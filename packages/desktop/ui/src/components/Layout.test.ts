@@ -5,6 +5,7 @@ import {
   clearWorkbenchOnlySearchParamsForCompact,
   readStoredPanelWidth,
   readStoredWorkbenchExplorerOpen,
+  resolveActiveExtensionWorkbenchSurface,
   resolveActiveWorkspaceCwd,
   resolveDefaultDiffCheckpointId,
   resolveWorkbenchRailMode,
@@ -96,6 +97,16 @@ describe('Layout workbench rail state', () => {
     expect(resolveWorkbenchRailMode('runs', { extensionId: 'system-runs', id: 'runs-tool' } as never)).toBe(
       'extension:system-runs:runs-tool',
     );
+  });
+
+  it('resolves built-in file rail detail views without extension mode state', () => {
+    expect(
+      resolveActiveExtensionWorkbenchSurface({
+        activeWorkbenchTool: 'files',
+        extensionRightToolPanels: [{ extensionId: 'system-files', id: 'files-tool', detailView: 'files-workbench' } as never],
+        extensionWorkbenchSurfaces: [{ extensionId: 'system-files', id: 'files-workbench' } as never],
+      }),
+    ).toEqual({ extensionId: 'system-files', id: 'files-workbench' });
   });
 
   it('defaults the diffs rail to uncommitted changes when present', () => {

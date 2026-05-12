@@ -121,6 +121,29 @@ function parseExtensionToolPanelMode(mode: WorkbenchRailMode): { extensionId: st
   return extensionId && surfaceId ? { extensionId, surfaceId } : null;
 }
 
+export function resolveActiveExtensionWorkbenchSurface({
+  activeWorkbenchTool,
+  extensionRightToolPanels,
+  extensionWorkbenchSurfaces,
+}: {
+  activeWorkbenchTool: WorkbenchRailMode;
+  extensionRightToolPanels: Array<(ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary>;
+  extensionWorkbenchSurfaces: NativeExtensionViewSummary[];
+}): NativeExtensionViewSummary | null {
+  const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
+  const activeRailSurface = parsed
+    ? extensionRightToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId)
+    : activeWorkbenchTool === 'files'
+      ? (extensionRightToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null)
+      : null;
+  if (!activeRailSurface || !('detailView' in activeRailSurface) || typeof activeRailSurface.detailView !== 'string') return null;
+  return (
+    extensionWorkbenchSurfaces.find(
+      (surface) => surface.extensionId === activeRailSurface.extensionId && surface.id === activeRailSurface.detailView,
+    ) ?? null
+  );
+}
+
 function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
   const parsed = parseExtensionToolPanelMode(mode);
   return mode === 'diffs' || parsed?.extensionId === 'system-diffs';
@@ -1282,20 +1305,10 @@ export function Layout() {
     routeIsKnowledge(location.pathname, extensionRegistry.surfaces) &&
     railOpen &&
     systemKnowledgeExtensionSurface !== null;
-  const activeExtensionWorkbenchSurface = useMemo(() => {
-    const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
-    const activeRailSurface = parsed
-      ? extensionRightToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId)
-      : activeWorkbenchTool === 'files'
-        ? (extensionRightToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null)
-        : null;
-    if (!activeRailSurface || !('detailView' in activeRailSurface) || typeof activeRailSurface.detailView !== 'string') return null;
-    return (
-      extensionWorkbenchSurfaces.find(
-        (surface) => surface.extensionId === parsed.extensionId && surface.id === activeRailSurface.detailView,
-      ) ?? null
-    );
-  }, [activeWorkbenchTool, extensionRightToolPanels, extensionWorkbenchSurfaces]);
+  const activeExtensionWorkbenchSurface = useMemo(
+    () => resolveActiveExtensionWorkbenchSurface({ activeWorkbenchTool, extensionRightToolPanels, extensionWorkbenchSurfaces }),
+    [activeWorkbenchTool, extensionRightToolPanels, extensionWorkbenchSurfaces],
+  );
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [commandPaletteMounted, setCommandPaletteMounted] = useState(false);
   const [pendingCommandPaletteOpen, setPendingCommandPaletteOpen] = useState<OpenCommandPaletteDetail | null>(null);
