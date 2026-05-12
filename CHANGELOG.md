@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9 — 2026-05-12
+
+- Release maintenance
+
 ## 0.7.9-rc.11 — 2026-05-12
 
 - feat: update codex extension protocol support
