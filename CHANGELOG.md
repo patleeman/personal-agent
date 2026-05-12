@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.7.9-rc.11 — 2026-05-12
+
+- feat: update codex extension protocol support
+- test: cover conversation inspect extension cache worker
+- feat: add session import export extension
+- fix desktop launch mode type
+- fix: show extension descriptions in manager
+- fix: respond immediately to codex turn start
+- feat: package RC desktop app separately
+- fix: load bundled conversation inspect worker from extension cache
+- fix: enable pull to refresh on iOS tab list
+- Fix companion conversation fork types
+- fix: tolerate missing session integrity telemetry API
+- Fix companion server fork branch type imports
+- fix: start idle deferred follow-up resumes
+- fix: resolve inspect worker from extension cache
+- Fix iOS scroll on conversation list (scrollBounceBehavior) and history loading (tailBlocks 5→200)
+- Fix transcript newline rendering with inlineOnlyPreservingWhitespace markdown parsing
+- Add fork/branch API and iOS UX for conversation branching parity
+- fix: surface conversation queue wakeups
+- fix: isolate ios daemon and recover runtime db
+- fix: isolate daemon runtime storage
+- fix: clear completed goal state
+- fix: render terminal bash blocks in core chat
+- fix: properly unsubscribe notifier from thread subscriber group in codex protocol
+- fix: use correct cwd field in codex cwd_changed event forwarder
+- fix: notify Codex client on turn/interrupt to avoid hanging turns
+- fix: harden iOS companion live QA flows
+- fix: keep prompts flowing when run db is corrupt
+- Fix duplicate daemon client import
+- fix: stop goal mode no-progress loops
+- feat: persist server timing metrics
+- fix: import legacy sync observability stores
+- refactor: route config read failures through telemetry
+- test: assert shared observability database
+- docs: clarify observability migration comments
+- docs: align trace declarations with observability storage
+- fix: namespace observability migrations
+- fix: cap iOS companion transcript snapshots
+- fix: cap unified observability trace tables
+- refactor: route server diagnostics through logger
+- feat: unify observability storage
+- fix: support companion websocket token fallback
+- Fix npm run check exit code (knip non-blocking), add testing workflow table to AGENTS.md
+- Fix npm run check pipeline — move knip after extension check so extension tests actually run (&& was blocked by knip exit 1)
+- fix: route desktop companion calls through api proxy
+- fix: cap telemetry and ignore broken pipe logging
+- Wire extension quick check into npm run check pipeline, update AGENTS.md
+- fix: restore iOS companion daemon transport
+- Add visible skip message when QUICK_EXTENSION_CHECK is set
+- fix: proxy companion API from built desktop app
+- Add extension validation commands to README.md dev section
+- Add check:extensions to AGENTS.md npm scripts documentation
+- fix: ignore idle web live runs during recovery
+- Add npm run check:extensions and check:extensions:quick scripts, env-var-based quick-skip for slow test, update docs
+- Add dynamic import test for backend modules to catch module-scope runtime errors (+1 test, 79 total, 93 combined)
+- fix: import native context menu guard in sidebar
+- Add stale build detection test (checks dist files are newer than source), update docs (+1 test, 78 total, 92 combined)
+- Add UTF-8 BOM check, system- naming convention check, update docs (+2 tests, 77 total, 91 combined)
+- Fix component export regexes in template literals (single backslash -> double backslash), add status bar item + transcript renderer component export validation
+- Add frontend bundle syntax check, update docs (+1 test, 75 total, 89 combined)
+
 ## 0.7.9-rc.10 — 2026-05-12
 
 - Update docs for 74 tests and extended cross-extension conflict coverage
