@@ -7,10 +7,48 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-describe('api.extensions', () => {
-  beforeEach(() => {
-    vi.resetModules();
+function htmlResponse(body = '<!doctype html><html><body>SPA fallback</body></html>', status = 200): Response {
+  return new Response(body, {
+    status,
+    statusText: status === 200 ? 'OK' : 'Not Found',
+    headers: { 'Content-Type': 'text/html' },
   });
+}
+
+function resetApiTestGlobals(): void {
+  vi.resetModules();
+}
+
+describe('api request parsing', () => {
+  beforeEach(resetApiTestGlobals);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reports the API path when an OK response is HTML instead of JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => htmlResponse()),
+    );
+
+    const { api } = await import('./api.js');
+    await expect(api.status()).rejects.toThrow('Expected JSON from /api/status, received text/html: <!doctype html>');
+  });
+
+  it('includes non-JSON error body previews', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => htmlResponse('<!doctype html><html><body>Missing route</body></html>', 404)),
+    );
+
+    const { api } = await import('./api.js');
+    await expect(api.status()).rejects.toThrow('404 Not Found from /api/status: <!doctype html>');
+  });
+});
+
+describe('api.extensions', () => {
+  beforeEach(resetApiTestGlobals);
 
   afterEach(() => {
     vi.unstubAllGlobals();

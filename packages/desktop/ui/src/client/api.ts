@@ -135,8 +135,8 @@ async function requestJson<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE
         }),
   });
   recordApiTiming(requestPath, res);
-  if (!res.ok) throw new Error(await readApiError(res));
-  return res.json() as Promise<T>;
+  if (!res.ok) throw new Error(await readApiError(res, requestPath));
+  return readJsonResponse<T>(res, requestPath);
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -159,9 +159,25 @@ async function del<T>(path: string): Promise<T> {
   return requestJson<T>('DELETE', path);
 }
 
-async function readApiError(res: Response): Promise<string> {
+function formatResponsePreview(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').slice(0, 160);
+}
+
+async function readJsonResponse<T>(res: Response, path: string): Promise<T> {
+  const text = await res.text();
   try {
-    const data = (await res.json()) as { error?: string };
+    return JSON.parse(text) as T;
+  } catch {
+    const contentType = res.headers.get('Content-Type') ?? 'unknown content type';
+    const preview = formatResponsePreview(text);
+    throw new Error(`Expected JSON from ${path}, received ${contentType}${preview ? `: ${preview}` : ''}`);
+  }
+}
+
+async function readApiError(res: Response, path?: string): Promise<string> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text) as { error?: string };
     if (typeof data.error === 'string' && data.error.trim().length > 0) {
       return data.error;
     }
@@ -169,7 +185,8 @@ async function readApiError(res: Response): Promise<string> {
     // Ignore non-JSON error bodies.
   }
 
-  return `${res.status} ${res.statusText}`;
+  const preview = formatResponsePreview(text);
+  return `${res.status} ${res.statusText}${path ? ` from ${path}` : ''}${preview ? `: ${preview}` : ''}`;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -975,7 +992,7 @@ export const api = {
     const response = await fetchWithRetry(requestPath, { method: 'GET', cache: 'no-store' });
     recordApiTiming(requestPath, response);
     if (!response.ok) {
-      throw new Error(await readApiError(response));
+      throw new Error(await readApiError(response, requestPath));
     }
 
     const blob = await response.blob();
