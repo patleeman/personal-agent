@@ -889,8 +889,14 @@ async function readCompanionApiError(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`;
 }
 
+const DESKTOP_COMPANION_API_ROOT = '/api/companion/v1';
+
+function desktopCompanionApiPath(path: string): string {
+  return `${DESKTOP_COMPANION_API_ROOT}${path}`;
+}
+
 async function requestCompanionJson<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(desktopCompanionApiPath(path), {
     method,
     cache: 'no-store',
     ...(body === undefined
@@ -965,8 +971,8 @@ export function DesktopCompanionSettingsPanel() {
     setError(null);
     try {
       const [nextHello, nextAdmin] = await Promise.all([
-        requestCompanionJson<CompanionHelloState>('GET', '/companion/v1/hello'),
-        requestCompanionJson<CompanionAdminState>('GET', '/companion/v1/admin/devices'),
+        requestCompanionJson<CompanionHelloState>('GET', '/hello'),
+        requestCompanionJson<CompanionAdminState>('GET', '/admin/devices'),
       ]);
       setHello(nextHello);
       setAdminState(nextAdmin);
@@ -1027,7 +1033,7 @@ export function DesktopCompanionSettingsPanel() {
         enabledFromDesktop = result.changed;
       }
 
-      const setup = await requestCompanionJson<CompanionSetupState>('POST', '/companion/v1/admin/setup');
+      const setup = await requestCompanionJson<CompanionSetupState>('POST', '/admin/setup');
       setLatestSetup(setup);
       setLatestPairingCode(setup.pairing);
       setSelectedSetupLinkId(setup.links[0]?.id ?? null);
@@ -1053,7 +1059,7 @@ export function DesktopCompanionSettingsPanel() {
     try {
       const result = await requestCompanionJson<{ devices: CompanionDeviceSummaryState[] }>(
         'DELETE',
-        `/companion/v1/admin/devices/${encodeURIComponent(deviceId)}`,
+        `/admin/devices/${encodeURIComponent(deviceId)}`,
       );
       setAdminState((current) => (current ? { ...current, devices: result.devices } : { pendingPairings: [], devices: result.devices }));
       setNotice('Paired device revoked.');

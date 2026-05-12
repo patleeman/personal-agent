@@ -3,7 +3,7 @@ import type { Express, Request, Response } from 'express';
 import { getCompanionUrl } from '../daemon/client.js';
 import { logError } from '../middleware/index.js';
 
-const COMPANION_PROXY_ROUTE = '/companion/v1/*';
+const COMPANION_PROXY_ROUTE = '/api/companion/v1/*';
 
 function buildProxyHeaders(req: Request): HeadersInit {
   const headers: Record<string, string> = {};
@@ -22,7 +22,8 @@ async function handleCompanionProxyRequest(req: Request, res: Response): Promise
       return;
     }
 
-    const upstreamUrl = new URL(req.originalUrl, companionUrl);
+    const upstreamPath = req.originalUrl.replace(/^\/api\/companion(?=\/v1(?:\/|$))/, '/companion');
+    const upstreamUrl = new URL(upstreamPath, companionUrl);
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD' && req.body !== undefined;
     const upstreamResponse = await fetch(upstreamUrl, {
       method: req.method,

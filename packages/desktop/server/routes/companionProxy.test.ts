@@ -79,10 +79,10 @@ describe('registerCompanionProxyRoutes', () => {
     );
 
     const res = createResponse();
-    await handlers['POST /companion/v1/*']!(
+    await handlers['POST /api/companion/v1/*']!(
       {
         method: 'POST',
-        originalUrl: '/companion/v1/admin/setup?refresh=1',
+        originalUrl: '/api/companion/v1/admin/setup?refresh=1',
         body: { create: true },
         get: (name) => (name.toLowerCase() === 'content-type' ? 'application/json' : undefined),
       },
@@ -104,7 +104,7 @@ describe('registerCompanionProxyRoutes', () => {
     getCompanionUrlMock.mockResolvedValue(null);
 
     const res = createResponse();
-    await handlers['GET /companion/v1/*']!({ method: 'GET', originalUrl: '/companion/v1/hello', get: () => undefined }, res);
+    await handlers['GET /api/companion/v1/*']!({ method: 'GET', originalUrl: '/api/companion/v1/hello', get: () => undefined }, res);
 
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({ error: 'Companion server is not available.' });

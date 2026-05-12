@@ -1437,6 +1437,9 @@ func companionTranscriptImageAssetPath(_ src: String?) -> String? {
     if normalized.hasPrefix("/companion/v1/") {
         return normalized
     }
+    if normalized.hasPrefix("/api/companion/v1/") {
+        return String(normalized.dropFirst("/api".count))
+    }
 
     let components = URLComponents(string: normalized)
     let path = components?.path.nilIfBlank ?? normalized

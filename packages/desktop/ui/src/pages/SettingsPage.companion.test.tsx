@@ -63,7 +63,7 @@ describe('DesktopCompanionSettingsPanel', () => {
     mocks.ensureCompanionNetworkReachable.mockResolvedValue({ changed: true, url: 'http://0.0.0.0:3843' });
     mocks.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
-      if (url === '/companion/v1/hello') {
+      if (url === '/api/companion/v1/hello') {
         return new Response(
           JSON.stringify({
             hostLabel: 'Desktop Mac',
@@ -74,14 +74,14 @@ describe('DesktopCompanionSettingsPanel', () => {
         );
       }
 
-      if (url === '/companion/v1/admin/devices') {
+      if (url === '/api/companion/v1/admin/devices') {
         return new Response(JSON.stringify({ pendingPairings: [], devices: [] }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       }
 
-      if (url === '/companion/v1/admin/setup' && init?.method === 'POST') {
+      if (url === '/api/companion/v1/admin/setup' && init?.method === 'POST') {
         return new Response(
           JSON.stringify({
             pairing: {
@@ -131,7 +131,7 @@ describe('DesktopCompanionSettingsPanel', () => {
 
     expect(mocks.ensureCompanionNetworkReachable).toHaveBeenCalledTimes(1);
     expect(mocks.fetch).toHaveBeenCalledWith(
-      '/companion/v1/admin/setup',
+      '/api/companion/v1/admin/setup',
       expect.objectContaining({
         method: 'POST',
         cache: 'no-store',
