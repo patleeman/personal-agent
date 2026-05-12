@@ -2260,6 +2260,7 @@ export function Sidebar() {
     [filteredConversationItems, runs],
   );
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
+  const [activityTreeStyleRevision, setActivityTreeStyleRevision] = useState(0);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const conversationItemBySessionId = useMemo(
     () => new Map(renderedConversationItems.map((item) => [item.session.id, item] as const)),
@@ -2361,7 +2362,11 @@ export function Sidebar() {
     return () => {
       cancelled = true;
     };
-  }, [baseActivityTreeItems, extensionRegistry.activityTreeItemStyles]);
+  }, [activityTreeStyleRevision, baseActivityTreeItems, extensionRegistry.activityTreeItemStyles]);
+
+  const refreshActivityTreeStyles = useCallback(() => {
+    setActivityTreeStyleRevision((revision) => revision + 1);
+  }, []);
 
   const handleThreadsActivityTreeToggle = useCallback(() => {
     setThreadsActivityTreeEnabled((current) => {
@@ -3608,6 +3613,54 @@ export function Sidebar() {
                               Copy Working Directory
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              void api
+                                .invokeExtensionAction('system-conversation-tools', 'cycleThreadColor', {
+                                  conversationId,
+                                  sessionTitle: conversationItem.session.title,
+                                  cwd: conversationItem.session.cwd,
+                                })
+                                .then(refreshActivityTreeStyles)
+                                .catch((error) => {
+                                  showSidebarNotice(
+                                    'danger',
+                                    `Thread color failed: ${error instanceof Error ? error.message : String(error)}`,
+                                    4000,
+                                  );
+                                });
+                            }}
+                          >
+                            Cycle Thread Color
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              void api
+                                .invokeExtensionAction('system-conversation-tools', 'clearThreadColor', {
+                                  conversationId,
+                                  sessionTitle: conversationItem.session.title,
+                                  cwd: conversationItem.session.cwd,
+                                })
+                                .then(refreshActivityTreeStyles)
+                                .catch((error) => {
+                                  showSidebarNotice(
+                                    'danger',
+                                    `Clear thread color failed: ${error instanceof Error ? error.message : String(error)}`,
+                                    4000,
+                                  );
+                                });
+                            }}
+                          >
+                            Clear Thread Color
+                          </button>
                         </>
                       ) : null}
                       <button
