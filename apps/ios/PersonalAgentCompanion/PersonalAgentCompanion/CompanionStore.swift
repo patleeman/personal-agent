@@ -2224,6 +2224,7 @@ final class ConversationViewModel: ObservableObject {
     private var attachmentRefreshTask: Task<Void, Never>?
     private var modelRefreshTask: Task<Void, Never>?
     private var streamTask: Task<Void, Never>?
+    private var subscribedConversationId: String?
     private var activityRefreshTask: Task<Void, Never>?
     private var activityRunsRefreshTask: Task<Void, Never>?
     private var executionTargetChangeTask: Task<Void, Never>?
@@ -2311,6 +2312,7 @@ final class ConversationViewModel: ObservableObject {
         persistComposerDraftIfNeeded()
         streamTask?.cancel()
         streamTask = nil
+        subscribedConversationId = nil
         activityRefreshTask?.cancel()
         activityRefreshTask = nil
         activityRunsRefreshTask?.cancel()
@@ -2407,6 +2409,7 @@ final class ConversationViewModel: ObservableObject {
             defer { isSubmittingPrompt = false }
             do {
                 let targetConversationId = try await ensureLiveConversationForPrompt()
+                try await ensureConversationEventSubscription(conversationId: targetConversationId)
                 try await client.promptConversation(
                     conversationId: targetConversationId,
                     text: currentText,
@@ -2442,6 +2445,7 @@ final class ConversationViewModel: ObservableObject {
             defer { isSubmittingPrompt = false }
             do {
                 let targetConversationId = try await ensureLiveConversationForPrompt()
+                try await ensureConversationEventSubscription(conversationId: targetConversationId)
                 try await client.promptConversation(
                     conversationId: targetConversationId,
                     text: trimmed,
@@ -3223,21 +3227,29 @@ final class ConversationViewModel: ObservableObject {
 
     private func updateConversationSubscription(isLive: Bool) {
         if isLive {
-            if streamTask == nil {
-                subscribeConversationEvents()
+            let targetConversationId = liveConversationId ?? conversationId
+            if streamTask != nil, subscribedConversationId == targetConversationId {
+                return
             }
+            subscribeConversationEvents(conversationId: targetConversationId)
             return
         }
 
         streamTask?.cancel()
         streamTask = nil
+        subscribedConversationId = nil
     }
 
-    private func subscribeConversationEvents() {
+    private func subscribeConversationEvents(conversationId targetConversationId: String) {
         streamTask?.cancel()
+        subscribedConversationId = nil
         streamTask = Task {
             do {
-                let stream = try await client.subscribeConversationEvents(conversationId: liveConversationId ?? conversationId, surfaceId: installationSurfaceId)
+                let stream = try await client.subscribeConversationEvents(conversationId: targetConversationId, surfaceId: installationSurfaceId)
+                guard !Task.isCancelled else {
+                    return
+                }
+                subscribedConversationId = targetConversationId
                 for await event in stream {
                     if Task.isCancelled { break }
                     applyEvent(event)
@@ -3246,7 +3258,31 @@ final class ConversationViewModel: ObservableObject {
                 if !Task.isCancelled {
                     errorMessage = error.localizedDescription
                     streamTask = nil
+                    subscribedConversationId = nil
                 }
+            }
+        }
+    }
+
+    private func ensureConversationEventSubscription(conversationId targetConversationId: String) async throws {
+        if streamTask != nil, subscribedConversationId == targetConversationId {
+            return
+        }
+
+        streamTask?.cancel()
+        streamTask = nil
+        subscribedConversationId = nil
+
+        let stream = try await client.subscribeConversationEvents(conversationId: targetConversationId, surfaceId: installationSurfaceId)
+        guard !Task.isCancelled else {
+            return
+        }
+
+        subscribedConversationId = targetConversationId
+        streamTask = Task {
+            for await event in stream {
+                if Task.isCancelled { break }
+                applyEvent(event)
             }
         }
     }

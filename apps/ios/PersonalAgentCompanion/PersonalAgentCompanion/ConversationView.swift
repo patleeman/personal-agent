@@ -69,10 +69,6 @@ struct ConversationScreen: View {
                         )
                     }
 
-                    if ConversationActivityShelf.hasItems(viewModel) {
-                        ConversationActivityShelf(viewModel: viewModel, onOpenConversation: onOpenConversation)
-                    }
-
                     ForEach(transcriptItems) { item in
                         switch item {
                         case .message(let block):
@@ -337,6 +333,12 @@ struct ConversationScreen: View {
                     onTakeOver: viewModel.takeOver
                 )
             } else {
+                if ConversationActivityShelf.hasItems(viewModel) {
+                    ConversationActivityShelf(viewModel: viewModel, onOpenConversation: onOpenConversation)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 10)
+                }
+
                 if !viewModel.promptImages.isEmpty || !viewModel.promptAttachmentRefs.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         if !viewModel.promptImages.isEmpty {

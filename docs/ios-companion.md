@@ -20,7 +20,9 @@ Tap the microphone button to dictate a prompt. Audio is sent to the daemon for t
 
 ### Conversation History
 
-Browse recent conversations from your phone. View the transcript of any conversation. Continue conversations by adding new messages.
+Browse recent conversations from your phone. View the transcript of any conversation. Continue conversations by adding new messages. The conversation screen subscribes to live events before submitting a prompt so the reply streams immediately in-place.
+
+Queued prompts, deferred resumes, connected runs, and parallel jobs appear in an activity shelf directly above the composer, not in the transcript.
 
 ### Notifications
 

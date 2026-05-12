@@ -1874,6 +1874,35 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.promptText.isEmpty)
     }
 
+    func testPromptSendWaitsForConversationSubscriptionBeforeSubmitting() async throws {
+        let client = MockCompanionClient()
+        client.subscribeConversationEventsDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Stream this immediately"
+        model.sendPrompt()
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.blocks.contains(where: { $0.type == "user" && $0.text == "Stream this immediately" })
+                && model.blocks.contains(where: { $0.type == "text" && ($0.text ?? "").contains("Native companion prompt accepted") })
+        }
+        XCTAssertEqual(client.promptSubmissionCount, 1)
+        XCTAssertGreaterThanOrEqual(client.conversationSubscriptionCount, 1)
+    }
+
     func testPromptSendPreservesNewComposerTextEditedDuringSubmission() async throws {
         let client = MockCompanionClient()
         client.promptSubmissionDelayNanoseconds = 150_000_000

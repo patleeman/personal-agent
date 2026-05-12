@@ -1388,6 +1388,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var simulateRunningConversationFailureQueueMessages: [String] = []
     var listConversationsDelayNanoseconds: UInt64 = 0
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
+    var subscribeConversationEventsDelayNanoseconds: UInt64 = 0
     var updateConversationTabsDelayNanoseconds: UInt64 = 0
     var updateConversationTabsFailureQueueMessages: [String] = []
     var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
@@ -1497,6 +1498,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var updatePairedDeviceCount = 0
     private(set) var deletePairedDeviceCount = 0
     private(set) var promptSubmissionCount = 0
+    private(set) var conversationSubscriptionCount = 0
     private(set) var cancelDeferredResumeCount = 0
     private(set) var simulateRunningConversationCount = 0
     private(set) var abortConversationCount = 0
@@ -3969,6 +3971,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func subscribeConversationEvents(conversationId: String, surfaceId: String) async throws -> AsyncStream<CompanionConversationEvent> {
+        conversationSubscriptionCount += 1
+        if subscribeConversationEventsDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: subscribeConversationEventsDelayNanoseconds)
+        }
         let id = UUID()
         return AsyncStream { continuation in
             var bucket = self.conversationContinuations[conversationId] ?? [:]
