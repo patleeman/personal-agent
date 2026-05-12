@@ -22,4 +22,4 @@ The adapter lives at `packages/desktop/ui/src/activity/activityTree.ts` and curr
 - run nesting via `manifest.spec.conversationId`, `manifest.spec.threadConversationId`, result metadata, or checkpoint payload metadata
 - normalized status values: `idle`, `running`, `queued`, `failed`, `done`
 
-`packages/desktop/ui/src/activity/activityTreePaths.ts` converts activity items into stable Pierre tree paths, and `ActivityTreeView.tsx` is the first reusable Pierre-backed renderer. The remaining work is to replace the Threads sidebar list incrementally without regressing existing row actions, grouping, drag-and-drop, and extension decorators.
+`packages/desktop/ui/src/activity/activityTreePaths.ts` converts activity items into stable Pierre tree paths, and `ActivityTreeView.tsx` is the reusable Pierre-backed renderer. The Threads sidebar now has an activity-tree toggle in the header; when enabled, it renders conversations and linked durable runs through the shared tree while the classic list remains available for full row actions, grouping, drag-and-drop, and existing conversation decorators.
