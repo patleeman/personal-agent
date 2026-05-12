@@ -85,7 +85,7 @@ const electronBuilderConfig = {
     {
       from: 'extensions',
       to: 'extensions',
-      filter: ['**/*', '!**/src{,/**/*}'],
+      filter: ['**/*', '!**/src/**/*.test.*', '!**/src/**/__tests__{,/**/*}'],
     },
     {
       from: 'docs',
