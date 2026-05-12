@@ -172,21 +172,29 @@ describe('extension manifests - structural validation', () => {
 
   it('startupAction and onEnableAction reference valid backend action ids', () => {
     for (const ext of summaries) {
-      const backend = ext.manifest.backend;
-      if (!backend) continue;
-      const actionIds = new Set((backend.actions ?? []).map((a) => a.id));
+      if (ext.packageType !== 'system') continue;
+      const manifest = ext.manifest;
 
-      if (backend.startupAction) {
+      // startupAction and onEnableAction must reference existing backend actions
+      if (manifest.backend?.startupAction) {
+        const actionIds = new Set((manifest.backend.actions ?? []).map((a) => a.id));
         expect(
-          actionIds.has(backend.startupAction),
-          `${ext.id}: startupAction "${backend.startupAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
+          actionIds.has(manifest.backend.startupAction),
+          `${ext.id}: startupAction "${manifest.backend.startupAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
         ).toBe(true);
       }
-      if (backend.onEnableAction) {
+      if (manifest.backend?.onEnableAction) {
+        const actionIds = new Set((manifest.backend.actions ?? []).map((a) => a.id));
         expect(
-          actionIds.has(backend.onEnableAction),
-          `${ext.id}: onEnableAction "${backend.onEnableAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
+          actionIds.has(manifest.backend.onEnableAction),
+          `${ext.id}: onEnableAction "${manifest.backend.onEnableAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
         ).toBe(true);
+      }
+
+      // Extensions without a backend entry must not declare startup/onEnable actions
+      if (!manifest.backend?.entry) {
+        expect(!manifest.backend?.startupAction, `${ext.id}: declares startupAction but has no backend entry`).toBe(true);
+        expect(!manifest.backend?.onEnableAction, `${ext.id}: declares onEnableAction but has no backend entry`).toBe(true);
       }
     }
   });
@@ -691,6 +699,25 @@ describe('extension manifests - cross-extension conflict detection', () => {
     expect(
       [...realConflicts].map(([id, sources]) => `${id}: ${sources.join(', ')}`),
       'Duplicate secret ids across extensions',
+    ).toEqual([]);
+  });
+
+  it('no duplicate secret env variable names across extensions', () => {
+    const envVars: Array<[string, string]> = [];
+    const summaries = listExtensionInstallSummaries();
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const secrets = ext.manifest.contributes?.secrets ?? {};
+      for (const [key, secret] of Object.entries(secrets)) {
+        if (secret.env) {
+          envVars.push([secret.env, `${ext.id}/${key}`]);
+        }
+      }
+    }
+    const conflicts = findAllStringConflicts(envVars);
+    expect(
+      [...conflicts].map(([env, sources]) => `${env}: ${sources.join(', ')}`),
+      'Duplicate secret env variable names across extensions',
     ).toEqual([]);
   });
 
