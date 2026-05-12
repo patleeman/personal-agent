@@ -81,6 +81,32 @@ describe('useConversationScroll', () => {
     expect(result.current.atBottom).toBe(true);
   });
 
+  it('keeps short transcripts pinned when the user clicks in the transcript', () => {
+    const scrollEl = document.createElement('div');
+    setScrollMetrics(scrollEl, { scrollHeight: 320, clientHeight: 400, scrollTop: 0 });
+    scrollEl.querySelector = vi.fn().mockReturnValue(null);
+    scrollEl.getBoundingClientRect = vi.fn().mockReturnValue({ left: 0, right: 400, top: 0, bottom: 400 });
+    const scrollRef = { current: scrollEl };
+    const messages = [{ type: 'text' as const, ts: '1', text: 'hello' }];
+
+    const { result } = renderHook(() =>
+      useConversationScroll({
+        conversationId: 'conversation-1',
+        messages,
+        scrollRef,
+        sessionLoading: false,
+        isStreaming: true,
+        initialScrollKey: null,
+      }),
+    );
+
+    act(() => {
+      scrollEl.dispatchEvent(new MouseEvent('pointerdown', { clientX: 10 }));
+    });
+
+    expect(result.current.atBottom).toBe(true);
+  });
+
   it('allows explicit scroll-to-bottom actions to re-pin during streaming', () => {
     const scrollEl = document.createElement('div');
     setScrollMetrics(scrollEl, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });

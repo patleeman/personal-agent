@@ -5579,17 +5579,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               }
             />
           )}
-          {!showConversationLoadingState && showScrollToBottomControl && (
-            <button
-              onClick={() => {
-                scrollToBottom({ behavior: 'smooth', force: true });
-              }}
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
-            >
-              ↓ scroll to bottom
-            </button>
-          )}
         </div>
+        {!showConversationLoadingState && showScrollToBottomControl && (
+          <button
+            onClick={() => {
+              scrollToBottom({ behavior: 'smooth', force: true });
+            }}
+            className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
+          >
+            ↓ scroll to bottom
+          </button>
+        )}
         {showInlineConversationLoadingState && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-base/85 px-6 py-4 backdrop-blur-sm">
             <LoadingState label={renderingStaleTranscript ? 'Loading new messages…' : 'Loading messages…'} className="justify-center" />

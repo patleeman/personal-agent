@@ -5,6 +5,7 @@ import {
   getConversationPrependRestoreScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
+  isConversationScrollOverflowing,
   isConversationTailVisibleAtBottom,
   scrollConversationTailIntoView,
   shouldAutoScrollToStreamingTail,
@@ -99,11 +100,24 @@ export function useConversationScroll({
   }, []);
 
   const detachFromBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (
+      !el ||
+      !isConversationScrollOverflowing({
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      })
+    ) {
+      scrollPinnedToBottomRef.current = true;
+      setAtBottom(true);
+      return;
+    }
+
     scrollPinnedToBottomRef.current = false;
     setAtBottom(false);
     cancelBottomScrollSettle();
     cancelPinnedBottomWatch();
-  }, [cancelBottomScrollSettle, cancelPinnedBottomWatch]);
+  }, [cancelBottomScrollSettle, cancelPinnedBottomWatch, scrollRef]);
 
   useLayoutEffect(() => {
     isStreamingRef.current = isStreaming;

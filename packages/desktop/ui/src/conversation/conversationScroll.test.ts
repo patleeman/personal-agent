@@ -6,6 +6,7 @@ import {
   getConversationPrependRestoreScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
+  isConversationScrollOverflowing,
   isConversationTailVisibleAtBottom,
   scrollConversationTailIntoView,
   shouldAutoScrollToStreamingTail,
@@ -71,6 +72,12 @@ describe('conversation scroll helpers', () => {
         clientHeight: 400,
       }),
     ).toBe(false);
+  });
+
+  it('only treats the conversation as scrollable when there is room to detach from the bottom', () => {
+    expect(isConversationScrollOverflowing({ scrollHeight: 1200, clientHeight: 400 })).toBe(true);
+    expect(isConversationScrollOverflowing({ scrollHeight: 420, clientHeight: 400 })).toBe(false);
+    expect(isConversationScrollOverflowing({ scrollHeight: 320, clientHeight: 400 })).toBe(false);
   });
 
   it('keeps prepended history pinned to the latest message when the view was already at the bottom', () => {

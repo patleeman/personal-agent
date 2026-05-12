@@ -51,6 +51,13 @@ export function isConversationScrolledToBottom(
   return getConversationBottomScrollTop(metrics) - metrics.scrollTop < thresholdPx;
 }
 
+export function isConversationScrollOverflowing(
+  metrics: Pick<ConversationScrollMetrics, 'scrollHeight' | 'clientHeight'>,
+  thresholdPx = DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX,
+): boolean {
+  return getConversationBottomScrollTop(metrics) > thresholdPx;
+}
+
 export function getConversationTailBlockKey(block: MessageBlock | null | undefined): string | null {
   if (!block) {
     return null;
