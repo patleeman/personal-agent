@@ -3263,15 +3263,14 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               </div>
 
               {settingsComponents.map((settingsComponent) => (
-                <div key={`${settingsComponent.extensionId}:${settingsComponent.id}`} className="space-y-0">
-                  <SettingsPanel
-                    id={settingsComponent.sectionId}
-                    title={settingsComponent.label}
-                    description={settingsComponent.description}
-                  >
-                    <SettingsPanelHost registration={settingsComponent} />
-                  </SettingsPanel>
-                </div>
+                <SettingsPanel
+                  key={`${settingsComponent.extensionId}:${settingsComponent.id}`}
+                  id={settingsComponent.sectionId}
+                  title={settingsComponent.label}
+                  description={settingsComponent.description}
+                >
+                  <SettingsPanelHost registration={settingsComponent} />
+                </SettingsPanel>
               ))}
 
               <ExtensionSettingsSection />
