@@ -134,9 +134,15 @@ function getOrCreateContext(modelRootPath: string, model: string, module_: Whisp
   return ctx;
 }
 
-function formatWhisperSegments(segments: Array<{ start: string; end: string; text: string }>): string {
+type WhisperSegment = { start: string; end: string; text: string } | [string, string, string];
+
+function readWhisperSegmentText(segment: WhisperSegment): string {
+  return Array.isArray(segment) ? segment[2] : segment.text;
+}
+
+function formatWhisperSegments(segments: WhisperSegment[]): string {
   return segments
-    .map((segment) => segment.text.trim())
+    .map((segment) => readWhisperSegmentText(segment).trim())
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')
