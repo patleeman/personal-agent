@@ -23,7 +23,8 @@
       "@personal-agent/extensions/data": ["./packages/desktop/ui/src/extensions/data"],
       "@personal-agent/extensions/settings": ["./packages/desktop/ui/src/extensions/settings"],
       "@personal-agent/extensions/excalidraw": ["./packages/extensions/src/excalidraw"],
-      "@personal-agent/extensions/backend": ["./packages/desktop/server/extensions/backendApi"]
+      "@personal-agent/extensions/backend": ["./packages/desktop/server/extensions/backendApi"],
+      "@personal-agent/extensions/backend/*": ["./packages/desktop/server/extensions/backendApi/*"]
     }
   },
   "references": [{ "path": "./packages/core" }, { "path": "./packages/extensions" }, { "path": "./packages/desktop" }],

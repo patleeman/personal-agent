@@ -38,6 +38,10 @@
     "./backend": {
       "types": "./dist/backend.d.ts",
       "default": "./dist/backend.js"
+    },
+    "./backend/checkpoints": {
+      "types": "./dist/backend/checkpoints.d.ts",
+      "default": "./dist/backend/checkpoints.js"
     }
   },
   "scripts": {

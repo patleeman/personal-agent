@@ -399,12 +399,31 @@ function resolveExtensionBackendApiPath(): string {
   );
 }
 
+function resolveExtensionBackendApiSubpath(subpath: string): string {
+  const backendApiRoot = dirname(resolveExtensionBackendApiPath());
+  const normalized = subpath.replace(/^\/+/, '').replace(/\.js$/, '');
+  if (!normalized || normalized.includes('..')) throw new Error(`Invalid extension backend API subpath: ${subpath}`);
+  const candidates = [resolve(backendApiRoot, `${normalized}.ts`), resolve(backendApiRoot, normalized, 'index.ts')];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  for (const candidate of candidates) {
+    const jsPath = candidate.replace(/\.ts$/, '.js');
+    if (existsSync(jsPath)) return jsPath;
+  }
+  throw new Error(`Could not find extension backend API subpath: ${subpath}`);
+}
+
 function createExtensionBackendApiPlugin(): Plugin {
   const backendApiPath = resolveExtensionBackendApiPath();
   return {
     name: 'personal-agent-extension-backend-api',
     setup(buildContext) {
       buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend$/ }, () => ({ path: backendApiPath }));
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend\/(.+)$/ }, (args) => {
+        const match = args.path.match(/^@personal-agent\/extensions\/backend\/(.+)$/);
+        return { path: resolveExtensionBackendApiSubpath(match?.[1] ?? '') };
+      });
     },
   };
 }

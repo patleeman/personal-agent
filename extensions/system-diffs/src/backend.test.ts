@@ -4,7 +4,7 @@ const mockListCheckpoints = vi.fn();
 const mockGetCheckpoint = vi.fn();
 const mockSaveCheckpoint = vi.fn();
 
-vi.mock('@personal-agent/extensions/backend', () => ({
+vi.mock('@personal-agent/extensions/backend/checkpoints', () => ({
   listConversationCommitCheckpoints: (...args: unknown[]) => mockListCheckpoints(...args),
   getConversationCommitCheckpoint: (...args: unknown[]) => mockGetCheckpoint(...args),
   saveConversationCommitCheckpoint: (...args: unknown[]) => mockSaveCheckpoint(...args),

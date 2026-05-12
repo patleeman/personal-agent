@@ -8,7 +8,7 @@ import {
   getConversationCommitCheckpoint,
   listConversationCommitCheckpoints,
   saveConversationCommitCheckpoint,
-} from '@personal-agent/extensions/backend';
+} from '@personal-agent/extensions/backend/checkpoints';
 
 type CheckpointBackendContext = ExtensionBackendContext & {
   profile: string;

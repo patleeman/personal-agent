@@ -231,6 +231,12 @@ System backend extensions can also import deliberate backend primitives through 
 import { createScheduledTask } from '@personal-agent/extensions/backend';
 ```
 
+Prefer focused backend subpaths for narrow primitives so extension bundles do not pull in unrelated host seams:
+
+```ts
+import { saveConversationCommitCheckpoint } from '@personal-agent/extensions/backend/checkpoints';
+```
+
 If a system extension needs a host primitive that is not exported here, add it deliberately to this package as a reusable SDK capability. Do not punch through into app internals, and do not hardcode one-off product behavior in the app shell.
 
 ## Frontend surfaces
