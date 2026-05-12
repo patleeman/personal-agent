@@ -339,6 +339,112 @@ describe('extension manifests - structural validation', () => {
     }
   });
 
+  it('all action fields in contributions follow a valid reference pattern', () => {
+    // Known built-in frontend actions (handled by the UI layer, not backend)
+    const knownBuiltInFrontendActions = new Set([
+      'duplicateConversation',
+      'copyWorkingDirectory',
+      'copyConversationId',
+      'copyDeeplink',
+      'openBrowserBackend',
+      'attachConversation',
+    ]);
+    // Known system action prefixes that don't reference backend handlers
+    const knownSystemActionPrefixes = ['commandPalette:', 'navigate:', 'rightRail:'];
+
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const backendActionIds = new Set((ext.manifest.backend?.actions ?? []).map((a) => a.id));
+
+      // Collect all action references from contributions
+      const actionRefs: Array<{ source: string; action: string }> = [];
+
+      for (const menu of ext.manifest.contributes?.contextMenus ?? []) {
+        if (menu.action) actionRefs.push({ source: `contextMenu(${menu.id})`, action: menu.action });
+      }
+      for (const cmd of ext.manifest.contributes?.commands ?? []) {
+        if (cmd.action) actionRefs.push({ source: `command(${cmd.id})`, action: cmd.action });
+      }
+      for (const tb of ext.manifest.contributes?.toolbarActions ?? []) {
+        if (tb.action) actionRefs.push({ source: `toolbarAction(${tb.id})`, action: tb.action });
+      }
+      for (const msg of ext.manifest.contributes?.messageActions ?? []) {
+        if (msg.action) actionRefs.push({ source: `messageAction(${msg.id})`, action: msg.action });
+      }
+      for (const item of ext.manifest.contributes?.statusBarItems ?? []) {
+        // Status bar items without an action are static labels — valid
+        if (item.action) actionRefs.push({ source: `statusBarItem(${item.id})`, action: item.action });
+      }
+
+      for (const { source, action } of actionRefs) {
+        // If the action matches a backend action id, it's valid
+        if (backendActionIds.has(action)) continue;
+        // If the action matches a known built-in frontend action, it's valid
+        if (knownBuiltInFrontendActions.has(action)) continue;
+        // If the action starts with a known system prefix, it's valid
+        if (knownSystemActionPrefixes.some((prefix) => action.startsWith(prefix))) continue;
+        // Otherwise, flag it as potentially dangling
+        expect(
+          false,
+          `${ext.id}: ${source} references action "${action}" which is not a known backend action ` +
+            `[${[...backendActionIds].join(', ')}], known frontend action, or system action prefix. ` +
+            `If this is a custom frontend action, add it to knownBuiltInFrontendActions.`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('settings contributions have type-consistent values', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const settings = ext.manifest.contributes?.settings ?? {};
+      for (const [key, setting] of Object.entries(settings)) {
+        // Select type must have enum
+        if (setting.type === 'select') {
+          expect(
+            Array.isArray(setting.enum) && setting.enum.length > 0,
+            `${ext.id}: setting "${key}" is type "select" but missing or empty "enum"`,
+          ).toBe(true);
+          // Default must be one of the enum values
+          if (setting.default !== undefined && Array.isArray(setting.enum)) {
+            expect(
+              setting.enum.includes(setting.default),
+              `${ext.id}: setting "${key}" default "${setting.default}" is not in enum [${setting.enum.join(', ')}]`,
+            ).toBe(true);
+          }
+        }
+        // Number type must have a number default
+        if (setting.type === 'number' && setting.default !== undefined) {
+          expect(typeof setting.default === 'number', `${ext.id}: setting "${key}" is type "number" but default is not a number`).toBe(
+            true,
+          );
+        }
+        // Boolean type must have a boolean default
+        if (setting.type === 'boolean' && setting.default !== undefined) {
+          expect(typeof setting.default === 'boolean', `${ext.id}: setting "${key}" is type "boolean" but default is not a boolean`).toBe(
+            true,
+          );
+        }
+      }
+    }
+  });
+
+  it('secret contributions have valid env variable names', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const secrets = ext.manifest.contributes?.secrets ?? {};
+      for (const [key, secret] of Object.entries(secrets)) {
+        expect(typeof key === 'string' && key.trim().length > 0, `${ext.id}: secret has empty key`).toBe(true);
+        expect(secret.label?.trim(), `${ext.id}: secret "${key}" missing label`).toBeTruthy();
+        if (secret.env) {
+          expect(/^[A-Z][A-Z0-9_]*$/.test(secret.env), `${ext.id}: secret "${key}" env "${secret.env}" must be UPPER_SNAKE_CASE`).toBe(
+            true,
+          );
+        }
+      }
+    }
+  });
+
   it('backend action handler names appear in the prebuilt bundle', () => {
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
