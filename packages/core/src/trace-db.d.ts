@@ -1,9 +1,9 @@
 /**
  * Trace Database
  *
- * SQLite-backed telemetry storage for the Traces monitoring page.
+ * SQLite-backed observability storage for the Traces monitoring page.
  * Stores turn-level stats, tool calls, context snapshots, compaction events,
- * and queue operations in a dedicated trace.db per profile.
+ * and queue operations in the shared observability.db per state root.
  *
  * All writes are fire-and-forget — they never block the session loop.
  */
