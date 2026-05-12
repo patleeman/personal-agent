@@ -6,8 +6,6 @@ import { api } from '../client/api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
   COMMAND_PALETTE_SECTION_LABELS,
-  THREAD_COMMAND_PALETTE_SECTIONS,
-  THREADS_COMMAND_PALETTE_SCOPE,
   type CommandPaletteItem,
   type CommandPaletteScope,
   type CommandPaletteSection,
@@ -15,6 +13,8 @@ import {
   searchCommandPaletteItems,
   selectCommandPaletteScopedItems,
   shouldBootstrapCommandPaletteThreads,
+  THREAD_COMMAND_PALETTE_SECTIONS,
+  THREADS_COMMAND_PALETTE_SCOPE,
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
