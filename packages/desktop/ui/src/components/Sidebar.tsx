@@ -10,6 +10,8 @@ import {
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
+import { buildActivityTreeItems, buildConversationActivityId } from '../activity/activityTree';
+import { ActivityTreeView } from '../activity/ActivityTreeView';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
@@ -138,6 +140,7 @@ const THREADS_ORGANIZE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-o
 const THREADS_FILTER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-filter');
 const THREADS_SORT_BY_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-sort-by');
 const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-manual-group-order');
+const THREADS_ACTIVITY_TREE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-activity-tree');
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
@@ -587,6 +590,26 @@ function readThreadsSortMode(): ThreadsSortMode {
 function writeThreadsSortMode(value: ThreadsSortMode): void {
   try {
     localStorage.setItem(THREADS_SORT_BY_STORAGE_KEY, value);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readThreadsActivityTreeEnabled(): boolean {
+  try {
+    return localStorage.getItem(THREADS_ACTIVITY_TREE_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeThreadsActivityTreeEnabled(value: boolean): void {
+  try {
+    if (value) {
+      localStorage.setItem(THREADS_ACTIVITY_TREE_STORAGE_KEY, 'true');
+      return;
+    }
+    localStorage.removeItem(THREADS_ACTIVITY_TREE_STORAGE_KEY);
   } catch {
     // Ignore storage failures.
   }
@@ -1828,7 +1851,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
-  const { sessions, tasks } = useAppData();
+  const { sessions, tasks, runs } = useAppData();
   const {
     pinnedIds,
     openIds,
@@ -1858,6 +1881,7 @@ export function Sidebar() {
   const [threadsOrganizeMode, setThreadsOrganizeMode] = useState<ThreadsOrganizeMode>(() => readThreadsOrganizeMode());
   const [threadsFilterMode, setThreadsFilterMode] = useState<ThreadsFilterMode>(() => readThreadsFilterMode());
   const [threadsSortMode, setThreadsSortMode] = useState<ThreadsSortMode>(() => readThreadsSortMode());
+  const [threadsActivityTreeEnabled, setThreadsActivityTreeEnabled] = useState(() => readThreadsActivityTreeEnabled());
   const [manualConversationGroupOrder, setManualConversationGroupOrder] = useState(() => readManualConversationGroupOrder());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
   const [conversationGroupLabelOverrides, setConversationGroupLabelOverrides] = useState(() => readConversationGroupLabelOverrides());
@@ -2225,6 +2249,15 @@ export function Sidebar() {
     () => (threadsOrganizeMode === 'project' ? groupedConversationRows.flatMap((group) => group.items) : filteredConversationItems),
     [filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
+  const activityTreeItems = useMemo(
+    () =>
+      buildActivityTreeItems({
+        conversations: filteredConversationItems.map((item) => item.session),
+        runs: runs?.runs ?? [],
+      }),
+    [filteredConversationItems, runs],
+  );
+  const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const canReorderConversationRows = threadsFilterMode === 'all';
   const canReorderConversationGroups = canReorderConversationRows && threadsOrganizeMode === 'project';
   const hotkeyConversationItems = useMemo(
@@ -2302,6 +2335,14 @@ export function Sidebar() {
   const handleThreadsSortModeChange = useCallback((value: ThreadsSortMode) => {
     setThreadsSortMode(value);
     writeThreadsSortMode(value);
+  }, []);
+
+  const handleThreadsActivityTreeToggle = useCallback(() => {
+    setThreadsActivityTreeEnabled((current) => {
+      const next = !current;
+      writeThreadsActivityTreeEnabled(next);
+      return next;
+    });
   }, []);
 
   function clearDragState() {
@@ -3379,6 +3420,17 @@ export function Sidebar() {
             />
             <button
               type="button"
+              onClick={handleThreadsActivityTreeToggle}
+              className={['ui-icon-button ui-icon-button-compact shrink-0', threadsActivityTreeEnabled && 'text-accent']
+                .filter(Boolean)
+                .join(' ')}
+              title={threadsActivityTreeEnabled ? 'Use classic thread list' : 'Use activity tree'}
+              aria-label={threadsActivityTreeEnabled ? 'Use classic thread list' : 'Use activity tree'}
+            >
+              <Ico d={PATH.nodes} size={12} />
+            </button>
+            <button
+              type="button"
               onClick={handleOpenThreadSwitcher}
               className="ui-icon-button ui-icon-button-compact shrink-0"
               title="Find threads and archived conversations"
@@ -3413,57 +3465,66 @@ export function Sidebar() {
               </p>
             ) : null}
 
-            {threadsOrganizeMode === 'project'
-              ? groupedConversationRows.map((group) => {
-                  const collapsed = collapsedConversationGroupKeySet.has(group.key);
-                  const groupSessionIds = group.items
-                    .map(({ session }) => session.id)
-                    .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
-                  const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
-                  const groupDropPosition =
-                    canReorderConversationGroups && groupDropTarget?.groupKey === group.key && draggingGroupKey !== group.key
-                      ? groupDropTarget.position
-                      : null;
+            {threadsActivityTreeEnabled ? (
+              <ActivityTreeView
+                items={activityTreeItems}
+                activeItemId={activeActivityTreeItemId}
+                className="h-[calc(100vh-9rem)] min-h-[12rem]"
+                onOpenItem={(item) => {
+                  if (item.route) {
+                    navigate(item.route);
+                  }
+                }}
+              />
+            ) : threadsOrganizeMode === 'project' ? (
+              groupedConversationRows.map((group) => {
+                const collapsed = collapsedConversationGroupKeySet.has(group.key);
+                const groupSessionIds = group.items
+                  .map(({ session }) => session.id)
+                  .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
+                const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
+                const groupDropPosition =
+                  canReorderConversationGroups && groupDropTarget?.groupKey === group.key && draggingGroupKey !== group.key
+                    ? groupDropTarget.position
+                    : null;
 
-                  return (
-                    <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
-                      <ConversationCwdGroupHeader
-                        label={group.label}
-                        cwd={group.cwd}
-                        collapsed={collapsed}
-                        canDrag={canReorderConversationGroups}
-                        isDragging={canReorderConversationGroups && draggingGroupKey === group.key}
-                        isConversationDropTarget={conversationCwdDropTargetGroupKey === group.key}
-                        dropPosition={groupDropPosition}
-                        dragId={group.key}
-                        onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
-                        onNewConversation={() => handleNewConversation(group.cwd)}
-                        onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
-                        onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
-                        onArchiveThreads={
-                          groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined
-                        }
-                        onRemove={() =>
-                          handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)
-                        }
-                        onDragStart={
-                          canReorderConversationGroups ? (event) => handleConversationGroupDragStart(group.key, event) : undefined
-                        }
-                        onDragOver={canReorderConversationGroups ? (event) => handleConversationGroupDragOver(group.key, event) : undefined}
-                        onDrop={canReorderConversationGroups ? (event) => handleConversationGroupDrop(group.key, event) : undefined}
-                        onDragEnd={canReorderConversationGroups ? () => clearDragState() : undefined}
-                      />
-                      {!collapsed ? (
-                        group.items.length > 0 ? (
-                          group.items.map(renderConversationRow)
-                        ) : (
-                          <p className="px-4 pb-1 text-[12px] text-dim">No threads yet.</p>
-                        )
-                      ) : null}
-                    </div>
-                  );
-                })
-              : filteredConversationItems.map(renderConversationRow)}
+                return (
+                  <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
+                    <ConversationCwdGroupHeader
+                      label={group.label}
+                      cwd={group.cwd}
+                      collapsed={collapsed}
+                      canDrag={canReorderConversationGroups}
+                      isDragging={canReorderConversationGroups && draggingGroupKey === group.key}
+                      isConversationDropTarget={conversationCwdDropTargetGroupKey === group.key}
+                      dropPosition={groupDropPosition}
+                      dragId={group.key}
+                      onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
+                      onNewConversation={() => handleNewConversation(group.cwd)}
+                      onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
+                      onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
+                      onArchiveThreads={
+                        groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined
+                      }
+                      onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)}
+                      onDragStart={canReorderConversationGroups ? (event) => handleConversationGroupDragStart(group.key, event) : undefined}
+                      onDragOver={canReorderConversationGroups ? (event) => handleConversationGroupDragOver(group.key, event) : undefined}
+                      onDrop={canReorderConversationGroups ? (event) => handleConversationGroupDrop(group.key, event) : undefined}
+                      onDragEnd={canReorderConversationGroups ? () => clearDragState() : undefined}
+                    />
+                    {!collapsed ? (
+                      group.items.length > 0 ? (
+                        group.items.map(renderConversationRow)
+                      ) : (
+                        <p className="px-4 pb-1 text-[12px] text-dim">No threads yet.</p>
+                      )
+                    ) : null}
+                  </div>
+                );
+              })
+            ) : (
+              filteredConversationItems.map(renderConversationRow)
+            )}
           </div>
         </div>
 
