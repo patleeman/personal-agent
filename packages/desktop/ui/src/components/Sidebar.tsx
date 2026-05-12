@@ -3596,6 +3596,12 @@ export function Sidebar() {
                 items={activityTreeItems}
                 activeItemId={activeActivityTreeItemId}
                 className="h-[calc(100vh-9rem)] min-h-[12rem]"
+                onArchiveItem={(item) => {
+                  const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
+                  if (conversationId) {
+                    handleArchiveConversation(conversationId);
+                  }
+                }}
                 onOpenItem={(item) => {
                   if (item.route) {
                     navigate(item.route);
