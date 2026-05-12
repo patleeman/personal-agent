@@ -68,11 +68,11 @@ const ConversationDiffRailContent = lazyRouteWithRecovery('layout-diff-rail', ()
 const ConversationCheckpointWorkbenchPane = lazyRouteWithRecovery('layout-checkpoint-workbench', () =>
   import('./ConversationCheckpointWorkbench').then((module) => ({ default: module.ConversationCheckpointWorkbenchPane })),
 );
-const ConversationRunsRailContent = lazyRouteWithRecovery('layout-runs-rail', () =>
-  import('./ConversationRunsWorkbench').then((module) => ({ default: module.ConversationRunsRailContent })),
+const ConversationBackgroundWorkRailContent = lazyRouteWithRecovery('layout-background-work-rail', () =>
+  import('./ConversationBackgroundWorkWorkbench').then((module) => ({ default: module.ConversationBackgroundWorkRailContent })),
 );
-const ConversationRunWorkbenchPane = lazyRouteWithRecovery('layout-run-workbench', () =>
-  import('./ConversationRunsWorkbench').then((module) => ({ default: module.ConversationRunWorkbenchPane })),
+const ConversationBackgroundWorkWorkbenchPane = lazyRouteWithRecovery('layout-background-work-workbench', () =>
+  import('./ConversationBackgroundWorkWorkbench').then((module) => ({ default: module.ConversationBackgroundWorkWorkbenchPane })),
 );
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
@@ -565,7 +565,7 @@ function WorkbenchDocumentPane({
   if (activeTool === 'runs') {
     return (
       <Suspense fallback={<div className="px-4 py-3 text-[12px] text-dim">Loading run…</div>}>
-        <ConversationRunWorkbenchPane conversationId={conversationId} runId={runId} lookups={{ sessions, tasks }} />
+        <ConversationBackgroundWorkWorkbenchPane conversationId={conversationId} runId={runId} lookups={{ sessions, tasks }} />
       </Suspense>
     );
   }
@@ -1075,7 +1075,7 @@ function WorkbenchKnowledgeRail({
             />
           ) : (
             <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading runs…</div>}>
-              <ConversationRunsRailContent
+              <ConversationBackgroundWorkRailContent
                 conversationId={conversationId}
                 runs={runs}
                 activeRunId={activeRunId}

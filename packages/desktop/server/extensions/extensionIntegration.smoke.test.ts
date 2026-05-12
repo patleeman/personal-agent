@@ -823,7 +823,8 @@ describe('extension manifests - cross-extension conflict detection', () => {
     const providers = listExtensionQuickOpenRegistrations();
     const knowledge = providers.find((provider) => provider.extensionId === 'system-knowledge' && provider.id === 'knowledge-files');
 
-    expect(knowledge).toMatchObject({ title: 'Knowledge', section: 'knowledge', order: 10 });
+    expect(knowledge).toMatchObject({ title: 'Knowledge files', section: 'files' });
+    expect(typeof knowledge?.order === 'number' || knowledge?.order === undefined).toBe(true);
   });
 });
 

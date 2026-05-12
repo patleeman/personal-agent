@@ -38,9 +38,9 @@ Layered instructions: the vault root AGENTS.md defines durable identity and pref
 
 When writing docs, use human-readable titles, one-sentence summaries, plain-English openings, and high-signal prose. No template filler or empty index pages.
 
-# Durable Runs
+# Background Work
 
-Prefer durable runs for multi-step or long-running work — one run per task. Use the \`run\` tool (start/show/log/follow-up/cancel). Report run ID, plan, and latest output. Report outcomes before deciding to keep or cancel.
+Use intent-shaped async tools instead of the legacy \`run\` surface: \`bash\` with \`background: true\` for background commands, \`subagent\` for delegated agent work, \`scheduled_task\` for persistent automations, and \`conversation_queue\` or \`reminder\` for attention-only follow-up. Report the background command/subagent id, plan, and latest output when you start or inspect async work.
 
 # Technical Context
 

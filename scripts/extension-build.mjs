@@ -184,8 +184,10 @@ function relativeToPackage(path) {
 }
 
 function copyJsdomSyncWorkerIfNeeded(outfile, buildOutputs) {
-  const bundledSource = readFileSync(outfile, 'utf8');
-  if (!bundledSource.includes('xhr-sync-worker.js')) return;
+  // Some bundled dependencies resolve jsdom's sync XHR worker dynamically at
+  // runtime, so the literal worker filename is not always present in the
+  // bundle. Copying the tiny worker beside backend bundles is harmless and
+  // keeps packaged extension import checks deterministic.
   const workerSource = join(repoRoot, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'xhr', 'xhr-sync-worker.js');
   if (!existsSync(workerSource)) return;
   const workerOutput = join(dirname(outfile), 'xhr-sync-worker.js');

@@ -76,7 +76,7 @@ const RUN_GROUP_CONFIG: Record<RunGroup, { label: string; icon: string; tone: st
   subagent: { label: 'Subagents', icon: '✦', tone: 'text-accent' },
 };
 
-export function ConversationRunsRailContent({
+export function ConversationBackgroundWorkRailContent({
   conversationId,
   runs,
   activeRunId,
@@ -164,7 +164,7 @@ export function ConversationRunsRailContent({
   );
 }
 
-export function ConversationRunWorkbenchPane({
+export function ConversationBackgroundWorkWorkbenchPane({
   conversationId,
   runId,
   lookups,

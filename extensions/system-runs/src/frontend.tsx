@@ -1,18 +1,17 @@
 export { ActivityShelf } from './ActivityShelf.js';
 
-import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import { useAppData } from '@personal-agent/extensions/data';
 import {
-  ConversationRunsRailContent,
-  ConversationRunWorkbenchPane,
+  ConversationBackgroundWorkRailContent,
+  ConversationBackgroundWorkWorkbenchPane,
   getConversationRunIdFromSearch,
   setConversationRunIdInSearch,
 } from '@personal-agent/extensions/workbench';
+import { useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-export function ConversationRunsPanel({ context }: ExtensionSurfaceProps) {
+export function ConversationBackgroundWorkPanel({ context }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
   const lookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
@@ -31,7 +30,7 @@ export function ConversationRunsPanel({ context }: ExtensionSurfaceProps) {
   );
 
   return (
-    <ConversationRunsRailContent
+    <ConversationBackgroundWorkRailContent
       conversationId={context.conversationId ?? null}
       runs={runs}
       activeRunId={activeRunId}
@@ -41,8 +40,13 @@ export function ConversationRunsPanel({ context }: ExtensionSurfaceProps) {
   );
 }
 
-export function ConversationRunDetailPanel({ context }: ExtensionSurfaceProps) {
+export function ConversationBackgroundWorkDetailPanel({ context }: ExtensionSurfaceProps) {
   const { sessions, tasks } = useAppData();
   const runId = getConversationRunIdFromSearch(context.search);
-  return <ConversationRunWorkbenchPane conversationId={context.conversationId ?? null} runId={runId} lookups={{ sessions, tasks }} />;
+  return (
+    <ConversationBackgroundWorkWorkbenchPane conversationId={context.conversationId ?? null} runId={runId} lookups={{ sessions, tasks }} />
+  );
 }
+
+export const ConversationRunsPanel = ConversationBackgroundWorkPanel;
+export const ConversationRunDetailPanel = ConversationBackgroundWorkDetailPanel;

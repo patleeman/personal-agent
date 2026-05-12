@@ -5,11 +5,16 @@ export {
   useConversationArtifactSummaries,
 } from '../components/ConversationArtifactWorkbench';
 export {
+  ConversationBackgroundWorkRailContent,
+  ConversationBackgroundWorkWorkbenchPane,
+  ConversationBackgroundWorkRailContent as ConversationRunsRailContent,
+  ConversationBackgroundWorkWorkbenchPane as ConversationRunWorkbenchPane,
+} from '../components/ConversationBackgroundWorkWorkbench';
+export {
   ConversationCheckpointWorkbenchPane,
   ConversationDiffRailContent,
   useConversationCheckpointSummaries,
 } from '../components/ConversationCheckpointWorkbench';
-export { ConversationRunsRailContent, ConversationRunWorkbenchPane } from '../components/ConversationRunsWorkbench';
 export { cx } from '../components/ui';
 export { WorkbenchBrowserTab } from '../components/workbench/WorkbenchBrowserTab';
 export { WorkspaceExplorer, WorkspaceFileDocument } from '../components/workspace/WorkspaceExplorer';
