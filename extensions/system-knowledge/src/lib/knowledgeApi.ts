@@ -12,10 +12,24 @@ import {
 } from '@personal-agent/extensions/data';
 
 const EXTENSION_ID = 'system-knowledge';
+const KNOWLEDGE_ACTION_TIMEOUT_MS = 15_000;
 
 async function invoke<T>(actionId: string, input: unknown = {}): Promise<T> {
-  const response = await api.invokeExtensionAction(EXTENSION_ID, actionId, input);
-  return response.result as T;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Knowledge action '${actionId}' timed out after ${KNOWLEDGE_ACTION_TIMEOUT_MS / 1000}s`));
+    }, KNOWLEDGE_ACTION_TIMEOUT_MS);
+  });
+
+  try {
+    const response = await Promise.race([api.invokeExtensionAction(EXTENSION_ID, actionId, input), timeout]);
+    return response.result as T;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export const knowledgeApi = {
