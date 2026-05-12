@@ -24,8 +24,33 @@ function getKnowledgeFileId(search: string): string | null {
   return new URLSearchParams(search).get('file');
 }
 
+async function readKnowledgeBaseResponse<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init);
+  const payload = (await response.json()) as { ok?: boolean; result?: T; error?: string } | T;
+  if (!response.ok || (payload && typeof payload === 'object' && 'ok' in payload && payload.ok === false)) {
+    throw new Error((payload as { error?: string }).error ?? `Knowledge base request failed: ${response.status}`);
+  }
+  if (payload && typeof payload === 'object' && 'result' in payload) {
+    return (payload as { result: T }).result;
+  }
+  return payload as T;
+}
+
 export function KnowledgeSettingsPanel() {
-  return <KnowledgeSettingsPanelComponent />;
+  return (
+    <KnowledgeSettingsPanelComponent
+      apiClient={{
+        state: () => readKnowledgeBaseResponse('/api/knowledge-base'),
+        updateState: (input) =>
+          readKnowledgeBaseResponse('/api/knowledge-base', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(input),
+          }),
+        sync: () => readKnowledgeBaseResponse('/api/knowledge-base/sync', { method: 'POST' }),
+      }}
+    />
+  );
 }
 
 export function KnowledgeTreePanel({ pa }: ExtensionSurfaceProps) {
