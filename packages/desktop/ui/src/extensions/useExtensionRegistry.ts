@@ -27,7 +27,7 @@ export interface ExtensionComposerButtonRegistration {
   id: string;
   component: string;
   title?: string;
-  placement: 'afterModelPicker';
+  placement: 'afterModelPicker' | 'actions';
   when?: string;
   priority?: number;
   frontendEntry?: string;
@@ -275,7 +275,7 @@ function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionCom
         extensionId: extension.id,
         id: button.id,
         component: button.component,
-        placement: button.placement ?? 'afterModelPicker',
+        placement: button.placement ?? 'actions',
         ...(button.title ? { title: button.title } : {}),
         ...(button.when ? { when: button.when } : {}),
         ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),

@@ -63,6 +63,7 @@ export function ConversationComposerActions({
   const visibleComposerButtons = useMemo(
     () =>
       composerButtons.filter((button) => {
+        if (button.placement !== 'actions') return false;
         const expr = button.when;
         if (!expr) return true;
         const clauses = expr.split(/\s*&&\s*/).filter(Boolean);

@@ -91,22 +91,27 @@ describe('ConversationPreferencesRow', () => {
     }
   });
 
-  it('progressively moves overflowing controls into the settings menu', () => {
-    const { container, unmount } = renderInteractive({ inlineLimit: 2 });
+  it('keeps model controls grouped inline and moves extra controls into the settings menu', () => {
+    const { container, unmount } = renderInteractive({
+      inlineLimit: 3,
+      composerButtons: [
+        {
+          extensionId: 'system-auto-mode',
+          id: 'goal-mode',
+          packageType: 'system',
+          component: 'GoalModeComposerButton',
+          placement: 'afterModelPicker',
+        },
+      ],
+    });
 
     try {
-      expect(container.textContent).not.toContain('Thinking');
+      expect(container.textContent).toContain('Model A');
+      expect(container.textContent).toContain('Conversation thinking level');
       expect(container.textContent).toContain('Fast');
 
       const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
       expect(moreButton).not.toBeNull();
-      act(() => {
-        moreButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
-
-      expect(container.textContent).toContain('Model A');
-      expect(container.textContent).toContain('Thinking');
-      expect(container.textContent).toContain('Fast');
     } finally {
       unmount();
     }

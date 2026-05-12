@@ -212,8 +212,8 @@ export interface ExtensionComposerButtonContribution {
   id: string;
   component: string;
   title?: string;
-  /** Where the control should appear in the composer preference row. */
-  placement?: 'afterModelPicker';
+  /** Where the control should appear in the composer. Defaults to the right-side action slot. */
+  placement?: 'afterModelPicker' | 'actions';
   /** Condition for visibility, e.g. "composerHasContent && !streamIsStreaming" */
   when?: string;
   /** Sort priority. Higher = closer to submit button. Default 0. */

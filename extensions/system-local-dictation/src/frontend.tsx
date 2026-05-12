@@ -168,7 +168,7 @@ export function DictationButton({
     await pendingStart;
   }, [buttonContext.composerDisabled, enabled, pa, state]);
 
-  if (buttonContext.renderMode || !settingsLoaded || !enabled) return null;
+  if (!settingsLoaded || !enabled) return null;
 
   return (
     <>

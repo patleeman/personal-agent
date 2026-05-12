@@ -118,6 +118,7 @@ export function ConversationComposerInputControls({
   const visibleComposerButtons = useMemo(
     () =>
       composerButtons.filter((button) => {
+        if (button.placement !== 'afterModelPicker') return false;
         const expr = button.when;
         if (!expr) return true;
         const clauses = expr.split(/\s*&&\s*/).filter(Boolean);

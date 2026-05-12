@@ -232,13 +232,15 @@ export function ConversationPreferencesRow({
   const preferenceItems = useMemo(
     () => [
       { id: 'model' as const },
+      { id: 'thinking' as const },
       ...(supportsFastMode ? [{ id: 'fastMode' as const }] : []),
       ...composerButtons.map((button, index) => ({ id: `composer:${index}` as const, button })),
-      { id: 'thinking' as const },
     ],
     [composerButtons, supportsFastMode],
   );
-  const inlineItemIds = new Set(preferenceItems.slice(0, inlineLimit).map((item) => item.id));
+  const groupedItemCount = supportsFastMode ? 3 : 2;
+  const inlineCount = Math.max(groupedItemCount, inlineLimit);
+  const inlineItemIds = new Set(preferenceItems.slice(0, inlineCount).map((item) => item.id));
   const menuItems = preferenceItems.filter((item) => !inlineItemIds.has(item.id));
   const hasMenuItems = menuItems.length > 0;
 
