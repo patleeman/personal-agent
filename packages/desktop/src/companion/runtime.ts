@@ -8,11 +8,13 @@ import type {
   CompanionConversationAbortInput,
   CompanionConversationBlockImageInput,
   CompanionConversationBootstrapInput,
+  CompanionConversationBranchInput,
   CompanionConversationCheckpointCreateInput,
   CompanionConversationCreateInput,
   CompanionConversationCwdChangeInput,
   CompanionConversationDuplicateInput,
   CompanionConversationExecutionTargetChangeInput,
+  CompanionConversationForkInput,
   CompanionConversationModelPreferencesUpdateInput,
   CompanionConversationParallelJobInput,
   CompanionConversationPromptInput,
@@ -656,7 +658,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
           beforeEntry: input.beforeEntry,
           preserveSource: input.preserveSource,
         });
-        return this.readConversationBootstrap({ conversationId: result.id, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
+        return this.readConversationBootstrap({ conversationId: result.newSessionId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
       }
 
       return invokeDesktopApi(hostManager, {
