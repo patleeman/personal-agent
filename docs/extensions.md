@@ -907,7 +907,8 @@ manager UI's "Reload" button or restart the app.
 
 Run the extension integration smoke tests to catch cross-extension issues
 before starting the app (manifest validation, route conflicts, missing
-backend/frontend entries, handler export mismatches):
+backend/frontend entries, handler export mismatches, and packaged-runtime
+backend import failures):
 
 ```bash
 # Run the full extension integration suite (includes ~25s dynamic import check)
@@ -923,6 +924,14 @@ npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.tes
 # Or include in the full test suite
 npm test
 ```
+
+`npm run check:extensions` and `npm run check:extensions:quick` also run
+`scripts/check-packaged-extensions.mjs`. That check imports every system
+extension backend from its built `dist/` output and fails on forbidden bare
+imports that are not available inside the packaged desktop app, such as
+`@earendil-works/pi-coding-agent`, `@personal-agent/core`, `@personal-agent/daemon`,
+`jsdom`, and `@sinclair/typebox`. This catches the “works from repo node_modules,
+breaks in the signed app” class of extension bug before release.
 
 The integration suite covers 79 tests across 12 categories:
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /* eslint-env node */
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
-const HOST_RUNTIME_EXTERNAL_IMPORT_RE = /^(@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
+const HOST_RUNTIME_EXTERNAL_IMPORT_RE = /^(process|@xenova\/transformers|better-sqlite3|esbuild)(\/.*)?$/;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = resolve(process.argv[2] || process.cwd());
@@ -76,10 +76,12 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
       '@personal-agent/extensions/excalidraw',
       'electron',
       'fsevents',
+      'process',
     ],
     nodePaths: findAppNodeModules(),
-    plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
+    plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin(), createJsdomWorkerPlugin()],
   });
+  copyJsdomSyncWorkerIfNeeded(outfile);
 }
 
 function createExtensionBackendApiPlugin() {
@@ -89,8 +91,11 @@ function createExtensionBackendApiPlugin() {
       buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend$/ }, () => ({
         path: join(repoRoot, 'packages/desktop/server/extensions/backendApi/index.ts'),
       }));
-      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend\/artifacts$/ }, () => ({
-        path: join(repoRoot, 'packages/desktop/server/extensions/backendApi/artifacts.ts'),
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend\/(.+)$/ }, (args) => ({
+        path: join(repoRoot, `packages/desktop/server/extensions/backendApi/${args.path.split('/').pop()}.ts`),
+      }));
+      buildContext.onResolve({ filter: /^@personal-agent\/daemon$/ }, () => ({
+        path: join(repoRoot, 'packages/desktop/server/dist/daemon/index.js'),
       }));
     },
   };
@@ -103,6 +108,27 @@ function createHostRuntimeExternalPlugin() {
       buildContext.onResolve({ filter: HOST_RUNTIME_EXTERNAL_IMPORT_RE }, (args) => ({ path: args.path, external: true }));
     },
   };
+}
+
+function createJsdomWorkerPlugin() {
+  return {
+    name: 'personal-agent-jsdom-worker-stub',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^\.\/xhr-sync-worker\.js$/ }, () => ({
+        path: 'personal-agent-jsdom-xhr-sync-worker',
+        namespace: 'pa-jsdom',
+      }));
+      buildContext.onLoad({ filter: /.*/, namespace: 'pa-jsdom' }, () => ({ contents: 'export default "";', loader: 'js' }));
+    },
+  };
+}
+
+function copyJsdomSyncWorkerIfNeeded(outfile) {
+  const bundledSource = readFileSync(outfile, 'utf8');
+  if (!bundledSource.includes('xhr-sync-worker.js')) return;
+  const workerSource = join(repoRoot, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'xhr', 'xhr-sync-worker.js');
+  if (!existsSync(workerSource)) return;
+  copyFileSync(workerSource, join(dirname(outfile), 'xhr-sync-worker.js'));
 }
 
 function findAppNodeModules() {
