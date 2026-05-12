@@ -72,6 +72,23 @@ describe('ConversationPreferencesRow', () => {
     expect(html).toContain('Enable goal mode');
   });
 
+  it('keeps thinking out of the expanded settings menu when it is already inline', () => {
+    const { container, unmount } = renderInteractive();
+
+    try {
+      const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
+      expect(moreButton).not.toBeNull();
+      act(() => {
+        moreButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(container.textContent).not.toContain('Thinking');
+      expect(container.textContent).toContain('Fast mode');
+    } finally {
+      unmount();
+    }
+  });
+
   it('renders compact model and goal controls inside the settings menu', () => {
     const onToggleGoal = vi.fn();
     const { container, unmount } = renderInteractive({ compact: true, onToggleGoal });

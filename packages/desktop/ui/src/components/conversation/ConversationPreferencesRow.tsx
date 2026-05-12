@@ -324,19 +324,21 @@ export function ConversationPreferencesRow({
                   />
                 </div>
               )}
-              <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
-                <ConversationThinkingLevelSelect
-                  value={currentThinkingLevel}
-                  disabled={savingPreference !== null}
-                  variant="menu"
-                  model={selectedModel}
-                  onChange={(thinkingLevel) => {
-                    onSelectThinkingLevel(thinkingLevel);
-                    setMenuOpen(false);
-                  }}
-                />
-              </div>
+              {compact && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
+                  <ConversationThinkingLevelSelect
+                    value={currentThinkingLevel}
+                    disabled={savingPreference !== null}
+                    variant="menu"
+                    model={selectedModel}
+                    onChange={(thinkingLevel) => {
+                      onSelectThinkingLevel(thinkingLevel);
+                      setMenuOpen(false);
+                    }}
+                  />
+                </div>
+              )}
               {compact && (
                 <ConversationPreferenceToggle
                   label="Goal mode"
