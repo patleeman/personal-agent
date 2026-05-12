@@ -484,6 +484,26 @@ describe('extension manifests - structural validation', () => {
     }
   });
 
+  it('all extension.json files are valid UTF-8 without BOM', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const manifestPath = resolve(ext.packageRoot ?? '', 'extension.json');
+      if (!existsSync(manifestPath)) continue;
+      const raw = readFileSync(manifestPath);
+      // Check for BOM (Byte Order Mark)
+      expect(raw[0], `${ext.id}: extension.json has UTF-8 BOM (Byte Order Mark)`).not.toBe(0xef);
+    }
+  });
+
+  it('system extensions follow the system- naming convention', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      expect(ext.manifest.id.startsWith('system-'), `${ext.id}: system extension id "${ext.manifest.id}" should start with "system-"`).toBe(
+        true,
+      );
+    }
+  });
+
   it('settings keys follow a dot-separated key-value convention', () => {
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
