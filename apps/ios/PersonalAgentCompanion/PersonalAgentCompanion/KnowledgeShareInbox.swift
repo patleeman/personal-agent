@@ -75,6 +75,11 @@ enum KnowledgeShareInboxStore {
     private static let pendingDirectoryName = "pending-knowledge-shares"
 
     static func pendingDirectoryURL(fileManager: FileManager = .default) throws -> URL {
+        #if targetEnvironment(simulator)
+        if fileManager === FileManager.default, ProcessInfo.processInfo.environment["PA_IOS_ALLOW_SIMULATOR_APP_GROUP"] != "1" {
+            throw KnowledgeShareInboxError.appGroupUnavailable
+        }
+        #endif
         guard let containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: personalAgentKnowledgeShareAppGroupIdentifier) else {
             throw KnowledgeShareInboxError.appGroupUnavailable
         }
