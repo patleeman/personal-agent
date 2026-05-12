@@ -446,6 +446,13 @@ function createHostRuntimeExternalPlugin(): Plugin {
     name: 'personal-agent-extension-host-runtime-externals',
     setup(buildContext) {
       buildContext.onResolve({ filter: HOST_RUNTIME_EXTERNAL_IMPORT_RE }, async (args) => {
+        if (args.path === '@personal-agent/daemon' && process.env.PERSONAL_AGENT_REPO_ROOT) {
+          const daemonBundlePath = resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist/daemon/index.js');
+          if (existsSync(daemonBundlePath)) {
+            return { path: daemonBundlePath, external: true };
+          }
+        }
+
         const resolveImport = (import.meta as ImportMeta & { resolve(specifier: string): string | Promise<string> }).resolve;
         const resolvedUrl = await Promise.resolve(resolveImport(args.path));
         return { path: fileURLToPath(resolvedUrl), external: true };
