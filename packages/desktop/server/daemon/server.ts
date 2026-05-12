@@ -3,6 +3,7 @@ import { type ChildProcess, spawn } from 'child_process';
 import { closeSync, cpSync, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
 
+import { closeAutomationDbs } from '../automation/store.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from '../automation/tasks/index.js';
 import { type DaemonConfig, loadDaemonConfig, type LogLevel } from '../config.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from '../paths.js';
@@ -19,6 +20,7 @@ import {
   type StartBackgroundRunInput,
 } from '../runs/background-runs.js';
 import {
+  closeRuntimeDbs,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
   scanDurableRun,
@@ -380,6 +382,21 @@ export class PersonalAgentDaemon {
 
       this.server.close(() => resolve());
     });
+
+    // Checkpoint and close all cached SQLite databases so WAL data is
+    // flushed to the main DB file before we release the process lock.
+    // Without this, an unclean kill during a subsequent startup can leave
+    // the WAL in an inconsistent state, causing index corruption.
+    try {
+      closeRuntimeDbs();
+    } catch (error) {
+      this.log('warn', `failed to close runtime DBs: ${(error as Error).message}`);
+    }
+    try {
+      closeAutomationDbs();
+    } catch (error) {
+      this.log('warn', `failed to close automation DBs: ${(error as Error).message}`);
+    }
 
     if (existsSync(this.paths.socketPath)) {
       rmSync(this.paths.socketPath, { force: true });

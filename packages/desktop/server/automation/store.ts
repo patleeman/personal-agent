@@ -326,6 +326,11 @@ const dbCache = new Map<string, SqliteDatabase>();
 
 export function closeAutomationDbs(): void {
   for (const db of dbCache.values()) {
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Best-effort checkpoint before close.
+    }
     db.close();
   }
 

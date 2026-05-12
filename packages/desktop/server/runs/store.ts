@@ -100,6 +100,18 @@ type StoredEventRow = {
 
 const runtimeDbCache = new Map<string, SqliteDatabase>();
 
+export function closeRuntimeDbs(): void {
+  for (const db of runtimeDbCache.values()) {
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Best-effort checkpoint before close.
+    }
+    db.close();
+  }
+  runtimeDbCache.clear();
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

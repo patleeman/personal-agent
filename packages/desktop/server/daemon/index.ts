@@ -85,6 +85,7 @@ export type {
 } from '../runs/store.js';
 export {
   appendDurableRunEvent,
+  closeRuntimeDbs,
   createDurableRunManifest,
   createInitialDurableRunStatus,
   listDurableRunIds,
