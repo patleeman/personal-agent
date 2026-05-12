@@ -11,6 +11,9 @@ const outdir = resolve(packageRoot, 'server', 'dist');
 
 rmSync(outdir, { recursive: true, force: true });
 
+const createRequireBanner =
+  'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);';
+
 const sharedEsbuildOptions = {
   bundle: true,
   platform: 'node',
@@ -38,7 +41,7 @@ await Promise.all([
     entryPoints: [resolve(packageRoot, 'server/app/localApi.ts')],
     outfile: resolve(outdir, 'app/localApi.js'),
     banner: {
-      js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
+      js: createRequireBanner,
     },
   }),
   // Conversation inspect worker — runs synchronous file I/O off the main thread
@@ -46,11 +49,20 @@ await Promise.all([
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/conversations/conversationInspectWorker.ts')],
     outfile: resolve(outdir, 'conversations/conversationInspectWorker.js'),
+    banner: {
+      js: createRequireBanner,
+    },
   }),
   // Trace worker — runs all trace-db writes off the main thread
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/traces/traceWorker.ts')],
     outfile: resolve(outdir, 'traces/traceWorker.js'),
+  }),
+  // Daemon barrel used by @personal-agent/daemon and iOS companion dev host.
+  build({
+    ...sharedEsbuildOptions,
+    entryPoints: [resolve(packageRoot, 'server/daemon/index.ts')],
+    outfile: resolve(outdir, 'daemon/index.js'),
   }),
 ]);

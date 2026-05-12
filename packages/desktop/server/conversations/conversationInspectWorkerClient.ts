@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 
@@ -71,21 +71,26 @@ function handleWorkerExit(code: number): void {
   workerInstance = null;
 }
 
-function resolveConversationInspectWorkerUrl(): URL {
+export function resolveConversationInspectWorkerUrlFrom(importMetaUrl: string): URL {
   // Normal server bundle path: server/dist/app/localApi.js -> server/dist/conversations/...
-  // Extension backend cache path: extension-cache/<extension>/backend.mjs, where the
-  // relative worker path does not exist. Fall back to repo/build locations so cached
-  // extension tools can still spawn the shared worker.
-  const relativeUrl = new URL('../conversations/conversationInspectWorker.js', import.meta.url);
-  try {
-    if (existsSync(fileURLToPath(relativeUrl))) {
-      return relativeUrl;
+  // Extension backend cache path: extension-cache/<extension>/backend.mjs may also contain
+  // a transpiled sibling worker, but that copy cannot resolve repo package dependencies.
+  // Prefer the bundled repo/build worker whenever the client itself is running from the
+  // extension cache.
+  const currentDir = dirname(fileURLToPath(importMetaUrl));
+  const isExtensionCacheClient = currentDir.includes(`${sep}extension-cache${sep}`);
+  const relativeUrl = new URL('../conversations/conversationInspectWorker.js', importMetaUrl);
+
+  if (!isExtensionCacheClient) {
+    try {
+      if (existsSync(fileURLToPath(relativeUrl))) {
+        return relativeUrl;
+      }
+    } catch {
+      // Keep walking fallbacks below.
     }
-  } catch {
-    // Keep walking fallbacks below.
   }
 
-  const currentDir = dirname(fileURLToPath(import.meta.url));
   const candidates = [
     ...(process.env.PERSONAL_AGENT_REPO_ROOT
       ? [resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist/conversations/conversationInspectWorker.js')]
@@ -103,7 +108,15 @@ function resolveConversationInspectWorkerUrl(): URL {
     }
   }
 
+  if (isExtensionCacheClient) {
+    throw new Error('Unable to locate bundled conversation inspect worker outside extension cache.');
+  }
+
   return relativeUrl;
+}
+
+function resolveConversationInspectWorkerUrl(): URL {
+  return resolveConversationInspectWorkerUrlFrom(import.meta.url);
 }
 
 function getOrCreateWorker(): Worker {
