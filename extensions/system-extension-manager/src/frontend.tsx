@@ -785,7 +785,9 @@ export function ExtensionManagerPage() {
                               <td className="min-w-0 py-3 pr-4 align-middle">
                                 <div className="min-w-0">
                                   <div className="truncate text-[14px] font-semibold text-primary">{extension.name}</div>
-                                  <div className="mt-0.5 truncate font-mono text-[11px] text-dim">{extension.id}</div>
+                                  <div className="mt-0.5 truncate text-[12px] leading-5 text-secondary">
+                                    {extension.description || 'No description provided.'}
+                                  </div>
                                 </div>
                               </td>
                               <td className="whitespace-nowrap px-3 py-3 align-middle text-[11px] uppercase tracking-[0.12em] text-secondary">
