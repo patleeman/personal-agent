@@ -394,7 +394,7 @@ struct ConversationListView: View {
                 showingHostSelection = true
             } label: {
                 Image(systemName: "server.rack")
-                    .font(.title2.weight(.medium))
+                    .font(.system(size: 28, weight: .medium))
                     .frame(width: 56, height: 56)
                     .background(CompanionTheme.panelRaised, in: Circle())
                     .overlay {
@@ -417,7 +417,7 @@ struct ConversationListView: View {
                             .tint(CompanionTheme.accent)
                     } else {
                         Image(systemName: "square.and.pencil")
-                            .font(.title2.weight(.medium))
+                            .font(.system(size: 28, weight: .medium))
                     }
                 }
                 .frame(width: 56, height: 56)
