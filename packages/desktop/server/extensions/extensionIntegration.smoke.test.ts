@@ -208,6 +208,137 @@ describe('extension manifests - structural validation', () => {
     }
   });
 
+  it('all tools have a valid inputSchema with at least type and properties', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const tools = ext.manifest.contributes?.tools ?? [];
+      for (const tool of tools) {
+        const schema = tool.inputSchema ?? {};
+        expect(schema.type, `${ext.id}: tool "${tool.id}" inputSchema missing "type"`).toBe('object');
+        expect(
+          typeof schema.properties === 'object' && schema.properties !== null && !Array.isArray(schema.properties),
+          `${ext.id}: tool "${tool.id}" inputSchema "properties" must be an object`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('no tool declares a replaces field that references a non-existent built-in tool', () => {
+    const validBuiltInTools = ['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls', 'notify', 'web_fetch', 'web_search'];
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const tools = ext.manifest.contributes?.tools ?? [];
+      for (const tool of tools) {
+        if (!tool.replaces) continue;
+        expect(
+          validBuiltInTools.includes(tool.replaces),
+          `${ext.id}: tool "${tool.id}" replaces "${tool.replaces}" which is not a valid built-in tool ` +
+            `[${validBuiltInTools.join(', ')}]`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('tools that reference backend actions have matching handler names in the prebuilt bundle', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const actions = ext.manifest.backend?.actions ?? [];
+      const actionHandlerMap = new Map(actions.map((a) => [a.id, a.handler ?? a.id]));
+
+      const tools = ext.manifest.contributes?.tools ?? [];
+      const toolActions = tools.map((t) => t.action ?? t.handler ?? '').filter(Boolean);
+      if (toolActions.length === 0) continue;
+
+      const backendPath = resolve(ext.packageRoot ?? '', 'dist', 'backend.mjs');
+      if (!existsSync(backendPath)) continue;
+
+      const content = readFileSync(backendPath, 'utf-8');
+      for (const toolAction of toolActions) {
+        // If the action matches a backend action id, resolve to the handler
+        const handlerName = actionHandlerMap.get(toolAction) ?? toolAction;
+        expect(
+          content.includes(handlerName),
+          `${ext.id}: tool action "${toolAction}" handler "${handlerName}" not found in dist/backend.mjs`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('frontend contributions with component fields export those components', () => {
+    // Check composer buttons, composer input tools, settings components, top bar elements,
+    // conversation headers, conversation decorators, and new conversation panels
+    for (const s of summaries) {
+      if (s.packageType !== 'system') continue;
+      const frontendEntry = s.manifest.frontend?.entry;
+      if (!frontendEntry) continue;
+      const frontendPath = resolve(s.packageRoot ?? '', frontendEntry);
+      if (!existsSync(frontendPath) || statSync(frontendPath).isDirectory()) continue;
+
+      const content = readFileSync(frontendPath, 'utf-8');
+
+      // Composer buttons
+      for (const btn of s.manifest.contributes?.composerButtons ?? []) {
+        const cmp = btn.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: composer button component "${cmp}" not exported`).toBe(true);
+      }
+
+      // Composer input tools
+      for (const tool of s.manifest.contributes?.composerInputTools ?? []) {
+        const cmp = tool.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: composer input tool component "${cmp}" not exported`).toBe(true);
+      }
+
+      // Settings components
+      const settingsCmp = s.manifest.contributes?.settingsComponent;
+      if (settingsCmp?.component) {
+        const cmp = settingsCmp.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: settings component "${cmp}" not exported`).toBe(true);
+      }
+
+      // Top bar elements
+      for (const el of s.manifest.contributes?.topBarElements ?? []) {
+        const cmp = el.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: top bar element component "${cmp}" not exported`).toBe(true);
+      }
+
+      // Conversation headers
+      for (const el of s.manifest.contributes?.conversationHeaderElements ?? []) {
+        const cmp = el.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: conversation header component "${cmp}" not exported`).toBe(true);
+      }
+
+      // Conversation decorators
+      for (const el of s.manifest.contributes?.conversationDecorators ?? []) {
+        const cmp = el.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: conversation decorator component "${cmp}" not exported`).toBe(true);
+      }
+
+      // New conversation panels
+      for (const panel of s.manifest.contributes?.newConversationPanels ?? []) {
+        const cmp = panel.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: new conversation panel component "${cmp}" not exported`).toBe(true);
+      }
+    }
+  });
+
+  it('transcript renderers reference valid tool names', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const renderers = ext.manifest.contributes?.transcriptRenderers ?? [];
+      for (const renderer of renderers) {
+        expect(renderer.tool?.trim(), `${ext.id}: transcript renderer "${renderer.id}" missing tool reference`).toBeTruthy();
+        expect(renderer.component?.trim(), `${ext.id}: transcript renderer "${renderer.id}" missing component`).toBeTruthy();
+      }
+    }
+  });
+
   it('backend action handler names appear in the prebuilt bundle', () => {
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
@@ -798,7 +929,6 @@ describe('extension agent extensions - registration listing', () => {
     // system-conversation-tools is always enabled (defaultEnabled is not false)
     expect(agentIds, 'Expected system-conversation-tools agent extension').toContain('system-conversation-tools');
     // system-slack-mcp-gateway has defaultEnabled: false, so it may not be registered
-    // Check if it's enabled in the config before asserting
     const slackGateway = listExtensionInstallSummaries().find((s) => s.id === 'system-slack-mcp-gateway');
     if (slackGateway?.enabled) {
       expect(agentIds, 'Expected system-slack-mcp-gateway agent extension').toContain('system-slack-mcp-gateway');
@@ -830,10 +960,21 @@ describe('extension integration - summary report', () => {
     const settingRegistrations = listExtensionSettingsRegistrations();
     const viewRegistrations = snapshot.views;
     const routeRegistrations = snapshot.routes;
+    const contextMenuRegistrations = listExtensionContextMenuRegistrations();
+    const messageActionRegistrations = listExtensionMessageActionRegistrations();
+    const composerShelfRegistrations = listExtensionComposerShelfRegistrations();
+    const composerButtonRegistrations = listExtensionComposerButtonRegistrations();
+    const composerInputToolRegistrations = listExtensionComposerInputToolRegistrations();
+    const keybindingRegistrations = listExtensionKeybindingRegistrations();
+    const statusBarRegistrations = listExtensionStatusBarItemRegistrations();
+    const secretRegistrations = listExtensionSecretRegistrations();
+    const secretBackendRegistrations = listExtensionSecretBackendRegistrations();
+    const settingsComponentRegistrations = listExtensionSettingsComponentRegistrations();
+    const defaultDisabled = systemExtensions.filter((s) => s.manifest.defaultEnabled === false);
 
     const report = [
       `Total extension entries: ${summaries.length}`,
-      `  System extensions: ${systemExtensions.length} (${enabledSystem.length} enabled)`,
+      `  System extensions: ${systemExtensions.length} (${enabledSystem.length} enabled, ${defaultDisabled.length} default-disabled)`,
       `  Invalid extensions: ${invalidExtensions.length}`,
       `  Extensions with diagnostics: ${extensionsWithDiagnostics.length}`,
       `  Extensions with backends: ${extensionsWithBackends.length}`,
@@ -848,6 +989,16 @@ describe('extension integration - summary report', () => {
       `  Slash commands: ${slashCommandRegistrations.length}`,
       `  Settings: ${settingRegistrations.length}`,
       `  Agent extensions: ${agentExtensions.length}`,
+      `  Context menus: ${contextMenuRegistrations.length}`,
+      `  Message actions: ${messageActionRegistrations.length}`,
+      `  Composer shelves: ${composerShelfRegistrations.length}`,
+      `  Composer buttons: ${composerButtonRegistrations.length}`,
+      `  Composer input tools: ${composerInputToolRegistrations.length}`,
+      `  Keybindings: ${keybindingRegistrations.length}`,
+      `  Status bar items: ${statusBarRegistrations.length}`,
+      `  Secrets: ${secretRegistrations.length}`,
+      `  Secret backends: ${secretBackendRegistrations.length}`,
+      `  Settings components: ${settingsComponentRegistrations.length}`,
     ].join('\n');
 
     // Print the report

@@ -112,4 +112,157 @@ describe('registerServerRoutes smoke test', () => {
       }),
     );
   });
+
+  /* ---- Extension API endpoints ---- */
+
+  it('serves the extension schema endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/schema`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.manifestVersion).toBe(2);
+    expect(body.placements).toContain('main');
+    expect(body.surfaceKinds).toContain('page');
+    expect(body.iconNames).toContain('kanban');
+  });
+
+  it('serves the extension manifest list', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    const systemExts = body.filter((e: { packageType: string }) => e.packageType === 'system');
+    expect(systemExts.length).toBeGreaterThanOrEqual(20);
+    expect(systemExts.some((e: { id: string }) => e.id === 'system-extension-manager')).toBe(true);
+    expect(systemExts.some((e: { id: string }) => e.id === 'system-automations')).toBe(true);
+  });
+
+  it('serves the installed extension summaries', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/installed`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    const systemExts = body.filter((e: { packageType: string }) => e.packageType === 'system');
+    expect(systemExts.length).toBeGreaterThanOrEqual(20);
+    for (const ext of systemExts) {
+      expect(typeof ext.id).toBe('string');
+      expect(typeof ext.name).toBe('string');
+      expect(typeof ext.enabled).toBe('boolean');
+    }
+  });
+
+  it('serves the extension routes endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/routes`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThanOrEqual(7);
+    // Every route entry should have required fields
+    for (const route of body) {
+      expect(typeof route.route).toBe('string');
+      expect(typeof route.extensionId).toBe('string');
+      expect(typeof route.surfaceId).toBe('string');
+    }
+  });
+
+  it('serves the extension surfaces endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/surfaces`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThan(0);
+    // Each surface should have extension identification
+    for (const surface of body) {
+      expect(typeof surface.extensionId).toBe('string');
+      expect(typeof surface.component).toBe('string');
+      expect(surface.location).toMatch(/^(main|rightRail|workbench)$/);
+    }
+  });
+
+  it('serves the extension commands endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/commands`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    for (const cmd of body) {
+      expect(typeof cmd.extensionId).toBe('string');
+      expect(typeof cmd.title).toBe('string');
+      expect(typeof cmd.action).toBe('string');
+    }
+  });
+
+  it('serves the extension slash-commands endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/slash-commands`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    for (const cmd of body) {
+      expect(typeof cmd.extensionId).toBe('string');
+      expect(typeof cmd.name).toBe('string');
+      expect(typeof cmd.action).toBe('string');
+    }
+  });
+
+  it('serves the per-extension manifest endpoint for a known extension', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/system-extension-manager/manifest`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe('system-extension-manager');
+    expect(body.name).toBe('Extension Manager');
+    expect(body.packageType).toBe('system');
+    expect(body.contributes?.views).toBeDefined();
+    expect(body.contributes?.nav).toBeDefined();
+  });
+
+  it('returns 404 for unknown extension manifest', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/nonexistent-extension/manifest`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('serves the per-extension surfaces endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/system-automations/surfaces`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    // The automations extension should have at least one view
+    expect(body.some((s: { location: string }) => s.location === 'main')).toBe(true);
+  });
+
+  it('serves extension mentions endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/mentions`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+  });
+
+  it('serves extension quick-open endpoint', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/quick-open`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+  });
+
+  it('serves extension keybinding registrations', async () => {
+    const res = await fetch(`${appBaseUrl}/api/extensions/keybindings`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    for (const kb of body) {
+      expect(typeof kb.extensionId).toBe('string');
+      expect(typeof kb.title).toBe('string');
+      expect(Array.isArray(kb.keys)).toBe(true);
+    }
+  });
 });
