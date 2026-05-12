@@ -1218,6 +1218,7 @@ export function Layout() {
   const activeWorkbenchKnowledgeFileId = showWorkbench
     ? (searchParams.get('file') ?? (activeConversationId ? selectedFileByConversation[activeConversationId] : null) ?? null)
     : null;
+  const activeWorkbenchWorkspaceFileId = showWorkbench ? searchParams.get('workspaceFile') : null;
   const activeWorkbenchArtifactId =
     showWorkbench && activeConversationId
       ? (getConversationArtifactIdFromSearch(location.search) ?? selectedArtifactByConversation[activeConversationId] ?? null)
@@ -1283,10 +1284,11 @@ export function Layout() {
     systemKnowledgeExtensionSurface !== null;
   const activeExtensionWorkbenchSurface = useMemo(() => {
     const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
-    if (!parsed) return null;
-    const activeRailSurface = extensionRightToolPanels.find(
-      (surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId,
-    );
+    const activeRailSurface = parsed
+      ? extensionRightToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId)
+      : activeWorkbenchTool === 'files'
+        ? (extensionRightToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null)
+        : null;
     if (!activeRailSurface || !('detailView' in activeRailSurface) || typeof activeRailSurface.detailView !== 'string') return null;
     return (
       extensionWorkbenchSurfaces.find(
@@ -1538,11 +1540,12 @@ export function Layout() {
         return;
       }
 
-      if (activeWorkbenchKnowledgeFileId) {
+      if (activeWorkbenchKnowledgeFileId || activeWorkbenchWorkspaceFileId) {
         setSearchParams(
           (current) => {
             const next = new URLSearchParams(current);
             next.delete('file');
+            next.delete('workspaceFile');
             return next;
           },
           { replace: true },
@@ -1575,6 +1578,7 @@ export function Layout() {
     activeWorkbenchCheckpointId,
     activeWorkbenchKnowledgeFileId,
     activeWorkbenchRunId,
+    activeWorkbenchWorkspaceFileId,
     clearActiveConversationCheckpoint,
     setSearchParams,
   ]);
@@ -1814,6 +1818,7 @@ export function Layout() {
                       data-workbench-document-pane="true"
                       data-has-open-file={
                         activeWorkbenchKnowledgeFileId ||
+                        activeWorkbenchWorkspaceFileId ||
                         activeWorkbenchArtifactId ||
                         activeWorkbenchCheckpointId ||
                         activeWorkbenchRunId ||
