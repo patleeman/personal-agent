@@ -102,6 +102,7 @@ export function ActivityTreeView({
           const conversationIsRunning = item.kind === 'conversation' && item.metadata?.isRunning === true;
           const conversationNeedsAttention = item.kind === 'conversation' && item.metadata?.needsAttention === true;
           const showConversationStatus = conversationIsRunning || conversationNeedsAttention;
+          const rowPaddingLeft = item.kind === 'group' || item.kind === 'conversation' ? 0.5 : 0.5 + depth * 0.5;
           return (
             <button
               key={item.id}
@@ -116,7 +117,7 @@ export function ActivityTreeView({
                 .filter(Boolean)
                 .join(' ')}
               style={{
-                paddingLeft: `${0.5 + depth * 0.5}rem`,
+                paddingLeft: `${rowPaddingLeft}rem`,
                 ...(backgroundColor ? { backgroundColor } : {}),
                 ...(accentColor ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : {}),
               }}
@@ -207,7 +208,7 @@ export function ActivityTreeView({
                 <span
                   role="button"
                   tabIndex={-1}
-                  className="shrink-0 rounded px-1 text-[12px] text-dim opacity-0 hover:bg-surface-hover hover:text-primary group-hover:opacity-100 group-focus-within:opacity-100"
+                  className="shrink-0 rounded px-1 text-[14px] leading-none text-dim opacity-0 hover:bg-surface-hover hover:text-primary group-hover:opacity-100 group-focus-within:opacity-100"
                   aria-label="Archive thread"
                   title="Archive thread"
                   onClick={(event) => {
@@ -216,7 +217,7 @@ export function ActivityTreeView({
                     onArchiveItem(item);
                   }}
                 >
-                  ⌫
+                  ×
                 </span>
               ) : null}
             </button>
