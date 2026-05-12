@@ -839,6 +839,8 @@ private struct TraceClusterView: View {
     let cluster: TraceCluster
     let live: Bool
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @State private var preference: DisclosurePreference = .auto
     @State private var showAllBlocks = false
 
@@ -853,58 +855,113 @@ private struct TraceClusterView: View {
         return Array(cluster.blocks.suffix(maxVisibleTraceBlocks))
     }
 
+    @ViewBuilder
+    private var traceClusterHeader: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    traceStatusIcon
+                    Text(autoOpen ? "Working" : "Internal work")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textPrimary)
+                }
+                Text("\(cluster.summary.stepCount) step\(cluster.summary.stepCount == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                if live {
+                    Text("live")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.accent)
+                }
+                if let duration = formatDurationLabel(cluster.summary.durationMs), !autoOpen {
+                    Text(duration)
+                        .font(.caption2)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+                Text(open ? "Hide" : "Show")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+        } else {
+            HStack(spacing: 8) {
+                traceStatusIcon
+                Text(autoOpen ? "Working" : "Internal work")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CompanionTheme.textPrimary)
+                Text("· \(cluster.summary.stepCount) step\(cluster.summary.stepCount == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                Spacer()
+                if live {
+                    Text("live")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.accent)
+                }
+                if let duration = formatDurationLabel(cluster.summary.durationMs), !autoOpen {
+                    Text(duration)
+                        .font(.caption2)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+                Text(open ? "Hide" : "Show")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var traceStatusIcon: some View {
+        if autoOpen {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(cluster.summary.hasError ? .red : CompanionTheme.accent)
+                .scaleEffect(0.8)
+        } else {
+            Image(systemName: cluster.summary.hasError ? "exclamationmark.circle" : "ellipsis")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(cluster.summary.hasError ? .red : CompanionTheme.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var traceCategorySummary: some View {
+        let categories = Array(cluster.summary.categories.prefix(3))
+        let remaining = max(0, cluster.summary.categories.count - 3)
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(categories) { category in
+                    TraceSummaryChip(category: category)
+                }
+                if remaining > 0 {
+                    Text("+\(remaining) more")
+                        .font(.caption2)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+            }
+        } else {
+            HStack(spacing: 6) {
+                ForEach(categories) { category in
+                    TraceSummaryChip(category: category)
+                }
+                if remaining > 0 {
+                    Text("+\(remaining) more")
+                        .font(.caption2)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
                 preference = toggleDisclosurePreference(autoOpen: autoOpen, preference: preference)
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        if autoOpen {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(cluster.summary.hasError ? .red : CompanionTheme.accent)
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: cluster.summary.hasError ? "exclamationmark.circle" : "ellipsis")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(cluster.summary.hasError ? .red : CompanionTheme.textSecondary)
-                        }
-
-                        Text(autoOpen ? "Working" : "Internal work")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(CompanionTheme.textPrimary)
-                        Text("· \(cluster.summary.stepCount) step\(cluster.summary.stepCount == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundStyle(CompanionTheme.textSecondary)
-                        Spacer()
-                        if live {
-                            Text("live")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(CompanionTheme.accent)
-                        }
-                        if let duration = formatDurationLabel(cluster.summary.durationMs), !autoOpen {
-                            Text(duration)
-                                .font(.caption2)
-                                .foregroundStyle(CompanionTheme.textSecondary)
-                        }
-                        Text(open ? "Hide" : "Show")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(CompanionTheme.textSecondary)
-                    }
+                    traceClusterHeader
 
                     if !cluster.summary.categories.isEmpty {
-                        HStack(spacing: 6) {
-                            ForEach(Array(cluster.summary.categories.prefix(3))) { category in
-                                TraceSummaryChip(category: category)
-                            }
-                            let remaining = max(0, cluster.summary.categories.count - 3)
-                            if remaining > 0 {
-                                Text("+\(remaining) more")
-                                    .font(.caption2)
-                                    .foregroundStyle(CompanionTheme.textSecondary)
-                            }
-                        }
+                        traceCategorySummary
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
