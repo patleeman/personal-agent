@@ -107,7 +107,7 @@ Bypass with `git commit --no-verify` if needed.
 ### npm scripts
 
 ```bash
-npm run check    # tsc --noEmit → eslint → prettier --check → knip (dead code) → extension quick check
+npm run check    # tsc --noEmit → eslint → prettier --check → extension quick check; knip (dead code, informational)
 npm run fix      # prettier --write + eslint --fix
 ```
 
