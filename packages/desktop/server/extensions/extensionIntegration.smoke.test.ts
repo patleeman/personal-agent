@@ -142,6 +142,94 @@ describe('extension manifests - structural validation', () => {
       }
     }
   });
+
+  it('all permissions use valid resource:action format', () => {
+    for (const ext of summaries) {
+      const permissions = ext.manifest.permissions ?? [];
+      for (const perm of permissions) {
+        expect(
+          typeof perm === 'string' && /^[a-z][a-z0-9-]*:[a-z][a-zA-Z0-9-]*$/.test(perm.trim()),
+          `${ext.id}: invalid permission format "${perm}" — must be "resource:action"`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('all main-view routes start with /', () => {
+    for (const ext of snapshot.extensions) {
+      const views = ext.contributes?.views ?? [];
+      for (const view of views) {
+        if (view.location !== 'main' || !view.route) continue;
+        expect(view.route.startsWith('/'), `${ext.id}: view "${view.id}" route "${view.route}" must start with /`).toBe(true);
+        expect(!view.route.includes('//'), `${ext.id}: view "${view.id}" route "${view.route}" contains double slash`).toBe(true);
+      }
+      const nav = ext.contributes?.nav ?? [];
+      for (const n of nav) {
+        expect(n.route.startsWith('/'), `${ext.id}: nav "${n.id}" route "${n.route}" must start with /`).toBe(true);
+      }
+    }
+  });
+
+  it('startupAction and onEnableAction reference valid backend action ids', () => {
+    for (const ext of summaries) {
+      const backend = ext.manifest.backend;
+      if (!backend) continue;
+      const actionIds = new Set((backend.actions ?? []).map((a) => a.id));
+
+      if (backend.startupAction) {
+        expect(
+          actionIds.has(backend.startupAction),
+          `${ext.id}: startupAction "${backend.startupAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
+        ).toBe(true);
+      }
+      if (backend.onEnableAction) {
+        expect(
+          actionIds.has(backend.onEnableAction),
+          `${ext.id}: onEnableAction "${backend.onEnableAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('extensions with both frontend and backend have both entry files', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const hasFrontend = Boolean(ext.manifest.frontend?.entry);
+      const hasBackend = Boolean(ext.manifest.backend?.entry);
+      if (!hasFrontend || !hasBackend) continue;
+
+      const frontendPath = resolve(ext.packageRoot ?? '', ext.manifest.frontend!.entry);
+      const backendPath = ext.manifest.backend!.entry.startsWith('src/')
+        ? resolve(ext.packageRoot ?? '', 'dist', 'backend.mjs')
+        : resolve(ext.packageRoot ?? '', ext.manifest.backend!.entry);
+
+      expect(existsSync(frontendPath), `${ext.id}: missing frontend entry at ${ext.manifest.frontend!.entry}`).toBe(true);
+      expect(existsSync(backendPath), `${ext.id}: missing backend entry at ${backendPath}`).toBe(true);
+    }
+  });
+
+  it('backend action handler names appear in the prebuilt bundle', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const actions = ext.manifest.backend?.actions ?? [];
+      for (const action of actions) {
+        expect(action.handler?.trim(), `${ext.id}: action "${action.id}" is missing a handler property`).toBeTruthy();
+      }
+
+      const backendPath = resolve(ext.packageRoot ?? '', 'dist', 'backend.mjs');
+      if (!existsSync(backendPath) || actions.length === 0) continue;
+
+      const content = readFileSync(backendPath, 'utf-8');
+      for (const action of actions) {
+        const handlerName = action.handler ?? action.id;
+        // The handler name should appear as a word in the source (function def, export entry, or method name)
+        expect(
+          content.includes(handlerName),
+          `${ext.id}: backend action handler "${handlerName}" (from action "${action.id}") not found anywhere in dist/backend.mjs`,
+        ).toBe(true);
+      }
+    }
+  });
 });
 
 /* ------------------------------------------------------------------ */
