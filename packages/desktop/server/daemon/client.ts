@@ -5,6 +5,8 @@ import type { DaemonConfig } from '../config.js';
 import { loadDaemonConfig } from '../config.js';
 import { resolveDaemonPaths } from '../paths.js';
 import { publishAppEvent } from '../shared/appEvents.js';
+import { logWarn } from '../shared/logging.js';
+import { logWarn } from '../shared/logging.js';
 import { createDaemonEvent } from './events.js';
 import { getDaemonClientTransportOverride } from './in-process-client.js';
 import type {
@@ -400,7 +402,7 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
   try {
     const accepted = await emitDaemonEvent(input, config);
     if (!accepted) {
-      console.warn(`daemon queue is full; dropped event type=${input.type}`);
+      logWarn('daemon queue is full; dropped event', { type: input.type });
       publishAppEvent({
         type: 'notification',
         extensionId: 'core',
@@ -409,7 +411,7 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
       });
     }
   } catch (error) {
-    console.warn(formatDaemonUnavailableWarning(error, config));
+    logWarn('daemon unavailable; continuing without background event', { message: formatDaemonUnavailableWarning(error, config) });
     publishAppEvent({
       type: 'notification',
       extensionId: 'core',

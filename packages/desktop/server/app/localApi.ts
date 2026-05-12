@@ -159,6 +159,7 @@ import type { ServerRouteContext } from '../routes/context.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
 import { invalidateAppTopics, publishAppEvent, subscribeAppEvents } from '../shared/appEvents.js';
+import { logError } from '../shared/logging.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
@@ -568,7 +569,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     // servers, background services). Errors are logged per-extension but
     // don't block routes from being returned.
     startExtensionStartupActions(context).catch((error) => {
-      console.error(`[extensions] startup action dispatch failed: ${(error as Error).message}`);
+      logError('extension startup action dispatch failed', { message: (error as Error).message });
       publishAppEvent({
         type: 'notification',
         extensionId: 'core',

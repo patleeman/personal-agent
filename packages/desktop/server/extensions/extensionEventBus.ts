@@ -10,6 +10,7 @@
  */
 
 import { publishAppEvent } from '../shared/appEvents.js';
+import { logError } from '../shared/logging.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -95,10 +96,12 @@ export async function publishExtensionEvent(sourceExtensionId: string, event: st
       .filter((entry) => patternMatches(entry.pattern, event))
       .map((entry) =>
         Promise.resolve(entry.handler(envelope)).catch((error) => {
-          console.error(
-            `[extension-event-bus] error in "${entry.extensionId}" handler ` +
-              `for event "${event}" (pattern "${entry.pattern}"): ${(error as Error).message}`,
-          );
+          logError('extension event handler failed', {
+            extensionId: entry.extensionId,
+            event,
+            pattern: entry.pattern,
+            message: (error as Error).message,
+          });
           publishAppEvent({
             type: 'notification',
             extensionId: entry.extensionId,

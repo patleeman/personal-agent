@@ -1,4 +1,5 @@
 import { publishAppEvent } from '../shared/appEvents.js';
+import { logError } from '../shared/logging.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
 
 export interface LiveSessionDurableRunHost {
@@ -55,9 +56,7 @@ export async function syncLiveSessionDurableRun(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      `[${new Date().toISOString()}] [web] [error] conversation durable run sync failed sessionId=${entry.sessionId} state=${state} message=${message}`,
-    );
+    logError('conversation durable run sync failed', { sessionId: entry.sessionId, state, message });
     publishAppEvent({
       type: 'notification',
       extensionId: 'core',

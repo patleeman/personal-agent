@@ -1,4 +1,5 @@
 import { publishAppEvent } from '../shared/appEvents.js';
+import { logError } from '../shared/logging.js';
 
 export interface LiveSessionLifecycleEvent {
   conversationId: string;
@@ -42,9 +43,7 @@ export function notifyLiveSessionLifecycleHandlers(
   for (const handler of handlers) {
     Promise.resolve(handler(event)).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        `[${new Date().toISOString()}] [web] [error] live session lifecycle handler failed conversationId=${event.conversationId} trigger=${event.trigger} message=${message}`,
-      );
+      logError('live session lifecycle handler failed', { conversationId: event.conversationId, trigger: event.trigger, message });
       publishAppEvent({
         type: 'notification',
         extensionId: 'core',

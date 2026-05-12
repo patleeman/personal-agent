@@ -10,6 +10,7 @@ import type { Plugin } from 'esbuild';
 
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
+import { logError, logInfo, logWarn } from '../shared/logging.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { isPrebuiltOnlyExtensionRuntime, resolvePackagedExtensionBackendLoadTarget } from './extensionBackendLoadTarget.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
@@ -210,7 +211,7 @@ function createBackendContext(
     shell: createExtensionShellCapability(),
     notify: {
       toast: (message, type = 'info') => {
-        console.log(`[extension:${extensionId}] [${type}] ${message}`);
+        logInfo('extension notification', { extensionId, type, message });
         invalidateAppTopics('notifications');
         publishAppEvent({ type: 'notification', extensionId, message, severity: type });
       },
@@ -267,9 +268,9 @@ function createBackendContext(
       },
     },
     log: {
-      info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
-      warn: (message, fields) => console.warn(`[extension:${extensionId}] ${message}`, fields ?? {}),
-      error: (message, fields) => console.error(`[extension:${extensionId}] ${message}`, fields ?? {}),
+      info: (message, fields) => logInfo(`extension:${extensionId} ${message}`, fields),
+      warn: (message, fields) => logWarn(`extension:${extensionId} ${message}`, fields),
+      error: (message, fields) => logError(`extension:${extensionId} ${message}`, fields),
     },
   };
 }
@@ -594,14 +595,14 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
   try {
     compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: true });
     if (compiled.stale) {
-      console.warn(`[extension:${extensionId}] backend build failed; using previous compiled backend`);
+      logWarn('extension backend build failed; using previous compiled backend', { extensionId });
     }
   } catch (buildError) {
     // Rebuild from source failed and no stale cache available.
     // Fall back to pre-built dist file if one exists (system extensions).
     const preBuiltEntry = resolve(packageRoot, 'dist', 'backend.mjs');
     if (existsSync(preBuiltEntry)) {
-      console.warn(`[extension:${extensionId}] backend rebuild failed; falling back to pre-built dist/backend.mjs`);
+      logWarn('extension backend rebuild failed; falling back to pre-built dist/backend.mjs', { extensionId });
       compiled = { path: preBuiltEntry, hash: `prebuilt-${Date.now()}`, rebuilt: false, stale: false };
     } else {
       const causeMsg = buildError instanceof Error ? buildError.message : String(buildError);
@@ -709,7 +710,7 @@ export async function startExtensionStartupActions(
       results.push({ extensionId: summary.id, ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[extension:${summary.id}] startup action "${startupActionId}" failed: ${message}`);
+      logError('extension startup action failed', { extensionId: summary.id, startupActionId, message });
       publishAppEvent({ type: 'notification', extensionId: summary.id, message: `Startup action failed: ${message}`, severity: 'error' });
       results.push({ extensionId: summary.id, ok: false, error: message });
     }
