@@ -445,6 +445,55 @@ describe('extension manifests - structural validation', () => {
     }
   });
 
+  it('all system extensions have a version field', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      expect(ext.manifest.version?.trim(), `${ext.id}: missing version field`).toBeTruthy();
+      expect(
+        /^\d+\.\d+\.\d+/.test(ext.manifest.version!),
+        `${ext.id}: version "${ext.manifest.version}" does not follow semver (X.Y.Z)`,
+      ).toBe(true);
+    }
+  });
+
+  it('settings keys follow a dot-separated key-value convention', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const settings = ext.manifest.contributes?.settings ?? {};
+      for (const key of Object.keys(settings)) {
+        // Setting keys should be dot-separated: namespace.key or namespace.sub.key
+        expect(key.includes('.'), `${ext.id}: setting key "${key}" should use dot-separated format (e.g. "namespace.key")`).toBe(true);
+        // Each segment should be a valid identifier
+        for (const segment of key.split('.')) {
+          expect(
+            /^[a-zA-Z][a-zA-Z0-9]*$/.test(segment),
+            `${ext.id}: setting key "${key}" segment "${segment}" is not a valid identifier`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('nav badgeAction references reference valid actions', () => {
+    for (const ext of summaries) {
+      if (ext.packageType !== 'system') continue;
+      const navItems = ext.manifest.contributes?.nav ?? [];
+      const backendActionIds = new Set((ext.manifest.backend?.actions ?? []).map((a) => a.id));
+      const knownBadgeActions = new Set(['commandPalette:threads']);
+
+      for (const nav of navItems) {
+        if (!nav.badgeAction) continue;
+        if (knownBadgeActions.has(nav.badgeAction)) continue;
+        if (backendActionIds.has(nav.badgeAction)) continue;
+        if (nav.badgeAction.startsWith('commandPalette:') || nav.badgeAction.startsWith('navigate:')) continue;
+        expect(
+          false,
+          `${ext.id}: nav "${nav.id}" badgeAction "${nav.badgeAction}" is not a known backend action, built-in badge action, or system action prefix`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it('backend action handler names appear in the prebuilt bundle', () => {
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
