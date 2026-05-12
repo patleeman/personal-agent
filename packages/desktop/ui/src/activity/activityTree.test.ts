@@ -86,7 +86,7 @@ describe('buildActivityTreeItems', () => {
         parentId: buildConversationActivityId('conv-1'),
         title: 'Visual QA',
         status: 'running',
-        route: '/runs/run-1',
+        route: '/conversations/conv-1?run=run-1',
       }),
     ]);
   });
@@ -136,7 +136,7 @@ describe('buildActivityTreeItems', () => {
     expect(items).toEqual([expect.objectContaining({ id: buildConversationActivityId('conv-1') })]);
   });
 
-  it('keeps unlinked runs as root items', () => {
+  it('skips unlinked runs', () => {
     const items = buildActivityTreeItems({
       conversations: [session({ id: 'conv-1', title: 'Build the thing' })],
       runs: [
@@ -162,8 +162,6 @@ describe('buildActivityTreeItems', () => {
       ],
     });
 
-    expect(items.find((item) => item.id === buildRunActivityId('run-2'))).toEqual(
-      expect.objectContaining({ parentId: undefined, status: 'done' }),
-    );
+    expect(items.find((item) => item.id === buildRunActivityId('run-2'))).toBeUndefined();
   });
 });

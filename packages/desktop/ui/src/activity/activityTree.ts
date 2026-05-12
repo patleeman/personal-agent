@@ -49,15 +49,18 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
     }
 
     const parentConversationId = getRunConversationId(run);
+    if (!parentConversationId || !conversationIds.has(parentConversationId)) {
+      continue;
+    }
+
     items.push({
       id: buildRunActivityId(run.runId),
       kind: 'run',
-      parentId:
-        parentConversationId && conversationIds.has(parentConversationId) ? buildConversationActivityId(parentConversationId) : undefined,
+      parentId: buildConversationActivityId(parentConversationId),
       title: getRunTitle(run),
       subtitle: run.status?.lastError || run.manifest?.kind || undefined,
       status: normalizeRunStatus(run.status?.status),
-      route: `/runs/${encodeURIComponent(run.runId)}`,
+      route: `/conversations/${encodeURIComponent(parentConversationId)}?run=${encodeURIComponent(run.runId)}`,
       updatedAt: run.status?.updatedAt ?? run.manifest?.createdAt,
       metadata: { runId: run.runId, conversationId: parentConversationId },
     });
