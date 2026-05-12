@@ -40,9 +40,9 @@ pipeline.
 
 ## Current release
 
-**v0.7.9-rc.3** — published 2026-05-11.
+**v0.7.9-rc.10** — published 2026-05-12.
 
-Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.7.9-rc.3
+Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.7.9-rc.10
 
 ### Highlights
 
@@ -115,6 +115,7 @@ npm run fix      # prettier --write + eslint --fix
 - **`lint`** — `eslint` with `simple-import-sort` for import ordering.
 - **`fmt`** — `prettier --check`. Config: single quotes, trailing commas, 140 width.
 - **`check:dead`** — `knip`. Catches unused exports, files, and dependencies. Config in `knip.json`.
+- **`check:extensions`** — Vitest extension integration smoke tests (93 tests, ~30s). Also available as `check:extensions:quick` (~5s, skips dynamic import check).
 
 ### Coverage
 
