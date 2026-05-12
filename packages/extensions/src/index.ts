@@ -561,6 +561,21 @@ export interface ExtensionBackendContext {
     getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
   ui: { invalidate(topics: string | string[]): void };
+  telemetry: {
+    record(event: {
+      source?: 'server' | 'renderer' | 'agent' | 'system';
+      category: string;
+      name: string;
+      sessionId?: string;
+      runId?: string;
+      route?: string;
+      status?: number;
+      durationMs?: number;
+      count?: number;
+      value?: number;
+      metadata?: Record<string, unknown>;
+    }): void;
+  };
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;

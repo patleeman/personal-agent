@@ -13,10 +13,10 @@ import {
   getDurableRunLog,
   invalidateAppTopics,
   listDurableRuns,
-  persistAppTelemetryEvent,
   rerunDurableRun,
   startBackgroundRun,
 } from '@personal-agent/extensions/backend/runs';
+import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemetry';
 import { Type } from '@sinclair/typebox';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
@@ -317,7 +317,7 @@ export function createRunAgentExtension(options: {
               });
 
               if (!result.accepted) {
-                persistAppTelemetryEvent({
+                recordTelemetryEvent({
                   source: 'agent',
                   category: 'durable_run',
                   name: 'start_rejected',
@@ -327,7 +327,7 @@ export function createRunAgentExtension(options: {
                 throw new Error(result.reason ?? `Could not start durable run for ${taskSlug}.`);
               }
 
-              persistAppTelemetryEvent({
+              recordTelemetryEvent({
                 source: 'agent',
                 category: 'durable_run',
                 name: 'start',
@@ -442,7 +442,7 @@ export function createRunAgentExtension(options: {
 
                 invalidateAppTopics('tasks');
 
-                persistAppTelemetryEvent({
+                recordTelemetryEvent({
                   source: 'agent',
                   category: 'scheduled_task',
                   name: 'save_from_run_tool',
@@ -507,7 +507,7 @@ export function createRunAgentExtension(options: {
               });
 
               if (!result.accepted) {
-                persistAppTelemetryEvent({
+                recordTelemetryEvent({
                   source: 'agent',
                   category: 'durable_run',
                   name: 'start_rejected',
@@ -517,7 +517,7 @@ export function createRunAgentExtension(options: {
                 throw new Error(result.reason ?? `Could not start durable agent run for ${taskSlug}.`);
               }
 
-              persistAppTelemetryEvent({
+              recordTelemetryEvent({
                 source: 'agent',
                 category: 'durable_run',
                 name: 'start_agent',
@@ -559,7 +559,7 @@ export function createRunAgentExtension(options: {
               if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await rerunDurableRun(runId);
               if (!result.accepted) {
-                persistAppTelemetryEvent({
+                recordTelemetryEvent({
                   source: 'agent',
                   category: 'durable_run',
                   name: 'rerun_rejected',
@@ -570,7 +570,7 @@ export function createRunAgentExtension(options: {
                 throw new Error(result.reason ?? `Could not rerun ${runId}.`);
               }
 
-              persistAppTelemetryEvent({
+              recordTelemetryEvent({
                 source: 'agent',
                 category: 'durable_run',
                 name: 'rerun',
@@ -596,7 +596,7 @@ export function createRunAgentExtension(options: {
               if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await followUpDurableRun(runId, prompt);
               if (!result.accepted) {
-                persistAppTelemetryEvent({
+                recordTelemetryEvent({
                   source: 'agent',
                   category: 'durable_run',
                   name: 'follow_up_rejected',
@@ -607,7 +607,7 @@ export function createRunAgentExtension(options: {
                 throw new Error(result.reason ?? `Could not continue ${runId}.`);
               }
 
-              persistAppTelemetryEvent({
+              recordTelemetryEvent({
                 source: 'agent',
                 category: 'durable_run',
                 name: 'follow_up',
@@ -633,7 +633,7 @@ export function createRunAgentExtension(options: {
               if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await cancelDurableRun(runId);
               if (!result.cancelled) {
-                persistAppTelemetryEvent({
+                recordTelemetryEvent({
                   source: 'agent',
                   category: 'durable_run',
                   name: 'cancel_rejected',
@@ -644,7 +644,7 @@ export function createRunAgentExtension(options: {
                 throw new Error(result.reason ?? `Could not cancel run ${runId}.`);
               }
 
-              persistAppTelemetryEvent({ source: 'agent', category: 'durable_run', name: 'cancel', runId, status: 200 });
+              recordTelemetryEvent({ source: 'agent', category: 'durable_run', name: 'cancel', runId, status: 200 });
               invalidateAppTopics('runs');
               return {
                 content: [{ type: 'text' as const, text: `Cancelled durable run ${runId}.` }],

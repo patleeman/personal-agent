@@ -12,3 +12,4 @@ export * from './knowledgeVault.js';
 export * from './mcp.js';
 export * from './runs.js';
 export * from './runtime.js';
+export * from './telemetry.js';

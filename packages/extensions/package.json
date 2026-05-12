@@ -83,6 +83,10 @@
       "types": "./dist/backend/runtime.d.ts",
       "default": "./dist/backend/runtime.js"
     },
+    "./backend/telemetry": {
+      "types": "./dist/backend/telemetry.d.ts",
+      "default": "./dist/backend/telemetry.js"
+    },
     "./backend/artifacts": {
       "types": "./dist/backend/artifacts.d.ts",
       "default": "./dist/backend/artifacts.js"

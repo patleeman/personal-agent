@@ -11,7 +11,6 @@ import {
   loadScheduledTasksForProfile,
   normalizeAutomationTargetTypeForSelection,
   parseFutureHumanDateTime,
-  persistAppTelemetryEvent,
   pingDaemon,
   readSessionConversationId,
   resolveScheduledTaskForProfile,
@@ -23,6 +22,7 @@ import {
   type TaskRuntimeEntry,
   updateStoredAutomation,
 } from '@personal-agent/extensions/backend/automations';
+import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemetry';
 import { Type } from '@sinclair/typebox';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
@@ -546,7 +546,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
               const { task } = resolveScheduledTaskForProfile(profile, taskId);
               if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await startScheduledTaskRun(task.id);
-              persistAppTelemetryEvent({
+              recordTelemetryEvent({
                 source: 'agent',
                 category: 'scheduled_task',
                 name: 'run_tool_run',

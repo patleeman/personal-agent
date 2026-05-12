@@ -558,7 +558,17 @@ The `pa` client provides:
 
 See `packages/extensions/src/index.ts` for the full API.
 
-Backend-only host APIs that should stay narrow can also be exposed through focused SDK subpaths such as `@personal-agent/extensions/backend/artifacts`, `/automations`, `/browser`, `/conversations`, `/images`, `/knowledge`, `/knowledgeVault`, `/mcp`, `/runs`, and `/runtime`. Prefer a focused subpath over the broad backend barrel when bundling a system extension that only needs one backend service.
+Backend-only host APIs that should stay narrow can also be exposed through focused SDK subpaths such as `@personal-agent/extensions/backend/artifacts`, `/automations`, `/browser`, `/conversations`, `/images`, `/knowledge`, `/knowledgeVault`, `/mcp`, `/runs`, `/runtime`, and `/telemetry`. Prefer a focused subpath over the broad backend barrel when bundling a system extension that only needs one backend service.
+
+Backend extensions can record fire-and-forget app telemetry through the dedicated telemetry seam:
+
+```ts
+import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemetry';
+
+recordTelemetryEvent({ source: 'agent', category: 'my_extension', name: 'action_completed', durationMs: 42 });
+```
+
+Backend action handlers can also use `ctx.telemetry.record(...)`, which records the same event shape and adds the current extension id to metadata automatically.
 
 ## Main page layout
 

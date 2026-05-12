@@ -11,6 +11,7 @@ import type { Plugin } from 'esbuild';
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { logError, logInfo, logWarn } from '../shared/logging.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { isPrebuiltOnlyExtensionRuntime, resolvePackagedExtensionBackendLoadTarget } from './extensionBackendLoadTarget.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
@@ -120,6 +121,21 @@ export interface ExtensionBackendContext {
   };
   ui: {
     invalidate(topics: string | string[]): void;
+  };
+  telemetry: {
+    record(event: {
+      source?: 'server' | 'renderer' | 'agent' | 'system';
+      category: string;
+      name: string;
+      sessionId?: string;
+      runId?: string;
+      route?: string;
+      status?: number;
+      durationMs?: number;
+      count?: number;
+      value?: number;
+      metadata?: Record<string, unknown>;
+    }): void;
   };
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
@@ -290,6 +306,15 @@ function createBackendContext(
       invalidate: (topics) => {
         const items = Array.isArray(topics) ? topics : [topics];
         invalidateAppTopics(...(items as import('../shared/appEvents.js').AppEventTopic[]));
+      },
+    },
+    telemetry: {
+      record: (event) => {
+        persistAppTelemetryEvent({
+          ...event,
+          source: event.source ?? 'server',
+          metadata: { ...(event.metadata ?? {}), extensionId },
+        });
       },
     },
     log: {
