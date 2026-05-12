@@ -1770,7 +1770,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         self.autoModeByConversation = Dictionary(uniqueKeysWithValues: self.conversations.keys.map {
             ($0, ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil))
         })
-        self.knowledgeRootPath = "/home/user/Documents/vault"
+        self.knowledgeRootPath = "/Users/patrick/Documents/personal-agent"
         self.knowledgeFiles = Self.defaultKnowledgeFiles()
         self.knowledgeFolders = Self.buildKnowledgeFolderSet(from: self.knowledgeFiles.keys)
         self.tasks = [
