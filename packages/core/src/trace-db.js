@@ -235,8 +235,27 @@ function importLegacyTraceRows(db, stateRoot) {
     } catch {}
   }
 }
-// Prune rows older than this many days on each DB open
+// Prune rows older than this many days and cap each trace table on every DB open.
 const TRACE_STATS_TTL_DAYS = 90;
+const DEFAULT_TRACE_TABLE_MAX_ROWS = 50_000;
+function resolveTraceTableMaxRows() {
+  const raw = process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS;
+  if (!raw) return DEFAULT_TRACE_TABLE_MAX_ROWS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) && parsed >= 1_000 ? parsed : DEFAULT_TRACE_TABLE_MAX_ROWS;
+}
+function pruneTraceTable(db, table, maxRows = resolveTraceTableMaxRows()) {
+  db.prepare(
+    `
+    DELETE FROM ${table}
+    WHERE id IN (
+      SELECT id FROM ${table}
+      ORDER BY ts DESC
+      LIMIT -1 OFFSET ?
+    )
+  `,
+  ).run(maxRows);
+}
 function getTraceDb(stateRoot) {
   const path = resolveTraceDbPath(stateRoot);
   const cached = dbCache.get(path);
@@ -261,6 +280,17 @@ function getTraceDb(stateRoot) {
     db.prepare(`DELETE FROM trace_auto_mode WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_suggested_context WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_context_pointer_inspect WHERE ts < ?`).run(cutoff);
+    for (const table of [
+      'trace_stats',
+      'trace_context',
+      'trace_tool_calls',
+      'trace_compactions',
+      'trace_auto_mode',
+      'trace_suggested_context',
+      'trace_context_pointer_inspect',
+    ]) {
+      pruneTraceTable(db, table);
+    }
     db.exec(`VACUUM`);
   } catch {
     // Non-fatal

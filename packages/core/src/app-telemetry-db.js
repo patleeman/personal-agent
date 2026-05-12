@@ -83,6 +83,7 @@ function getAppTelemetryDb(stateRoot) {
   db.exec(`CREATE TABLE IF NOT EXISTS observability_imports (key TEXT PRIMARY KEY, value TEXT NOT NULL, imported_at TEXT NOT NULL)`);
   applyMigrations(db, 'app-telemetry-db', APP_TELEMETRY_MIGRATIONS);
   importLegacyAppTelemetryEvents(db, stateRoot);
+  maybePruneAppTelemetryEvents(db, path, { force: true });
   dbCache.set(path, db);
   return db;
 }
@@ -113,10 +114,12 @@ function resolveMaxEvents() {
   const parsed = Number.parseInt(raw, 10);
   return Number.isSafeInteger(parsed) && parsed >= 1_000 ? parsed : DEFAULT_MAX_EVENTS;
 }
-function maybePruneAppTelemetryEvents(db, dbPath) {
-  const count = (writeCounts.get(dbPath) ?? 0) + 1;
-  writeCounts.set(dbPath, count);
-  if (count % PRUNE_EVERY_WRITES !== 0) return;
+function maybePruneAppTelemetryEvents(db, dbPath, input = {}) {
+  if (!input.force) {
+    const count = (writeCounts.get(dbPath) ?? 0) + 1;
+    writeCounts.set(dbPath, count);
+    if (count % PRUNE_EVERY_WRITES !== 0) return;
+  }
   const maxEvents = resolveMaxEvents();
   db.prepare(
     `

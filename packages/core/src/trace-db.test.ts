@@ -42,6 +42,7 @@ describe('trace-db', () => {
   // Use a temp directory for trace DB during tests
   const testDir = join(tmpdir(), `trace-db-test-${randomUUID()}`);
   const originalRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
+  const originalTraceTableMaxRows = process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS;
 
   beforeAll(() => {
     if (!existsSync(testDir)) {
@@ -57,6 +58,11 @@ describe('trace-db', () => {
     } else {
       delete process.env.PERSONAL_AGENT_STATE_ROOT;
     }
+    if (originalTraceTableMaxRows) {
+      process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS = originalTraceTableMaxRows;
+    } else {
+      delete process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS;
+    }
     rmSync(testDir, { recursive: true, force: true });
   });
 
@@ -67,6 +73,8 @@ describe('trace-db', () => {
     closeTraceDbs();
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
     rmSync(join(testDir, 'observability'), { recursive: true, force: true });
+
+    delete process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS;
 
     // Write some test data
     writeTraceStats({
@@ -377,6 +385,19 @@ describe('trace-db', () => {
     expect(gpt4!.avgTokensPerSec).toBe(2000);
     expect(gpt4!.peakTokensPerSec).toBe(2000);
     expect(gpt4!.tokensOutput).toBe(2000);
+  });
+
+  it('caps trace tables on open', () => {
+    process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS = '1000';
+
+    for (let index = 0; index < 1005; index++) {
+      writeTraceStats({ sessionId: `cap-${index}`, modelId: 'cap-model', tokensInput: 1, tokensOutput: 1, cost: 1 });
+    }
+
+    closeTraceDbs();
+    const usage = queryModelUsage(fiveHoursAgo).find((row) => row.modelId === 'cap-model');
+
+    expect(usage?.calls).toBe(1000);
   });
 
   it('queryTokensDaily returns daily aggregation with tool errors', () => {
