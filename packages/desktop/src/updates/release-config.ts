@@ -17,7 +17,8 @@ export const DESKTOP_RELEASE_REPO_SLUG = resolveDesktopReleaseRepoSlug();
 const [DESKTOP_RELEASE_REPO_OWNER_VALUE, DESKTOP_RELEASE_REPO_NAME_VALUE] = DESKTOP_RELEASE_REPO_SLUG.split('/', 2);
 export const DESKTOP_RELEASE_REPO_OWNER = DESKTOP_RELEASE_REPO_OWNER_VALUE;
 export const DESKTOP_RELEASE_REPO_NAME = DESKTOP_RELEASE_REPO_NAME_VALUE;
-const DESKTOP_RELEASE_ARTIFACT_PREFIX = 'Personal-Agent';
+const STABLE_DESKTOP_RELEASE_ARTIFACT_PREFIX = 'Personal-Agent';
+const RC_DESKTOP_RELEASE_ARTIFACT_PREFIX = 'Personal-Agent-RC';
 
 function normalizeVersion(version: string): string {
   return version.trim().replace(/^v/i, '');
@@ -31,6 +32,14 @@ export function buildDesktopReleasePageUrl(version: string): string {
   return `https://github.com/${DESKTOP_RELEASE_REPO_SLUG}/releases/tag/${buildDesktopReleaseTag(version)}`;
 }
 
+export function isRcDesktopReleaseVersion(version: string): boolean {
+  return /-rc(?:\.|$)/iu.test(normalizeVersion(version));
+}
+
+export function resolveDesktopReleaseArtifactPrefix(version: string): string {
+  return isRcDesktopReleaseVersion(version) ? RC_DESKTOP_RELEASE_ARTIFACT_PREFIX : STABLE_DESKTOP_RELEASE_ARTIFACT_PREFIX;
+}
+
 export function buildDesktopReleaseAssetName(options: {
   version: string;
   arch?: 'arm64' | 'x64';
@@ -38,5 +47,5 @@ export function buildDesktopReleaseAssetName(options: {
 }): string {
   const version = normalizeVersion(options.version);
   const arch = options.arch ?? 'arm64';
-  return `${DESKTOP_RELEASE_ARTIFACT_PREFIX}-${version}-mac-${arch}.${options.ext}`;
+  return `${resolveDesktopReleaseArtifactPrefix(version)}-${version}-mac-${arch}.${options.ext}`;
 }

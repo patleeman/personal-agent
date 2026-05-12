@@ -17,7 +17,7 @@ npm run desktop:demo
 
 Both `desktop:start` and `desktop:dev` build the Electron shell and launch it through `packages/desktop/scripts/launch-dev-app.mjs`.
 
-For packaged builds, launch `Personal Agent.app` from the output directory.
+For packaged builds, launch `Personal Agent.app` from the output directory. RC builds launch as `Personal Agent RC.app` so they can coexist with the stable app.
 
 ## Runtime Model
 

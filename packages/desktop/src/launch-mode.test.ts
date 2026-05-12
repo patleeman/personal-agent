@@ -33,4 +33,31 @@ describe('resolveDesktopLaunchPresentation', () => {
       launchLabel: 'Testing',
     });
   });
+
+  it('marks explicit RC launches clearly', () => {
+    expect(
+      resolveDesktopLaunchPresentation({
+        PERSONAL_AGENT_DESKTOP_VARIANT: ' rc ',
+      }),
+    ).toEqual({
+      mode: 'rc',
+      appName: 'Personal Agent RC',
+      launchLabel: 'RC',
+    });
+  });
+
+  it('uses the RC app presentation for packaged RC versions', () => {
+    expect(resolveDesktopLaunchPresentation({}, { version: '0.7.9-rc.10', packaged: true })).toEqual({
+      mode: 'rc',
+      appName: 'Personal Agent RC',
+      launchLabel: 'RC',
+    });
+  });
+
+  it('keeps unpackaged RC versions on the stable presentation unless explicitly marked', () => {
+    expect(resolveDesktopLaunchPresentation({}, { version: '0.7.9-rc.10', packaged: false })).toEqual({
+      mode: 'stable',
+      appName: 'Personal Agent',
+    });
+  });
 });

@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent';
 
@@ -22,6 +23,26 @@ function optionalExtraResource(resource) {
   return existsSync(resource.from) ? [resource] : [];
 }
 
+function readDesktopPackageVersion() {
+  const packageJson = JSON.parse(readFileSync(resolve('packages/desktop/package.json'), 'utf8'));
+  return typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
+}
+
+export function isRcDesktopVersion(version = readDesktopPackageVersion()) {
+  return /-rc(?:\.|$)/iu.test(version);
+}
+
+export function resolveDesktopReleaseIdentity(version = readDesktopPackageVersion()) {
+  const isRc = isRcDesktopVersion(version);
+  return {
+    appId: isRc ? 'com.personal-agent.desktop.rc' : 'com.personal-agent.desktop',
+    artifactPrefix: isRc ? 'Personal-Agent-RC' : 'Personal-Agent',
+    productName: isRc ? 'Personal Agent RC' : 'Personal Agent',
+  };
+}
+
+export const desktopReleaseIdentity = resolveDesktopReleaseIdentity();
+
 export const desktopReleasePublishConfig = {
   provider: 'github',
   owner: DESKTOP_RELEASE_REPO_OWNER,
@@ -30,8 +51,8 @@ export const desktopReleasePublishConfig = {
 };
 
 const electronBuilderConfig = {
-  appId: 'com.personal-agent.desktop',
-  productName: 'Personal Agent',
+  appId: desktopReleaseIdentity.appId,
+  productName: desktopReleaseIdentity.productName,
   directories: {
     app: 'packages/desktop',
     output: 'dist/release',
@@ -117,7 +138,7 @@ const electronBuilderConfig = {
         arch: ['arm64'],
       },
     ],
-    artifactName: 'Personal-Agent-${version}-mac-${arch}.${ext}',
+    artifactName: `${desktopReleaseIdentity.artifactPrefix}-\${version}-mac-\${arch}.\${ext}`,
   },
 };
 

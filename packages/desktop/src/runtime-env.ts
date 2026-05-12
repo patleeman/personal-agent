@@ -10,26 +10,32 @@ function resolveDefaultStateRootForEnv(env: NodeJS.ProcessEnv): string {
   return xdgStateHome ? join(xdgStateHome, 'personal-agent') : getDefaultStateRoot();
 }
 
-function resolveTestingStateRoot(defaultStateRoot: string): string {
-  return join(dirname(defaultStateRoot), `${basename(defaultStateRoot)}-testing`);
+function resolveVariantStateRoot(defaultStateRoot: string, variant: 'rc' | 'testing'): string {
+  return join(dirname(defaultStateRoot), `${basename(defaultStateRoot)}-${variant}`);
+}
+
+interface DesktopRuntimeEnvironmentOptions {
+  defaultStateRoot?: string;
+  version?: string;
+  packaged?: boolean;
 }
 
 export function resolveDesktopRuntimeEnvironmentOverrides(
   env: NodeJS.ProcessEnv = process.env,
-  options: { defaultStateRoot?: string } = {},
+  options: DesktopRuntimeEnvironmentOptions = {},
 ): {
   stateRoot?: string;
 } {
-  const launchPresentation = resolveDesktopLaunchPresentation(env);
+  const launchPresentation = resolveDesktopLaunchPresentation(env, options);
 
-  if (launchPresentation.mode !== 'testing') {
+  if (launchPresentation.mode !== 'rc' && launchPresentation.mode !== 'testing') {
     return {};
   }
 
   return {
     ...(env.PERSONAL_AGENT_STATE_ROOT?.trim()
       ? {}
-      : { stateRoot: resolveTestingStateRoot(options.defaultStateRoot ?? resolveDefaultStateRootForEnv(env)) }),
+      : { stateRoot: resolveVariantStateRoot(options.defaultStateRoot ?? resolveDefaultStateRootForEnv(env), launchPresentation.mode) }),
   };
 }
 
@@ -84,28 +90,32 @@ function writeJsonRecord(filePath: string, record: Record<string, unknown>): voi
   writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`);
 }
 
-export function seedTestingRuntimeState(env: NodeJS.ProcessEnv = process.env): void {
-  if (resolveDesktopLaunchPresentation(env).mode !== 'testing') {
+export function seedTestingRuntimeState(env: NodeJS.ProcessEnv = process.env, options: DesktopRuntimeEnvironmentOptions = {}): void {
+  const launchPresentation = resolveDesktopLaunchPresentation(env, options);
+  if (launchPresentation.mode !== 'rc' && launchPresentation.mode !== 'testing') {
     return;
   }
 
-  const testingStateRoot = env.PERSONAL_AGENT_STATE_ROOT?.trim();
-  if (!testingStateRoot) {
+  const variantStateRoot = env.PERSONAL_AGENT_STATE_ROOT?.trim();
+  if (!variantStateRoot) {
     return;
   }
 
   const stableAgentDir = getPiAgentRuntimeDir(resolveDefaultStateRootForEnv(env));
-  const testingAgentDir = getPiAgentRuntimeDir(testingStateRoot);
-  if (stableAgentDir === testingAgentDir) {
+  const variantAgentDir = getPiAgentRuntimeDir(variantStateRoot);
+  if (stableAgentDir === variantAgentDir) {
     return;
   }
 
-  seedTestingAuthFile(join(stableAgentDir, 'auth.json'), join(testingAgentDir, 'auth.json'));
-  seedTestingAgentRuntimeFile(join(stableAgentDir, 'models.json'), join(testingAgentDir, 'models.json'));
+  seedTestingAuthFile(join(stableAgentDir, 'auth.json'), join(variantAgentDir, 'auth.json'));
+  seedTestingAgentRuntimeFile(join(stableAgentDir, 'models.json'), join(variantAgentDir, 'models.json'));
 }
 
-export function applyDesktopRuntimeEnvironmentOverrides(env: NodeJS.ProcessEnv = process.env): void {
-  const overrides = resolveDesktopRuntimeEnvironmentOverrides(env);
+export function applyDesktopRuntimeEnvironmentOverrides(
+  env: NodeJS.ProcessEnv = process.env,
+  options: DesktopRuntimeEnvironmentOptions = {},
+): void {
+  const overrides = resolveDesktopRuntimeEnvironmentOverrides(env, options);
 
   if (overrides.stateRoot) {
     env.PERSONAL_AGENT_STATE_ROOT = overrides.stateRoot;
@@ -113,9 +123,13 @@ export function applyDesktopRuntimeEnvironmentOverrides(env: NodeJS.ProcessEnv =
 
   // Use a separate codex port for the testing variant to avoid conflicts
   // with the production app's codex protocol server (default port 3843).
-  if (!env.CODEX_PORT && resolveDesktopLaunchPresentation(env).mode === 'testing') {
+  const launchMode = resolveDesktopLaunchPresentation(env, options).mode;
+  if (!env.CODEX_PORT && launchMode === 'testing') {
     env.CODEX_PORT = '3846';
   }
+  if (!env.CODEX_PORT && launchMode === 'rc') {
+    env.CODEX_PORT = '3847';
+  }
 
-  seedTestingRuntimeState(env);
+  seedTestingRuntimeState(env, options);
 }

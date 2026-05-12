@@ -127,7 +127,7 @@ async function updateDesktopAppPreferencesState(input: {
   return buildDesktopAppPreferencesState();
 }
 
-app.setName(resolveDesktopLaunchPresentation().appName);
+app.setName(resolveDesktopLaunchPresentation(process.env, { version: app.getVersion(), packaged: app.isPackaged }).appName);
 
 const desktopUserDataDir = process.env.PERSONAL_AGENT_DESKTOP_USER_DATA_DIR?.trim();
 if (desktopUserDataDir) {
@@ -233,7 +233,7 @@ function configureDesktopRuntimeEnvironment(): void {
   // Do not hydrate the shell environment here. That runs an interactive shell
   // synchronously and can burn multiple seconds before the first window exists.
   // Child-process launch paths resolve shell env lazily when they actually need it.
-  applyDesktopRuntimeEnvironmentOverrides();
+  applyDesktopRuntimeEnvironmentOverrides(process.env, { version: app.getVersion(), packaged: app.isPackaged });
 
   const runtime = resolveDesktopRuntimePaths();
   process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';

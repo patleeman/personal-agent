@@ -28,6 +28,14 @@ describe('desktop runtime environment overrides', () => {
     });
   });
 
+  it('isolates packaged RC launches onto a separate state root', () => {
+    expect(
+      resolveDesktopRuntimeEnvironmentOverrides({}, { defaultStateRoot: '/state/personal-agent', version: '0.7.9-rc.10', packaged: true }),
+    ).toEqual({
+      stateRoot: '/state/personal-agent-rc',
+    });
+  });
+
   it('respects explicit user overrides in testing launches', () => {
     expect(
       resolveDesktopRuntimeEnvironmentOverrides(
@@ -49,6 +57,18 @@ describe('desktop runtime environment overrides', () => {
 
     expect(env.PERSONAL_AGENT_STATE_ROOT).toBeTruthy();
     expect(env.PERSONAL_AGENT_STATE_ROOT).toMatch(/personal-agent-testing$/);
+    expect(env.CODEX_PORT).toBe('3846');
+  });
+
+  it('applies RC overrides directly onto the process environment', () => {
+    const env: NodeJS.ProcessEnv = {
+      XDG_STATE_HOME: '/state',
+    };
+
+    applyDesktopRuntimeEnvironmentOverrides(env, { version: '0.7.9-rc.10', packaged: true });
+
+    expect(env.PERSONAL_AGENT_STATE_ROOT).toBe('/state/personal-agent-rc');
+    expect(env.CODEX_PORT).toBe('3847');
   });
 
   it('seeds testing auth from the stable runtime when the testing auth file is empty', () => {

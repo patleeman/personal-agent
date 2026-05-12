@@ -15,6 +15,12 @@ npm run release:desktop:minor
 npm run release:desktop:major
 ```
 
+## RC App Identity
+
+Versions with an `-rc` prerelease suffix are packaged as **Personal Agent RC** instead of **Personal Agent**. The RC app uses a separate macOS bundle identifier (`com.personal-agent.desktop.rc`), runtime state root (`personal-agent-rc`), Codex bridge port (`3847`), and artifact prefix (`Personal-Agent-RC-*`), so it can be installed next to the stable app without replacing it.
+
+Stable versions keep the existing app name, bundle identifier, and `Personal-Agent-*` artifact names.
+
 ## Release Flow
 
 Each release command performs these steps in order:

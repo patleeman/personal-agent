@@ -554,7 +554,10 @@ function requireSmokeTestApproval(env, releaseDir, buildRoot) {
     return;
   }
 
-  const appPath = resolve(releaseDir, 'mac-arm64', 'Personal Agent.app');
+  const appPath = collectPackagedAppPath(releaseDir);
+  if (!appPath) {
+    fail(`Packaged desktop app not found under ${releaseDir}; cannot run release smoke test.`);
+  }
   const smokeScriptPath = resolve(buildRoot, 'scripts', 'smoke-desktop-release.mjs');
 
   if (!isTruthyEnv(env.PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE)) {
@@ -612,8 +615,15 @@ requireSmokeTestApproval(env, releaseDir, buildRoot);
 console.log(`Pushing ${tag} to GitHub...`);
 pushReleaseRef(tag);
 
+const packagedAppPath = collectPackagedAppPath(releaseDir);
+const releaseProductName = packagedAppPath
+  ? packagedAppPath
+      .split('/')
+      .pop()
+      ?.replace(/\.app$/u, '') || 'Personal Agent'
+  : 'Personal Agent';
 const releaseNotes = [
-  `Signed desktop release artifacts for Personal Agent ${version}.`,
+  `Signed desktop release artifacts for ${releaseProductName} ${version}.`,
   '',
   'Release assets and update metadata are hosted alongside the source repo.',
 ].join('\n');
@@ -621,11 +631,22 @@ const releaseNotes = [
 const releaseView = tryCapture('gh', ['release', 'view', tag, '--repo', releaseRepo, '--json', 'url']);
 if (releaseView.status === 0) {
   console.log(`Updating existing GitHub release ${tag} in ${releaseRepo}...`);
-  run('gh', ['release', 'edit', tag, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes]);
+  run('gh', ['release', 'edit', tag, '--repo', releaseRepo, '--title', `${releaseProductName} ${version}`, '--notes', releaseNotes]);
   run('gh', ['release', 'upload', tag, ...files, '--repo', releaseRepo, '--clobber']);
 } else if (`${releaseView.stderr}${releaseView.stdout}`.includes('release not found')) {
   console.log(`Creating GitHub release ${tag} in ${releaseRepo}...`);
-  const args = ['release', 'create', tag, ...files, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes];
+  const args = [
+    'release',
+    'create',
+    tag,
+    ...files,
+    '--repo',
+    releaseRepo,
+    '--title',
+    `${releaseProductName} ${version}`,
+    '--notes',
+    releaseNotes,
+  ];
   if (version.includes('-')) {
     args.push('--prerelease');
   }
