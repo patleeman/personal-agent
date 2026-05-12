@@ -831,7 +831,7 @@ export interface DesktopEnvironmentState {
   activeHostLabel: string;
   activeHostKind: 'local';
   activeHostSummary: string;
-  launchMode?: 'stable' | 'testing';
+  launchMode?: 'stable' | 'rc' | 'testing';
   launchLabel?: string;
 }
 

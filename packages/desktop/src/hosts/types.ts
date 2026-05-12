@@ -469,6 +469,6 @@ export interface DesktopEnvironmentState {
   activeHostLabel: string;
   activeHostKind: DesktopHostRecord['kind'];
   activeHostSummary: string;
-  launchMode?: 'stable' | 'testing';
+  launchMode?: 'stable' | 'rc' | 'testing';
   launchLabel?: string;
 }
