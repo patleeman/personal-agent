@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.10-rc.0 — 2026-05-12
+
+- fix: harden session export menu action
+- fix: use file picker for session imports
+- fix: harden goal mode continuations
+
 ## 0.7.9 — 2026-05-12
 
 - Release maintenance
