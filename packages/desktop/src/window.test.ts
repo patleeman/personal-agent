@@ -114,11 +114,14 @@ describe('shouldOpenNavigationExternally', () => {
 });
 
 describe('shouldGrantDesktopMediaPermission', () => {
-  it('allows audio media capture for the desktop app origin only', () => {
-    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'media', ['audio'])).toBe(true);
-    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'media', ['video'])).toBe(false);
-    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'geolocation', ['audio'])).toBe(false);
-    expect(shouldGrantDesktopMediaPermission('https://example.com', 'media', ['audio'])).toBe(false);
+  it('allows app-local media and microphone permission requests', () => {
+    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'media')).toBe(true);
+    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'microphone')).toBe(true);
+  });
+
+  it('blocks non-app origins and unrelated permissions', () => {
+    expect(shouldGrantDesktopMediaPermission('https://example.com', 'media')).toBe(false);
+    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'camera')).toBe(false);
   });
 });
 

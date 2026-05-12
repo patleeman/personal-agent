@@ -35,7 +35,7 @@ function formatElapsed(startedAt: number | null, now: number): string {
 
 function DictationWaveform({ samples, startedAt }: { samples: number[]; startedAt: number | null }) {
   const [now, setNow] = useState(() => performance.now());
-  const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 44 }, () => 0.04);
+  const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 28 }, () => 0.04);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(performance.now()), 250);
@@ -43,9 +43,12 @@ function DictationWaveform({ samples, startedAt }: { samples: number[]; startedA
   }, []);
 
   return (
-    <div className="flex min-w-[9rem] max-w-[16rem] items-center gap-2 text-secondary" aria-label="Recording dictation">
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-[2px]" aria-hidden="true">
-        {visibleSamples.slice(-52).map((sample, index) => {
+    <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden text-secondary" aria-label="Recording dictation">
+      <div
+        className="hidden min-w-0 max-w-[9rem] flex-1 items-center justify-end gap-[2px] overflow-hidden min-[520px]:flex"
+        aria-hidden="true"
+      >
+        {visibleSamples.slice(-32).map((sample, index) => {
           const height = Math.max(2, Math.round(3 + sample * 22));
           const opacity = 0.28 + Math.min(0.72, sample * 1.4);
           return <span key={index} className="w-[2px] shrink-0 rounded-full bg-current" style={{ height: `${height}px`, opacity }} />;
@@ -85,11 +88,33 @@ export function DictationButton({
   buttonContext: { composerDisabled: boolean; insertText: (text: string) => void };
 }) {
   const [state, setState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [enabled, setEnabled] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [samples, setSamples] = useState<number[]>([]);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const captureRef = useRef<ComposerDictationCapture | null>(null);
   const pendingStartRef = useRef<Promise<void> | null>(null);
   const pointerRef = useRef<{ pointerId: number; startedAt: number; startedExistingRecording: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void pa.extension
+      .invoke('readSettings')
+      .then((value) => {
+        if (cancelled) return;
+        const next = value as DictationSettingsState;
+        setEnabled(next.settings.enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setEnabled(false);
+      })
+      .finally(() => {
+        if (!cancelled) setSettingsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pa]);
 
   const stop = useCallback(async () => {
     if (pendingStartRef.current) {
@@ -119,14 +144,9 @@ export function DictationButton({
   }, [buttonContext, pa]);
 
   const start = useCallback(async () => {
-    if (buttonContext.composerDisabled || captureRef.current || pendingStartRef.current || state === 'transcribing') return;
+    if (!enabled || buttonContext.composerDisabled || captureRef.current || pendingStartRef.current || state === 'transcribing') return;
     const pendingStart = (async () => {
       try {
-        const settings = (await pa.extension.invoke('readSettings')) as DictationSettingsState;
-        if (!settings.settings.enabled) {
-          pa.ui.toast('Enable dictation in Settings first.');
-          return;
-        }
         setSamples([]);
         setStartedAt(performance.now());
         setState('recording');
@@ -143,7 +163,9 @@ export function DictationButton({
     })();
     pendingStartRef.current = pendingStart;
     await pendingStart;
-  }, [buttonContext.composerDisabled, pa, state]);
+  }, [buttonContext.composerDisabled, enabled, pa, state]);
+
+  if (!settingsLoaded || !enabled) return null;
 
   return (
     <>

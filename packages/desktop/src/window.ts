@@ -138,20 +138,14 @@ export function buildWindowTitle(_host: DesktopHostRecord): string {
   return appName;
 }
 
-export function shouldGrantDesktopMediaPermission(requestingUrl: string, permission: string, mediaTypes: string[] = []): boolean {
-  if (permission !== 'media' || !mediaTypes.includes('audio')) return false;
+export function shouldGrantDesktopMediaPermission(requestingUrl: string, permission: string): boolean {
+  if (permission !== 'media' && permission !== 'microphone') return false;
   try {
     const parsed = new URL(requestingUrl);
     return parsed.protocol === 'personal-agent:' && parsed.hostname === 'app';
   } catch {
     return false;
   }
-}
-
-function getDesktopMediaPermissionTypes(details: unknown): string[] {
-  if (details === null || typeof details !== 'object' || !('mediaTypes' in details)) return [];
-  const mediaTypes = (details as { mediaTypes?: unknown }).mediaTypes;
-  return Array.isArray(mediaTypes) ? mediaTypes.filter((mediaType): mediaType is string => typeof mediaType === 'string') : [];
 }
 
 function configureDesktopMediaPermissions(partition: string): void {
@@ -163,12 +157,18 @@ function configureDesktopMediaPermissions(partition: string): void {
         webContents: WebContents,
         permission: string,
         callback: (permissionGranted: boolean) => void,
-        details: { requestingUrl?: string; mediaTypes?: string[] },
+        details: { requestingUrl?: string },
       ) => void,
+    ) => void;
+    setPermissionCheckHandler?: (
+      handler: (webContents: WebContents | null, permission: string, requestingOrigin: string) => boolean,
     ) => void;
   };
   partitionSession.setPermissionRequestHandler?.((_webContents, permission, callback, details) => {
-    callback(shouldGrantDesktopMediaPermission(details.requestingUrl ?? '', permission, getDesktopMediaPermissionTypes(details)));
+    callback(shouldGrantDesktopMediaPermission(details.requestingUrl ?? '', permission));
+  });
+  partitionSession.setPermissionCheckHandler?.((_webContents, permission, requestingOrigin) => {
+    return shouldGrantDesktopMediaPermission(requestingOrigin, permission);
   });
 }
 
