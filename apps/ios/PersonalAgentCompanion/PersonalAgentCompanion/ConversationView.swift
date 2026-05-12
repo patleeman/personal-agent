@@ -154,7 +154,7 @@ struct ConversationScreen: View {
                             Button {
                                 showingForkBranch = true
                             } label: {
-                                Label("Fork / Branch", systemImage: "arrow.tree.branch")
+                                Label("Fork / Branch", systemImage: "arrow.triangle.branch")
                             }
                             Button {
                                 showingArtifacts = true
@@ -3421,7 +3421,7 @@ private struct ForkBranchBrowserView: View {
                 } else if forkEntries.isEmpty {
                     ContentUnavailableView(
                         "No fork points",
-                        systemImage: "arrow.tree.branch",
+                        systemImage: "arrow.triangle.branch",
                         description: Text("Send a message first, then return here to fork or branch.")
                     )
                     .frame(maxWidth: .infinity)
