@@ -141,7 +141,7 @@ const THREADS_ORGANIZE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-o
 const THREADS_FILTER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-filter');
 const THREADS_SORT_BY_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-sort-by');
 const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-manual-group-order');
-const THREADS_ACTIVITY_TREE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-activity-tree');
+const LEGACY_THREAD_LIST_ENABLED = false;
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
@@ -598,26 +598,6 @@ function writeThreadsSortMode(value: ThreadsSortMode): void {
 
 function buildActivityTreeGroupId(groupKey: string): string {
   return `group:${groupKey || 'chats'}`;
-}
-
-function readThreadsActivityTreeEnabled(): boolean {
-  try {
-    return localStorage.getItem(THREADS_ACTIVITY_TREE_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function writeThreadsActivityTreeEnabled(value: boolean): void {
-  try {
-    if (value) {
-      localStorage.setItem(THREADS_ACTIVITY_TREE_STORAGE_KEY, 'true');
-      return;
-    }
-    localStorage.removeItem(THREADS_ACTIVITY_TREE_STORAGE_KEY);
-  } catch {
-    // Ignore storage failures.
-  }
 }
 
 function readManualConversationGroupOrder(): string[] {
@@ -1888,7 +1868,6 @@ export function Sidebar() {
   const [threadsOrganizeMode, setThreadsOrganizeMode] = useState<ThreadsOrganizeMode>(() => readThreadsOrganizeMode());
   const [threadsFilterMode, setThreadsFilterMode] = useState<ThreadsFilterMode>(() => readThreadsFilterMode());
   const [threadsSortMode, setThreadsSortMode] = useState<ThreadsSortMode>(() => readThreadsSortMode());
-  const [threadsActivityTreeEnabled, setThreadsActivityTreeEnabled] = useState(() => readThreadsActivityTreeEnabled());
   const [manualConversationGroupOrder, setManualConversationGroupOrder] = useState(() => readManualConversationGroupOrder());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
   const [conversationGroupLabelOverrides, setConversationGroupLabelOverrides] = useState(() => readConversationGroupLabelOverrides());
@@ -2332,18 +2311,21 @@ export function Sidebar() {
             title: group.label,
             subtitle: group.cwd ?? undefined,
             status: 'idle',
-            metadata: { cwd: group.cwd, groupKey: group.key },
+            metadata: { cwd: group.cwd, groupKey: group.key, defaultLabel: group.defaultLabel },
           }) satisfies ActivityTreeItem,
       );
 
     return [...groupItems, ...groupedItems];
   }, [activityTreeSessions, groupedConversationRows, runs, threadsOrganizeMode]);
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
-  const [activityTreeStyleRevision, setActivityTreeStyleRevision] = useState(0);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const conversationItemBySessionId = useMemo(
     () => new Map(renderedConversationItems.map((item) => [item.session.id, item] as const)),
     [renderedConversationItems],
+  );
+  const conversationGroupByKey = useMemo(
+    () => new Map(groupedConversationRows.map((group) => [group.key, group] as const)),
+    [groupedConversationRows],
   );
   const canReorderConversationRows = threadsFilterMode === 'all';
   const canReorderConversationGroups = canReorderConversationRows && threadsOrganizeMode === 'project';
@@ -2442,11 +2424,7 @@ export function Sidebar() {
     return () => {
       cancelled = true;
     };
-  }, [activityTreeStyleRevision, baseActivityTreeItems, extensionRegistry.activityTreeItemStyles]);
-
-  const refreshActivityTreeStyles = useCallback(() => {
-    setActivityTreeStyleRevision((revision) => revision + 1);
-  }, []);
+  }, [baseActivityTreeItems, extensionRegistry.activityTreeItemStyles]);
 
   const activityTreeExtensionContextMenus = useMemo(
     () =>
@@ -2480,15 +2458,6 @@ export function Sidebar() {
           return;
         }
 
-        if (
-          menu.extensionId === 'system-conversation-tools' &&
-          (menu.action === 'cycleThreadColor' || menu.action === 'clearThreadColor')
-        ) {
-          await api.invokeExtensionAction(menu.extensionId, menu.action, input);
-          refreshActivityTreeStyles();
-          return;
-        }
-
         if (menu.extensionId === 'system-session-exchange' && menu.action === 'exportSession') {
           await api.invokeExtensionAction(menu.extensionId, menu.action, input);
           return;
@@ -2499,16 +2468,8 @@ export function Sidebar() {
         showSidebarNotice('danger', `${menu.title} failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
       }
     },
-    [getActivityTreePaClient, navigate, refreshActivityTreeStyles, showSidebarNotice],
+    [getActivityTreePaClient, navigate, showSidebarNotice],
   );
-
-  const handleThreadsActivityTreeToggle = useCallback(() => {
-    setThreadsActivityTreeEnabled((current) => {
-      const next = !current;
-      writeThreadsActivityTreeEnabled(next);
-      return next;
-    });
-  }, []);
 
   function clearDragState() {
     setDraggingSessionId(null);
@@ -3584,17 +3545,6 @@ export function Sidebar() {
             />
             <button
               type="button"
-              onClick={handleThreadsActivityTreeToggle}
-              className={['ui-icon-button ui-icon-button-compact shrink-0', threadsActivityTreeEnabled && 'text-accent']
-                .filter(Boolean)
-                .join(' ')}
-              title={threadsActivityTreeEnabled ? 'Use classic thread list' : 'Use activity tree'}
-              aria-label={threadsActivityTreeEnabled ? 'Use classic thread list' : 'Use activity tree'}
-            >
-              <Ico d={PATH.nodes} size={12} />
-            </button>
-            <button
-              type="button"
               onClick={handleOpenThreadSwitcher}
               className="ui-icon-button ui-icon-button-compact shrink-0"
               title="Find threads and archived conversations"
@@ -3629,7 +3579,7 @@ export function Sidebar() {
               </p>
             ) : null}
 
-            {threadsActivityTreeEnabled ? (
+            {!LEGACY_THREAD_LIST_ENABLED ? (
               <ActivityTreeView
                 items={activityTreeItems}
                 activeItemId={activeActivityTreeItemId}
@@ -3640,6 +3590,10 @@ export function Sidebar() {
                     handleArchiveConversation(conversationId);
                   }
                 }}
+                onCreateChildItem={(item) => {
+                  const cwd = typeof item.metadata?.cwd === 'string' ? item.metadata.cwd : null;
+                  handleNewConversation(cwd);
+                }}
                 onOpenItem={(item) => {
                   if (item.route) {
                     navigate(item.route);
@@ -3648,26 +3602,90 @@ export function Sidebar() {
                 renderContextMenu={(item, context) => {
                   const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
                   const conversationItem = conversationId ? conversationItemBySessionId.get(conversationId) : null;
+                  const groupKey = typeof item.metadata?.groupKey === 'string' ? item.metadata.groupKey : null;
+                  const conversationGroup = groupKey ? conversationGroupByKey.get(groupKey) : null;
                   const isConversation = item.kind === 'conversation' && conversationId && conversationItem;
+                  const isGroup = item.kind === 'group' && conversationGroup;
+                  const groupSessionIds = conversationGroup?.items
+                    .map(({ session }) => session.id)
+                    .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
+                  const groupIncludesDraft = Boolean(conversationGroup?.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID));
                   return (
                     <div
                       className="ui-menu-shell ui-context-menu-shell static bottom-auto left-auto right-auto top-auto mb-0 min-w-[224px]"
                       role="menu"
                     >
-                      <button
-                        type="button"
-                        className="ui-context-menu-item"
-                        role="menuitem"
-                        onClick={() => {
-                          context.close();
-                          if (item.route) {
-                            navigate(item.route);
-                          }
-                        }}
-                      >
-                        Open
-                      </button>
-                      {isConversation ? (
+                      {item.route ? (
+                        <button
+                          type="button"
+                          className="ui-context-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            context.close();
+                            navigate(item.route!);
+                          }}
+                        >
+                          Open
+                        </button>
+                      ) : null}
+                      {isGroup ? (
+                        <>
+                          {conversationGroup.cwd ? (
+                            <button
+                              type="button"
+                              className="ui-context-menu-item"
+                              role="menuitem"
+                              onClick={() => {
+                                context.close();
+                                void handleOpenConversationGroupInFinder(conversationGroup.cwd!, conversationGroup.label);
+                              }}
+                            >
+                              Open in Finder
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              handleRenameConversationGroup(conversationGroup.key, conversationGroup.defaultLabel, conversationGroup.label);
+                            }}
+                          >
+                            Edit Name
+                          </button>
+                          {groupSessionIds && groupSessionIds.length > 0 ? (
+                            <button
+                              type="button"
+                              className="ui-context-menu-item"
+                              role="menuitem"
+                              onClick={() => {
+                                context.close();
+                                void handleArchiveConversationGroup(conversationGroup.label, groupSessionIds);
+                              }}
+                            >
+                              Archive Threads
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="ui-context-menu-item text-danger hover:bg-danger/10 focus-visible:bg-danger/10"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              handleRemoveConversationGroup(
+                                conversationGroup.key,
+                                conversationGroup.label,
+                                conversationGroup.cwd,
+                                groupSessionIds ?? [],
+                                groupIncludesDraft,
+                              );
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      ) : isConversation ? (
                         <>
                           <button
                             type="button"
@@ -3776,17 +3794,6 @@ export function Sidebar() {
                           ))}
                         </>
                       ) : null}
-                      <button
-                        type="button"
-                        className="ui-context-menu-item"
-                        role="menuitem"
-                        onClick={() => {
-                          context.close();
-                          handleThreadsActivityTreeToggle();
-                        }}
-                      >
-                        Use Classic List
-                      </button>
                     </div>
                   );
                 }}

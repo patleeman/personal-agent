@@ -17,9 +17,10 @@ Each item carries a `kind`, `title`, optional `parentId`, `status`, `route`, and
 
 The adapter lives at `packages/desktop/ui/src/activity/activityTree.ts` and currently supports:
 
-- conversation root items
+- workspace/CWD group items
+- conversation items
 - durable run items
 - run nesting via `manifest.spec.conversationId`, `manifest.spec.threadConversationId`, result metadata, or checkpoint payload metadata
 - normalized status values: `idle`, `running`, `queued`, `failed`, `done`
 
-`packages/desktop/ui/src/activity/activityTreePaths.ts` converts activity items into stable Pierre tree paths, and `ActivityTreeView.tsx` is the reusable Pierre-backed renderer. The Threads sidebar now has an activity-tree toggle in the header; when enabled, it renders conversations and linked durable runs through the shared tree, decorates running/failed/done rows, and exposes conversation actions for open, pin/unpin, close, archive, copy, duplicate, thread color changes, and extension-provided conversation-list context menu items. The classic list remains available for grouping, drag-and-drop, and existing conversation decorators while those behaviors are ported.
+`packages/desktop/ui/src/activity/activityTreePaths.ts` converts activity items into stable tree paths, and `ActivityTreeView.tsx` is the reusable native React renderer. The Threads sidebar renders workspace groups, conversations, and linked durable runs through the shared tree, decorates running/failed/done rows, and exposes workspace actions plus conversation actions for open, pin/unpin, close, archive, copy, duplicate, and extension-provided conversation-list context menu items.

@@ -11,6 +11,7 @@ interface ActivityTreeViewProps {
   className?: string;
   style?: CSSProperties;
   onArchiveItem?: (item: ActivityTreeItem) => void;
+  onCreateChildItem?: (item: ActivityTreeItem) => void;
   onOpenItem?: (item: ActivityTreeItem) => void;
   renderContextMenu?: (item: ActivityTreeItem, context: FileTreeContextMenuOpenContext) => ReactNode;
 }
@@ -27,6 +28,7 @@ export function ActivityTreeView({
   className,
   style,
   onArchiveItem,
+  onCreateChildItem,
   onOpenItem,
   renderContextMenu,
 }: ActivityTreeViewProps) {
@@ -95,6 +97,7 @@ export function ActivityTreeView({
           const childCount = childCountByParentId.get(item.id) ?? 0;
           const expanded = item.kind === 'group' ? !collapsedGroupIds.has(item.id) : expandedIds.has(item.id);
           const canArchive = item.kind === 'conversation' && onArchiveItem;
+          const canCreateChild = item.kind === 'group' && onCreateChildItem;
           return (
             <button
               key={item.id}
@@ -158,6 +161,39 @@ export function ActivityTreeView({
               <span className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] text-primary">{item.title}</span>
               {item.status !== 'idle' ? (
                 <span className="shrink-0 text-[10px] text-dim">{formatActivityTreeStatus(item.status)}</span>
+              ) : null}
+              {item.kind === 'group' && renderContextMenu ? (
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  className="shrink-0 rounded px-1 text-[16px] leading-none text-dim hover:bg-surface-hover hover:text-primary"
+                  aria-label="Workspace actions"
+                  title="Workspace actions"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setContextMenu({ item, x: rect.left, y: rect.bottom + 4 });
+                  }}
+                >
+                  …
+                </span>
+              ) : null}
+              {canCreateChild ? (
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  className="shrink-0 rounded px-1 text-[14px] leading-none text-dim hover:bg-surface-hover hover:text-primary"
+                  aria-label="New thread in workspace"
+                  title="New thread in workspace"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onCreateChildItem(item);
+                  }}
+                >
+                  +
+                </span>
               ) : null}
               {canArchive ? (
                 <span
