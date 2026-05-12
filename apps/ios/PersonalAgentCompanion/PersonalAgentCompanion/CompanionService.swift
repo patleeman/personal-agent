@@ -81,7 +81,7 @@ protocol CompanionClientProtocol: AnyObject {
 }
 
 struct ConversationBootstrapRequestOptions: Equatable {
-    static let defaultTailBlocks = 5
+    static let defaultTailBlocks = 200
 
     let tailBlocks: Int?
     let knownSessionSignature: String?
