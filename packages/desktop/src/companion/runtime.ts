@@ -640,6 +640,55 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       return this.readConversationBootstrap({ conversationId: input.conversationId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
     },
 
+    async listConversationForkEntries(conversationId: string) {
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: `/api/live-sessions/${encodeURIComponent(conversationId)}/fork-entries`,
+      });
+    },
+
+    async forkConversation(input: CompanionConversationForkInput) {
+      const localController = hostManager.getHostController('local');
+      if (localController.forkLiveSession) {
+        const result = await localController.forkLiveSession({
+          conversationId: input.conversationId,
+          entryId: input.entryId,
+          beforeEntry: input.beforeEntry,
+          preserveSource: input.preserveSource,
+        });
+        return this.readConversationBootstrap({ conversationId: result.id, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/live-sessions/${encodeURIComponent(input.conversationId)}/fork`,
+        body: {
+          entryId: input.entryId,
+          beforeEntry: input.beforeEntry,
+          preserveSource: input.preserveSource,
+        },
+      });
+    },
+
+    async branchConversation(input: CompanionConversationBranchInput) {
+      const localController = hostManager.getHostController('local');
+      if (localController.branchLiveSession) {
+        const result = await localController.branchLiveSession({
+          conversationId: input.conversationId,
+          entryId: input.entryId,
+        });
+        return this.readConversationBootstrap({ conversationId: result.newSessionId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/live-sessions/${encodeURIComponent(input.conversationId)}/branch`,
+        body: {
+          entryId: input.entryId,
+        },
+      });
+    },
+
     async readConversationBlockImage(input: CompanionConversationBlockImageInput): Promise<CompanionBinaryAsset> {
       const response = await dispatchDesktopApi(hostManager, {
         method: 'GET',

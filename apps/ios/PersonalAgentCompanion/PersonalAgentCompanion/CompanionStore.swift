@@ -2769,6 +2769,51 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func listForkEntries() async -> [CompanionForkEntry] {
+        do {
+            let entries = try await client.listConversationForkEntries(conversationId: conversationId)
+            errorMessage = nil
+            return entries
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func forkConversation(entryId: String, preserveSource: Bool? = nil, beforeEntry: Bool? = nil) async -> String? {
+        let mutationKey = "fork:\(entryId)"
+        guard pendingDuplicateConversation == false else {
+            return nil
+        }
+        pendingDuplicateConversation = true
+        defer { pendingDuplicateConversation = false }
+        do {
+            let result = try await client.forkConversation(conversationId: conversationId, entryId: entryId, preserveSource: preserveSource, beforeEntry: beforeEntry)
+            errorMessage = nil
+            return result.newSessionId
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func branchConversation(entryId: String) async -> String? {
+        let mutationKey = "branch:\(entryId)"
+        guard pendingDuplicateConversation == false else {
+            return nil
+        }
+        pendingDuplicateConversation = true
+        defer { pendingDuplicateConversation = false }
+        do {
+            let result = try await client.branchConversation(conversationId: conversationId, entryId: entryId)
+            errorMessage = nil
+            return result.newSessionId
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func readRemoteDirectory(targetId: String, path: String?) async -> CompanionRemoteDirectoryListing? {
         do {
             let listing = try await client.readRemoteDirectory(targetId: targetId, path: path)

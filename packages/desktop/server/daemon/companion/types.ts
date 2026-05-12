@@ -159,6 +159,20 @@ export interface CompanionConversationCwdChangeInput {
   surfaceId?: string;
 }
 
+export interface CompanionConversationForkInput {
+  conversationId: string;
+  entryId: string;
+  beforeEntry?: boolean;
+  preserveSource?: boolean;
+  executionTargetId?: string | null;
+}
+
+export interface CompanionConversationBranchInput {
+  conversationId: string;
+  entryId: string;
+  executionTargetId?: string | null;
+}
+
 export interface CompanionConversationModelPreferencesUpdateInput {
   conversationId: string;
   model?: string | null;
@@ -327,6 +341,9 @@ export interface CompanionRuntime {
   readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
   listConversationCheckpoints(conversationId: string): Promise<unknown>;
   readConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<unknown>;
+  listConversationForkEntries(conversationId: string): Promise<unknown>;
+  forkConversation(input: CompanionConversationForkInput): Promise<unknown>;
+  branchConversation(input: CompanionConversationBranchInput): Promise<unknown>;
   changeConversationExecutionTarget(input: CompanionConversationExecutionTargetChangeInput): Promise<unknown>;
   listConversationAttachments(conversationId: string): Promise<unknown>;
   readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;

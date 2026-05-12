@@ -811,6 +811,23 @@ struct CompanionParallelJobActionResult: Codable, Equatable {
     let status: String
 }
 
+struct CompanionForkEntry: Codable, Equatable, Identifiable {
+    let entryId: String
+    let text: String
+
+    var id: String { entryId }
+}
+
+struct CompanionForkResult: Codable, Equatable {
+    let newSessionId: String
+    let sessionFile: String
+}
+
+struct CompanionBranchResult: Codable, Equatable {
+    let newSessionId: String
+    let sessionFile: String
+}
+
 struct PromptImageDraftResponse: Codable, Equatable {
     let data: String
     let mimeType: String

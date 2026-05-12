@@ -37,6 +37,16 @@ Tap a notification to open the relevant conversation.
 
 Send a message to the agent from the iOS app without context switching to the desktop.
 
+### Fork & Branch
+
+Fork or branch conversations from any user message in the transcript. Open **Fork / Branch** from the conversation toolbar menu to see forkable user messages, then choose:
+
+- **Fork** — creates a new conversation starting from that message (the source stays open)
+- **Fork before** — creates a new conversation ending just before that message
+- **Branch here** — navigates the current conversation tree to that point (rewinds the leaf pointer without creating a new file)
+
+Forked conversations appear at the top of the conversation list with a "Fork of..." title.
+
 ## Architecture
 
 ```

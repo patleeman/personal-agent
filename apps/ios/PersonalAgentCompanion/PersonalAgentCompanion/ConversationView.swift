@@ -27,6 +27,7 @@ struct ConversationScreen: View {
     @State private var showingModelPreferences = false
     @State private var showingArtifacts = false
     @State private var showingCheckpoints = false
+    @State private var showingForkBranch = false
     @State private var composerTextHeight: CGFloat = 32
 
     private var currentExecutionTargetLabel: String {
@@ -155,6 +156,11 @@ struct ConversationScreen: View {
                                 Label("Model preferences", systemImage: "slider.horizontal.3")
                             }
                             Button {
+                                showingForkBranch = true
+                            } label: {
+                                Label("Fork / Branch", systemImage: "arrow.tree.branch")
+                            }
+                            Button {
                                 showingArtifacts = true
                             } label: {
                                 Label("Artifacts", systemImage: "doc.richtext")
@@ -247,6 +253,9 @@ struct ConversationScreen: View {
             }
             .sheet(isPresented: $showingArtifacts) {
                 ArtifactBrowserView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showingForkBranch) {
+                ForkBranchBrowserView(viewModel: viewModel, onOpenConversation: onOpenConversation)
             }
             .sheet(isPresented: $showingCheckpoints) {
                 CheckpointBrowserView(viewModel: viewModel)
@@ -3388,4 +3397,103 @@ private func hexString(for color: UIColor) -> String {
     var alpha: CGFloat = 0
     color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
     return String(format: "#%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
+}
+
+// MARK: - Fork / Branch
+
+private struct ForkBranchBrowserView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ConversationViewModel
+    let onOpenConversation: (String) -> Void
+
+    @State private var forkEntries: [CompanionForkEntry] = []
+    @State private var isLoading = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                } else if forkEntries.isEmpty {
+                    ContentUnavailableView(
+                        "No fork points",
+                        systemImage: "arrow.tree.branch",
+                        description: Text("Send a message first, then return here to fork or branch.")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                } else {
+                    Section("Fork from a message") {
+                        ForEach(forkEntries) { entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(entry.text)
+                                    .lineLimit(3)
+                                    .font(.body)
+
+                                HStack(spacing: 12) {
+                                    Button {
+                                        Task {
+                                            if let nextId = await viewModel.forkConversation(entryId: entry.entryId) {
+                                                dismiss()
+                                                onOpenConversation(nextId)
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Fork", systemImage: "arrow.branch")
+                                            .font(.subheadline.weight(.medium))
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(CompanionTheme.accent)
+
+                                    Button {
+                                        Task {
+                                            if let nextId = await viewModel.forkConversation(entryId: entry.entryId, beforeEntry: true) {
+                                                dismiss()
+                                                onOpenConversation(nextId)
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Fork before", systemImage: "arrow.up.to.line")
+                                            .font(.subheadline.weight(.medium))
+                                    }
+                                    .buttonStyle(.bordered)
+
+                                    Button {
+                                        Task {
+                                            if let nextId = await viewModel.branchConversation(entryId: entry.entryId) {
+                                                dismiss()
+                                                onOpenConversation(nextId)
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Branch here", systemImage: "arrow.turn.down.right")
+                                            .font(.subheadline.weight(.medium))
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Fork / Branch")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task {
+                await load()
+            }
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        forkEntries = await viewModel.listForkEntries()
+    }
 }

@@ -916,6 +916,57 @@ export class DaemonCompanionServer {
       return;
     }
 
+    const conversationForkMatch = /^\/companion\/v1\/conversations\/([^/]+)\/fork$/.exec(pathname);
+    if (conversationForkMatch && request.method === 'POST') {
+      if (!(await this.requireBearer(request, response))) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationForkInput = {
+        conversationId: decodeURIComponent(conversationForkMatch[1] || ''),
+        entryId: readRequiredString(payload.entryId, 'entryId'),
+        beforeEntry: payload.beforeEntry === true ? true : undefined,
+        preserveSource: payload.preserveSource === true ? true : undefined,
+        ...(readOptionalString(payload.executionTargetId) !== undefined
+          ? { executionTargetId: readOptionalString(payload.executionTargetId) }
+          : {}),
+      };
+      sendJson(response, 200, await runtime.forkConversation(input));
+      return;
+    }
+
+    const conversationBranchMatch = /^\/companion\/v1\/conversations\/([^/]+)\/branch$/.exec(pathname);
+    if (conversationBranchMatch && request.method === 'POST') {
+      if (!(await this.requireBearer(request, response))) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationBranchInput = {
+        conversationId: decodeURIComponent(conversationBranchMatch[1] || ''),
+        entryId: readRequiredString(payload.entryId, 'entryId'),
+      };
+      sendJson(response, 200, await runtime.branchConversation(input));
+      return;
+    }
+
+    const conversationForkEntriesMatch = /^\/companion\/v1\/conversations\/([^/]+)\/fork-entries$/.exec(pathname);
+    if (conversationForkEntriesMatch && request.method === 'GET') {
+      if (!(await this.requireBearer(request, response))) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const conversationId = decodeURIComponent(conversationForkEntriesMatch[1] || '');
+      sendJson(response, 200, await runtime.listConversationForkEntries(conversationId));
+      return;
+    }
+
     const conversationQueueRestoreMatch = /^\/companion\/v1\/conversations\/([^/]+)\/dequeue$/.exec(pathname);
     if (conversationQueueRestoreMatch && request.method === 'POST') {
       if (!(await this.requireBearer(request, response))) {
@@ -1721,6 +1772,29 @@ export class DaemonCompanionServer {
           ...(readOptionalString(payload.cwd) ? { cwd: readOptionalString(payload.cwd) } : {}),
         };
         return runtime.changeConversationExecutionTarget(input);
+      }
+      case 'conversation.fork': {
+        const input: CompanionConversationForkInput = {
+          conversationId: readRequiredString(payload.conversationId, 'conversationId'),
+          entryId: readRequiredString(payload.entryId, 'entryId'),
+          beforeEntry: payload.beforeEntry === true ? true : undefined,
+          preserveSource: payload.preserveSource === true ? true : undefined,
+          ...(readOptionalString(payload.executionTargetId) !== undefined
+            ? { executionTargetId: readOptionalString(payload.executionTargetId) }
+            : {}),
+        };
+        return runtime.forkConversation(input);
+      }
+      case 'conversation.branch': {
+        const input: CompanionConversationBranchInput = {
+          conversationId: readRequiredString(payload.conversationId, 'conversationId'),
+          entryId: readRequiredString(payload.entryId, 'entryId'),
+        };
+        return runtime.branchConversation(input);
+      }
+      case 'conversation.fork_entries': {
+        const conversationId = readRequiredString(payload.conversationId, 'conversationId');
+        return runtime.listConversationForkEntries(conversationId);
       }
       default:
         throw new Error(`Unsupported companion command: ${message.name}`);

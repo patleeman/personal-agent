@@ -32,6 +32,9 @@ protocol CompanionClientProtocol: AnyObject {
     func takeOverConversation(conversationId: String, surfaceId: String) async throws
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws
     func changeConversationCwd(conversationId: String, cwd: String, surfaceId: String) async throws -> ConversationCwdChangeResult
+    func listConversationForkEntries(conversationId: String) async throws -> [CompanionForkEntry]
+    func forkConversation(conversationId: String, entryId: String, preserveSource: Bool?, beforeEntry: Bool?) async throws -> CompanionForkResult
+    func branchConversation(conversationId: String, entryId: String) async throws -> CompanionBranchResult
     func readConversationAutoMode(conversationId: String) async throws -> ConversationAutoModeState
     func updateConversationAutoMode(conversationId: String, enabled: Bool, surfaceId: String) async throws -> ConversationAutoModeState
     func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState
@@ -490,6 +493,38 @@ final class LiveCompanionClient: CompanionClientProtocol {
                 "surfaceId": surfaceId,
             ],
             decode: ConversationCwdChangeResult.self
+        )
+    }
+
+    func listConversationForkEntries(conversationId: String) async throws -> [CompanionForkEntry] {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/fork-entries",
+            method: "GET",
+            body: nil,
+            decode: [CompanionForkEntry].self
+        )
+    }
+
+    func forkConversation(conversationId: String, entryId: String, preserveSource: Bool?, beforeEntry: Bool?) async throws -> CompanionForkResult {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/fork",
+            method: "POST",
+            body: {
+                var body: [String: Any] = ["entryId": entryId]
+                if let preserveSource { body["preserveSource"] = preserveSource }
+                if let beforeEntry { body["beforeEntry"] = beforeEntry }
+                return body
+            }(),
+            decode: CompanionForkResult.self
+        )
+    }
+
+    func branchConversation(conversationId: String, entryId: String) async throws -> CompanionBranchResult {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/branch",
+            method: "POST",
+            body: ["entryId": entryId],
+            decode: CompanionBranchResult.self
         )
     }
 
@@ -2973,6 +3008,142 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
         emitApp(.conversationListState(listState))
         return ConversationCwdChangeResult(id: nextId, sessionFile: meta.file, cwd: cwd, changed: true)
+    }
+
+    // MARK: Fork / Branch
+
+    var forkEntriesByConversation: [String: [CompanionForkEntry]] = [:]
+
+    func listConversationForkEntries(conversationId: String) async throws -> [CompanionForkEntry] {
+        if let entries = forkEntriesByConversation[conversationId] {
+            return entries
+        }
+        guard conversations[conversationId] != nil else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        return []
+    }
+
+    func forkConversation(conversationId: String, entryId: String, preserveSource: Bool?, beforeEntry: Bool?) async throws -> CompanionForkResult {
+        guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let nextId = "fork-\(conversationId)-\(entryId.prefix(8))"
+        let forkFile = "/tmp/mock-\(nextId).jsonl"
+        var forkedMeta = SessionMeta(
+            id: nextId,
+            file: forkFile,
+            timestamp: ISO8601DateFormatter.flexible.string(from: .now),
+            cwd: meta.cwd,
+            cwdSlug: meta.cwdSlug,
+            model: meta.model,
+            title: "Fork of \(meta.title)",
+            messageCount: 0,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: ISO8601DateFormatter.flexible.string(from: .now),
+            parentSessionFile: meta.file,
+            parentSessionId: conversationId,
+            sourceRunId: meta.sourceRunId,
+            remoteHostId: meta.remoteHostId,
+            remoteHostLabel: meta.remoteHostLabel,
+            remoteConversationId: meta.remoteConversationId,
+            automationTaskId: meta.automationTaskId,
+            automationTitle: meta.automationTitle,
+            needsAttention: meta.needsAttention,
+            attentionUpdatedAt: meta.attentionUpdatedAt,
+            attentionUnreadMessageCount: meta.attentionUnreadMessageCount,
+            attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
+            attentionActivityIds: meta.attentionActivityIds
+        )
+        forkedMeta.deferredResumes = []
+        let forkedEnvelope = ConversationBootstrapEnvelope(
+            bootstrap: ConversationBootstrapState(
+                conversationId: nextId,
+                sessionDetail: nil,
+                sessionDetailSignature: nil,
+                sessionDetailUnchanged: nil,
+                sessionDetailAppendOnly: nil,
+                liveSession: ConversationBootstrapLiveSession(live: true, id: nextId, cwd: meta.cwd, sessionFile: forkFile, title: forkedMeta.title, isStreaming: false, hasPendingHiddenTurn: nil)
+            ),
+            sessionMeta: forkedMeta,
+            attachments: envelope.attachments,
+            executionTargets: envelope.executionTargets
+        )
+        conversations[nextId] = forkedEnvelope
+        listState = ConversationListState(
+            sessions: [forkedMeta] + listState.sessions,
+            ordering: ConversationOrdering(
+                sessionIds: [nextId] + listState.ordering.sessionIds,
+                pinnedSessionIds: listState.ordering.pinnedSessionIds,
+                archivedSessionIds: listState.ordering.archivedSessionIds,
+                workspacePaths: listState.ordering.workspacePaths
+            ),
+            executionTargets: listState.executionTargets
+        )
+        emitApp(.conversationListState(listState))
+        return CompanionForkResult(newSessionId: nextId, sessionFile: forkFile)
+    }
+
+    func branchConversation(conversationId: String, entryId: String) async throws -> CompanionBranchResult {
+        guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let nextId = "branch-\(conversationId)-\(entryId.prefix(8))"
+        let branchFile = "/tmp/mock-\(nextId).jsonl"
+        var branchedMeta = SessionMeta(
+            id: nextId,
+            file: branchFile,
+            timestamp: ISO8601DateFormatter.flexible.string(from: .now),
+            cwd: meta.cwd,
+            cwdSlug: meta.cwdSlug,
+            model: meta.model,
+            title: meta.title,
+            messageCount: 0,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: ISO8601DateFormatter.flexible.string(from: .now),
+            parentSessionFile: meta.file,
+            parentSessionId: conversationId,
+            sourceRunId: meta.sourceRunId,
+            remoteHostId: meta.remoteHostId,
+            remoteHostLabel: meta.remoteHostLabel,
+            remoteConversationId: meta.remoteConversationId,
+            automationTaskId: meta.automationTaskId,
+            automationTitle: meta.automationTitle,
+            needsAttention: meta.needsAttention,
+            attentionUpdatedAt: meta.attentionUpdatedAt,
+            attentionUnreadMessageCount: meta.attentionUnreadMessageCount,
+            attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
+            attentionActivityIds: meta.attentionActivityIds
+        )
+        branchedMeta.deferredResumes = []
+        let branchedEnvelope = ConversationBootstrapEnvelope(
+            bootstrap: ConversationBootstrapState(
+                conversationId: nextId,
+                sessionDetail: nil,
+                sessionDetailSignature: nil,
+                sessionDetailUnchanged: nil,
+                sessionDetailAppendOnly: nil,
+                liveSession: ConversationBootstrapLiveSession(live: true, id: nextId, cwd: meta.cwd, sessionFile: branchFile, title: branchedMeta.title, isStreaming: false, hasPendingHiddenTurn: nil)
+            ),
+            sessionMeta: branchedMeta,
+            attachments: envelope.attachments,
+            executionTargets: envelope.executionTargets
+        )
+        conversations[nextId] = branchedEnvelope
+        listState = ConversationListState(
+            sessions: [branchedMeta] + listState.sessions,
+            ordering: ConversationOrdering(
+                sessionIds: [nextId] + listState.ordering.sessionIds,
+                pinnedSessionIds: listState.ordering.pinnedSessionIds,
+                archivedSessionIds: listState.ordering.archivedSessionIds,
+                workspacePaths: listState.ordering.workspacePaths
+            ),
+            executionTargets: listState.executionTargets
+        )
+        emitApp(.conversationListState(listState))
+        return CompanionBranchResult(newSessionId: nextId, sessionFile: branchFile)
     }
 
     func readConversationAutoMode(conversationId: String) async throws -> ConversationAutoModeState {
