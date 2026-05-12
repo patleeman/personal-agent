@@ -1934,7 +1934,7 @@ private extension JSONValue {
 func renderTranscriptMarkdown(_ text: String) -> AttributedString? {
     try? AttributedString(
         markdown: text,
-        options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
     )
 }
 
