@@ -131,8 +131,8 @@ CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_ts ON trace_context
 CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id);
 `;
 // ── Migrations ────────────────────────────────────────────────────────────────
-// Versioned, sequential migrations tracked via PRAGMA user_version.
-// Version 0 = pre-migration DB — all migrations run on first open.
+// Versioned, sequential migrations tracked per observability namespace.
+// Version 0 = pre-migration namespace — all migrations run on first open.
 const TRACE_MIGRATIONS = [
   {
     version: 1,
