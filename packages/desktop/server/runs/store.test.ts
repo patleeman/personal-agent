@@ -1,5 +1,5 @@
 import { openSqliteDatabase } from '@personal-agent/core';
-import { existsSync, mkdtempSync } from 'fs';
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -187,6 +187,27 @@ describe('durable run store', () => {
     expect(existsSync(paths.manifestPath)).toBe(false);
     expect(existsSync(paths.statusPath)).toBe(false);
     expect(existsSync(paths.checkpointPath)).toBe(false);
+  });
+
+  it('quarantines and recreates a corrupt runtime sqlite database', () => {
+    const runsRoot = createTempDir('durable-runs-store-corrupt-');
+    const dbPath = join(runsRoot, 'runtime.db');
+    writeFileSync(dbPath, 'not a sqlite database', 'utf-8');
+
+    const paths = resolveDurableRunPaths(runsRoot, 'run-corrupt');
+    const manifest = createDurableRunManifest({
+      id: 'run-corrupt',
+      kind: 'workflow',
+      resumePolicy: 'continue',
+      createdAt: '2026-03-12T18:00:00Z',
+    });
+
+    expect(() => saveDurableRunManifest(paths.manifestPath, manifest)).not.toThrow();
+    expect(loadDurableRunManifest(paths.manifestPath)).toEqual({
+      ...manifest,
+      createdAt: '2026-03-12T18:00:00.000Z',
+    });
+    expect(readdirSync(join(runsRoot, '.corrupt')).some((entry) => entry.endsWith('.db'))).toBe(true);
   });
 
   it('appends and reads durable run events from sqlite', async () => {
