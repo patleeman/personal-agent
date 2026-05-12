@@ -15,6 +15,7 @@ import {
   type FileTreeDropContext,
   type FileTreeDropResult,
   type FileTreeRenameEvent,
+  type FileTreeRowDecorationRenderer,
 } from '@pierre/trees';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -57,6 +58,8 @@ export interface UseFileTreeModelOptions {
   onSelectionChange?: (paths: readonly string[]) => void;
   /** Called on rename. */
   onRename?: (event: FileTreeRenameEvent) => void;
+  /** Optional lightweight row decoration renderer. */
+  renderRowDecoration?: FileTreeRowDecorationRenderer;
 }
 
 export interface UseFileTreeModelResult {
@@ -88,6 +91,7 @@ export function useFileTreeModel({
   dragAndDrop,
   onSelectionChange,
   onRename,
+  renderRowDecoration,
 }: UseFileTreeModelOptions): UseFileTreeModelResult {
   const selectedPathsRef = useRef<readonly string[]>([]);
   const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
@@ -115,6 +119,7 @@ export function useFileTreeModel({
         },
         onSelectionChange: (paths) => selectionChangeRef.current(paths),
         renaming: { onRename: (event) => renameRef.current(event) },
+        ...(renderRowDecoration ? { renderRowDecoration } : {}),
         ...(dragAndDrop !== false
           ? {
               dragAndDrop: {
@@ -135,7 +140,7 @@ export function useFileTreeModel({
           : {}),
       }),
     // These are the immutable options — the model must be rebuilt when they change.
-    [search, contextMenuTrigger, useNativeContextMenu],
+    [search, contextMenuTrigger, renderRowDecoration, useNativeContextMenu],
   );
 
   const resetTree = useCallback(

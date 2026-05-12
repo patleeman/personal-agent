@@ -1,3 +1,4 @@
+import type { FileTreeRowDecorationRenderer } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -31,10 +32,29 @@ export function ActivityTreeView({ items, activeItemId, className, style, onOpen
     },
     [onOpenItem, pathModel],
   );
+  const renderRowDecoration = useCallback<FileTreeRowDecorationRenderer>(
+    ({ item }) => {
+      const activityItem = pathModel.itemByPath.get(item.path);
+      if (!activityItem) return null;
+
+      if (activityItem.kind === 'run') {
+        return { text: formatActivityTreeStatus(activityItem.status), title: `Run · ${activityItem.status}` };
+      }
+
+      if (activityItem.status === 'running' || activityItem.status === 'failed') {
+        return { text: formatActivityTreeStatus(activityItem.status), title: activityItem.status };
+      }
+
+      return null;
+    },
+    [pathModel],
+  );
+
   const { model, resetTree } = useFileTreeModel({
     useNativeContextMenu: false,
     dragAndDrop: false,
     onSelectionChange: handleSelectionChange,
+    renderRowDecoration,
   });
 
   useEffect(() => {
@@ -45,6 +65,22 @@ export function ActivityTreeView({ items, activeItemId, className, style, onOpen
   }, [pathModel, resetTree, selectedPath]);
 
   return <TreesFileTree className={className} model={model} style={{ ...ACTIVITY_TREE_STYLE, ...style }} />;
+}
+
+function formatActivityTreeStatus(status: ActivityTreeItem['status']): string {
+  switch (status) {
+    case 'running':
+      return 'run';
+    case 'queued':
+      return 'wait';
+    case 'failed':
+      return 'fail';
+    case 'done':
+      return 'done';
+    case 'idle':
+    default:
+      return 'idle';
+  }
 }
 
 export function useActivityTreeModel(items: readonly ActivityTreeItem[], activeItemId?: string | null) {
