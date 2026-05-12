@@ -596,6 +596,10 @@ function writeThreadsSortMode(value: ThreadsSortMode): void {
   }
 }
 
+function buildActivityTreeGroupId(groupKey: string): string {
+  return `group:${groupKey || 'chats'}`;
+}
+
 function readThreadsActivityTreeEnabled(): boolean {
   try {
     return localStorage.getItem(THREADS_ACTIVITY_TREE_STORAGE_KEY) === 'true';
@@ -2292,14 +2296,48 @@ export function Sidebar() {
 
     return [...byId.values()];
   }, [archivedSessions, automationConversationIdSet, renderedConversationItems, threadsFilterMode]);
-  const baseActivityTreeItems = useMemo(
-    () =>
-      buildActivityTreeItems({
-        conversations: activityTreeSessions,
-        runs: runs?.runs ?? [],
-      }),
-    [activityTreeSessions, runs],
-  );
+  const baseActivityTreeItems = useMemo(() => {
+    const flatItems = buildActivityTreeItems({
+      conversations: activityTreeSessions,
+      runs: runs?.runs ?? [],
+    });
+
+    if (threadsOrganizeMode !== 'project' || groupedConversationRows.length === 0) {
+      return flatItems;
+    }
+
+    const groupByConversationId = new Map<string, SidebarConversationGroup>();
+    for (const group of groupedConversationRows) {
+      for (const item of group.items) {
+        groupByConversationId.set(item.session.id, group);
+      }
+    }
+
+    const usedGroupKeys = new Set<string>();
+    const groupedItems = flatItems.map((item) => {
+      const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
+      const group = conversationId ? groupByConversationId.get(conversationId) : null;
+      if (!group || item.kind !== 'conversation') return item;
+
+      usedGroupKeys.add(group.key);
+      return { ...item, parentId: buildActivityTreeGroupId(group.key) } satisfies ActivityTreeItem;
+    });
+    const groupItems = groupedConversationRows
+      .filter((group) => usedGroupKeys.has(group.key))
+      .map(
+        (group) =>
+          ({
+            id: buildActivityTreeGroupId(group.key),
+            kind: 'group',
+            title: group.label,
+            subtitle: group.cwd ?? undefined,
+            status: 'idle',
+            metadata: { cwd: group.cwd, groupKey: group.key },
+          }) satisfies ActivityTreeItem,
+      );
+
+    return [...groupItems, ...groupedItems];
+  }, [activityTreeSessions, groupedConversationRows, runs, threadsOrganizeMode]);
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const [activityTreeStyleRevision, setActivityTreeStyleRevision] = useState(0);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;

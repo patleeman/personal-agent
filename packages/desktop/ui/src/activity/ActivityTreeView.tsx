@@ -32,6 +32,7 @@ export function ActivityTreeView({
 }: ActivityTreeViewProps) {
   const pathModel = useMemo(() => buildActivityTreePathModel(items), [items]);
   const selectedPath = activeItemId ? pathModel.pathById.get(activeItemId) : undefined;
+  const itemById = useMemo(() => new Map(items.map((item) => [item.id, item] as const)), [items]);
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
@@ -57,8 +58,13 @@ export function ActivityTreeView({
   }, []);
 
   const visibleEntries = useMemo(
-    () => pathModel.entries.filter(({ item }) => !item.parentId || expandedIds.has(item.parentId)),
-    [expandedIds, pathModel.entries],
+    () =>
+      pathModel.entries.filter(({ item }) => {
+        if (!item.parentId) return true;
+        const parent = itemById.get(item.parentId);
+        return parent?.kind === 'group' || expandedIds.has(item.parentId);
+      }),
+    [expandedIds, itemById, pathModel.entries],
   );
 
   if (pathModel.entries.length === 0) {
@@ -74,7 +80,7 @@ export function ActivityTreeView({
           const accentColor = sanitizeCssColor(item.accentColor);
           const backgroundColor = sanitizeCssColor(item.backgroundColor);
           const childCount = childCountByParentId.get(item.id) ?? 0;
-          const expanded = expandedIds.has(item.id);
+          const expanded = item.kind === 'group' || expandedIds.has(item.id);
           const canArchive = item.kind === 'conversation' && onArchiveItem;
           return (
             <button
@@ -84,6 +90,7 @@ export function ActivityTreeView({
               aria-selected={active ? 'true' : 'false'}
               className={[
                 'ui-sidebar-session-row group flex w-full items-center gap-1 select-none text-left',
+                item.kind === 'group' && 'font-semibold',
                 active && 'ui-sidebar-session-row-active',
               ]
                 .filter(Boolean)
@@ -102,7 +109,11 @@ export function ActivityTreeView({
                 setContextMenu({ item, x: event.clientX, y: event.clientY });
               }}
             >
-              {childCount > 0 ? (
+              {item.kind === 'group' ? (
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-dim" aria-hidden="true">
+                  ▾
+                </span>
+              ) : childCount > 0 ? (
                 <span
                   role="button"
                   tabIndex={-1}
