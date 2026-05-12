@@ -105,6 +105,8 @@ export interface ExtensionContributions {
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
+  activityTreeItemElements?: ExtensionActivityTreeItemElementContribution[];
+  activityTreeItemStyles?: ExtensionActivityTreeItemStyleContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
   secrets?: Record<string, ExtensionSecretContribution>;
   secretBackends?: ExtensionSecretBackendContribution[];
@@ -234,6 +236,21 @@ export interface ExtensionConversationDecoratorContribution {
   id: string;
   component: string;
   position: 'before-title' | 'after-title' | 'subtitle';
+  priority?: number;
+}
+
+export type ExtensionActivityTreeItemSlot = 'leading' | 'before-title' | 'after-title' | 'subtitle' | 'trailing';
+
+export interface ExtensionActivityTreeItemElementContribution {
+  id: string;
+  component: string;
+  slot: ExtensionActivityTreeItemSlot;
+  priority?: number;
+}
+
+export interface ExtensionActivityTreeItemStyleContribution {
+  id: string;
+  provider: string;
   priority?: number;
 }
 

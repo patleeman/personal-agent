@@ -1062,6 +1062,34 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.activityTreeItemElements !== undefined) {
+    for (const [index, element] of assertRecordArray(
+      contributes.activityTreeItemElements,
+      'contributes.activityTreeItemElements',
+    ).entries()) {
+      requireString(element.id, `contributes.activityTreeItemElements[${index}].id`);
+      requireString(element.component, `contributes.activityTreeItemElements[${index}].component`);
+      validateEnum(
+        element.slot,
+        ['leading', 'before-title', 'after-title', 'subtitle', 'trailing'],
+        `contributes.activityTreeItemElements[${index}].slot`,
+      );
+      if (element.priority !== undefined && (typeof element.priority !== 'number' || !Number.isInteger(element.priority))) {
+        throw new Error(`Extension manifest contributes.activityTreeItemElements[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
+  if (contributes.activityTreeItemStyles !== undefined) {
+    for (const [index, style] of assertRecordArray(contributes.activityTreeItemStyles, 'contributes.activityTreeItemStyles').entries()) {
+      requireString(style.id, `contributes.activityTreeItemStyles[${index}].id`);
+      requireString(style.provider, `contributes.activityTreeItemStyles[${index}].provider`);
+      if (style.priority !== undefined && (typeof style.priority !== 'number' || !Number.isInteger(style.priority))) {
+        throw new Error(`Extension manifest contributes.activityTreeItemStyles[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.settingsComponent !== undefined) {
     if (!isRecord(contributes.settingsComponent)) {
       throw new Error('Extension manifest contributes.settingsComponent must be an object.');
@@ -1363,6 +1391,8 @@ export function readExtensionSchema() {
       'composerInputTools',
       'toolbarActions',
       'conversationDecorators',
+      'activityTreeItemElements',
+      'activityTreeItemStyles',
       'contextMenus',
       'threadHeaderActions',
       'statusBarItems',

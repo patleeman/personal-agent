@@ -321,6 +321,25 @@ export interface ExtensionConversationDecoratorContribution {
   priority?: number;
 }
 
+export type ExtensionActivityTreeItemSlot = 'leading' | 'before-title' | 'after-title' | 'subtitle' | 'trailing';
+
+export interface ExtensionActivityTreeItemElementContribution {
+  id: string;
+  component: string;
+  /** Which row slot renders this element. */
+  slot: ExtensionActivityTreeItemSlot;
+  /** Sort priority within slot. Higher renders first. Default 0. */
+  priority?: number;
+}
+
+export interface ExtensionActivityTreeItemStyleContribution {
+  id: string;
+  /** Backend action that returns data-only row style metadata. */
+  provider: string;
+  /** Sort priority for merge order. Higher runs first. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionSettingsComponentContribution {
   id: string;
   component: string;
@@ -356,6 +375,8 @@ export interface ExtensionContributions {
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
+  activityTreeItemElements?: ExtensionActivityTreeItemElementContribution[];
+  activityTreeItemStyles?: ExtensionActivityTreeItemStyleContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
   settingsComponent?: ExtensionSettingsComponentContribution;
 }

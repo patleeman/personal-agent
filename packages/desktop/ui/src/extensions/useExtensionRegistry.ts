@@ -90,6 +90,22 @@ export interface ExtensionConversationDecoratorRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionActivityTreeItemElementRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  slot: 'leading' | 'before-title' | 'after-title' | 'subtitle' | 'trailing';
+  priority?: number;
+  frontendEntry?: string;
+}
+
+export interface ExtensionActivityTreeItemStyleRegistration {
+  extensionId: string;
+  id: string;
+  provider: string;
+  priority?: number;
+}
+
 export interface ExtensionComposerShelfRegistration {
   extensionId: string;
   id: string;
@@ -146,6 +162,8 @@ export interface ExtensionRegistryState {
   statusBarItems: ExtensionStatusBarItemRegistration[];
   conversationHeaderElements: ExtensionConversationHeaderElementRegistration[];
   conversationDecorators: ExtensionConversationDecoratorRegistration[];
+  activityTreeItemElements: ExtensionActivityTreeItemElementRegistration[];
+  activityTreeItemStyles: ExtensionActivityTreeItemStyleRegistration[];
   loading: boolean;
   error: string | null;
 }
@@ -349,6 +367,44 @@ function normalizeConversationDecorators(extensions: ExtensionManifest[]): Exten
   return result;
 }
 
+function normalizeActivityTreeItemElements(extensions: ExtensionManifest[]): ExtensionActivityTreeItemElementRegistration[] {
+  const result: ExtensionActivityTreeItemElementRegistration[] = [];
+  for (const extension of extensions) {
+    const elements = extension.contributes?.activityTreeItemElements;
+    if (!elements?.length) continue;
+    for (const element of elements) {
+      result.push({
+        extensionId: extension.id,
+        id: element.id,
+        component: element.component,
+        slot: element.slot,
+        ...(typeof element.priority === 'number' ? { priority: element.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
+function normalizeActivityTreeItemStyles(extensions: ExtensionManifest[]): ExtensionActivityTreeItemStyleRegistration[] {
+  const result: ExtensionActivityTreeItemStyleRegistration[] = [];
+  for (const extension of extensions) {
+    const styles = extension.contributes?.activityTreeItemStyles;
+    if (!styles?.length) continue;
+    for (const style of styles) {
+      result.push({
+        extensionId: extension.id,
+        id: style.id,
+        provider: style.provider,
+        ...(typeof style.priority === 'number' ? { priority: style.priority } : {}),
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
 function normalizeContextMenus(extensions: ExtensionManifest[]): ExtensionContextMenuRegistration[] {
   const result: ExtensionContextMenuRegistration[] = [];
   for (const extension of extensions) {
@@ -430,6 +486,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     statusBarItems: [],
     conversationHeaderElements: [],
     conversationDecorators: [],
+    activityTreeItemElements: [],
+    activityTreeItemStyles: [],
     loading: true,
     error: null,
   });
@@ -464,6 +522,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           statusBarItems: [],
           conversationHeaderElements: [],
           conversationDecorators: [],
+          activityTreeItemElements: [],
+          activityTreeItemStyles: [],
           loading: false,
           error: null,
         });
@@ -492,6 +552,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             statusBarItems: normalizeStatusBarItems(extensions),
             conversationHeaderElements: normalizeConversationHeaderElements(extensions),
             conversationDecorators: normalizeConversationDecorators(extensions),
+            activityTreeItemElements: normalizeActivityTreeItemElements(extensions),
+            activityTreeItemStyles: normalizeActivityTreeItemStyles(extensions),
             loading: false,
             error: null,
           });
@@ -516,6 +578,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             statusBarItems: [],
             conversationHeaderElements: [],
             conversationDecorators: [],
+            activityTreeItemElements: [],
+            activityTreeItemStyles: [],
             loading: false,
             error: error.message,
           });

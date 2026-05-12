@@ -343,6 +343,35 @@ The component receives:
 }
 ```
 
+### Activity Tree Item Elements (`activityTreeItemElements`)
+
+Add small component-backed elements to the shared activity tree rows used for conversations, runs, and future work items. Core owns row layout, routing, selection, and keyboard behavior; extensions only fill safe slots.
+
+```json
+{
+  "id": "thread-color-dot",
+  "component": "ThreadColorDot",
+  "slot": "leading",
+  "priority": 10
+}
+```
+
+**`slot`**: `"leading"`, `"before-title"`, `"after-title"`, `"subtitle"`, or `"trailing"`.
+
+### Activity Tree Item Styles (`activityTreeItemStyles`)
+
+Register backend providers for data-only row styling metadata such as accent colors, backgrounds, or tooltip text. Providers are sorted by `priority`; higher priority runs first.
+
+```json
+{
+  "id": "thread-color-style",
+  "provider": "getThreadColorStyle",
+  "priority": 10
+}
+```
+
+The host will pass activity item metadata to the provider once the activity tree UI integration is enabled. Providers should return sanitized data, not arbitrary DOM or CSS ownership.
+
 ### Context Menus (`contextMenus`)
 
 Add right-click menu items. Action-based — no frontend entry needed.

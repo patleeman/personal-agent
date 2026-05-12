@@ -218,6 +218,21 @@ interface ExtensionConversationDecoratorContribution {
   priority?: number;
 }
 
+type ExtensionActivityTreeItemSlot = 'leading' | 'before-title' | 'after-title' | 'subtitle' | 'trailing';
+
+interface ExtensionActivityTreeItemElementContribution {
+  id: string;
+  component: string;
+  slot: ExtensionActivityTreeItemSlot;
+  priority?: number;
+}
+
+interface ExtensionActivityTreeItemStyleContribution {
+  id: string;
+  provider: string;
+  priority?: number;
+}
+
 interface ExtensionSettingsComponentContribution {
   id: string;
   component: string;
@@ -252,6 +267,8 @@ interface ExtensionContributions {
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
+  activityTreeItemElements?: ExtensionActivityTreeItemElementContribution[];
+  activityTreeItemStyles?: ExtensionActivityTreeItemStyleContribution[];
   settings?: Record<string, unknown>;
   secrets?: Record<string, unknown>;
   secretBackends?: unknown[];

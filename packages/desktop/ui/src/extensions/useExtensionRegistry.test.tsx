@@ -60,6 +60,21 @@ describe('useExtensionRegistry', () => {
               priority: 25,
             },
           ],
+          activityTreeItemElements: [
+            {
+              id: 'thread-color-dot',
+              component: 'ThreadColorDot',
+              slot: 'leading',
+              priority: 10,
+            },
+          ],
+          activityTreeItemStyles: [
+            {
+              id: 'thread-color-style',
+              provider: 'getThreadColorStyle',
+              priority: 20,
+            },
+          ],
         },
       },
     ] as never);
@@ -111,6 +126,24 @@ describe('useExtensionRegistry', () => {
         frontendEntry: 'dist/frontend.js',
       },
     ]);
+    expect(result.current.activityTreeItemElements).toEqual([
+      {
+        extensionId: 'test-extension',
+        id: 'thread-color-dot',
+        component: 'ThreadColorDot',
+        slot: 'leading',
+        priority: 10,
+        frontendEntry: 'dist/frontend.js',
+      },
+    ]);
+    expect(result.current.activityTreeItemStyles).toEqual([
+      {
+        extensionId: 'test-extension',
+        id: 'thread-color-style',
+        provider: 'getThreadColorStyle',
+        priority: 20,
+      },
+    ]);
   });
 
   it('keeps registry arrays defined when the extension API is unavailable', async () => {
@@ -123,6 +156,8 @@ describe('useExtensionRegistry', () => {
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.conversationHeaderElements).toEqual([]);
       expect(result.current.conversationDecorators).toEqual([]);
+      expect(result.current.activityTreeItemElements).toEqual([]);
+      expect(result.current.activityTreeItemStyles).toEqual([]);
       expect(result.current.statusBarItems).toEqual([]);
       expect(result.current.composerButtons).toEqual([]);
       expect(result.current.composerInputTools).toEqual([]);
