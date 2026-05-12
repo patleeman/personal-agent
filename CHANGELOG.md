@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.9-rc.10 — 2026-05-12
+
+- Update docs for 74 tests and extended cross-extension conflict coverage
+- Add cross-extension conflict checks for mentions, prompt references, context providers, quick open providers (+4 tests, 74 total)
+- Add Node.js syntax check for prebuilt backend bundles, update docs (+1 test, 70 total, 84 combined)
+- Add duplicate env variable detection, improve startup action validation (+1 test, 69 total)
+- Add version field check, settings key format check, nav badgeAction validation (+3 tests, 68 total)
+- Update extension testing docs table for 65 tests / 12 categories
+- Add action reference validation, settings type consistency, secret env format checks (+3 tests, 65 total)
+- Add extension testing docs, tool validation, frontend component checks, extension API smoke tests
+- Add tool validation, frontend component checks, extension API smoke tests (+19 tests, 76 total)
+- Add extension integration smoke test suite (12 new sections, 57 total tests)
+- Add extension integration smoke test suite
+- fix: narrow checkpoint backend API import
+- Revert "fix: force Codex conversations to SSE transport"
+- fix: force Codex conversations to SSE transport
+- fix: anchor conversation scroll button
+- fix: clarify non-json api responses
+
 ## 0.7.9-rc.9 — 2026-05-11
 
 - fix: add missing async to extension enable route handler
