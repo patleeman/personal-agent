@@ -6,7 +6,7 @@ const mockList = vi.fn();
 const mockDelete = vi.fn();
 const mockInvalidate = vi.fn();
 
-vi.mock('@personal-agent/extensions/backend', () => ({
+vi.mock('@personal-agent/extensions/backend/artifacts', () => ({
   saveConversationArtifact: (...args: unknown[]) => mockSave(...args),
   getConversationArtifact: (...args: unknown[]) => mockGet(...args),
   listConversationArtifacts: (...args: unknown[]) => mockList(...args),

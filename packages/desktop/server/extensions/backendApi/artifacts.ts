@@ -4,4 +4,4 @@ export {
   getConversationArtifact,
   listConversationArtifacts,
   saveConversationArtifact,
-} from '@personal-agent/core';
+} from '../../../../core/src/conversation-artifacts.js';

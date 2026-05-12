@@ -89,6 +89,9 @@ function createExtensionBackendApiPlugin() {
       buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend$/ }, () => ({
         path: join(repoRoot, 'packages/desktop/server/extensions/backendApi/index.ts'),
       }));
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend\/artifacts$/ }, () => ({
+        path: join(repoRoot, 'packages/desktop/server/extensions/backendApi/artifacts.ts'),
+      }));
     },
   };
 }

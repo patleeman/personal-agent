@@ -501,6 +501,8 @@ The `pa` client provides:
 
 See `packages/extensions/src/index.ts` for the full API.
 
+Backend-only host APIs that should stay narrow can also be exposed through focused SDK subpaths such as `@personal-agent/extensions/backend/artifacts`. Prefer a focused subpath over the broad backend barrel when bundling a system extension that only needs one backend service.
+
 ## Main page layout
 
 Main-route extension pages should use the shared app page primitives instead of hand-rolled widths or padding:

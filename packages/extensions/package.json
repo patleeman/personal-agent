@@ -39,6 +39,10 @@
       "types": "./dist/backend.d.ts",
       "default": "./dist/backend.js"
     },
+    "./backend/artifacts": {
+      "types": "./dist/backend/artifacts.d.ts",
+      "default": "./dist/backend/artifacts.js"
+    },
     "./backend/checkpoints": {
       "types": "./dist/backend/checkpoints.d.ts",
       "default": "./dist/backend/checkpoints.js"

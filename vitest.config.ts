@@ -12,6 +12,7 @@ export default defineConfig({
       '@personal-agent/extensions/data': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/data.ts'),
       '@personal-agent/extensions/settings': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/settings.ts'),
       '@personal-agent/extensions/excalidraw': resolve(process.cwd(), 'packages/extensions/src/excalidraw.ts'),
+      '@personal-agent/extensions/backend/artifacts': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/artifacts.ts'),
       '@personal-agent/extensions/backend/checkpoints': resolve(
         process.cwd(),
         'packages/desktop/server/extensions/backendApi/checkpoints.ts',

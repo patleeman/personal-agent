@@ -1,11 +1,11 @@
+import type { ExtensionBackendContext } from '@personal-agent/extensions/backend';
 import {
   type ConversationArtifactKind,
   deleteConversationArtifact,
-  type ExtensionBackendContext,
   getConversationArtifact,
   listConversationArtifacts,
   saveConversationArtifact,
-} from '@personal-agent/extensions/backend';
+} from '@personal-agent/extensions/backend/artifacts';
 
 const ARTIFACT_KIND_VALUES = ['html', 'mermaid', 'latex'] as const;
 type ArtifactAction = 'save' | 'get' | 'list' | 'delete';
