@@ -60,6 +60,15 @@ Loop mode stores a prompt, max iteration count, iterations used, and delay. Afte
 
 Simple delays are supported in the loop delay field: `immediate`, `After each turn`, `500ms`, `2s`, `5m`, or `1h`. Unknown delay text falls back to immediate continuation.
 
+## Legacy Goal Mode Guardrails
+
+The `set_goal` / `update_goal` tools are the legacy goal-mode path. They are hardened so a completed goal cannot keep speaking through stale queued continuations:
+
+- only one continuation timer can be pending at a time;
+- the timer re-reads the latest goal state before it sends;
+- changing, clearing, pausing, or completing the goal cancels any queued continuation;
+- repeated `update_goal { status: "complete" }` calls are idempotent no-ops.
+
 ## Tools
 
 ### `conversation_auto_control`

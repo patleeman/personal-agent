@@ -111,6 +111,14 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     // Track consecutive turns that did not use tools so goal mode cannot spin forever on chat-only continuations.
     let continuationSuppressed = false;
     let consecutiveNoToolTurns = 0;
+    let pendingContinuationTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearPendingContinuation = () => {
+      if (pendingContinuationTimer) {
+        clearTimeout(pendingContinuationTimer);
+        pendingContinuationTimer = null;
+      }
+    };
 
     // ── Register set_goal tool ───────────────────────────────────────────
     pi.registerTool({
@@ -144,6 +152,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         };
         writeGoalState(pi, newState);
         syncGoalTools(pi, true);
+        clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
 
@@ -174,6 +183,21 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const state = readGoalState(ctx.sessionManager);
         if (state.status !== 'active') {
+          if (params.status === 'complete') {
+            syncGoalTools(pi, false);
+            clearPendingContinuation();
+            continuationSuppressed = false;
+            consecutiveNoToolTurns = 0;
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'Goal already complete.',
+                },
+              ],
+              details: { state },
+            };
+          }
           throw new Error('No active goal to update.');
         }
 
@@ -200,6 +224,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
               };
         writeGoalState(pi, newState);
         syncGoalTools(pi, newState.status === 'active');
+        clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
 
@@ -237,6 +262,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           };
           writeGoalState(pi, cleared);
           syncGoalTools(pi, false);
+          clearPendingContinuation();
           continuationSuppressed = false;
           consecutiveNoToolTurns = 0;
           pi.sendUserMessage(`Goal cleared. Previous objective: ${state.objective}`);
@@ -263,6 +289,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         };
         writeGoalState(pi, newState);
         syncGoalTools(pi, true);
+        clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
         pi.sendUserMessage(`Goal set: ${trimmed}`);
@@ -273,6 +300,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     pi.on('turn_end', async (event, ctx) => {
       const state = readGoalState(ctx.sessionManager);
       if (state.status !== 'active') {
+        clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
         return;
@@ -283,6 +311,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         const paused: GoalState = { ...state, status: 'paused', updatedAt: new Date().toISOString() };
         writeGoalState(pi, paused);
         syncGoalTools(pi, false);
+        clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
         return;
@@ -305,6 +334,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         };
         writeGoalState(pi, paused);
         syncGoalTools(pi, false);
+        clearPendingContinuation();
         continuationSuppressed = true;
         consecutiveNoToolTurns = 0;
         return;
@@ -320,10 +350,24 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
+      if (pendingContinuationTimer) {
+        return;
+      }
+
       const prompt = buildContinuationPrompt(state);
       const continuationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const scheduledObjective = state.objective;
+      const scheduledUpdatedAt = state.updatedAt;
 
-      setTimeout(() => {
+      pendingContinuationTimer = setTimeout(() => {
+        pendingContinuationTimer = null;
+        const latest = readGoalState(ctx.sessionManager);
+        if (latest.status !== 'active' || latest.objective !== scheduledObjective || latest.updatedAt !== scheduledUpdatedAt) {
+          return;
+        }
+        if (ctx.hasPendingMessages()) {
+          return;
+        }
         pi.sendMessage(
           {
             customType: CONTINUATION_CUSTOM_TYPE,
@@ -362,6 +406,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       };
       writeGoalState(pi, newState);
       syncGoalTools(pi, true);
+      clearPendingContinuation();
       continuationSuppressed = false;
       consecutiveNoToolTurns = 0;
     });

@@ -32,6 +32,8 @@ The system automatically schedules a continuation turn after each turn while the
 - Mark the goal complete with `update_goal` only when the objective is actually achieved.
 - The system's continuation prompt already includes the current objective.
 
-## No-tool suppression
+## Safety guards
 
 If continuation turns produce no tool calls, the active goal is paused after two no-progress turns so it cannot spin forever. Starting, updating, or completing a goal resets this.
+
+Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Goal mode should end quietly once the objective is complete.
