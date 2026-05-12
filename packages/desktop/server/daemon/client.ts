@@ -6,7 +6,6 @@ import { loadDaemonConfig } from '../config.js';
 import { resolveDaemonPaths } from '../paths.js';
 import { publishAppEvent } from '../shared/appEvents.js';
 import { logWarn } from '../shared/logging.js';
-import { logWarn } from '../shared/logging.js';
 import { createDaemonEvent } from './events.js';
 import { getDaemonClientTransportOverride } from './in-process-client.js';
 import type {
