@@ -1,17 +1,21 @@
 /**
  * Trace Database
  *
- * SQLite-backed telemetry storage for the Traces monitoring page.
+ * SQLite-backed observability storage for the Traces monitoring page.
  * Stores turn-level stats, tool calls, context snapshots, compaction events,
- * and queue operations in a dedicated trace.db per profile.
+ * and queue operations in the shared observability.db per state root.
  *
  * All writes are fire-and-forget — they never block the session loop.
  */
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
-import { ensureObservabilityDbDir, resolveLegacyTraceDbPath, resolveObservabilityDbPath } from './observability-db.js';
+import {
+  applyObservabilityMigrations,
+  ensureObservabilityDbDir,
+  resolveLegacyTraceDbPath,
+  resolveObservabilityDbPath,
+} from './observability-db.js';
 import { openSqliteDatabase } from './sqlite.js';
-import { applyMigrations } from './sqlite-migrations.js';
 // ── Schema ────────────────────────────────────────────────────────────────────
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS trace_stats (
@@ -267,8 +271,8 @@ function getTraceDb(stateRoot) {
   // Apply baseline schema (all IF NOT EXISTS — safe to run on any DB)
   db.exec(SCHEMA);
   db.exec(`CREATE TABLE IF NOT EXISTS observability_imports (key TEXT PRIMARY KEY, value TEXT NOT NULL, imported_at TEXT NOT NULL)`);
-  // Apply versioned migrations tracked via PRAGMA user_version
-  applyMigrations(db, 'trace', TRACE_MIGRATIONS);
+  // Apply versioned migrations per observability namespace.
+  applyObservabilityMigrations(db, 'trace', TRACE_MIGRATIONS);
   importLegacyTraceRows(db, stateRoot);
   // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {

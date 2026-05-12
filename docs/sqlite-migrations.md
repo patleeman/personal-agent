@@ -8,7 +8,7 @@ Before this framework, each SQLite store handled schema migration ad-hoc:
 
 - **Automation store**: `PRAGMA table_info` + `ALTER TABLE ADD COLUMN` for each new column, plus one destructive `ALTER TABLE RENAME` that broke child table foreign keys
 - **Activity store**: One-time legacy migration from markdown files, mixed with every-open schema creation
-- **Runs store**, **Search index**, **Summaries**, **Trace DB**: Pure `CREATE TABLE IF NOT EXISTS` — no version tracking at all
+- **Runs store**, **Search index**, **Summaries**, older **Trace DB**: Pure `CREATE TABLE IF NOT EXISTS` — no version tracking at all
 
 This caused the exact bug we hit: renaming `automations` → `automations_legacy_profile` silently rewrote FK references in child tables, and the repair was a post-hoc hack (`repairAutomationChildForeignKeys`).
 
@@ -16,7 +16,7 @@ This caused the exact bug we hit: renaming `automations` → `automations_legacy
 
 ### `PRAGMA user_version`
 
-SQLite provides a single-integer schema version via `PRAGMA user_version`. This is the foundation of the migration system.
+SQLite provides a single-integer schema version via `PRAGMA user_version`. This is the foundation of the migration system for single-schema stores. Shared stores, like the unified observability database, use a namespace table (`observability_schema_versions`) instead so trace and app-telemetry migrations do not fight over one global integer.
 
 ### `Migration`
 

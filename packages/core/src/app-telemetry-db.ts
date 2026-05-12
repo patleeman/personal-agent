@@ -8,9 +8,14 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 
-import { ensureObservabilityDbDir, resolveLegacyAppTelemetryDbPath, resolveObservabilityDbPath } from './observability-db.js';
+import {
+  applyObservabilityMigrations,
+  ensureObservabilityDbDir,
+  resolveLegacyAppTelemetryDbPath,
+  resolveObservabilityDbPath,
+} from './observability-db.js';
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite.js';
-import { applyMigrations, type Migration } from './sqlite-migrations.js';
+import type { Migration } from './sqlite-migrations.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS app_telemetry_events (
@@ -99,7 +104,7 @@ function getAppTelemetryDb(stateRoot?: string): SqliteDatabase {
   const db = openSqliteDatabase(path);
   db.exec(SCHEMA);
   db.exec(`CREATE TABLE IF NOT EXISTS observability_imports (key TEXT PRIMARY KEY, value TEXT NOT NULL, imported_at TEXT NOT NULL)`);
-  applyMigrations(db, 'app-telemetry-db', APP_TELEMETRY_MIGRATIONS);
+  applyObservabilityMigrations(db, 'app-telemetry', APP_TELEMETRY_MIGRATIONS);
   importLegacyAppTelemetryEvents(db, stateRoot);
   maybePruneAppTelemetryEvents(db, path, { force: true });
   dbCache.set(path, db);
