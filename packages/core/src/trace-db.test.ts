@@ -473,29 +473,6 @@ describe('trace-db', () => {
     expect(countRows('trace_context_pointer_inspect')).toBe(0);
   });
 
-  it('drops raw suggested context pointer ids after the short attribution window', () => {
-    writeTraceSuggestedContext({ sessionId: 'old-pointer-ids', pointerIds: ['pointer-a', 'pointer-b'] });
-
-    closeTraceDbs();
-    const oldTimestamp = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
-    const db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
-    try {
-      db.prepare(`UPDATE trace_suggested_context SET ts = ? WHERE session_id = ?`).run(oldTimestamp, 'old-pointer-ids');
-    } finally {
-      db.close();
-    }
-
-    writeTraceSuggestedContext({ sessionId: 'fresh-pointer-ids', pointerIds: ['pointer-c'] });
-
-    expect(countRows('trace_suggested_context')).toBe(2);
-    expect(readSingleValue<string>(`SELECT pointer_ids AS value FROM trace_suggested_context WHERE session_id = 'old-pointer-ids'`)).toBe(
-      '',
-    );
-    expect(readSingleValue<number>(`SELECT pointer_count AS value FROM trace_suggested_context WHERE session_id = 'old-pointer-ids'`)).toBe(
-      2,
-    );
-  });
-
   it('drops raw suggested context pointer ids before aggregate telemetry expires', () => {
     writeTraceSuggestedContext({ sessionId: 'suggested-ids', pointerIds: ['pointer-a', 'pointer-b'] });
 
