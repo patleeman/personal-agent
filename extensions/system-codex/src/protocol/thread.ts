@@ -1,18 +1,72 @@
+import { resolve } from 'node:path';
+
 import type { MethodHandler } from '../server.js';
-import { broadcastToThread, subscribeConnectionToThread } from '../server.js';
+import { broadcastToThread, subscribeConnectionToThread, unsubscribeConnectionFromThread } from '../server.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function toThreadResponse(id: string, detail?: Record<string, unknown>) {
+function epochSeconds(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return Math.floor(Date.now() / 1000);
+  return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+}
+
+function absoluteCwd(value: unknown): string {
+  return resolve(typeof value === 'string' && value.trim() ? value : process.cwd());
+}
+
+function threadStatus(detail?: Record<string, unknown>) {
+  return detail?.running ? { type: 'active', activeFlags: [] } : { type: 'idle' };
+}
+
+function toThreadResponse(id: string, detail?: Record<string, unknown>, turns: unknown[] = []) {
+  const name = (detail?.title as string) || null;
+  const preview = (detail?.preview as string) || name || '';
+  const cwd = absoluteCwd(detail?.cwd);
+
   return {
     id,
-    modelProvider: 'personal-agent',
-    createdAt: typeof detail?.createdAt === 'number' ? detail.createdAt : Date.now(),
-    updatedAt: typeof detail?.updatedAt === 'number' ? detail.updatedAt : Date.now(),
-    title: (detail?.title as string) ?? '',
-    status: detail?.running ? { type: 'active', activeFlags: [] } : { type: 'idle' },
-    cwd: (detail?.cwd as string) ?? process.cwd(),
+    sessionId: (detail?.sessionId as string) || id,
+    forkedFromId: (detail?.forkedFromId as string) || null,
+    preview,
+    ephemeral: false,
+    modelProvider: (detail?.modelProvider as string) || 'personal-agent',
+    createdAt: epochSeconds(detail?.createdAt),
+    updatedAt: epochSeconds(detail?.updatedAt),
+    status: detail?.status && typeof detail.status === 'object' ? detail.status : threadStatus(detail),
+    path: null,
+    cwd,
+    cliVersion: '0.125.0',
+    source: 'appServer',
+    threadSource: null,
+    agentNickname: null,
+    agentRole: null,
+    gitInfo: detail?.gitInfo ?? null,
+    name,
+    turns,
+
+    // Legacy PA compatibility field. Upstream Codex clients ignore it.
+    title: name ?? '',
   };
+}
+
+function threadSessionFields(thread: ReturnType<typeof toThreadResponse>) {
+  return {
+    model: 'personal-agent',
+    modelProvider: thread.modelProvider,
+    serviceTier: null,
+    cwd: thread.cwd,
+    instructionSources: [],
+    approvalPolicy: 'on-failure',
+    approvalsReviewer: 'user',
+    sandbox: { type: 'dangerFullAccess' },
+    permissionProfile: null,
+    activePermissionProfile: null,
+    reasoningEffort: null,
+  };
+}
+
+function toThreadSessionResponse(thread: ReturnType<typeof toThreadResponse>) {
+  return { thread, ...threadSessionFields(thread) };
 }
 
 // ── Goal storage key helper ─────────────────────────────────────────────────
@@ -29,7 +83,7 @@ function metaKey(threadId: string): string {
 
 export const thread = {
   /** `thread/start` */
-  start: (async (params, ctx, _conn, notify) => {
+  start: (async (params, ctx, conn, notify) => {
     const p = params as Record<string, unknown> | undefined;
     const created = await ctx.conversations.create({
       cwd: p?.cwd as string | undefined,
@@ -40,19 +94,20 @@ export const thread = {
     const detail = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
     const threadId = created.id;
 
-    subscribeConnectionToThread(threadId, notify, ctx);
+    subscribeConnectionToThread(threadId, notify, ctx, conn);
 
-    notify('thread/started', { thread: toThreadResponse(threadId, detail) });
+    const thread = toThreadResponse(threadId, detail);
+    notify('thread/started', { thread });
     broadcastToThread(threadId, 'thread/status/changed', {
       threadId,
       status: { type: 'idle' },
     });
 
-    return { thread: toThreadResponse(threadId, detail) };
+    return toThreadSessionResponse(thread);
   }) as MethodHandler,
 
   /** `thread/resume` */
-  resume: (async (params, ctx, _conn, notify) => {
+  resume: (async (params, ctx, conn, notify) => {
     const p = params as Record<string, unknown> | undefined;
     const threadId = p?.threadId as string | undefined;
     if (!threadId) throw new Error('threadId is required');
@@ -60,15 +115,16 @@ export const thread = {
     const meta = await ctx.conversations.getMeta(threadId).catch(() => null);
     const detail = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
 
-    subscribeConnectionToThread(threadId, notify, ctx);
+    subscribeConnectionToThread(threadId, notify, ctx, conn);
 
-    notify('thread/started', { thread: toThreadResponse(threadId, detail) });
+    const thread = toThreadResponse(threadId, detail);
+    notify('thread/started', { thread });
     broadcastToThread(threadId, 'thread/status/changed', {
       threadId,
       status: { type: 'idle' },
     });
 
-    return { thread: toThreadResponse(threadId, detail) };
+    return toThreadSessionResponse(thread);
   }) as MethodHandler,
 
   /** `thread/fork` — fork a thread into a new one with full history */
@@ -78,7 +134,10 @@ export const thread = {
     if (!sourceId) throw new Error('threadId is required');
 
     const result = await ctx.conversations.fork(sourceId, p?.cwd as string | undefined);
-    return { thread: toThreadResponse(result.id) };
+    const meta = await ctx.conversations.getMeta(result.id).catch(() => null);
+    const detail = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
+    const thread = toThreadResponse(result.id, { ...detail, forkedFromId: sourceId });
+    return toThreadSessionResponse(thread);
   }) as MethodHandler,
 
   /** `thread/list` */
@@ -90,18 +149,16 @@ export const thread = {
     const data = Array.isArray(sessions)
       ? sessions.slice(0, limit).map((s: unknown) => {
           const session = s as Record<string, unknown>;
-          return {
-            id: session.id ?? session.sessionId ?? '',
+          const id = String(session.id ?? session.sessionId ?? '');
+          return toThreadResponse(id, {
+            ...session,
             title: (session.title as string) ?? '',
-            modelProvider: 'personal-agent',
-            createdAt: typeof session.createdAt === 'number' ? session.createdAt : 0,
-            updatedAt: typeof session.updatedAt === 'number' ? session.updatedAt : 0,
             status: { type: 'notLoaded' },
-          };
+          });
         })
       : [];
 
-    return { data, nextCursor: null };
+    return { data, nextCursor: null, backwardsCursor: null };
   }) as MethodHandler,
 
   /** `thread/loaded/list` — list currently loaded (live) thread ids */
@@ -115,7 +172,7 @@ export const thread = {
           })
           .map((s: unknown) => (s as Record<string, unknown>).id as string)
       : [];
-    return { data: loaded };
+    return { data: loaded, nextCursor: null };
   }) as MethodHandler,
 
   /** `thread/read` */
@@ -128,42 +185,27 @@ export const thread = {
     const meta = await ctx.conversations.getMeta(threadId).catch(() => null);
     const detail = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
 
-    let turns: unknown[] = [];
-    if (includeTurns) {
-      try {
-        const blocks = await ctx.conversations.getBlocks(threadId);
-        if (blocks && typeof blocks === 'object') {
-          const sr = blocks as Record<string, unknown>;
-          if (sr.detail && typeof sr.detail === 'object') {
-            const d = sr.detail as Record<string, unknown>;
-            if (Array.isArray(d.blocks)) {
-              turns = [
-                {
-                  id: `turn-${threadId}-0`,
-                  status: 'completed',
-                  items: d.blocks.map((b: unknown, i: number) => ({
-                    id: `item-${i}`,
-                    type: (b as Record<string, unknown>).type ?? 'unknown',
-                    role: (b as Record<string, unknown>).role ?? 'assistant',
-                    content: (b as Record<string, unknown>).content ?? '',
-                    status: 'completed',
-                  })),
-                },
-              ];
-            }
-          }
-        }
-      } catch {
-        /* unavailable */
-      }
-    }
+    const turns: unknown[] = includeTurns
+      ? [
+          {
+            id: `turn-${threadId}-0`,
+            items: [],
+            itemsView: 'full',
+            status: 'completed',
+            error: null,
+            startedAt: null,
+            completedAt: null,
+            durationMs: null,
+          },
+        ]
+      : [];
 
     // Attach stored metadata
     const storedMeta = await ctx.storage.get<Record<string, unknown>>(metaKey(threadId)).catch(() => null);
     const gitInfo = storedMeta?.gitInfo ?? null;
 
     return {
-      thread: { ...toThreadResponse(threadId, detail), turns, gitInfo },
+      thread: toThreadResponse(threadId, { ...detail, gitInfo }, turns),
     };
   }) as MethodHandler,
 
@@ -178,7 +220,7 @@ export const thread = {
   unarchive: (async (params) => {
     const threadId = (params as Record<string, unknown> | undefined)?.threadId as string | undefined;
     if (!threadId) throw new Error('threadId is required');
-    return { thread: { id: threadId } };
+    return { thread: toThreadResponse(threadId) };
   }) as MethodHandler,
 
   /** `thread/name/set` */
@@ -227,9 +269,10 @@ export const thread = {
   }) as MethodHandler,
 
   /** `thread/unsubscribe` */
-  unsubscribe: (async (params, _ctx, conn) => {
+  unsubscribe: (async (params, _ctx, conn, notify) => {
     const threadId = (params as Record<string, unknown> | undefined)?.threadId as string | undefined;
     if (!threadId) throw new Error('threadId is required');
+    unsubscribeConnectionFromThread(threadId, notify);
     conn.subscribedThreads.delete(threadId);
     return { status: 'unsubscribed' };
   }) as MethodHandler,

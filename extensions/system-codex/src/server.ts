@@ -374,4 +374,14 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
   });
 }
 
-export { broadcastToThread, subscribeConnectionToThread };
+export { broadcastToThread, subscribeConnectionToThread, unsubscribeConnectionFromThread };
+
+function unsubscribeConnectionFromThread(threadId: string, notify: NotifyFn): void {
+  const group = threadSubscribers.get(threadId);
+  if (!group) return;
+  group.notifiers.delete(notify);
+  if (group.notifiers.size === 0) {
+    group.unsubscribe?.();
+    threadSubscribers.delete(threadId);
+  }
+}
