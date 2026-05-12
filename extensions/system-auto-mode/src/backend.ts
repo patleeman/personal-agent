@@ -182,13 +182,22 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           throw new Error('Provide objective to update the goal, or status: "complete" to finish it.');
         }
 
-        const newState: GoalState = {
-          ...state,
-          objective: objective || state.objective,
-          status: params.status === 'complete' ? 'complete' : 'active',
-          stopReason: params.status === 'complete' ? 'goal achieved' : null,
-          updatedAt: new Date().toISOString(),
-        };
+        const newState: GoalState =
+          params.status === 'complete'
+            ? {
+                objective: '',
+                status: 'complete',
+                tasks: [],
+                stopReason: 'goal achieved',
+                updatedAt: new Date().toISOString(),
+              }
+            : {
+                ...state,
+                objective: objective || state.objective,
+                status: 'active',
+                stopReason: null,
+                updatedAt: new Date().toISOString(),
+              };
         writeGoalState(pi, newState);
         syncGoalTools(pi, newState.status === 'active');
         continuationSuppressed = false;

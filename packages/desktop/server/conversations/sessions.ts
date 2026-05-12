@@ -2568,6 +2568,10 @@ export function readGoalFromEntries(entries: unknown[]): ThreadGoal | null {
     if (!isRecord(data) || typeof data.objective !== 'string') {
       continue;
     }
+    const status = normalizeGoalStatus(data.status);
+    if (!data.objective.trim() || status === 'complete') {
+      return null;
+    }
     const tasks: ThreadGoal['tasks'] = [];
     if (Array.isArray(data.tasks)) {
       for (const task of data.tasks) {
@@ -2583,7 +2587,7 @@ export function readGoalFromEntries(entries: unknown[]): ThreadGoal | null {
     }
     return {
       objective: data.objective,
-      status: normalizeGoalStatus(data.status),
+      status,
       tasks,
       stopReason: typeof data.stopReason === 'string' ? data.stopReason : null,
       updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,

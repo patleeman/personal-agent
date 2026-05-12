@@ -178,6 +178,26 @@ describe('desktopConversationState reducer', () => {
       stopReason: null,
       updatedAt: '2026-05-11T12:00:00.000Z',
     });
+
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'tool_end',
+      toolName: 'update_goal',
+      toolCallId: 'goal-2',
+      output: 'Goal complete!',
+      isError: false,
+      durationMs: 5,
+      details: {
+        state: {
+          objective: '',
+          status: 'complete',
+          tasks: [],
+          stopReason: 'goal achieved',
+          updatedAt: '2026-05-11T12:01:00.000Z',
+        },
+      },
+    } as never);
+
+    expect(state.goalState).toBeNull();
   });
 
   it('preserves terminal-style metadata for direct bang bash runs', async () => {

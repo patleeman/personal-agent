@@ -131,17 +131,24 @@ function normalizeGoalStatus(value: unknown): import('./sessions.js').ThreadGoal
   return 'complete';
 }
 
-function readGoalStateFromToolDetails(toolName: string | undefined, details: unknown): import('./sessions.js').ThreadGoal | null {
+function readGoalStateFromToolDetails(
+  toolName: string | undefined,
+  details: unknown,
+): import('./sessions.js').ThreadGoal | null | undefined {
   if (!toolName || !GOAL_TOOL_NAMES.has(toolName) || !isRecord(details) || !isRecord(details.state)) {
-    return null;
+    return undefined;
   }
   const state = details.state;
   if (typeof state.objective !== 'string') {
+    return undefined;
+  }
+  const status = normalizeGoalStatus(state.status);
+  if (!state.objective.trim() || status === 'complete') {
     return null;
   }
   return {
     objective: state.objective,
-    status: normalizeGoalStatus(state.status),
+    status,
     tasks: [],
     stopReason: typeof state.stopReason === 'string' ? state.stopReason : null,
     updatedAt: typeof state.updatedAt === 'string' ? state.updatedAt : null,
@@ -435,7 +442,7 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
         ...prev,
         blocks,
         totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length),
-        ...(goalState ? { goalState } : {}),
+        ...(goalState !== undefined ? { goalState } : {}),
       };
     }
 

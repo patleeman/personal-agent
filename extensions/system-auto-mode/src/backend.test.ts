@@ -164,6 +164,52 @@ describe('system-goal-mode extension', () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  it('clears stored goal state when marking the goal complete', async () => {
+    const registeredTools: Array<{ name: string; execute: (...args: any[]) => Promise<{ details?: unknown }> }> = [];
+    const appendEntry = vi.fn();
+    const factory = createConversationAutoModeAgentExtension();
+    const pi = {
+      registerTool: vi.fn((tool: { name: string; execute: (...args: any[]) => Promise<{ details?: unknown }> }) =>
+        registeredTools.push(tool),
+      ),
+      registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
+      setActiveTools: vi.fn(),
+      sendMessage: vi.fn(),
+      appendEntry,
+      on: vi.fn(),
+    } as unknown as ExtensionAPI;
+
+    factory(pi);
+
+    const updateGoal = registeredTools.find((tool) => tool.name === 'update_goal');
+    const result = await updateGoal?.execute('goal-2', { status: 'complete' }, new AbortController().signal, vi.fn(), {
+      sessionManager: {
+        getEntries: () => [
+          {
+            type: 'custom',
+            customType: 'conversation-goal',
+            data: {
+              objective: 'ship goal mode',
+              status: 'active',
+              tasks: [],
+              stopReason: null,
+              updatedAt: '2026-05-09T00:00:00.000Z',
+            },
+          },
+        ],
+      },
+    });
+
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved' }),
+    );
+    expect(result?.details).toEqual({
+      state: expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved' }),
+    });
+  });
+
   it('registers only goal set and update tools', () => {
     const registeredTools: Array<{ name: string }> = [];
     const factory = createConversationAutoModeAgentExtension();
