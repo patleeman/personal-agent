@@ -2,6 +2,18 @@ import { type ChildProcess, spawn } from 'node:child_process';
 
 import type { MethodHandler } from '../server.js';
 
+function parseCommand(command: unknown): { executable: string; args: string[] } | null {
+  if (typeof command === 'string' && command.trim()) return { executable: 'sh', args: ['-c', command] };
+  if (!Array.isArray(command) || command.length === 0) return null;
+  const [executable, ...args] = command;
+  if (typeof executable !== 'string' || !executable) return null;
+  return { executable, args: args.map(String) };
+}
+
+function numberParam(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 // Track active command sessions for interactive terminal support
 const activeSessions = new Map<
   string,
@@ -17,19 +29,19 @@ export const command = {
    */
   exec: (async (params, _ctx, _conn, notify) => {
     const p = params as Record<string, unknown> | undefined;
-    const cmd = p?.command as string | undefined;
-    const cwd = (p?.cwd as string) ?? process.cwd();
-    const timeout = (p?.timeout as number) ?? 30000;
-    if (!cmd) throw new Error('command is required');
+    const command = parseCommand(p?.command);
+    const cwd = (p?.cwd as string | undefined) ?? process.cwd();
+    const timeout = p?.disableTimeout === true ? 0 : numberParam(p?.timeoutMs ?? p?.timeout, 30000);
+    if (!command) throw new Error('command is required');
 
-    const child = spawn('sh', ['-c', cmd], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
-    const processId = `exec-${Date.now()}`;
+    const child = spawn(command.executable, command.args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env } });
+    const processId = (p?.processId as string | undefined) ?? `exec-${Date.now()}`;
     activeSessions.set(processId, { process: child, processId });
 
     return new Promise((resolve, reject) => {
       const stdout: string[] = [];
       const stderr: string[] = [];
-      const timer = setTimeout(() => child.kill('SIGTERM'), timeout);
+      const timer = timeout > 0 ? setTimeout(() => child.kill('SIGTERM'), timeout) : null;
 
       child.stdout?.on('data', (chunk: Buffer) => {
         stdout.push(chunk.toString());
@@ -48,18 +60,18 @@ export const command = {
         });
       });
       child.on('close', (code, signal) => {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         activeSessions.delete(processId);
         resolve({
           processId,
-          exitCode: code,
+          exitCode: code ?? 0,
           signal: signal?.toString() ?? null,
           stdout: stdout.join(''),
           stderr: stderr.join(''),
         });
       });
       child.on('error', (err) => {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         reject(err);
       });
     });

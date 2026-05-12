@@ -20,7 +20,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Knowledge](../extensions/system-knowledge/README.md) — vault, docs, skills, instruction files, and managed sync
 - [Configuration](configuration.md) — file-based config, env vars
 - [Daemon](daemon.md) — background process and runtime lifecycle
-- [Extension authoring](extensions.md) — build native extensions with manifests, frontend/backend entries, tools, skills, agent hooks, event bus, notifications, and stable SDK imports
+- [Extension authoring](extensions.md) — build native extensions with manifests, frontend/backend entries, tools, skills, agent hooks, event bus, notifications, stable SDK imports, and integration testing
 - [Extension API types](../packages/extensions/README.md) — SDK package with exported types for frontend and backend code
 - [System extensions](../extensions) — feature-owned docs and implementation packages
 
@@ -36,6 +36,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Auto Mode](../extensions/system-auto-mode/README.md)
 - [Automations](../extensions/system-automations/README.md)
 - [Browser](../extensions/system-browser/README.md)
+- [Codex Protocol](../extensions/system-codex/README.md)
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)
 - [Extension Manager](../extensions/system-extension-manager/README.md)

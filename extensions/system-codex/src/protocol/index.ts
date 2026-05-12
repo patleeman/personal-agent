@@ -1,3 +1,4 @@
+import { account } from './account.js';
 import { command } from './command.js';
 import { config } from './config.js';
 import { fs as fsHandlers } from './fs.js';
@@ -88,6 +89,9 @@ export const REGISTERED_HANDLERS: Record<string, import('../server.js').MethodHa
   // Models
   'model/list': models.list,
   'modelProvider/capabilities/read': modelProvider.capabilitiesRead,
+
+  // Account
+  'account/read': account.read,
 
   // File system
   'fs/readFile': fsHandlers.readFile,

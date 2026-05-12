@@ -1,14 +1,16 @@
-import { hostname } from 'node:os';
+import { hostname, machine, release, type } from 'node:os';
+import { resolve } from 'node:path';
 
 import type { MethodHandler } from '../server.js';
 
 /**
  * `initialize` — connection handshake.
  * Must be the first call on any connection.
- * Then emits `initialized` notification.
+ * The Codex client sends the follow-up `initialized` notification after it
+ * receives this response.
  */
 export const initialize: { handler: MethodHandler } = {
-  handler: async (params, _ctx, conn, notify) => {
+  handler: async (params, _ctx, conn) => {
     const p = params as Record<string, unknown> | undefined;
     const clientInfo = p?.clientInfo as { name?: string; title?: string; version?: string } | undefined;
 
@@ -17,15 +19,20 @@ export const initialize: { handler: MethodHandler } = {
       conn.clientInfo = clientInfo;
     }
 
-    // Per spec: emit initialized notification
-    notify('initialized', {});
+    const codexHome = resolve(process.env.CODEX_HOME || process.cwd());
+    const platformOs = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux';
+    const platformFamily = process.platform === 'win32' ? 'windows' : 'unix';
+    const version = '0.125.0';
 
     return {
-      codexHome: process.env.CODEX_HOME || process.cwd(),
+      userAgent: `codex_cli_rs/${version} (${type()} ${release()}; ${machine()}) personal-agent`,
+      codexHome,
+      platformFamily,
+      platformOs,
+
+      // Extra compatibility fields retained for older PA Codex clients.
       hostname: hostname(),
-      platformFamily: process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux',
-      platformOs: process.platform,
-      version: '0.1.0',
+      version,
       capabilities: {
         experimentalApi: true,
         streams: true,

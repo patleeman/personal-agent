@@ -273,7 +273,15 @@ describe('Codex Protocol Server', () => {
       const ws = await connect(s.port);
 
       const init = await wsRpc(ws, 'initialize', { clientInfo: { name: 'test', version: '1.0' } });
-      expect(init).toMatchObject({ result: { capabilities: { experimentalApi: true, streams: true, files: true, commands: true } } });
+      expect(init).toMatchObject({
+        result: {
+          userAgent: expect.stringMatching(/^codex_cli_rs\/\d+\.\d+\.\d+/),
+          codexHome: expect.any(String),
+          platformFamily: expect.any(String),
+          platformOs: expect.any(String),
+          capabilities: { experimentalApi: true, streams: true, files: true, commands: true },
+        },
+      });
 
       const models = await wsRpc(ws, 'model/list');
       expect(models).toMatchObject({ result: { data: [] } });
@@ -282,7 +290,24 @@ describe('Codex Protocol Server', () => {
       expect(thread).toMatchObject({ result: { thread: expect.any(Object) } });
 
       const list = await wsRpc(ws, 'thread/list');
-      expect(list).toMatchObject({ result: { data: expect.any(Array) } });
+      expect(list).toMatchObject({ result: { data: expect.any(Array), nextCursor: null, backwardsCursor: null } });
+      expect((list as { result: { data: Array<Record<string, unknown>> } }).result.data[0]).toMatchObject({
+        id: expect.any(String),
+        sessionId: expect.any(String),
+        preview: expect.any(String),
+        ephemeral: false,
+        modelProvider: 'personal-agent',
+        createdAt: expect.any(Number),
+        updatedAt: expect.any(Number),
+        status: { type: 'notLoaded' },
+        cwd: expect.any(String),
+        cliVersion: expect.any(String),
+        source: 'appServer',
+        turns: [],
+      });
+
+      const account = await wsRpc(ws, 'account/read', { refreshToken: false });
+      expect(account).toMatchObject({ result: { account: { type: 'apiKey' }, requiresOpenaiAuth: false } });
 
       ws.close();
     }, 15000);
@@ -367,6 +392,13 @@ describe('Codex Protocol Server', () => {
       expect(exec.result.exitCode).toBe(0);
       expect(exec.result.stdout).toContain('hello');
 
+      const argvExec = (await wsRpc(ws, 'command/exec', { command: ['/bin/ls', '-lap', '/'] })) as {
+        result: { exitCode: number; stdout: string; stderr: string };
+      };
+      expect(argvExec.result.exitCode).toBe(0);
+      expect(argvExec.result.stdout).toContain('.');
+      expect(argvExec.result.stderr).toBe('');
+
       ws.close();
     }, 15000);
 
@@ -397,6 +429,35 @@ describe('Codex Protocol Server', () => {
 
       const textDeltas = messages.filter((m) => (m as Record<string, unknown>).method === 'item/agentMessage/delta');
       expect(textDeltas.length).toBe(1);
+
+      ws.close();
+    }, 15000);
+
+    it('returns from turn/start before the agent turn finishes', async () => {
+      const conv = makeMockConversations();
+      conv.sendMessage = vi.fn(async (_threadId: string, _text: string) => {
+        await delay(750);
+        return { accepted: true };
+      });
+      const mod = await import('../server.js');
+      created = await mod.createCodexServer({
+        port: 0,
+        auth: makeMockAuth(),
+        ctx: makeMockContext(conv),
+        bindAddress: BIND,
+      });
+      const ws = await connect(created.port);
+
+      await wsRpc(ws, 'initialize');
+      const start = (await wsRpc(ws, 'thread/start', {})) as { result: { thread: { id: string } } };
+
+      const startedAt = Date.now();
+      const response = await wsRpc(ws, 'turn/start', { threadId: start.result.thread.id, input: [{ type: 'text', text: 'Hello' }] });
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(elapsedMs).toBeLessThan(250);
+      expect(response).toMatchObject({ result: { turn: { status: 'inProgress' } } });
+      expect(conv.sendMessage).toHaveBeenCalledWith(start.result.thread.id, 'Hello');
 
       ws.close();
     }, 15000);
@@ -468,7 +529,9 @@ describe('Protocol handlers (unit)', () => {
       >;
 
       expect(conn.initialized).toBe(true);
-      expect(notify).toHaveBeenCalledWith('initialized', {});
+      expect(notify).not.toHaveBeenCalled();
+      expect(result.userAgent).toEqual(expect.stringMatching(/^codex_cli_rs\/\d+\.\d+\.\d+/));
+      expect(result.platformFamily).toMatch(/^(unix|windows)$/);
       expect(result.capabilities).toMatchObject({ experimentalApi: true, streams: true, files: true, commands: true });
     });
   });

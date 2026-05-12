@@ -244,6 +244,13 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
   const wss = new WebSocketServer({ server: httpServer });
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const heartbeat = setInterval(() => {
+      if (ws.readyState === ws.OPEN) {
+        ws.ping();
+      }
+    }, 25_000);
+    heartbeat.unref?.();
+
     const conn: ConnectionState = {
       initialized: false,
       subscribedThreads: new Set(),
@@ -326,13 +333,14 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
       }
     });
 
-    ws.on('close', () => {
+    const cleanupConnection = () => {
+      clearInterval(heartbeat);
       unsubscribeConnectionFromAll(notify, conn);
-    });
+    };
 
-    ws.on('error', () => {
-      unsubscribeConnectionFromAll(notify, conn);
-    });
+    ws.on('close', cleanupConnection);
+
+    ws.on('error', cleanupConnection);
   });
 
   return new Promise((resolve, reject) => {
