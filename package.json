@@ -48,6 +48,8 @@
     "check:dead": "knip --no-config-hints",
     "check:coverage": "vitest run --coverage --reporter=verbose || echo '⚠ Coverage check complete — review numbers above'",
     "check": "npm run check:types && npm run lint && npm run fmt && npm run check:dead",
+    "check:extensions": "vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts",
+    "check:extensions:quick": "QUICK_EXTENSION_CHECK=1 vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts",
     "fix": "npm run fmt:fix && npm run lint:fix",
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",

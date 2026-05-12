@@ -892,8 +892,11 @@ before starting the app (manifest validation, route conflicts, missing
 backend/frontend entries, handler export mismatches):
 
 ```bash
-# Run the full extension integration suite
-npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts
+# Run the full extension integration suite (includes ~25s dynamic import check)
+npm run check:extensions
+
+# Quick check (skips slow dynamic import test, ~5s)
+npm run check:extensions:quick
 
 # Run alongside the server endpoint smoke tests
 npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts \

@@ -1070,6 +1070,9 @@ describe('extension backends - file existence and structural checks', () => {
   });
 
   it('prebuilt backend modules can be imported without module-scope errors', async () => {
+    // Skip dynamic import when QUICK_EXTENSION_CHECK is set (saves ~25s)
+    if (process.env.QUICK_EXTENSION_CHECK) return;
+
     for (const s of summaries) {
       if (s.packageType !== 'system') continue;
       const backendEntry = s.manifest.backend?.entry;
