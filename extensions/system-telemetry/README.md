@@ -18,7 +18,7 @@ Legacy `pi-agent/state/trace/trace.db`, `pi-agent/state/trace/app-telemetry.db`,
 
 Application telemetry is a generic local event sink for signals that are useful to collect now before the UI has a first-class chart. It writes to the shared observability database through `writeAppTelemetryEvent` and stores source, category, name, session/run ids, route, status, duration, counts, values, and bounded JSON metadata.
 
-Current producers include server API request timing, server warn/error logs, server app events, renderer route views/leaves, renderer visibility changes, renderer crashes/rejections, conversation stream connect/snapshot/reconnect events, conversation prompt submissions, tool execution detail, and agent loop lifecycle/latency/outcome events. The endpoint for renderer events is `POST /api/telemetry/event`; it is intentionally fire-and-forget and must never block or break the app. If the in-process app telemetry queue overflows, the app records a `system/telemetry/queue_drop` event before shedding old buffered entries.
+Current producers include server API request timing, server `Server-Timing` metrics, server warn/error logs, server app events, renderer route views/leaves, renderer visibility changes, renderer crashes/rejections, conversation stream connect/snapshot/reconnect events, conversation prompt submissions, tool execution detail, and agent loop lifecycle/latency/outcome events. The endpoint for renderer events is `POST /api/telemetry/event`; it is intentionally fire-and-forget and must never block or break the app. If the in-process app telemetry queue overflows, the app records a `system/telemetry/queue_drop` event before shedding old buffered entries.
 
 ## Tool telemetry
 

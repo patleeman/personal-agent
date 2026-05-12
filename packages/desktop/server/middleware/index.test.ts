@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { logInfoMock } = vi.hoisted(() => ({
+const { logInfoMock, persistAppTelemetryEventMock } = vi.hoisted(() => ({
   logInfoMock: vi.fn(),
+  persistAppTelemetryEventMock: vi.fn(),
+}));
+
+vi.mock('../traces/appTelemetry.js', () => ({
+  persistAppTelemetryEvent: persistAppTelemetryEventMock,
 }));
 
 vi.mock('../shared/logging.js', () => ({
@@ -17,6 +22,7 @@ import { logSlowConversationPerf, readCookieValue, setServerTimingHeaders, write
 describe('server middleware helpers', () => {
   beforeEach(() => {
     logInfoMock.mockReset();
+    persistAppTelemetryEventMock.mockReset();
   });
 
   it('sets Server-Timing headers and stores timing metadata', () => {
@@ -34,6 +40,20 @@ describe('server middleware helpers', () => {
 
     expect(setHeader).toHaveBeenCalledWith('Server-Timing', 'sql;dur=12.3;desc="lookup users", render;dur=0.0');
     expect(res.locals.timingMeta).toEqual({ route: 'conversation' });
+    expect(persistAppTelemetryEventMock).toHaveBeenCalledWith({
+      source: 'server',
+      category: 'metric',
+      name: 'server_timing',
+      route: 'conversation',
+      durationMs: Number.NaN,
+      metadata: {
+        metrics: [
+          { name: 'sql', durationMs: 12.34, description: 'lookup "users"' },
+          { name: 'render', durationMs: Number.NaN },
+        ],
+        meta: { route: 'conversation' },
+      },
+    });
   });
 
   it('defaults unsafe Server-Timing durations to zero', () => {

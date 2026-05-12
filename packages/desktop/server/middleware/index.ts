@@ -16,6 +16,7 @@ export {
 } from '../shared/webSecurity.js';
 
 import { logInfo } from '../shared/logging.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 
 // Logging middleware
 export { installProcessLogging, logError, logInfo, logWarn, webRequestLoggingMiddleware } from '../shared/logging.js';
@@ -42,6 +43,18 @@ export function setServerTimingHeaders(res: Response, metrics: ServerTimingMetri
   }
   if (meta && res.locals) {
     res.locals.timingMeta = meta;
+  }
+
+  const total = metrics.find((metric) => metric.name === 'total') ?? metrics.at(-1);
+  if (total) {
+    persistAppTelemetryEvent({
+      source: 'server',
+      category: 'metric',
+      name: 'server_timing',
+      route: typeof meta?.route === 'string' ? meta.route : undefined,
+      durationMs: total.durationMs,
+      metadata: { metrics, meta },
+    });
   }
 }
 
