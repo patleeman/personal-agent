@@ -37,14 +37,6 @@
         "icon": "gear"
       }
     ],
-    "keybindings": [
-      {
-        "id": "open-settings",
-        "title": "Open Settings",
-        "keys": ["mod+,"],
-        "command": "navigate:/settings"
-      }
-    ],
     "views": [
       {
         "id": "settings",

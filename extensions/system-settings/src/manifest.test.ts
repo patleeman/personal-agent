@@ -27,10 +27,8 @@ describe('system-settings manifest', () => {
     expect(views.find((v: { id: string }) => v.id === 'desktop')).toBeDefined();
   });
 
-  it('declares the keyboard shortcut for settings', () => {
-    const kb = manifest.contributes.keybindings.find((k: { id: string }) => k.id === 'open-settings');
-    expect(kb).toBeDefined();
-    expect(kb.keys).toContain('mod+,');
+  it('does not declare a settings keybinding that duplicates the desktop menu shortcut', () => {
+    expect(manifest.contributes.keybindings ?? []).not.toContainEqual(expect.objectContaining({ id: 'open-settings' }));
   });
 
   it('declares required permissions', () => {
