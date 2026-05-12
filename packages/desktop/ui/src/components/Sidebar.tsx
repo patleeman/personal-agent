@@ -13,7 +13,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { type ActivityTreeItem, buildActivityTreeItems, buildConversationActivityId } from '../activity/activityTree';
 import { applyActivityTreeItemStyleProviders } from '../activity/activityTreeExtensionStyles';
 import { ActivityTreeView } from '../activity/ActivityTreeView';
-import { useAppData, useAppEvents } from '../app/contexts';
+import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
 import {
@@ -1852,6 +1852,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
+  const { titles: liveTitles } = useLiveTitles();
   const { sessions, tasks, runs } = useAppData();
   const extensionRegistry = useExtensionRegistry();
   const {
@@ -1959,7 +1960,38 @@ export function Sidebar() {
     [],
   );
 
-  const visibleConversationTabs = useMemo(() => tabs, [tabs]);
+  const activeConversationId = useMemo(() => {
+    const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
+    if (!match || match[1] === 'new') {
+      return null;
+    }
+
+    return decodeURIComponent(match[1]);
+  }, [location.pathname]);
+  const activeSession = useMemo(() => {
+    if (!activeConversationId) return null;
+    const session = (sessions ?? []).find((candidate) => candidate.id === activeConversationId);
+    if (session) return session;
+
+    return {
+      id: activeConversationId,
+      file: '',
+      timestamp: new Date(0).toISOString(),
+      cwd: draftCwd,
+      cwdSlug: '',
+      model: '',
+      title: liveTitles.get(activeConversationId) ?? 'Connecting…',
+      messageCount: 0,
+      isRunning: false,
+      isLive: true,
+    } satisfies SessionMeta;
+  }, [activeConversationId, draftCwd, liveTitles, sessions]);
+  const visibleConversationTabs = useMemo(() => {
+    if (!activeSession) return tabs;
+    const alreadyVisible =
+      pinnedSessions.some((session) => session.id === activeSession.id) || tabs.some((session) => session.id === activeSession.id);
+    return alreadyVisible ? tabs : [activeSession, ...tabs];
+  }, [activeSession, pinnedSessions, tabs]);
   const workspaceConversationTabs = useMemo(
     () => [...pinnedSessions, ...visibleConversationTabs],
     [pinnedSessions, visibleConversationTabs],
@@ -2116,14 +2148,6 @@ export function Sidebar() {
     [manualConversationGroupOrder],
   );
 
-  const activeConversationId = useMemo(() => {
-    const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
-    if (!match || match[1] === 'new') {
-      return null;
-    }
-
-    return decodeURIComponent(match[1]);
-  }, [location.pathname]);
   const conversationBootstrapVersionKey = useMemo(
     () =>
       buildConversationBootstrapVersionKey({
