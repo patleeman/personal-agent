@@ -650,8 +650,10 @@ final class HostSessionModel: ObservableObject {
             if let meta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta {
                 sessions[meta.id] = meta
             }
-            refresh()
-            errorMessage = nil
+            let didPersistOpenOrdering = await moveConversationToOpen(conversationId)
+            if didPersistOpenOrdering {
+                errorMessage = nil
+            }
             return conversationId
         } catch {
             errorMessage = error.localizedDescription
@@ -1103,21 +1105,25 @@ final class HostSessionModel: ObservableObject {
     private func applyConversationListState(_ state: ConversationListState) {
         errorMessage = nil
         currentOrdering = state.ordering
-        let sessionIndex = Dictionary(uniqueKeysWithValues: state.sessions.map { ($0.id, $0) })
-        sessions = sessionIndex
-        executionTargets = state.executionTargets ?? []
+        rebuildConversationSections(sessions: state.sessions, ordering: state.ordering, executionTargets: state.executionTargets ?? [])
+    }
 
-        let pinnedOrder = Set(state.ordering.pinnedSessionIds)
-        let archivedOrder = Set(state.ordering.archivedSessionIds)
-        let sessionOrder = state.ordering.sessionIds
-        let pinned: [SessionMeta] = state.ordering.pinnedSessionIds.compactMap { sessionIndex[$0] }
+    private func rebuildConversationSections(sessions nextSessions: [SessionMeta], ordering: ConversationOrdering, executionTargets nextExecutionTargets: [ExecutionTargetSummary]) {
+        let sessionIndex = Dictionary(uniqueKeysWithValues: nextSessions.map { ($0.id, $0) })
+        sessions = sessionIndex
+        executionTargets = nextExecutionTargets
+
+        let pinnedOrder = Set(ordering.pinnedSessionIds)
+        let archivedOrder = Set(ordering.archivedSessionIds)
+        let sessionOrder = ordering.sessionIds
+        let pinned: [SessionMeta] = ordering.pinnedSessionIds.compactMap { sessionIndex[$0] }
         let open: [SessionMeta] = sessionOrder.compactMap { (id: String) -> SessionMeta? in
             guard !pinnedOrder.contains(id), !archivedOrder.contains(id) else { return nil }
             return sessionIndex[id]
         }
-        let archived: [SessionMeta] = state.ordering.archivedSessionIds.compactMap { sessionIndex[$0] }
+        let archived: [SessionMeta] = ordering.archivedSessionIds.compactMap { sessionIndex[$0] }
         let orderedSet = Set(sessionOrder).union(pinnedOrder).union(archivedOrder)
-        let recent = state.sessions
+        let recent = nextSessions
             .filter { !orderedSet.contains($0.id) }
             .sorted { lhs, rhs in
                 (lhs.effectiveActivityDate ?? .distantPast) > (rhs.effectiveActivityDate ?? .distantPast)
@@ -1129,6 +1135,26 @@ final class HostSessionModel: ObservableObject {
             archived.isEmpty ? nil : ConversationListSection(id: "archived", title: "Archived", sessions: archived),
             recent.isEmpty ? nil : ConversationListSection(id: "recent", title: "Recent", sessions: recent),
         ].compactMap { $0 }
+    }
+
+    private func moveConversationToOpen(_ conversationId: String) async -> Bool {
+        var next = currentOrdering
+        next.archivedSessionIds.removeAll { $0 == conversationId }
+        if !next.pinnedSessionIds.contains(conversationId) {
+            next.sessionIds.removeAll { $0 == conversationId }
+            next.sessionIds.insert(conversationId, at: 0)
+        }
+        currentOrdering = next
+        rebuildConversationSections(sessions: Array(sessions.values), ordering: next, executionTargets: executionTargets)
+        do {
+            try await client.updateConversationTabs(ordering: next)
+            currentOrdering = next
+            refresh()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     private func saveOrdering(_ ordering: ConversationOrdering) async {

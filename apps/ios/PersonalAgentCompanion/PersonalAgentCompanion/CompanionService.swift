@@ -1405,6 +1405,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
     var createConversationDelayNanoseconds: UInt64 = 0
     var createConversationFailureQueueMessages: [String] = []
+    var createConversationOmitsOpenOrdering = false
     var readKnowledgeFileDelayNanoseconds: UInt64 = 0
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
@@ -2561,7 +2562,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         listState = ConversationListState(
             sessions: [session] + listState.sessions,
             ordering: ConversationOrdering(
-                sessionIds: [conversationId] + listState.ordering.sessionIds,
+                sessionIds: createConversationOmitsOpenOrdering ? listState.ordering.sessionIds : [conversationId] + listState.ordering.sessionIds,
                 pinnedSessionIds: listState.ordering.pinnedSessionIds,
                 archivedSessionIds: listState.ordering.archivedSessionIds,
                 workspacePaths: listState.ordering.workspacePaths
