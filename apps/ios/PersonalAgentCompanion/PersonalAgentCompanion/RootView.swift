@@ -689,14 +689,22 @@ struct KnowledgeRootView: View {
             guard let request = appModel.knowledgeNavigationRequest else {
                 return
             }
-            path = [.note(request.fileId)]
-            appModel.consumeKnowledgeNavigationRequest(request)
+            openKnowledgeNavigationRequest(request)
         }
         .task {
             if let request = appModel.knowledgeNavigationRequest {
-                path = [.note(request.fileId)]
-                appModel.consumeKnowledgeNavigationRequest(request)
+                openKnowledgeNavigationRequest(request)
             }
+        }
+    }
+
+    private func openKnowledgeNavigationRequest(_ request: KnowledgeNavigationRequest) {
+        let route: [KnowledgeRoute] = [.note(request.fileId)]
+        if path != route {
+            path = route
+        }
+        DispatchQueue.main.async {
+            appModel.consumeKnowledgeNavigationRequest(request)
         }
     }
 }
