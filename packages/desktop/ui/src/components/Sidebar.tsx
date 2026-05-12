@@ -3475,6 +3475,34 @@ export function Sidebar() {
                     navigate(item.route);
                   }
                 }}
+                renderContextMenu={(item, context) => (
+                  <div className="ui-context-menu min-w-[12rem] py-1" role="menu">
+                    <button
+                      type="button"
+                      className="ui-context-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        context.close();
+                        if (item.route) {
+                          navigate(item.route);
+                        }
+                      }}
+                    >
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      className="ui-context-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        context.close();
+                        handleThreadsActivityTreeToggle();
+                      }}
+                    >
+                      Use Classic List
+                    </button>
+                  </div>
+                )}
               />
             ) : threadsOrganizeMode === 'project' ? (
               groupedConversationRows.map((group) => {
