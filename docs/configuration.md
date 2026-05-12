@@ -90,8 +90,6 @@ Model/provider configuration is split on purpose:
 
 Provider credentials should be managed through Settings. Manual edits to `auth.json` are possible but discouraged. New extension secrets should use `contributes.secrets`; the active backend is configured by `secrets.provider` (`keychain`, `file`, or `env-only`). Environment variables declared by the extension take precedence over stored values.
 
-Live desktop conversations force `openai-codex-responses` models onto SSE transport. The upstream Codex WebSocket path can close mid-stream with code 1006, and losing cached WebSocket continuation is better than dropping the turn. Revisit this only after the upstream transport is boring again.
-
 ## Knowledge vault resolution
 
 The effective knowledge vault root resolves in this order:
