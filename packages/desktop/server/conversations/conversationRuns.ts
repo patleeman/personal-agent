@@ -36,6 +36,22 @@ function isDaemonUnavailable(error: unknown): boolean {
   );
 }
 
+function isRecoverableRunPersistenceError(error: unknown): boolean {
+  if (isDaemonUnavailable(error)) {
+    return true;
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('database disk image is malformed') ||
+    message.includes('database corruption') ||
+    message.includes('database is corrupt')
+  );
+}
+
 export { createWebLiveConversationRunId };
 
 function normalizeOptionalTimestamp(value: string | Date | undefined): string | undefined {
@@ -85,12 +101,23 @@ export async function syncWebLiveConversationRun(input: {
       return await syncWebLiveConversationRunState(normalizedInput);
     }
   } catch (error) {
-    if (!isDaemonUnavailable(error)) {
+    if (!isRecoverableRunPersistenceError(error)) {
       throw error;
     }
   }
 
-  return saveWebLiveConversationRunState(normalizedInput);
+  try {
+    return await saveWebLiveConversationRunState(normalizedInput);
+  } catch (error) {
+    if (!isRecoverableRunPersistenceError(error)) {
+      throw error;
+    }
+
+    // Recovery bookkeeping should not block the live conversation path. If the
+    // daemon run database is corrupt, keep the prompt flowing and let the user
+    // repair/reset the run store separately.
+    return { runId: createWebLiveConversationRunId(input.conversationId) };
+  }
 }
 
 export async function listRecoverableWebLiveConversationRuns(): Promise<RecoverableWebLiveConversationRun[]> {

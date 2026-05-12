@@ -165,6 +165,35 @@ describe('conversationRuns daemon fallback', () => {
     });
   });
 
+  it('does not block live conversation sync when the run database is corrupt', async () => {
+    pingDaemonMock.mockResolvedValueOnce(true);
+    syncWebLiveConversationRunStateMock.mockRejectedValueOnce(new Error('database disk image is malformed'));
+    saveWebLiveConversationRunStateMock.mockRejectedValueOnce(new Error('database disk image is malformed'));
+
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-corrupt',
+        sessionFile: '/tmp/conv-corrupt.jsonl',
+        cwd: '/tmp/workspace',
+        state: 'running',
+      }),
+    ).resolves.toEqual({ runId: 'conversation-live-conv-corrupt' });
+
+    expect(syncWebLiveConversationRunStateMock).toHaveBeenCalledWith({
+      conversationId: 'conv-corrupt',
+      sessionFile: '/tmp/conv-corrupt.jsonl',
+      cwd: '/tmp/workspace',
+      state: 'running',
+    });
+    expect(saveWebLiveConversationRunStateMock).toHaveBeenCalledWith({
+      conversationId: 'conv-corrupt',
+      sessionFile: '/tmp/conv-corrupt.jsonl',
+      cwd: '/tmp/workspace',
+      state: 'running',
+    });
+    expect(createWebLiveConversationRunIdMock).toHaveBeenCalledWith('conv-corrupt');
+  });
+
   it('rethrows unexpected daemon errors during sync', async () => {
     pingDaemonMock.mockRejectedValue(new Error('permission denied'));
 
