@@ -85,7 +85,7 @@ export function DictationButton({
   buttonContext,
 }: {
   pa: NativeExtensionClient;
-  buttonContext: { composerDisabled: boolean; insertText: (text: string) => void };
+  buttonContext: { composerDisabled: boolean; insertText: (text: string) => void; renderMode?: 'inline' | 'menu' };
 }) {
   const [state, setState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [enabled, setEnabled] = useState(false);
@@ -168,7 +168,7 @@ export function DictationButton({
     await pendingStart;
   }, [buttonContext.composerDisabled, enabled, pa, state]);
 
-  if (!settingsLoaded || !enabled) return null;
+  if (buttonContext.renderMode || !settingsLoaded || !enabled) return null;
 
   return (
     <>
