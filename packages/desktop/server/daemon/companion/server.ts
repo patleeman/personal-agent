@@ -900,7 +900,11 @@ export class DaemonCompanionServer {
           ? { workspacePaths: readOptionalStringArray(payload.workspacePaths, 'workspacePaths') }
           : {}),
       };
-      sendJson(response, 200, await runtime.updateConversationTabs(input));
+      if (typeof runtime.updateConversationTabs === 'function') {
+        sendJson(response, 200, await runtime.updateConversationTabs(input));
+      } else {
+        sendJson(response, 200, { ok: false, unsupported: 'updateConversationTabs' });
+      }
       return;
     }
 

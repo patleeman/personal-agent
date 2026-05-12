@@ -1863,6 +1863,35 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testPromptSendSubscribesBeforeSubmittingWhenLiveStreamIsStillConnecting() async throws {
+        let client = MockCompanionClient()
+        client.subscribeConversationEventsDelayNanoseconds = 1_000_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Stream this immediately"
+        model.sendPrompt()
+
+        try await waitForCondition(timeout: .seconds(4)) {
+            model.blocks.contains { $0.type == "user" && $0.text == "Stream this immediately" }
+        }
+        XCTAssertGreaterThanOrEqual(client.conversationSubscriptionCount, 1)
+        XCTAssertTrue(model.promptText.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testPromptSendIgnoresDuplicateTapWhileSubmissionIsPending() async throws {
         let client = MockCompanionClient()
         client.promptSubmissionDelayNanoseconds = 150_000_000
