@@ -27,6 +27,8 @@ import {
 } from '../runs/store.js';
 import { listRecoverableWebLiveConversationRuns, saveWebLiveConversationRunState } from '../runs/web-live-conversations.js';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
+import { DaemonCompanionServer } from './companion/server.js';
+import type { CompanionRuntimeProvider } from './companion/types.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { type DaemonRequest, type DaemonResponse, parseRequest, serializeResponse } from './ipc-protocol.js';
@@ -168,6 +170,7 @@ export interface PersonalAgentDaemonOptions {
   config?: DaemonConfig;
   stopRequestBehavior?: DaemonStopRequestBehavior;
   logSink?: (line: string) => void;
+  companionRuntimeProvider?: CompanionRuntimeProvider;
 }
 
 function isDaemonConfig(value: DaemonConfig | PersonalAgentDaemonOptions): value is DaemonConfig {
@@ -184,10 +187,12 @@ export class PersonalAgentDaemon {
   private readonly modules: ModuleRuntime[];
   private readonly stopRequestBehavior: DaemonStopRequestBehavior;
   private readonly logSink?: (line: string) => void;
+  private readonly companionRuntimeProvider?: CompanionRuntimeProvider;
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
   private server?: Server;
+  private companionServer?: DaemonCompanionServer;
   private timerHandles: NodeJS.Timeout[] = [];
   private running = false;
   private stopping = false;
@@ -197,6 +202,7 @@ export class PersonalAgentDaemon {
     this.config = options.config ?? loadDaemonConfig();
     this.stopRequestBehavior = options.stopRequestBehavior ?? 'exit-process';
     this.logSink = options.logSink;
+    this.companionRuntimeProvider = options.companionRuntimeProvider;
     this.paths = resolveDaemonPaths(this.config.ipc.socketPath);
     this.runsRoot = resolveDurableRunsRoot(this.paths.root);
     this.startedAt = new Date().toISOString();
@@ -257,6 +263,16 @@ export class PersonalAgentDaemon {
       });
     });
 
+    this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+    await this.companionServer.start();
+    const fallbackPort = this.companionServer.getPortFallbackFrom();
+    if (fallbackPort) {
+      this.log(
+        'warn',
+        `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`,
+      );
+    }
+
     this.running = true;
     this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
   }
@@ -276,6 +292,9 @@ export class PersonalAgentDaemon {
 
     await Promise.all([...this.activeBackgroundRuns.keys()].map((runId) => this.cancelBackgroundRun(runId, 'Daemon stopping')));
     await this.bus.waitForIdle();
+
+    await this.companionServer?.stop();
+    this.companionServer = undefined;
 
     for (const moduleRuntime of this.modules) {
       if (moduleRuntime.module.stop) {
@@ -311,6 +330,50 @@ export class PersonalAgentDaemon {
 
   isRunning(): boolean {
     return this.running && !this.stopping;
+  }
+
+  getCompanionUrl(): string | null {
+    return this.companionServer?.getUrl() ?? null;
+  }
+
+  async updateCompanionConfig(input: { enabled?: boolean; host?: string; port?: number }): Promise<{ url: string | null }> {
+    const previous = {
+      enabled: this.config.companion?.enabled !== false,
+      host: this.config.companion?.host ?? '127.0.0.1',
+      port: this.config.companion?.port ?? 3843,
+    };
+    const next = {
+      enabled: input.enabled ?? previous.enabled,
+      host: input.host ?? previous.host,
+      port: input.port ?? previous.port,
+    };
+
+    this.config.companion = next;
+
+    if (!this.isRunning()) {
+      return { url: null };
+    }
+
+    await this.companionServer?.stop();
+    this.companionServer = undefined;
+
+    try {
+      this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+      await this.companionServer.start();
+      const fallbackPort = this.companionServer.getPortFallbackFrom();
+      if (fallbackPort) {
+        this.log(
+          'warn',
+          `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`,
+        );
+      }
+      return { url: this.companionServer.getUrl() };
+    } catch (error) {
+      this.config.companion = previous;
+      this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+      await this.companionServer.start().catch(() => undefined);
+      throw error;
+    }
   }
 
   getStatus(): DaemonStatus {

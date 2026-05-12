@@ -72,17 +72,10 @@ This script handles provisioning, building, and launching the app on a connected
 
 ## Companion API
 
-The companion API is served by the daemon:
+The companion API is served by the daemon and can be exposed over LAN or Tailscale Serve:
 
-- **Base URL**: `http://<daemon-host>:<companion-port>/companion/v1/`
-- **Auth**: Bearer token obtained during QR pairing
-- **Transport**: HTTP/WebSocket
+- **Base URL**: `http(s)://<host>:<port>/companion/v1/`
+- **Auth**: Bearer token obtained during QR/setup pairing
+- **Socket**: `ws(s)://<host>:<port>/companion/v1/socket`
 
-### Endpoints
-
-| Method | Path                                       | Description               |
-| ------ | ------------------------------------------ | ------------------------- |
-| GET    | `/companion/v1/conversations`              | List conversations        |
-| GET    | `/companion/v1/conversations/:id`          | Get conversation detail   |
-| POST   | `/companion/v1/conversations/:id/messages` | Send a message            |
-| GET    | `/companion/v1/companion/status`           | Daemon and pairing status |
+Core reads use HTTP (`/hello`, `/auth/pair`, `/conversations`, `/models`, `/knowledge/*`, `/tasks`, `/runs`). Live conversation control uses the single companion socket with commands such as `conversation.bootstrap`, `conversation.create`, `conversation.prompt`, and `conversation.resume`, plus `conversation` subscriptions for streaming transcript events.

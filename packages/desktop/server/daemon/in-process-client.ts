@@ -64,6 +64,7 @@ export function createInProcessDaemonClient(daemon: PersonalAgentDaemon): Daemon
   return {
     ping: async () => daemon.isRunning(),
     getStatus: async () => daemon.getStatus(),
+    getCompanionUrl: async () => daemon.getCompanionUrl(),
     stop: async () => {
       await daemon.requestStop();
     },

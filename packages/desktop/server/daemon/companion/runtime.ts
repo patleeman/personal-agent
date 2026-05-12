@@ -12,6 +12,9 @@ export function getCompanionRuntimeProvider(): CompanionRuntimeProvider | undefi
 }
 
 export async function resolveCompanionRuntime(config: DaemonConfig): Promise<CompanionRuntime | null> {
-  if (!companionRuntimeProvider) return null;
+  if (!companionRuntimeProvider) {
+    return null;
+  }
+
   return companionRuntimeProvider(config);
 }

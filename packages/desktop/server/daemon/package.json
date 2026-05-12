@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/daemon",
   "type": "module",
-  "main": "index.ts",
+  "main": "../../../packages/desktop/dist/server/daemon/index.js",
   "types": "index.ts"
 }

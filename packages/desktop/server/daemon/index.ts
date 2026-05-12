@@ -138,7 +138,7 @@ export {
   syncWebLiveConversationRunState,
 } from '../daemon/client.js';
 export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from '../daemon/companion/runtime.js';
-export type { CompanionRuntime, CompanionRuntimeProvider } from '../daemon/companion/types.js';
+export * from '../daemon/companion/types.js';
 export { surfaceReadyDeferredResume } from '../daemon/conversation-wakeups.js';
 export {
   bindInProcessDaemonClient,

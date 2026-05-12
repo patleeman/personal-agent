@@ -164,10 +164,14 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
       const session = entry.session;
 
       try {
-        if (options?.steer) {
-          await session.steer(text);
+        if (entry.session.isStreaming) {
+          if (options?.steer) {
+            await session.steer(text);
+          } else {
+            await session.followUp(text);
+          }
         } else {
-          await session.followUp(text);
+          await session.prompt(text);
         }
         invalidateAppTopics('sessions');
         return { accepted: true };
