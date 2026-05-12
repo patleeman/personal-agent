@@ -2911,7 +2911,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         if !renameConversationFailureQueueMessages.isEmpty {
             throw CompanionClientError.requestFailed(renameConversationFailureQueueMessages.removeFirst())
         }
-        guard var envelope = conversations[conversationId], let sessionMeta = envelope.sessionMeta else { return }
+        guard let envelope = conversations[conversationId], let sessionMeta = envelope.sessionMeta else { return }
         var renamedMeta = SessionMeta(
             id: sessionMeta.id,
             file: sessionMeta.file,

@@ -2789,7 +2789,6 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func forkConversation(entryId: String, preserveSource: Bool? = nil, beforeEntry: Bool? = nil) async -> String? {
-        let mutationKey = "fork:\(entryId)"
         guard pendingDuplicateConversation == false else {
             return nil
         }
@@ -2806,7 +2805,6 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func branchConversation(entryId: String) async -> String? {
-        let mutationKey = "branch:\(entryId)"
         guard pendingDuplicateConversation == false else {
             return nil
         }
