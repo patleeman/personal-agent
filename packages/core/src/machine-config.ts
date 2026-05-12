@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 
+import { writeAppTelemetryEvent } from './app-telemetry-db.js';
 import { getConfigRoot } from './runtime/paths.js';
 
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
@@ -84,7 +85,12 @@ function readJsonObjectFile(path: string, label: string): Record<string, unknown
 
     return parsed;
   } catch (error) {
-    console.error(`Failed to read ${label} at ${path}: ${(error as Error).message}. Using defaults.`);
+    writeAppTelemetryEvent({
+      source: 'system',
+      category: 'config',
+      name: 'read_failed',
+      metadata: { label, path, message: (error as Error).message },
+    });
     return undefined;
   }
 }
