@@ -40,6 +40,15 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     order: 1,
     action: { kind: 'file' },
   },
+  {
+    id: 'run:daily-build',
+    section: 'runs',
+    title: 'Daily build run',
+    subtitle: 'runs/daily-build',
+    keywords: ['automation', 'build'],
+    order: 1,
+    action: { kind: 'run' },
+  },
 ];
 
 describe('command palette search', () => {
@@ -50,6 +59,20 @@ describe('command palette search', () => {
     expect(results[0]?.section).toBe('knowledge');
     expect(results[0]?.label).toBe('Knowledge');
     expect(results[0]?.items.map((item) => item.id)).toEqual(['file:guide']);
+  });
+
+  it('keeps extension quick-open surfaces isolated from each other', () => {
+    const scoped = selectCommandPaletteScopedItems({
+      scope: 'runs',
+      query: '',
+      openConversationItems: [ITEMS[0]!],
+      archivedConversationItems: [ITEMS[1]!],
+      fileItems: [ITEMS[2]!, ITEMS[3]!],
+      searchedConversationItems: [],
+      searchedFileItems: [],
+    });
+
+    expect(scoped.map((item) => item.id)).toEqual(['run:daily-build']);
   });
 
   it('matches across multiple tokens and keywords', () => {

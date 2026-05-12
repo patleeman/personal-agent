@@ -818,6 +818,13 @@ describe('extension manifests - cross-extension conflict detection', () => {
       'Duplicate quick open provider ids across extensions',
     ).toEqual([]);
   });
+
+  it('quick open surfaces have stable labels and numeric ordering', () => {
+    const providers = listExtensionQuickOpenRegistrations();
+    const knowledge = providers.find((provider) => provider.extensionId === 'system-knowledge' && provider.id === 'knowledge-files');
+
+    expect(knowledge).toMatchObject({ title: 'Knowledge', section: 'knowledge', order: 10 });
+  });
 });
 
 /* ------------------------------------------------------------------ */

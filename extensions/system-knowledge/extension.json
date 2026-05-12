@@ -107,7 +107,8 @@
         "id": "knowledge-files",
         "provider": "knowledgeQuickOpenProvider",
         "title": "Knowledge",
-        "section": "knowledge"
+        "section": "knowledge",
+        "order": 10
       }
     ],
     "settingsComponent": {

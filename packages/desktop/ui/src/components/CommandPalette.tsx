@@ -176,7 +176,7 @@ export function CommandPalette() {
   const { sessions } = useAppData();
   const { pinnedSessions, tabs, archivedSessions, openSession, loading: sessionsLoading, refetch } = useConversations();
   const [open, setOpen] = useState(false);
-  const [scope, setScope] = useState<CommandPaletteScope>('threads');
+  const [scope, setScope] = useState<CommandPaletteScope>(THREADS_COMMAND_PALETTE_SCOPE);
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
@@ -203,14 +203,20 @@ export function CommandPalette() {
   const searchedFileItems = quickOpenSearchItems;
   const quickOpenScopes = useMemo(
     () =>
-      quickOpenRegistrations.map((registration) => ({
-        value: registration.section ?? registration.id,
-        label: registration.title ?? registration.id,
-      })),
+      quickOpenRegistrations
+        .map((registration) => ({
+          value: registration.section ?? registration.id,
+          label: registration.title ?? registration.id,
+          order: registration.order ?? Number.MAX_SAFE_INTEGER,
+        }))
+        .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label)),
     [quickOpenRegistrations],
   );
   const quickOpenScopeLabel = quickOpenScopes.find((option) => option.value === scope)?.label ?? 'items';
-  const scopeOptions = useMemo(() => [...COMMAND_PALETTE_SCOPE_OPTIONS, ...quickOpenScopes], [quickOpenScopes]);
+  const scopeOptions = useMemo(
+    () => [...COMMAND_PALETTE_SCOPE_OPTIONS, ...quickOpenScopes.map(({ value, label }) => ({ value, label }))],
+    [quickOpenScopes],
+  );
   const quickOpenSectionLabels = useMemo(
     () => Object.fromEntries(quickOpenScopes.map((option) => [option.value, option.label])),
     [quickOpenScopes],
@@ -562,7 +568,7 @@ export function CommandPalette() {
 
       if (event.key === 'Tab') {
         event.preventDefault();
-        const scopeValues = COMMAND_PALETTE_SCOPE_OPTIONS.map((option) => option.value);
+        const scopeValues = scopeOptions.map((option) => option.value);
         const currentIndex = scopeValues.indexOf(scope);
         const direction = event.shiftKey ? -1 : 1;
         const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + scopeValues.length) % scopeValues.length;
@@ -622,7 +628,7 @@ export function CommandPalette() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activateItem, closePalette, cursor, open, scope, visibleItems]);
+  }, [activateItem, closePalette, cursor, open, scope, scopeOptions, visibleItems]);
 
   useEffect(() => {
     closePalette();
@@ -665,6 +671,10 @@ export function CommandPalette() {
     quickOpenSearchLoading,
   ]);
   const showSectionHeaders = groups.length > 1;
+  const labelForSection = useCallback(
+    (section: CommandPaletteSection) => quickOpenSectionLabels[section] ?? COMMAND_PALETTE_SECTION_LABELS[section] ?? section,
+    [quickOpenSectionLabels],
+  );
   const searchPlaceholder = scope === THREADS_COMMAND_PALETTE_SCOPE ? 'Search threads…' : `Open ${quickOpenScopeLabel.toLowerCase()}…`;
 
   if (!open) {
@@ -839,10 +849,10 @@ export function CommandPalette() {
             <section key={`loading:${section}`} className="pb-2 last:pb-0">
               {showSectionHeaders && (
                 <div className="px-2.5 pb-1 flex items-center gap-2">
-                  <p className="ui-section-label">{COMMAND_PALETTE_SECTION_LABELS[section]}</p>
+                  <p className="ui-section-label">{labelForSection(section)}</p>
                 </div>
               )}
-              <p className="px-2.5 py-3 text-[12px] text-dim font-mono">Loading {COMMAND_PALETTE_SECTION_LABELS[section].toLowerCase()}…</p>
+              <p className="px-2.5 py-3 text-[12px] text-dim font-mono">Loading {labelForSection(section).toLowerCase()}…</p>
             </section>
           ))}
 

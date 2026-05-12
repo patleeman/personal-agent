@@ -195,7 +195,8 @@ Backend handler receives:
 
 ### Quick-open surfaces (`quickOpen`)
 
-Add a top-level tab to the command palette. Each quick-open contribution registers one extension-owned surface. The palette uses `section` as the stable tab/surface id, `title` as the visible tab label, and `provider` as the frontend export that returns items.
+Add a top-level tab to the command palette. Each quick-open contribution registers one extension-owned surface.
+The palette uses `section` as the stable tab/surface id, `title` as the visible tab label, and `provider` as the frontend export that returns items.
 
 ```json
 {
@@ -205,14 +206,17 @@ Add a top-level tab to the command palette. Each quick-open contribution registe
         "id": "knowledge-files",
         "provider": "knowledgeQuickOpenProvider",
         "title": "Knowledge",
-        "section": "knowledge"
+        "section": "knowledge",
+        "order": 10
       }
     ]
   }
 }
 ```
 
-Provider items can omit `section`; omitted values are assigned to the contribution's `section` (or `id` if no section is set). Items with a different section are ignored by that tab. Providers may expose `list()` for default results and `search(query, limit)` for content-backed search.
+Provider items can omit `section`; omitted values are assigned to the contribution's `section` (or `id` if no section is set).
+Items with a different section are ignored by that tab. Providers may expose `list()` for default results and `search(query, limit)` for content-backed search.
+`order` is optional and controls tab ordering after the built-in Threads tab.
 
 Keybindings can open a quick-open surface directly with `commandPalette:<section>`, for example `commandPalette:knowledge`.
 

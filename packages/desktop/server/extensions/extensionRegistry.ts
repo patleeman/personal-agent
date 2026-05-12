@@ -195,6 +195,7 @@ export interface ExtensionQuickOpenRegistration {
   provider: string;
   title?: string;
   section?: string;
+  order?: number;
 }
 
 export interface ExtensionComposerShelfRegistration {
@@ -870,6 +871,9 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(provider.provider, `contributes.quickOpen[${index}].provider`);
       validateOptionalString(provider.title, `contributes.quickOpen[${index}].title`);
       validateOptionalString(provider.section, `contributes.quickOpen[${index}].section`);
+      if (provider.order !== undefined && !Number.isInteger(provider.order)) {
+        throw new Error(`Extension manifest contributes.quickOpen[${index}].order must be an integer.`);
+      }
     }
   }
 
@@ -1579,6 +1583,7 @@ export function listExtensionQuickOpenRegistrations(stateRoot: string = getState
           provider: resolvedProvider,
           ...(provider.title ? { title: provider.title } : {}),
           ...(provider.section ? { section: provider.section } : {}),
+          ...(Number.isInteger(provider.order) ? { order: provider.order } : {}),
         },
       ];
     }),

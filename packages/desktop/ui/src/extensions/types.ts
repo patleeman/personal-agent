@@ -41,6 +41,7 @@ interface ExtensionQuickOpenContribution {
   provider: string;
   title?: string;
   section?: string;
+  order?: number;
 }
 
 interface ExtensionViewContribution {
@@ -444,6 +445,7 @@ export interface ExtensionQuickOpenRegistration {
   packageType?: ExtensionPackageType;
   title?: string;
   section?: string;
+  order?: number;
 }
 
 export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; packageType?: ExtensionPackageType };
