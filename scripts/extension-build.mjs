@@ -68,6 +68,9 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     target: 'node20',
     sourcemap: true,
     logLevel: 'info',
+    banner: {
+      js: 'import { createRequire as __paCreateRequire } from "node:module"; globalThis.require = globalThis.require ?? __paCreateRequire(import.meta.url);',
+    },
     external: [
       '@personal-agent/extensions/host',
       '@personal-agent/extensions/ui',
