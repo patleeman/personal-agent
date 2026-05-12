@@ -1918,8 +1918,8 @@ final class PersonalAgentCompanionTests: XCTestCase {
         model.sendPrompt()
         model.sendPrompt()
 
-        try await waitForCondition(timeout: .seconds(2)) {
-            !model.isSubmittingPrompt
+        try await waitForCondition(timeout: .seconds(3)) {
+            !model.isSubmittingPrompt && client.promptSubmissionCount > 0
         }
         XCTAssertEqual(client.promptSubmissionCount, 1)
         XCTAssertEqual(model.blocks.filter { $0.type == "user" && $0.text == "Only send this once" }.count, 1)
