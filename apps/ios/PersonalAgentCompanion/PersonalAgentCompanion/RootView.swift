@@ -279,7 +279,7 @@ struct ConversationListView: View {
                 .refreshable {
                     session.refresh()
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .scrollBounceBehavior(.always)
             }
             .background(CompanionTheme.canvas)
             .toolbar(.hidden, for: .navigationBar)
