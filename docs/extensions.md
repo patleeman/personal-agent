@@ -903,7 +903,7 @@ npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.tes
 npm test
 ```
 
-The integration suite covers 78 tests across 12 categories:
+The integration suite covers 79 tests across 12 categories:
 
 | Category                  | What it validates                                                                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1068,6 +1068,27 @@ describe('extension backends - file existence and structural checks', () => {
       ).not.toThrow();
     }
   });
+
+  it('prebuilt backend modules can be imported without module-scope errors', async () => {
+    for (const s of summaries) {
+      if (s.packageType !== 'system') continue;
+      const backendEntry = s.manifest.backend?.entry;
+      if (!backendEntry) continue;
+
+      const backendPath = resolve(s.packageRoot ?? '', 'dist', 'backend.mjs');
+      if (!existsSync(backendPath)) continue;
+
+      // Dynamic import executes module-scope code and catches runtime errors
+      // that node --check cannot detect (e.g. undefined env vars, top-level rejects)
+      try {
+        const mod = await import(/* @vite-ignore */ backendPath);
+        expect(mod).toBeDefined();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        expect(null, `${s.id}: dist/backend.mjs failed to import at module scope: ${msg}`).not.toBeNull();
+      }
+    }
+  }, 60000);
 });
 
 /* ------------------------------------------------------------------ */
