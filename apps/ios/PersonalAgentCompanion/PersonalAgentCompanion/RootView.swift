@@ -330,7 +330,7 @@ struct ConversationListView: View {
                         ConversationRow(session: item, includeCwdInSubtitle: includeCwdInSubtitle)
                         Spacer(minLength: 12)
                         Image(systemName: "chevron.right")
-                            .font(.title3.weight(.semibold))
+                            .font(.system(size: 24, weight: .semibold))
                             .foregroundStyle(CompanionTheme.textDim)
                     }
                     .contentShape(Rectangle())
@@ -350,7 +350,7 @@ struct ConversationListView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                        .font(.title3.weight(.medium))
+                        .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(CompanionTheme.textSecondary)
                         .frame(width: 36, height: 36)
                 }
