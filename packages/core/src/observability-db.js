@@ -12,11 +12,18 @@ export function ensureObservabilityDbDir(stateRoot) {
   }
   return dir;
 }
+function resolveExistingLegacyDbPath(stateRoot, filename) {
+  const root = stateRoot ?? getStateRoot();
+  const direct = join(root, 'pi-agent', 'state', 'trace', filename);
+  if (existsSync(direct)) return direct;
+  const sync = join(root, 'sync', 'pi-agent', 'state', 'trace', filename);
+  return existsSync(sync) ? sync : direct;
+}
 export function resolveLegacyTraceDbPath(stateRoot) {
-  return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace', 'trace.db');
+  return resolveExistingLegacyDbPath(stateRoot, 'trace.db');
 }
 export function resolveLegacyAppTelemetryDbPath(stateRoot) {
-  return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace', 'app-telemetry.db');
+  return resolveExistingLegacyDbPath(stateRoot, 'app-telemetry.db');
 }
 export function applyObservabilityMigrations(db, namespace, migrations) {
   if (migrations.length === 0) return 0;

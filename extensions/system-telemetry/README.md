@@ -12,7 +12,7 @@ Telemetry explains how Personal Agent records local trace data for the desktop m
 
 The desktop app writes turn stats, context pressure, compactions, tool calls, logs, app events, and lightweight metrics into one bounded local SQLite observability database at `observability/observability.db`. The Traces page reads aggregated views from `/api/traces/*` endpoints; writes are fire-and-forget through the trace and telemetry queues so conversation execution does not wait on analytics.
 
-Legacy `pi-agent/state/trace/trace.db` and `pi-agent/state/trace/app-telemetry.db` files are imported into the unified database once per state root, then left untouched.
+Legacy `pi-agent/state/trace/trace.db`, `pi-agent/state/trace/app-telemetry.db`, and older `sync/pi-agent/state/trace/*` files are imported into the unified database once per state root, then left untouched.
 
 ## Application telemetry
 
