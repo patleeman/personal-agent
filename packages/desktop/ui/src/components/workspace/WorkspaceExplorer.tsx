@@ -30,6 +30,7 @@ import type {
 } from '../../shared/types';
 import { useTheme } from '../../ui-state/theme';
 import { ContextMenuWrapper } from '../shared/ContextMenuWrapper';
+import { TextPromptDialog } from '../shared/TextPromptDialog';
 import { useFileTreeModel } from '../shared/useFileTreeModel';
 import { cx, EmptyState, LoadingState, Pill } from '../ui';
 
@@ -939,14 +940,20 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
     writeWorkspaceOpenFiles(cwd, []);
   }, [cwd]);
 
-  const createPath = useCallback(
-    async (kind: 'file' | 'folder', directory: string) => {
+  const [createPathPrompt, setCreatePathPrompt] = useState<{ kind: 'file' | 'folder'; directory: string } | null>(null);
+  const [movePathPrompt, setMovePathPrompt] = useState<WorkspaceEntry | null>(null);
+
+  const createPath = useCallback((kind: 'file' | 'folder', directory: string) => {
+    setCreatePathPrompt({ kind, directory });
+  }, []);
+
+  const submitCreatePath = useCallback(
+    async (kind: 'file' | 'folder', directory: string, name: string) => {
       if (!cwd) return;
-      const label = kind === 'file' ? 'New file name' : 'New folder name';
-      const fallback = kind === 'file' ? 'untitled.txt' : 'New Folder';
-      const name = window.prompt(label, fallback)?.trim();
-      if (!name) return;
-      const path = [directory, name].filter(Boolean).join('/');
+      setCreatePathPrompt(null);
+      const trimmedName = name.trim();
+      if (!trimmedName) return;
+      const path = [directory, trimmedName].filter(Boolean).join('/');
       if (kind === 'file') {
         await api.createWorkspaceFile(cwd, path, '');
         openWorkspaceFile(path);
@@ -979,12 +986,16 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
     [cwd, loadDirectory, loadRoot],
   );
 
-  const movePath = useCallback(
-    async (entry: WorkspaceEntry) => {
+  const movePath = useCallback((entry: WorkspaceEntry) => {
+    setMovePathPrompt(entry);
+  }, []);
+
+  const submitMovePath = useCallback(
+    async (entry: WorkspaceEntry, targetDir: string) => {
       if (!cwd) return;
-      const targetDir = window.prompt('Move to folder (blank for workspace root)', parentDirectory(entry.path));
-      if (targetDir === null) return;
-      const moved = await api.moveWorkspacePath(cwd, entry.path, targetDir.trim());
+      setMovePathPrompt(null);
+      const normalizedTargetDir = targetDir.trim();
+      const moved = await api.moveWorkspacePath(cwd, entry.path, normalizedTargetDir);
       setOpenFilePaths((current) => {
         const next = current.map((path) =>
           path === entry.path
@@ -998,7 +1009,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
       });
       await loadRoot();
       await loadDirectory(parentDirectory(entry.path));
-      if (targetDir.trim()) await loadDirectory(targetDir.trim());
+      if (normalizedTargetDir) await loadDirectory(normalizedTargetDir);
     },
     [cwd, loadDirectory, loadRoot],
   );
@@ -1362,6 +1373,26 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
           ) : null}
         </div>
       )}
+      {createPathPrompt ? (
+        <TextPromptDialog
+          title={createPathPrompt.kind === 'file' ? 'New file' : 'New folder'}
+          label={createPathPrompt.kind === 'file' ? 'New file name' : 'New folder name'}
+          initialValue={createPathPrompt.kind === 'file' ? 'untitled.txt' : 'New Folder'}
+          onCancel={() => setCreatePathPrompt(null)}
+          onSubmit={(name) => void submitCreatePath(createPathPrompt.kind, createPathPrompt.directory, name)}
+        />
+      ) : null}
+      {movePathPrompt ? (
+        <TextPromptDialog
+          title={`Move ${movePathPrompt.path}`}
+          label="Move to folder (blank for workspace root)"
+          initialValue={parentDirectory(movePathPrompt.path)}
+          allowEmpty
+          confirmLabel="Move"
+          onCancel={() => setMovePathPrompt(null)}
+          onSubmit={(targetDir) => void submitMovePath(movePathPrompt, targetDir)}
+        />
+      ) : null}
     </div>
   );
 }

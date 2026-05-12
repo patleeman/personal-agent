@@ -54,6 +54,8 @@ import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
 import { addNotification } from './notifications/notificationStore';
+import { TextPromptDialog } from './shared/TextPromptDialog';
+import { TextPromptDialog } from './shared/TextPromptDialog';
 
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
@@ -2842,28 +2844,36 @@ export function Sidebar() {
     [showSidebarNotice],
   );
 
-  const handleRenameConversationGroup = useCallback(
-    (groupKey: string, defaultLabel: string, currentLabel: string) => {
-      if (typeof window === 'undefined') {
-        return;
-      }
+  const [renameConversationGroupPrompt, setRenameConversationGroupPrompt] = useState<{
+    groupKey: string;
+    defaultLabel: string;
+    currentLabel: string;
+  } | null>(null);
 
-      const nextLabel = window.prompt('Edit workspace name', currentLabel);
-      if (nextLabel === null) {
-        return;
-      }
+  const handleRenameConversationGroup = useCallback((groupKey: string, defaultLabel: string, currentLabel: string) => {
+    setRenameConversationGroupPrompt({ groupKey, defaultLabel, currentLabel });
+  }, []);
+
+  const submitRenameConversationGroup = useCallback(
+    (nextLabel: string) => {
+      const prompt = renameConversationGroupPrompt;
+      if (!prompt) return;
+      setRenameConversationGroupPrompt(null);
 
       const normalizedLabel = nextLabel.trim();
-      updateConversationGroupLabelOverride(groupKey, normalizedLabel && normalizedLabel !== defaultLabel ? normalizedLabel : null);
+      updateConversationGroupLabelOverride(
+        prompt.groupKey,
+        normalizedLabel && normalizedLabel !== prompt.defaultLabel ? normalizedLabel : null,
+      );
 
-      if (normalizedLabel && normalizedLabel !== defaultLabel) {
+      if (normalizedLabel && normalizedLabel !== prompt.defaultLabel) {
         showSidebarNotice('accent', `Workspace renamed to ${normalizedLabel}.`);
         return;
       }
 
-      showSidebarNotice('accent', `Workspace name reset to ${defaultLabel}.`);
+      showSidebarNotice('accent', `Workspace name reset to ${prompt.defaultLabel}.`);
     },
-    [showSidebarNotice, updateConversationGroupLabelOverride],
+    [renameConversationGroupPrompt, showSidebarNotice, updateConversationGroupLabelOverride],
   );
 
   const handleArchiveConversationGroup = useCallback(
@@ -3476,6 +3486,17 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
+      {renameConversationGroupPrompt ? (
+        <TextPromptDialog
+          title="Edit workspace name"
+          label="Workspace name"
+          initialValue={renameConversationGroupPrompt.currentLabel}
+          allowEmpty
+          confirmLabel="Save"
+          onCancel={() => setRenameConversationGroupPrompt(null)}
+          onSubmit={submitRenameConversationGroup}
+        />
+      ) : null}
       {workspaceQuickSelectOpen ? (
         <WorkspaceQuickSelectModal
           workspacePaths={savedWorkspacePaths}

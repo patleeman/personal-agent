@@ -17,6 +17,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 type NativeViewContribution = NonNullable<NonNullable<NonNullable<ExtensionInstallSummary['manifest']>['contributes']>['views']>[number];
 
+type ExtensionTemplate = 'main-page' | 'right-rail' | 'workbench-detail';
+
+interface ExtensionCreateDraft {
+  name: string;
+  id: string;
+  template: ExtensionTemplate;
+}
+
 interface LogicalSurfaceSummary {
   id: string;
   title: string;
@@ -440,6 +448,8 @@ export function ExtensionManagerPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [detailsExtensionId, setDetailsExtensionId] = useState<string | null>(null);
+  const [createDraft, setCreateDraft] = useState<ExtensionCreateDraft | null>(null);
+  const [importDraft, setImportDraft] = useState(false);
 
   const load = useCallback((options: { showLoading?: boolean } = {}) => {
     if (options.showLoading) {
@@ -477,51 +487,48 @@ export function ExtensionManagerPage() {
       .catch((err: Error) => setError(err.message));
   }, [load]);
 
-  const createExtension = useCallback(async () => {
-    const name = window.prompt('Extension name');
-    if (!name?.trim()) return;
-    const defaultId = slugifyExtensionId(name);
-    const id = window.prompt('Extension id', defaultId);
-    if (!id?.trim()) return;
+  const createExtension = useCallback(() => {
+    setCreateDraft({ name: '', id: '', template: 'main-page' });
+  }, []);
 
-    const template = window.prompt('Template: main-page, right-rail, or workbench-detail', 'main-page');
-    if (!template?.trim()) return;
-
-    setNotice(null);
-    try {
-      const result = await api.createExtension({
-        id: id.trim(),
-        name: name.trim(),
-        template: template.trim() as 'main-page' | 'right-rail' | 'workbench-detail',
-      });
-      setNotice(`Created ${result.packageRoot}`);
-      notifyExtensionRegistryChanged();
-      await load();
-      // Auto-build the newly created extension so its frontend is immediately usable.
+  const submitCreateExtension = useCallback(
+    async (draft: ExtensionCreateDraft) => {
+      setCreateDraft(null);
+      setNotice(null);
       try {
-        const buildResult = await api.buildExtension(result.extension?.id ?? id.trim());
-        setNotice(
-          buildResult.outputs.length > 0
-            ? `Created and built ${buildResult.outputs.length} bundle output${buildResult.outputs.length === 1 ? '' : 's'}.`
-            : 'Created extension with no build outputs.',
-        );
-        await api.reloadExtension(result.extension?.id ?? id.trim()).catch(() => undefined);
+        const result = await api.createExtension({
+          id: draft.id.trim(),
+          name: draft.name.trim(),
+          template: draft.template,
+        });
+        setNotice(`Created ${result.packageRoot}`);
         notifyExtensionRegistryChanged();
         await load();
-      } catch {
-        setNotice(`Created extension at ${result.packageRoot}. Build manually from the actions menu.`);
+        // Auto-build the newly created extension so its frontend is immediately usable.
+        try {
+          const buildResult = await api.buildExtension(result.extension?.id ?? draft.id.trim());
+          setNotice(
+            buildResult.outputs.length > 0
+              ? `Created and built ${buildResult.outputs.length} bundle output${buildResult.outputs.length === 1 ? '' : 's'}.`
+              : 'Created extension with no build outputs.',
+          );
+          await api.reloadExtension(result.extension?.id ?? draft.id.trim()).catch(() => undefined);
+          notifyExtensionRegistryChanged();
+          await load();
+        } catch {
+          setNotice(`Created extension at ${result.packageRoot}. Build manually from the actions menu.`);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [load]);
+    },
+    [load],
+  );
 
   const [importWarningZip, setImportWarningZip] = useState<string | null>(null);
 
-  const importExtension = useCallback(async () => {
-    const zipPath = window.prompt('Path to extension .zip bundle');
-    if (!zipPath?.trim()) return;
-    setImportWarningZip(zipPath.trim());
+  const importExtension = useCallback(() => {
+    setImportDraft(true);
   }, []);
 
   const confirmImport = useCallback(
@@ -905,6 +912,21 @@ export function ExtensionManagerPage() {
       </div>
 
       {detailsExtensionId ? <ExtensionDetailsModal extensionId={detailsExtensionId} onClose={() => setDetailsExtensionId(null)} /> : null}
+      {createDraft ? (
+        <CreateExtensionModal draft={createDraft} onCancel={() => setCreateDraft(null)} onSubmit={submitCreateExtension} />
+      ) : null}
+      {importDraft ? (
+        <ExtensionTextInputModal
+          title="Import extension"
+          label="Path to extension .zip bundle"
+          confirmLabel="Review import"
+          onCancel={() => setImportDraft(false)}
+          onSubmit={(zipPath) => {
+            setImportDraft(false);
+            setImportWarningZip(zipPath.trim());
+          }}
+        />
+      ) : null}
       {importWarningZip ? <ImportWarningModal zipPath={importWarningZip} onConfirm={confirmImport} onCancel={cancelImport} /> : null}
     </>
   );
@@ -1270,6 +1292,146 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-dim">{label}</dt>
       <dd className="mt-0.5 break-words text-secondary">{value}</dd>
+    </div>
+  );
+}
+
+function ExtensionTextInputModal({
+  title,
+  label,
+  initialValue = '',
+  confirmLabel = 'Continue',
+  onCancel,
+  onSubmit,
+}: {
+  title: string;
+  label: string;
+  initialValue?: string;
+  confirmLabel?: string;
+  onCancel: () => void;
+  onSubmit: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const trimmed = value.trim();
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-8 backdrop-blur-sm" onClick={onCancel}>
+      <form
+        className="w-full max-w-md rounded-2xl border border-border-subtle bg-base p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (trimmed) onSubmit(value);
+        }}
+      >
+        <h2 className="text-[16px] font-semibold text-primary">{title}</h2>
+        <label className="mt-4 block text-[12px] font-medium text-secondary">
+          {label}
+          <input
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            className="mt-2 w-full rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-[13px] text-primary outline-none transition-colors placeholder:text-dim focus:border-accent/50"
+            autoFocus
+          />
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-xl px-4 py-2 text-[13px] text-secondary hover:bg-surface hover:text-primary"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!trimmed}
+            className="rounded-xl border border-accent/50 bg-accent/15 px-4 py-2 text-[13px] font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CreateExtensionModal({
+  draft,
+  onCancel,
+  onSubmit,
+}: {
+  draft: ExtensionCreateDraft;
+  onCancel: () => void;
+  onSubmit: (draft: ExtensionCreateDraft) => void;
+}) {
+  const [name, setName] = useState(draft.name);
+  const [id, setId] = useState(draft.id);
+  const [template, setTemplate] = useState<ExtensionTemplate>(draft.template);
+  const normalizedName = name.trim();
+  const normalizedId = id.trim() || slugifyExtensionId(normalizedName);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-8 backdrop-blur-sm" onClick={onCancel}>
+      <form
+        className="w-full max-w-md rounded-2xl border border-border-subtle bg-base p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (normalizedName && normalizedId) onSubmit({ name: normalizedName, id: normalizedId, template });
+        }}
+      >
+        <h2 className="text-[16px] font-semibold text-primary">Create extension</h2>
+        <label className="mt-4 block text-[12px] font-medium text-secondary">
+          Extension name
+          <input
+            value={name}
+            onChange={(event) => {
+              const nextName = event.target.value;
+              setName(nextName);
+              setId((current) => (current.trim() ? current : slugifyExtensionId(nextName)));
+            }}
+            className="mt-2 w-full rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/50"
+            autoFocus
+          />
+        </label>
+        <label className="mt-3 block text-[12px] font-medium text-secondary">
+          Extension id
+          <input
+            value={id}
+            onChange={(event) => setId(event.target.value)}
+            placeholder={slugifyExtensionId(name) || 'my-extension'}
+            className="mt-2 w-full rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/50"
+          />
+        </label>
+        <label className="mt-3 block text-[12px] font-medium text-secondary">
+          Template
+          <select
+            value={template}
+            onChange={(event) => setTemplate(event.target.value as ExtensionTemplate)}
+            className="mt-2 w-full rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/50"
+          >
+            <option value="main-page">Main page</option>
+            <option value="right-rail">Right rail</option>
+            <option value="workbench-detail">Workbench detail</option>
+          </select>
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-xl px-4 py-2 text-[13px] text-secondary hover:bg-surface hover:text-primary"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!normalizedName || !normalizedId}
+            className="rounded-xl border border-accent/50 bg-accent/15 px-4 py-2 text-[13px] font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Create
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
