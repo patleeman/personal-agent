@@ -35,7 +35,13 @@ export function buildActivityTreePathModel(items: readonly ActivityTreeItem[]): 
     return path;
   }
 
-  const entries = items.map((item) => ({ item, path: buildPath(item) }));
+  const parentIds = new Set(items.map((item) => item.parentId).filter((parentId): parentId is string => Boolean(parentId)));
+  const logicalEntries = items.map((item) => ({ item, path: buildPath(item) }));
+  const entries = logicalEntries.map(({ item, path }) => {
+    const treePath = parentIds.has(item.id) ? `${path}/` : path;
+    pathById.set(item.id, treePath);
+    return { item, path: treePath };
+  });
   entries.sort((left, right) => left.path.localeCompare(right.path));
 
   return {
