@@ -40,15 +40,6 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     order: 1,
     action: { kind: 'file' },
   },
-  {
-    id: 'extension-command:agent-board:new-task',
-    section: 'commands',
-    title: 'Agent Board: New task',
-    subtitle: 'agent-board',
-    keywords: ['kanban', 'task'],
-    order: 1,
-    action: { kind: 'extensionCommand' },
-  },
 ];
 
 describe('command palette search', () => {
@@ -74,35 +65,14 @@ describe('command palette search', () => {
     expect(results.map((group) => group.section)).toEqual(['open', 'archived']);
   });
 
-  it('includes commands and files in the search-all scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'search' });
-
-    expect(results.map((group) => group.section)).toEqual(['commands', 'open', 'archived', 'files']);
-  });
-
-  it('filters to the requested command scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: 'board', scope: 'commands' });
-
-    expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('commands');
-    expect(results[0]?.items.map((item) => item.id)).toEqual(['extension-command:agent-board:new-task']);
-  });
-
-  it('keeps local thread and file title matches while adding content-search results', () => {
+  it('keeps local file title matches while adding file content-search results', () => {
     const scoped = selectCommandPaletteScopedItems({
-      scope: 'search',
+      scope: 'files',
       query: 'workspace',
       openConversationItems: [ITEMS[0]!],
       archivedConversationItems: [ITEMS[1]!],
       fileItems: [ITEMS[2]!],
-      commandItems: [ITEMS[3]!],
-      searchedConversationItems: [
-        {
-          ...ITEMS[1]!,
-          id: 'conversation-search:beta:block-1',
-          title: 'Matched transcript block',
-        },
-      ],
+      searchedConversationItems: [],
       searchedFileItems: [
         {
           ...ITEMS[2]!,
@@ -112,16 +82,9 @@ describe('command palette search', () => {
       ],
     });
 
-    expect(scoped.map((item) => item.id)).toEqual([
-      'extension-command:agent-board:new-task',
-      'open:alpha',
-      'archived:beta',
-      'conversation-search:beta:block-1',
-      'file:guide',
-      'file-search:guide',
-    ]);
+    expect(scoped.map((item) => item.id)).toEqual(['file:guide', 'file-search:guide']);
 
-    const results = searchCommandPaletteItems(scoped, { query: 'workspace', scope: 'search' });
+    const results = searchCommandPaletteItems(scoped, { query: 'workspace', scope: 'files' });
     expect(results.flatMap((group) => group.items.map((item) => item.id))).toContain('file:guide');
   });
 
@@ -175,15 +138,6 @@ describe('command palette search', () => {
       shouldBootstrapCommandPaletteThreads({
         open: true,
         scope: 'threads',
-        sessions: null,
-        alreadyRequested: false,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldBootstrapCommandPaletteThreads({
-        open: true,
-        scope: 'search',
         sessions: null,
         alreadyRequested: false,
       }),

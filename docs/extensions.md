@@ -103,7 +103,7 @@ The manifest declares what your extension contributes:
 | ---------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
 | `views`                      | UI surfaces (pages, panels)             | See `docs/views.md`                                                   |
 | `nav`                        | Left sidebar navigation items           |                                                                       |
-| `commands`                   | Command palette commands                |                                                                       |
+| `commands`                   | Extension actions invokable by command IDs |                                                                    |
 | `keybindings`                | Keyboard shortcuts                      |                                                                       |
 | `slashCommands`              | `/command` in composer                  |                                                                       |
 | `tools`                      | Agent-callable tools                    |                                                                       |
@@ -112,7 +112,7 @@ The manifest declares what your extension contributes:
 | `themes`                     | Color themes                            |                                                                       |
 | `transcriptRenderers`        | Custom tool result rendering            |                                                                       |
 | `promptReferences`           | @-mention resolvers                     |                                                                       |
-| `quickOpen`                  | Quick-open providers                    |                                                                       |
+| `quickOpen`                  | Command palette providers; use `section: "files"` and `title` to name the palette tab |                         |
 | `settings`                   | Settings schema contributions           | [See below](#settings)                                                |
 | `settingsComponent`          | Component panel in Settings             | [See below](#settings-component-settingscomponent)                    |
 | `topBarElements`             | Top bar indicator icons                 | [See below](#top-bar-elements-topbarelements)                         |

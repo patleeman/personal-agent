@@ -106,7 +106,7 @@
       {
         "id": "knowledge-files",
         "provider": "knowledgeQuickOpenProvider",
-        "title": "Knowledge files",
+        "title": "Knowledge",
         "section": "files"
       }
     ],
