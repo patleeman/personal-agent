@@ -3065,11 +3065,7 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
         func updateHeight(for textView: UITextView) {
             let measuredWidth = textView.bounds.width > 1 ? textView.bounds.width : UIScreen.main.bounds.width - 120
             let targetWidth = max(1, measuredWidth)
-            let textContainerWidth = max(1, targetWidth - textView.textContainerInset.left - textView.textContainerInset.right)
-            textView.textContainer.size = CGSize(width: textContainerWidth, height: .greatestFiniteMagnitude)
-            textView.layoutManager.ensureLayout(for: textView.textContainer)
-            let usedTextRect = textView.layoutManager.usedRect(for: textView.textContainer)
-            let measuredHeight = ceil(usedTextRect.height + textView.textContainerInset.top + textView.textContainerInset.bottom)
+            let measuredHeight = ceil(textView.sizeThatFits(CGSize(width: targetWidth, height: .greatestFiniteMagnitude)).height)
             let clampedHeight = min(ConversationComposerTextEditor.maxHeight, max(ConversationComposerTextEditor.minHeight, measuredHeight))
             textView.isScrollEnabled = measuredHeight > ConversationComposerTextEditor.maxHeight
             guard abs(parent.height - clampedHeight) > 0.5 else {
