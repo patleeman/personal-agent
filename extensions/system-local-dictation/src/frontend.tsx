@@ -136,8 +136,7 @@ export function DictationButton({
       buttonContext.insertText(text);
       pa.ui.toast('Dictation inserted.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.toLowerCase().includes('empty transcript')) pa.ui.toast(message);
+      pa.ui.toast(error instanceof Error ? error.message : String(error));
     } finally {
       setState('idle');
     }

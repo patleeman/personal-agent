@@ -318,7 +318,10 @@ export const api = {
   startExtensionRun: async (extensionId: string, input: unknown) =>
     post<unknown>(`/extensions/${encodeURIComponent(extensionId)}/runs`, input),
   invokeExtensionAction: async (extensionId: string, actionId: string, input: unknown) =>
-    post<{ ok: true; result: unknown }>(`/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionId)}`, input),
+    post<{ ok: true; result: unknown } | { ok: false; error: string }>(
+      `/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionId)}`,
+      input,
+    ),
   listExtensionActions: async () =>
     get<
       Array<{

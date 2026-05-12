@@ -91,11 +91,18 @@ function detailStateKey(extensionId: string, surfaceId: string): string {
   return `${extensionId}:${surfaceId}`;
 }
 
+function unwrapExtensionActionResult(response: Awaited<ReturnType<typeof api.invokeExtensionAction>>): unknown {
+  if (!response.ok) {
+    throw new Error(response.error);
+  }
+  return response.result;
+}
+
 export function createNativeExtensionClient(extensionId: string): NativeExtensionClient {
   return {
     extension: {
       async invoke(actionId, input) {
-        return (await api.invokeExtensionAction(extensionId, actionId, input ?? {})).result;
+        return unwrapExtensionActionResult(await api.invokeExtensionAction(extensionId, actionId, input ?? {}));
       },
       async getManifest() {
         return api.extensionManifest(extensionId);
@@ -230,7 +237,7 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
     },
     extensions: {
       async callAction(targetExtensionId, actionId, input) {
-        return (await api.invokeExtensionAction(targetExtensionId, actionId, input ?? {})).result;
+        return unwrapExtensionActionResult(await api.invokeExtensionAction(targetExtensionId, actionId, input ?? {}));
       },
       async listActions() {
         return api.listExtensionActions();
