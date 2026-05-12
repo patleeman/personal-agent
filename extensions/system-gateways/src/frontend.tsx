@@ -266,7 +266,7 @@ export function GatewaysPage() {
   return (
     <div className="h-full overflow-y-auto">
       <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
-        <AppPageIntro title="Gateways" summary="Configure external apps and route them into conversation threads." />
+        <AppPageIntro title="Telegram Gateway" summary="Configure Telegram and route it into conversation threads." />
 
         {error ? <p className="text-[13px] text-danger">{error}</p> : null}
         {loading ? <p className="text-[13px] text-dim">Loading…</p> : null}

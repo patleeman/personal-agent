@@ -11,7 +11,7 @@ describe('system-gateways manifest', () => {
 
   it('has the expected identity', () => {
     expect(manifest.id).toBe('system-gateways');
-    expect(manifest.name).toBe('Gateways');
+    expect(manifest.name).toBe('Telegram Gateway');
     expect(manifest.packageType).toBe('system');
     expect(manifest.schemaVersion).toBe(2);
   });
@@ -29,12 +29,14 @@ describe('system-gateways manifest', () => {
     const nav = manifest.contributes.nav.find((n: { id: string }) => n.id === 'nav');
     expect(nav).toBeDefined();
     expect(nav.route).toBe('/gateways');
+    expect(nav.label).toBe('Telegram Gateway');
+    expect(view.title).toBe('Telegram Gateway');
   });
 
   it('declares the conversation list attach menu', () => {
     const menu = manifest.contributes.contextMenus.find((m: { id: string }) => m.id === 'attach-conversation');
     expect(menu).toBeDefined();
-    expect(menu.title).toBe('Attach to Gateway');
+    expect(menu.title).toBe('Attach to Telegram Gateway');
     expect(menu.action).toBe('attachConversation');
     expect(menu.surface).toBe('conversationList');
   });

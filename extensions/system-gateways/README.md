@@ -1,4 +1,4 @@
-# Gateways Extension
+# Telegram Gateway Extension
 
 This extension owns the product behavior documented below. Keep extension-specific user and agent docs here so the implementation and documentation move together.
 
@@ -6,13 +6,13 @@ This extension owns the product behavior documented below. Keep extension-specif
 
 <!-- Source: docs/gateways.md -->
 
-# Gateways
+# Telegram Gateway
 
-Gateways connect external apps to Personal Agent conversations. They are a first-class routing surface: provider credentials live in Settings, while the Gateways page owns attachment, health, and recent activity.
+The Telegram Gateway connects Telegram to Personal Agent conversations. It is a first-class routing surface: provider credentials live in Settings, while the Telegram Gateway page owns attachment, health, and recent activity.
 
 ## V1 model
 
-The first implemented provider is Telegram, behind a generic gateway model.
+Telegram is implemented behind a generic gateway model.
 
 - One Telegram bot token is one gateway connection.
 - Telegram uses managed long polling from the desktop/server runtime.
@@ -23,11 +23,11 @@ The first implemented provider is Telegram, behind a generic gateway model.
 - Completed assistant replies are delivered back to Telegram after each turn when the conversation has an enabled Telegram chat target and is the attached gateway thread.
 - User messages typed in the desktop composer stay local; they do not send directly to Telegram.
 
-The runtime stores Telegram bot tokens in the auth store under the `telegram` provider id. Save or remove the token from **Settings → Gateways**. Saving a token enables the managed long-poll service; removing the token stops it and marks Telegram as needing configuration.
+The runtime stores Telegram bot tokens in the auth store under the `telegram` provider id. Save or remove the token from **Settings → Telegram Gateway**. Saving a token enables the managed long-poll service; removing the token stops it and marks Telegram as needing configuration.
 
 ## UI surfaces
 
-The sidebar has a top-level **Gateways** item. The page shows connected gateways, routing state, health, and recent activity. It intentionally does not expose bot tokens or provider secrets.
+The sidebar has a top-level **Telegram Gateway** item. The page shows connected Telegram routing state, health, and recent activity. It intentionally does not expose bot tokens or provider secrets.
 
 Conversation composers expose a compact gateway icon beside the CWD metadata controls. The dropdown shows gateway status, the attached Telegram target, and attach/detach actions. The button is icon-only to keep the composer row compact.
 
