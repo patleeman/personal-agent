@@ -769,7 +769,6 @@ export function ExtensionManagerPage() {
                       <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
                         <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
                           <th className="py-2 pr-4 font-semibold">Name</th>
-                          <th className="py-2 px-3 font-semibold">Kind</th>
                           <th className="py-2 px-3 font-semibold">Contributes</th>
                           <th className="py-2 px-3 font-semibold">Status</th>
                           <th className="py-2 pl-3 text-right font-semibold">Actions</th>
@@ -784,14 +783,16 @@ export function ExtensionManagerPage() {
                             <tr key={extension.id} className="group border-t border-border-subtle/70 transition-colors hover:bg-surface/30">
                               <td className="min-w-0 py-3 pr-4 align-middle">
                                 <div className="min-w-0">
-                                  <div className="truncate text-[14px] font-semibold text-primary">{extension.name}</div>
-                                  <div className="mt-0.5 truncate text-[12px] leading-5 text-secondary">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <div className="truncate text-[14px] font-semibold text-primary">{extension.name}</div>
+                                    <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">
+                                      {extension.packageType ?? 'user'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-0.5 max-w-[44rem] whitespace-normal break-words text-[12px] leading-5 text-secondary">
                                     {extension.description || 'No description provided.'}
                                   </div>
                                 </div>
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 align-middle text-[11px] uppercase tracking-[0.12em] text-secondary">
-                                {extension.packageType ?? 'user'}
                               </td>
                               <td className="px-3 py-3 align-middle">
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
