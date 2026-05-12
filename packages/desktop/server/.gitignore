@@ -1,0 +1,8 @@
+# Stale tsc output — esbuild bundles from .ts sources directly.
+# These shadow .ts files and cause "No matching export" build failures.
+*.js
+*.js.map
+*.d.ts
+
+# Keep the dist/ output (built by esbuild, not committed)
+!dist/

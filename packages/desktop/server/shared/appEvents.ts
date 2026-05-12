@@ -25,6 +25,7 @@ export type AppEventTopic =
   | 'artifacts'
   | 'checkpoints'
   | 'attachments'
+  | 'extensions'
   | 'tasks'
   | 'runs'
   | 'automation'
@@ -78,6 +79,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'artifacts',
   'checkpoints',
   'attachments',
+  'extensions',
   'tasks',
   'runs',
   'automation',
@@ -215,6 +217,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: `${options.taskStateFile}-shm`, kind: 'file' },
     ],
     runs: [{ path: runsRoot, kind: 'directory' }],
+    extensions: [],
     automation: [],
     daemon: [
       { path: getDaemonConfigFilePath(), kind: 'file' },
