@@ -28,12 +28,19 @@ function rowProps(overrides: Partial<React.ComponentProps<typeof ConversationPre
     currentThinkingLevel: 'medium',
     currentServiceTier: 'priority',
     savingPreference: null,
-    goalEnabled: false,
+    composerButtons: [],
+    composerButtonContext: {
+      composerDisabled: false,
+      streamIsStreaming: false,
+      composerHasContent: false,
+      goalEnabled: false,
+      toggleGoal: vi.fn(),
+      insertText: vi.fn(),
+    },
     onSelectModel: vi.fn(),
     onSelectThinkingLevel: vi.fn(),
     onSelectServiceTier: vi.fn(),
-    onToggleGoal: vi.fn(),
-    compact: false,
+    inlineLimit: Number.POSITIVE_INFINITY,
     ...overrides,
   } satisfies React.ComponentProps<typeof ConversationPreferencesRow>;
 }
@@ -62,39 +69,33 @@ function renderInteractive(overrides: Partial<React.ComponentProps<typeof Conver
 }
 
 describe('ConversationPreferencesRow', () => {
-  it('renders inline model, thinking, and goal controls', () => {
+  it('renders inline model, thinking, and fast mode controls', () => {
     const html = renderRow();
 
     expect(html).toContain('Conversation model');
     expect(html).toContain('Provider A');
     expect(html).toContain('Model A');
     expect(html).toContain('Conversation thinking level');
-    expect(html).toContain('Enable goal mode');
+    expect(html).toContain('Disable fast mode');
   });
 
-  it('keeps thinking out of the expanded settings menu when it is already inline', () => {
+  it('does not render the overflow menu when all preference items fit inline', () => {
     const { container, unmount } = renderInteractive();
 
     try {
-      const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
-      expect(moreButton).not.toBeNull();
-      act(() => {
-        moreButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
-
-      expect(container.textContent).not.toContain('Thinking');
+      expect(container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]')).toBeNull();
       expect(container.textContent).toContain('Fast mode');
     } finally {
       unmount();
     }
   });
 
-  it('renders compact model and goal controls inside the settings menu', () => {
-    const onToggleGoal = vi.fn();
-    const { container, unmount } = renderInteractive({ compact: true, onToggleGoal });
+  it('progressively moves overflowing controls into the settings menu', () => {
+    const { container, unmount } = renderInteractive({ inlineLimit: 1 });
 
     try {
-      expect(container.textContent).not.toContain('Goal mode');
+      expect(container.textContent).not.toContain('Thinking');
+      expect(container.textContent).not.toContain('Fast mode');
 
       const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
       expect(moreButton).not.toBeNull();
@@ -102,18 +103,9 @@ describe('ConversationPreferencesRow', () => {
         moreButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
-      expect(container.textContent).toContain('Model');
+      expect(container.textContent).toContain('Model A');
       expect(container.textContent).toContain('Thinking');
-      expect(container.textContent).toContain('Goal mode');
-
-      const goalButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
-        button.textContent?.includes('Goal mode'),
-      );
-      expect(goalButton).not.toBeNull();
-      act(() => {
-        goalButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
-      expect(onToggleGoal).toHaveBeenCalledTimes(1);
+      expect(container.textContent).toContain('Fast mode');
     } finally {
       unmount();
     }
@@ -126,6 +118,6 @@ describe('ConversationPreferencesRow', () => {
     });
 
     expect(html).not.toContain('Enable fast mode');
-    expect(html).toContain('Enable goal mode');
+    expect(html).toContain('Conversation thinking level');
   });
 });

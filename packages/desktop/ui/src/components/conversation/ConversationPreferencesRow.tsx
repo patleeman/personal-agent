@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { type ComposerButtonContext, ComposerButtonHost } from '../../extensions/ComposerButtonHost';
+import type { ExtensionComposerButtonRegistration } from '../../extensions/useExtensionRegistry';
 import { getModelSelectableServiceTierOptions, getModelThinkingLevelOptions, groupModelsByProvider } from '../../model/modelPreferences';
 import type { ModelInfo } from '../../shared/types';
 import { cx, IconButton } from '../ui';
@@ -201,24 +203,24 @@ export function ConversationPreferencesRow({
   currentThinkingLevel,
   currentServiceTier,
   savingPreference,
-  goalEnabled,
+  composerButtons = [],
+  composerButtonContext,
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
-  onToggleGoal,
-  compact,
+  inlineLimit,
 }: {
   models: ModelInfo[];
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
   savingPreference: SavingPreference;
-  goalEnabled: boolean;
+  composerButtons: ExtensionComposerButtonRegistration[];
+  composerButtonContext: Omit<ComposerButtonContext, 'renderMode'>;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
-  onToggleGoal: () => void;
-  compact: boolean;
+  inlineLimit: number;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +229,18 @@ export function ConversationPreferencesRow({
   const serviceTierOptions = useMemo(() => getModelSelectableServiceTierOptions(selectedModel), [selectedModel]);
   const supportsFastMode = useMemo(() => serviceTierOptions.some((option) => option.value === 'priority'), [serviceTierOptions]);
   const fastModeEnabled = currentServiceTier === 'priority';
+  const preferenceItems = useMemo(
+    () => [
+      { id: 'model' as const },
+      ...composerButtons.map((button, index) => ({ id: `composer:${index}` as const, button })),
+      { id: 'thinking' as const },
+      ...(supportsFastMode ? [{ id: 'fastMode' as const }] : []),
+    ],
+    [composerButtons, supportsFastMode],
+  );
+  const inlineItemIds = new Set(preferenceItems.slice(0, inlineLimit).map((item) => item.id));
+  const menuItems = preferenceItems.filter((item) => !inlineItemIds.has(item.id));
+  const hasMenuItems = menuItems.length > 0;
 
   useEffect(() => {
     if (!menuOpen) {
@@ -255,122 +269,150 @@ export function ConversationPreferencesRow({
     };
   }, [menuOpen]);
 
-  return (
-    <div className="flex min-w-0 flex-nowrap items-center gap-2">
-      {!compact && (
+  function renderInlineItem(item: (typeof preferenceItems)[number]) {
+    if (item.id === 'model') {
+      return (
         <ConversationModelSelect
+          key="model"
           groupedModels={groupedModels}
           currentModel={currentModel}
           disabled={savingPreference !== null || models.length === 0}
           onChange={onSelectModel}
         />
-      )}
-
-      {!compact && (
+      );
+    }
+    if (item.id === 'thinking') {
+      return (
         <ConversationThinkingLevelSelect
+          key="thinking"
           value={currentThinkingLevel}
           disabled={savingPreference !== null}
           model={selectedModel}
           onChange={onSelectThinkingLevel}
         />
-      )}
-
-      {!compact && (
+      );
+    }
+    if (item.id === 'fastMode') {
+      return (
         <ConversationPreferenceToggle
-          label="Goal"
-          enabled={goalEnabled}
+          key="fastMode"
+          label="Fast mode"
+          enabled={fastModeEnabled}
           disabled={savingPreference !== null}
           tone="accent"
-          title={goalEnabled ? 'Disable goal mode' : 'Enable goal mode'}
+          title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
           layout="inline"
-          onToggle={onToggleGoal}
+          onToggle={() => onSelectServiceTier(!fastModeEnabled)}
         />
-      )}
+      );
+    }
+    if ('button' in item) {
+      return (
+        <ComposerButtonHost
+          key={`${item.button.extensionId}:${item.button.id}`}
+          registration={item.button}
+          buttonContext={{ ...composerButtonContext, renderMode: 'inline' }}
+        />
+      );
+    }
+    return null;
+  }
 
-      <div ref={menuRef} className="relative">
-        <IconButton
-          type="button"
-          onClick={() => setMenuOpen((current) => !current)}
-          className={cx(
-            'h-8 w-8 rounded-md border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-            menuOpen && 'bg-surface/55 text-primary',
-          )}
-          aria-label="More composer settings"
-          aria-expanded={menuOpen}
-          aria-haspopup="dialog"
-          title="Model, thinking, and priority settings"
-        >
-          <MoreHorizontalIcon />
-        </IconButton>
-        {menuOpen && (
-          <div
-            className="ui-context-menu-shell absolute bottom-full left-0 z-50 mb-2 w-[15rem] p-2.5"
-            role="dialog"
-            aria-label="Composer settings"
+  function renderMenuItem(item: (typeof preferenceItems)[number]) {
+    if (item.id === 'model') {
+      return (
+        <div key="model">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Model</p>
+          <ConversationModelSelect
+            groupedModels={groupedModels}
+            currentModel={currentModel}
+            disabled={savingPreference !== null || models.length === 0}
+            variant="menu"
+            onChange={(modelId) => {
+              onSelectModel(modelId);
+              setMenuOpen(false);
+            }}
+          />
+        </div>
+      );
+    }
+    if (item.id === 'thinking') {
+      return (
+        <div key="thinking">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
+          <ConversationThinkingLevelSelect
+            value={currentThinkingLevel}
+            disabled={savingPreference !== null}
+            variant="menu"
+            model={selectedModel}
+            onChange={(thinkingLevel) => {
+              onSelectThinkingLevel(thinkingLevel);
+              setMenuOpen(false);
+            }}
+          />
+        </div>
+      );
+    }
+    if (item.id === 'fastMode') {
+      return (
+        <ConversationPreferenceToggle
+          key="fastMode"
+          label="Fast mode"
+          enabled={fastModeEnabled}
+          disabled={savingPreference !== null}
+          tone="accent"
+          title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
+          layout="menu"
+          onToggle={() => {
+            onSelectServiceTier(!fastModeEnabled);
+            setMenuOpen(false);
+          }}
+        />
+      );
+    }
+    if ('button' in item) {
+      return (
+        <ComposerButtonHost
+          key={`${item.button.extensionId}:${item.button.id}`}
+          registration={item.button}
+          buttonContext={{ ...composerButtonContext, renderMode: 'menu' }}
+        />
+      );
+    }
+    return null;
+  }
+
+  return (
+    <div className="flex min-w-0 flex-nowrap items-center gap-2">
+      {preferenceItems.filter((item) => inlineItemIds.has(item.id)).map(renderInlineItem)}
+
+      {hasMenuItems && (
+        <div ref={menuRef} className="relative">
+          <IconButton
+            type="button"
+            onClick={() => setMenuOpen((current) => !current)}
+            className={cx(
+              'h-8 w-8 rounded-md border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+              menuOpen && 'bg-surface/55 text-primary',
+            )}
+            aria-label="More composer settings"
+            aria-expanded={menuOpen}
+            aria-haspopup="dialog"
+            title="More composer settings"
           >
-            <div className="flex flex-col gap-2">
-              {compact && (
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Model</p>
-                  <ConversationModelSelect
-                    groupedModels={groupedModels}
-                    currentModel={currentModel}
-                    disabled={savingPreference !== null || models.length === 0}
-                    variant="menu"
-                    onChange={(modelId) => {
-                      onSelectModel(modelId);
-                      setMenuOpen(false);
-                    }}
-                  />
-                </div>
-              )}
-              {compact && (
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
-                  <ConversationThinkingLevelSelect
-                    value={currentThinkingLevel}
-                    disabled={savingPreference !== null}
-                    variant="menu"
-                    model={selectedModel}
-                    onChange={(thinkingLevel) => {
-                      onSelectThinkingLevel(thinkingLevel);
-                      setMenuOpen(false);
-                    }}
-                  />
-                </div>
-              )}
-              {compact && (
-                <ConversationPreferenceToggle
-                  label="Goal mode"
-                  enabled={goalEnabled}
-                  disabled={savingPreference !== null}
-                  tone="accent"
-                  title={goalEnabled ? 'Disable goal mode' : 'Enable goal mode'}
-                  layout="menu"
-                  onToggle={() => {
-                    onToggleGoal();
-                    setMenuOpen(false);
-                  }}
-                />
-              )}
-              {supportsFastMode && (
-                <ConversationPreferenceToggle
-                  label="Fast mode"
-                  enabled={fastModeEnabled}
-                  disabled={savingPreference !== null}
-                  tone="accent"
-                  title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
-                  layout="menu"
-                  onToggle={() => {
-                    onSelectServiceTier(!fastModeEnabled);
-                    setMenuOpen(false);
-                  }}
-                />
-              )}
+            <MoreHorizontalIcon />
+          </IconButton>
+          {menuOpen && (
+            <div
+              className="ui-context-menu-shell absolute bottom-full left-0 z-50 mb-2 w-[15rem] p-2.5"
+              role="dialog"
+              aria-label="Composer settings"
+            >
+              <div className="flex flex-col gap-2">{menuItems.map(renderMenuItem)}</div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

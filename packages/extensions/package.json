@@ -35,6 +35,10 @@
       "types": "./dist/excalidraw.d.ts",
       "default": "./dist/excalidraw.js"
     },
+    "./composer": {
+      "types": "./dist/composer.d.ts",
+      "default": "./dist/composer.js"
+    },
     "./backend": {
       "types": "./dist/backend.d.ts",
       "default": "./dist/backend.js"

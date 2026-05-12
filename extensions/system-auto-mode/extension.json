@@ -5,12 +5,25 @@
   "packageType": "system",
   "description": "Persisted goal tracking with automatic continuation across turns.",
   "version": "0.2.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "backend": {
     "entry": "src/backend.ts",
     "agentExtension": "createConversationAutoModeAgentExtension"
   },
   "permissions": ["conversations:readwrite"],
   "contributes": {
+    "composerButtons": [
+      {
+        "id": "goal-mode",
+        "component": "GoalModeComposerButton",
+        "title": "Goal mode",
+        "placement": "afterModelPicker",
+        "priority": 100
+      }
+    ],
     "skills": [
       {
         "id": "goal-mode",

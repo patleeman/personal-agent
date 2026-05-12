@@ -167,6 +167,7 @@ interface ExtensionComposerButtonContribution {
   id: string;
   component: string;
   title?: string;
+  placement?: 'afterModelPicker';
   when?: string;
   priority?: number;
 }

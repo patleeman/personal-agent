@@ -42,6 +42,15 @@ describe('useExtensionRegistry', () => {
               priority: 100,
             },
           ],
+          composerButtons: [
+            {
+              id: 'goal-mode',
+              component: 'GoalModeComposerButton',
+              title: 'Goal mode',
+              placement: 'afterModelPicker',
+              priority: 100,
+            },
+          ],
           composerInputTools: [
             {
               id: 'draw',
@@ -80,6 +89,17 @@ describe('useExtensionRegistry', () => {
         frontendEntry: 'dist/frontend.js',
       },
     ]);
+    expect(result.current.composerButtons).toEqual([
+      {
+        extensionId: 'test-extension',
+        id: 'goal-mode',
+        component: 'GoalModeComposerButton',
+        title: 'Goal mode',
+        placement: 'afterModelPicker',
+        priority: 100,
+        frontendEntry: 'dist/frontend.js',
+      },
+    ]);
     expect(result.current.composerInputTools).toEqual([
       {
         extensionId: 'test-extension',
@@ -104,6 +124,7 @@ describe('useExtensionRegistry', () => {
       expect(result.current.conversationHeaderElements).toEqual([]);
       expect(result.current.conversationDecorators).toEqual([]);
       expect(result.current.statusBarItems).toEqual([]);
+      expect(result.current.composerButtons).toEqual([]);
       expect(result.current.composerInputTools).toEqual([]);
     } finally {
       (api as unknown as { extensions: typeof originalExtensions }).extensions = originalExtensions;

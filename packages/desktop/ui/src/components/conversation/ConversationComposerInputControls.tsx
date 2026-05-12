@@ -7,7 +7,14 @@ import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
 
-const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 780;
+function getComposerPreferenceInlineLimit(composerShellWidth: number | null): number {
+  const width = composerShellWidth ?? Number.POSITIVE_INFINITY;
+  if (width >= 860) return Number.POSITIVE_INFINITY;
+  if (width >= 760) return 4;
+  if (width >= 660) return 3;
+  if (width >= 560) return 2;
+  return 1;
+}
 
 export function ConversationComposerInputControls({
   fileInputRef,
@@ -90,7 +97,7 @@ export function ConversationComposerInputControls({
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
 }) {
-  const { composerInputTools } = useExtensionRegistry();
+  const { composerButtons = [], composerInputTools } = useExtensionRegistry();
   const visibleComposerInputTools = useMemo(
     () =>
       composerInputTools.filter((tool) => {
@@ -106,6 +113,23 @@ export function ConversationComposerInputControls({
         return true;
       }),
     [composerHasContent, composerInputTools, streamIsStreaming],
+  );
+
+  const visibleComposerButtons = useMemo(
+    () =>
+      composerButtons.filter((button) => {
+        const expr = button.when;
+        if (!expr) return true;
+        const clauses = expr.split(/\s*&&\s*/).filter(Boolean);
+        for (const clause of clauses) {
+          const trimmed = clause.trim();
+          if (trimmed === 'composerHasContent' && !composerHasContent) return false;
+          if (trimmed === 'streamIsStreaming' && !streamIsStreaming) return false;
+          if (trimmed === '!streamIsStreaming' && streamIsStreaming) return false;
+        }
+        return true;
+      }),
+    [composerButtons, composerHasContent, streamIsStreaming],
   );
 
   return (
@@ -204,12 +228,19 @@ export function ConversationComposerInputControls({
               currentThinkingLevel={currentThinkingLevel}
               currentServiceTier={currentServiceTier}
               savingPreference={savingPreference}
-              goalEnabled={goalEnabled}
+              composerButtons={visibleComposerButtons}
+              composerButtonContext={{
+                composerDisabled,
+                streamIsStreaming,
+                composerHasContent,
+                goalEnabled,
+                toggleGoal: onToggleGoal,
+                insertText: onInsertComposerText,
+              }}
               onSelectModel={onSelectModel}
               onSelectThinkingLevel={onSelectThinkingLevel}
               onSelectServiceTier={onSelectServiceTier}
-              onToggleGoal={onToggleGoal}
-              compact={(composerShellWidth ?? Number.POSITIVE_INFINITY) < COMPOSER_PREFERENCES_MENU_WIDTH_PX}
+              inlineLimit={getComposerPreferenceInlineLimit(composerShellWidth)}
             />
           </div>
 

@@ -212,19 +212,20 @@ The component receives `pa` and `settingsContext`. Use this for rich settings UI
 
 ### Composer Buttons (`composerButtons`)
 
-Add component-backed buttons in the compact shelf directly to the left of the submit button. Use this for interactive controls that need their own frontend state.
+Add component-backed controls in the composer preference row, immediately after the model picker. Use this for interactive composer settings that need their own frontend state.
 
 ```json
 {
   "id": "dictation",
   "component": "DictationButton",
   "title": "Dictation",
+  "placement": "afterModelPicker",
   "when": "!streamIsStreaming",
   "priority": 10
 }
 ```
 
-The component receives `pa` and `buttonContext`; `buttonContext.insertText(text)` inserts text at the current composer selection.
+The component receives `pa` and `buttonContext`; `buttonContext.renderMode` is `inline` or `menu` depending on available width, and `buttonContext.insertText(text)` inserts text at the current composer selection.
 
 ### Composer Input Tools (`composerInputTools`)
 
