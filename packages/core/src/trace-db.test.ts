@@ -11,6 +11,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 // We test the query functions by writing data and reading it back.
 // The module uses getStateRoot() which defaults to process.cwd-based paths.
 // We override by setting up our own DB path via environment manipulation.
+import { resolveObservabilityDbPath } from './observability-db.js';
+import { openSqliteDatabase } from './sqlite.js';
 import {
   closeTraceDbs,
   queryAgentLoop,
@@ -34,7 +36,9 @@ import {
   writeTraceAutoMode,
   writeTraceCompaction,
   writeTraceContext,
+  writeTraceContextPointerInspect,
   writeTraceStats,
+  writeTraceSuggestedContext,
   writeTraceToolCall,
 } from './trace-db.js';
 
@@ -68,6 +72,20 @@ describe('trace-db', () => {
 
   const sessionId = 'test-session-1';
   const fiveHoursAgo = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+
+  function readSingleValue<T>(sql: string): T {
+    closeTraceDbs();
+    const db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
+    try {
+      return (db.prepare(sql).get() as { value: T }).value;
+    } finally {
+      db.close();
+    }
+  }
+
+  function countRows(table: string): number {
+    return readSingleValue<number>(`SELECT COUNT(*) AS value FROM ${table}`);
+  }
 
   beforeEach(() => {
     closeTraceDbs();
@@ -136,6 +154,33 @@ describe('trace-db', () => {
 
     writeTraceCompaction({ sessionId, reason: 'overflow', tokensBefore: 120000, tokensAfter: 52000, tokensSaved: 68000 });
     writeTraceCompaction({ sessionId: 'session-2', reason: 'threshold', tokensBefore: 90000, tokensAfter: 45000, tokensSaved: 45000 });
+  });
+
+  it('redacts stale suggested-context pointer ids while preserving aggregate counts', () => {
+    writeTraceSuggestedContext({ sessionId: 'stale-suggested-context', pointerIds: ['old-a', 'old-b'] });
+    writeTraceSuggestedContext({ sessionId: 'fresh-suggested-context', pointerIds: ['fresh-a'] });
+    closeTraceDbs();
+
+    const dbPath = resolveObservabilityDbPath(testDir);
+    const db = openSqliteDatabase(dbPath);
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare(`UPDATE trace_suggested_context SET ts = ? WHERE session_id = ?`).run(eightDaysAgo, 'stale-suggested-context');
+    db.close();
+
+    writeTraceStats({ sessionId: 'trigger-prune', modelId: 'gpt-4o' });
+    closeTraceDbs();
+
+    const prunedDb = openSqliteDatabase(dbPath);
+    const stale = prunedDb
+      .prepare(`SELECT pointer_ids, pointer_count FROM trace_suggested_context WHERE session_id = ?`)
+      .get('stale-suggested-context') as { pointer_ids: string; pointer_count: number };
+    const fresh = prunedDb
+      .prepare(`SELECT pointer_ids, pointer_count FROM trace_suggested_context WHERE session_id = ?`)
+      .get('fresh-suggested-context') as { pointer_ids: string; pointer_count: number };
+    prunedDb.close();
+
+    expect(stale).toEqual({ pointer_ids: '', pointer_count: 2 });
+    expect(fresh).toEqual({ pointer_ids: 'fresh-a', pointer_count: 1 });
   });
 
   it('queryAutoMode returns activity and latest active sessions', () => {
@@ -392,12 +437,92 @@ describe('trace-db', () => {
 
     for (let index = 0; index < 1005; index++) {
       writeTraceStats({ sessionId: `cap-${index}`, modelId: 'cap-model', tokensInput: 1, tokensOutput: 1, cost: 1 });
+      writeTraceSuggestedContext({ sessionId: `cap-suggested-${index}`, pointerIds: [`pointer-${index}`] });
+      writeTraceContextPointerInspect({
+        sessionId: `cap-inspect-${index}`,
+        inspectedConversationId: `pointer-${index}`,
+        wasSuggested: index % 2 === 0,
+      });
     }
 
     closeTraceDbs();
     const usage = queryModelUsage(fiveHoursAgo).find((row) => row.modelId === 'cap-model');
 
     expect(usage?.calls).toBe(1000);
+    expect(countRows('trace_suggested_context')).toBe(1000);
+    expect(countRows('trace_context_pointer_inspect')).toBe(1000);
+  });
+
+  it('prunes stale suggested context telemetry on open', () => {
+    writeTraceSuggestedContext({ sessionId: 'stale-suggested', pointerIds: ['old-pointer'] });
+    writeTraceContextPointerInspect({ sessionId: 'stale-inspect', inspectedConversationId: 'old-pointer', wasSuggested: true });
+
+    closeTraceDbs();
+    const oldTimestamp = new Date(Date.now() - 91 * 24 * 60 * 60 * 1000).toISOString();
+    const db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
+    try {
+      db.prepare(`UPDATE trace_suggested_context SET ts = ? WHERE session_id = ?`).run(oldTimestamp, 'stale-suggested');
+      db.prepare(`UPDATE trace_context_pointer_inspect SET ts = ? WHERE session_id = ?`).run(oldTimestamp, 'stale-inspect');
+    } finally {
+      db.close();
+    }
+
+    writeTraceSuggestedContext({ sessionId: 'fresh-suggested', pointerIds: ['new-pointer'] });
+
+    expect(countRows('trace_suggested_context')).toBe(1);
+    expect(countRows('trace_context_pointer_inspect')).toBe(0);
+  });
+
+  it('drops raw suggested context pointer ids after the short attribution window', () => {
+    writeTraceSuggestedContext({ sessionId: 'old-pointer-ids', pointerIds: ['pointer-a', 'pointer-b'] });
+
+    closeTraceDbs();
+    const oldTimestamp = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
+    try {
+      db.prepare(`UPDATE trace_suggested_context SET ts = ? WHERE session_id = ?`).run(oldTimestamp, 'old-pointer-ids');
+    } finally {
+      db.close();
+    }
+
+    writeTraceSuggestedContext({ sessionId: 'fresh-pointer-ids', pointerIds: ['pointer-c'] });
+
+    expect(countRows('trace_suggested_context')).toBe(2);
+    expect(readSingleValue<string>(`SELECT pointer_ids AS value FROM trace_suggested_context WHERE session_id = 'old-pointer-ids'`)).toBe(
+      '',
+    );
+    expect(readSingleValue<number>(`SELECT pointer_count AS value FROM trace_suggested_context WHERE session_id = 'old-pointer-ids'`)).toBe(
+      2,
+    );
+  });
+
+  it('drops raw suggested context pointer ids before aggregate telemetry expires', () => {
+    writeTraceSuggestedContext({ sessionId: 'suggested-ids', pointerIds: ['pointer-a', 'pointer-b'] });
+
+    closeTraceDbs();
+    const oldTimestamp = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    let db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
+    try {
+      db.prepare(`UPDATE trace_suggested_context SET ts = ? WHERE session_id = ?`).run(oldTimestamp, 'suggested-ids');
+    } finally {
+      db.close();
+    }
+
+    writeTraceStats({ sessionId: 'trigger-prune', modelId: 'prune-model', tokensInput: 1, tokensOutput: 1, cost: 1 });
+
+    closeTraceDbs();
+    db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
+    try {
+      const row = db
+        .prepare(`SELECT pointer_ids, pointer_count FROM trace_suggested_context WHERE session_id = ?`)
+        .get('suggested-ids') as {
+        pointer_ids: string;
+        pointer_count: number;
+      };
+      expect(row).toEqual({ pointer_ids: '', pointer_count: 2 });
+    } finally {
+      db.close();
+    }
   });
 
   it('queryTokensDaily returns daily aggregation with tool errors', () => {

@@ -209,6 +209,15 @@ export function closeTraceDbs() {
 function resolveTraceDbPath(stateRoot) {
   return resolveObservabilityDbPath(stateRoot);
 }
+const TRACE_TABLES = [
+  'trace_stats',
+  'trace_tool_calls',
+  'trace_context',
+  'trace_compactions',
+  'trace_auto_mode',
+  'trace_suggested_context',
+  'trace_context_pointer_inspect',
+];
 function importLegacyTraceRows(db, stateRoot) {
   const legacyPath = resolveLegacyTraceDbPath(stateRoot);
   if (!existsSync(legacyPath) || legacyPath === resolveTraceDbPath(stateRoot)) return;
@@ -216,15 +225,7 @@ function importLegacyTraceRows(db, stateRoot) {
   if (imported?.value === legacyPath) return;
   try {
     db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_trace`);
-    for (const table of [
-      'trace_stats',
-      'trace_tool_calls',
-      'trace_context',
-      'trace_compactions',
-      'trace_auto_mode',
-      'trace_suggested_context',
-      'trace_context_pointer_inspect',
-    ]) {
+    for (const table of TRACE_TABLES) {
       db.exec(`INSERT OR IGNORE INTO ${table} SELECT * FROM legacy_trace.${table}`);
     }
     db.prepare(`INSERT OR REPLACE INTO observability_imports (key, value, imported_at) VALUES (?, ?, ?)`).run(
@@ -241,6 +242,9 @@ function importLegacyTraceRows(db, stateRoot) {
 }
 // Prune rows older than this many days and cap each trace table on every DB open.
 const TRACE_STATS_TTL_DAYS = 90;
+// Suggested-context pointer ids are only needed briefly to classify follow-up
+// conversation_inspect calls; keep aggregate counts longer, but drop raw ids.
+const SUGGESTED_CONTEXT_POINTER_IDS_TTL_DAYS = 7;
 const DEFAULT_TRACE_TABLE_MAX_ROWS = 50_000;
 function resolveTraceTableMaxRows() {
   const raw = process.env.PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS;
@@ -277,25 +281,17 @@ function getTraceDb(stateRoot) {
   // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {
     const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    db.prepare(`DELETE FROM trace_stats WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_context WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_tool_calls WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_compactions WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_auto_mode WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_suggested_context WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_context_pointer_inspect WHERE ts < ?`).run(cutoff);
-    for (const table of [
-      'trace_stats',
-      'trace_context',
-      'trace_tool_calls',
-      'trace_compactions',
-      'trace_auto_mode',
-      'trace_suggested_context',
-      'trace_context_pointer_inspect',
-    ]) {
+    for (const table of TRACE_TABLES) {
+      db.prepare(`DELETE FROM ${table} WHERE ts < ?`).run(cutoff);
       pruneTraceTable(db, table);
     }
     db.exec(`VACUUM`);
+  } catch {
+    // Non-fatal
+  }
+  try {
+    const pointerIdsCutoff = new Date(Date.now() - SUGGESTED_CONTEXT_POINTER_IDS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare(`UPDATE trace_suggested_context SET pointer_ids = '' WHERE ts < ? AND pointer_ids != ''`).run(pointerIdsCutoff);
   } catch {
     // Non-fatal
   }
