@@ -975,10 +975,25 @@ describe('extension backends - file existence and structural checks', () => {
       if (!existsSync(backendPath)) continue;
 
       // Running node --check validates syntax without executing the module
-      // This catches import-time syntax errors that would surface when the app starts
       expect(
         () => execFileSync('node', ['--check', backendPath], { encoding: 'utf-8', timeout: 10000 }),
         `${s.id}: dist/backend.mjs has syntax errors`,
+      ).not.toThrow();
+    }
+  });
+
+  it('prebuilt frontend files pass Node.js syntax check', () => {
+    for (const s of summaries) {
+      if (s.packageType !== 'system') continue;
+      const frontendEntry = s.manifest.frontend?.entry;
+      if (!frontendEntry) continue;
+
+      const frontendPath = resolve(s.packageRoot ?? '', frontendEntry);
+      if (!existsSync(frontendPath) || statSync(frontendPath).isDirectory()) continue;
+
+      expect(
+        () => execFileSync('node', ['--check', frontendPath], { encoding: 'utf-8', timeout: 10000 }),
+        `${s.id}: ${frontendEntry} has syntax errors`,
       ).not.toThrow();
     }
   });
