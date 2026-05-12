@@ -15,8 +15,12 @@ import {
   listExtensionConversationHeaderRegistrations,
   listExtensionInstallSummaries,
   listExtensionKeybindingRegistrations,
+  listExtensionMentionRegistrations,
   listExtensionMessageActionRegistrations,
   listExtensionNewConversationPanelRegistrations,
+  listExtensionPromptContextProviderRegistrations,
+  listExtensionPromptReferenceRegistrations,
+  listExtensionQuickOpenRegistrations,
   listExtensionSecretBackendRegistrations,
   listExtensionSecretRegistrations,
   listExtensionSettingsComponentRegistrations,
@@ -737,6 +741,46 @@ describe('extension manifests - cross-extension conflict detection', () => {
     expect(
       [...conflicts].map(([id, sources]) => `${id}: ${sources.join(', ')}`),
       'Duplicate settings component section ids',
+    ).toEqual([]);
+  });
+
+  it('no duplicate mention ids', () => {
+    const mentions = listExtensionMentionRegistrations();
+    const conflicts = findAllStringConflicts(mentions.map((m) => [m.id, m.extensionId]));
+    const realConflicts = new Map([...conflicts.entries()].filter(([_id, sources]) => new Set(sources).size > 1));
+    expect(
+      [...realConflicts].map(([id, sources]) => `${id}: ${sources.join(', ')}`),
+      'Duplicate mention ids across extensions',
+    ).toEqual([]);
+  });
+
+  it('no duplicate prompt reference ids', () => {
+    const refs = listExtensionPromptReferenceRegistrations();
+    const conflicts = findAllStringConflicts(refs.map((r) => [r.id, r.extensionId]));
+    const realConflicts = new Map([...conflicts.entries()].filter(([_id, sources]) => new Set(sources).size > 1));
+    expect(
+      [...realConflicts].map(([id, sources]) => `${id}: ${sources.join(', ')}`),
+      'Duplicate prompt reference ids across extensions',
+    ).toEqual([]);
+  });
+
+  it('no duplicate prompt context provider ids', () => {
+    const providers = listExtensionPromptContextProviderRegistrations();
+    const conflicts = findAllStringConflicts(providers.map((p) => [p.id, p.extensionId]));
+    const realConflicts = new Map([...conflicts.entries()].filter(([_id, sources]) => new Set(sources).size > 1));
+    expect(
+      [...realConflicts].map(([id, sources]) => `${id}: ${sources.join(', ')}`),
+      'Duplicate prompt context provider ids across extensions',
+    ).toEqual([]);
+  });
+
+  it('no duplicate quick open provider ids', () => {
+    const providers = listExtensionQuickOpenRegistrations();
+    const conflicts = findAllStringConflicts(providers.map((p) => [p.id, p.extensionId]));
+    const realConflicts = new Map([...conflicts.entries()].filter(([_id, sources]) => new Set(sources).size > 1));
+    expect(
+      [...realConflicts].map(([id, sources]) => `${id}: ${sources.join(', ')}`),
+      'Duplicate quick open provider ids across extensions',
     ).toEqual([]);
   });
 });
