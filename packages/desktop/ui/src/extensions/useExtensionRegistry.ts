@@ -71,6 +71,15 @@ interface ExtensionContextMenuRegistration {
   when?: string;
 }
 
+export interface ExtensionThreadHeaderActionRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionConversationDecoratorRegistration {
   extensionId: string;
   id: string;
@@ -131,6 +140,7 @@ export interface ExtensionRegistryState {
   composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
   contextMenus: ExtensionContextMenuRegistration[];
+  threadHeaderActions: ExtensionThreadHeaderActionRegistration[];
   statusBarItems: ExtensionStatusBarItemRegistration[];
   conversationHeaderElements: ExtensionConversationHeaderElementRegistration[];
   conversationDecorators: ExtensionConversationDecoratorRegistration[];
@@ -354,6 +364,26 @@ function normalizeContextMenus(extensions: ExtensionManifest[]): ExtensionContex
   return result;
 }
 
+function normalizeThreadHeaderActions(extensions: ExtensionManifest[]): ExtensionThreadHeaderActionRegistration[] {
+  const result: ExtensionThreadHeaderActionRegistration[] = [];
+  for (const extension of extensions) {
+    const actions = extension.contributes?.threadHeaderActions;
+    if (!actions?.length) continue;
+    for (const action of actions) {
+      result.push({
+        extensionId: extension.id,
+        id: action.id,
+        component: action.component,
+        ...(action.title ? { title: action.title } : {}),
+        ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
 function normalizeStatusBarItems(extensions: ExtensionManifest[]): ExtensionStatusBarItemRegistration[] {
   const result: ExtensionStatusBarItemRegistration[] = [];
   for (const extension of extensions) {
@@ -390,6 +420,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     composerInputTools: [],
     toolbarActions: [],
     contextMenus: [],
+    threadHeaderActions: [],
     statusBarItems: [],
     conversationHeaderElements: [],
     conversationDecorators: [],
@@ -422,6 +453,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           composerInputTools: [],
           toolbarActions: [],
           contextMenus: [],
+          threadHeaderActions: [],
           statusBarItems: [],
           conversationHeaderElements: [],
           conversationDecorators: [],
@@ -447,6 +479,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             composerInputTools: normalizeComposerInputTools(extensions),
             toolbarActions: normalizeToolbarActions(extensions),
             contextMenus: normalizeContextMenus(extensions),
+            threadHeaderActions: normalizeThreadHeaderActions(extensions),
             statusBarItems: normalizeStatusBarItems(extensions),
             conversationHeaderElements: normalizeConversationHeaderElements(extensions),
             conversationDecorators: normalizeConversationDecorators(extensions),
@@ -469,6 +502,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             composerInputTools: [],
             toolbarActions: [],
             contextMenus: [],
+            threadHeaderActions: [],
             statusBarItems: [],
             conversationHeaderElements: [],
             conversationDecorators: [],

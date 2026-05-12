@@ -441,6 +441,7 @@ Pick the smallest surface that matches the product shape. Do not use the right r
 | Composer shelf         | Info/status section above the composer input                           | Full-page workflows              |
 | Conversation decorator | Badge/indicator on a conversation list item                            | Interactive UI                   |
 | Context menu           | Right-click menu item on message or sidebar item                       | Primary navigation               |
+| Thread header action   | Compact button beside the Threads sidebar header                       | Wide/persistent workflows        |
 | Status bar item        | Label in the status bar below the composer                             | Interactive controls             |
 | Theme                  | Color theme via CSS variable tokens                                    | Layout or UI changes             |
 

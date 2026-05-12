@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 2,
+  "id": "system-session-exchange",
+  "name": "Session Exchange",
+  "packageType": "system",
+  "description": "Import and export conversation session files from the threads sidebar.",
+  "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      {
+        "id": "exportSession",
+        "handler": "exportSession",
+        "title": "Export session"
+      },
+      {
+        "id": "importSession",
+        "handler": "importSession",
+        "title": "Import session"
+      }
+    ]
+  },
+  "contributes": {
+    "contextMenus": [
+      {
+        "id": "export-session",
+        "title": "Export Session",
+        "action": "exportSession",
+        "surface": "conversationList"
+      }
+    ],
+    "threadHeaderActions": [
+      {
+        "id": "import-session",
+        "component": "ImportSessionButton",
+        "title": "Import Session",
+        "priority": 10
+      }
+    ]
+  },
+  "permissions": ["conversations:readwrite", "ui:notify"]
+}

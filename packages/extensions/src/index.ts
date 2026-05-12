@@ -233,6 +233,23 @@ export interface ExtensionConversationHeaderContribution {
   label?: string;
 }
 
+export interface ExtensionThreadHeaderActionContribution {
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
+}
+
+export interface ThreadHeaderActionContext {
+  activeConversationId?: string | null;
+  cwd?: string | null;
+}
+
+export interface ThreadHeaderActionProps {
+  pa: NativeExtensionClient;
+  actionContext: ThreadHeaderActionContext;
+}
+
 export interface ExtensionStatusBarItemContribution {
   id: string;
   label: string;
@@ -333,6 +350,7 @@ export interface ExtensionContributions {
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  threadHeaderActions?: ExtensionThreadHeaderActionContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];

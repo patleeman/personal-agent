@@ -39,6 +39,7 @@ import {
 import { persistForkPromptDraft } from '../conversation/forking';
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';
 import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
+import { ThreadHeaderActionHost } from '../extensions/ThreadHeaderActionHost';
 import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { getOrCreateConversationSurfaceId } from '../hooks/sessionStream';
@@ -3338,6 +3339,13 @@ export function Sidebar() {
         <div className="px-4 pt-1 pb-0.5">
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">Threads</p>
+            {extensionRegistry.threadHeaderActions.map((action) => (
+              <ThreadHeaderActionHost
+                key={`${action.extensionId}:${action.id}`}
+                registration={action}
+                actionContext={{ activeConversationId, cwd: draftCwd }}
+              />
+            ))}
             <ThreadsFilterButton
               organizeMode={threadsOrganizeMode}
               filterMode={threadsFilterMode}

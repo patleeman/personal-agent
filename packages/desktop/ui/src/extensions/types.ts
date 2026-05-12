@@ -203,6 +203,13 @@ interface ExtensionContextMenuContribution {
   when?: string;
 }
 
+interface ExtensionThreadHeaderActionContribution {
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
+}
+
 interface ExtensionConversationDecoratorContribution {
   id: string;
   component: string;
@@ -240,6 +247,7 @@ interface ExtensionContributions {
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  threadHeaderActions?: ExtensionThreadHeaderActionContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];

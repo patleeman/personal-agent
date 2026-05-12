@@ -998,6 +998,17 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.threadHeaderActions !== undefined) {
+    for (const [index, action] of assertRecordArray(contributes.threadHeaderActions, 'contributes.threadHeaderActions').entries()) {
+      requireString(action.id, `contributes.threadHeaderActions[${index}].id`);
+      requireString(action.component, `contributes.threadHeaderActions[${index}].component`);
+      validateOptionalString(action.title, `contributes.threadHeaderActions[${index}].title`);
+      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
+        throw new Error(`Extension manifest contributes.threadHeaderActions[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.statusBarItems !== undefined) {
     for (const [index, item] of assertRecordArray(contributes.statusBarItems, 'contributes.statusBarItems').entries()) {
       requireString(item.id, `contributes.statusBarItems[${index}].id`);
@@ -1337,6 +1348,7 @@ export function readExtensionSchema() {
       'toolbarActions',
       'conversationDecorators',
       'contextMenus',
+      'threadHeaderActions',
       'statusBarItems',
       'conversationHeaderElements',
     ],

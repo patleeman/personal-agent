@@ -99,33 +99,34 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                        | Purpose                             | Docs                                                                  |
-| ---------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
-| `views`                      | UI surfaces (pages, panels)         | See `docs/views.md`                                                   |
-| `nav`                        | Left sidebar navigation items       |                                                                       |
-| `commands`                   | Command palette commands            |                                                                       |
-| `keybindings`                | Keyboard shortcuts                  |                                                                       |
-| `slashCommands`              | `/command` in composer              |                                                                       |
-| `tools`                      | Agent-callable tools                |                                                                       |
-| `mentions`                   | @-mention providers                 |                                                                       |
-| `skills`                     | Agent Skills (markdown)             |                                                                       |
-| `themes`                     | Color themes                        |                                                                       |
-| `transcriptRenderers`        | Custom tool result rendering        |                                                                       |
-| `promptReferences`           | @-mention resolvers                 |                                                                       |
-| `quickOpen`                  | Quick-open providers                |                                                                       |
-| `settings`                   | Settings schema contributions       | [See below](#settings)                                                |
-| `settingsComponent`          | Component panel in Settings         | [See below](#settings-component-settingscomponent)                    |
-| `topBarElements`             | Top bar indicator icons             | [See below](#top-bar-elements-topbarelements)                         |
-| `conversationHeaderElements` | Badges in conversation header       | [See below](#conversation-header-elements-conversationheaderelements) |
-| `messageActions`             | Hover buttons on messages           | [See below](#message-actions-messageactions)                          |
-| `composerShelves`            | Sections above the composer         | [See below](#composer-shelves-composershelves)                        |
-| `newConversationPanels`      | Panels on the new conversation page | [See below](#new-conversation-panels-newconversationpanels)           |
-| `composerButtons`            | Component buttons beside submit     | [See below](#composer-buttons-composerbuttons)                        |
-| `composerInputTools`         | Component tools beside attachment   | [See below](#composer-input-tools-composerinputtools)                 |
-| `toolbarActions`             | Icon buttons in composer toolbar    | [See below](#toolbar-actions-toolbaractions)                          |
-| `conversationDecorators`     | Badges on conversation list items   | [See below](#conversation-decorators-conversationdecorators)          |
-| `contextMenus`               | Right-click menu items              | [See below](#context-menus-contextmenus)                              |
-| `statusBarItems`             | Labels in the composer status bar   | [See below](#status-bar-items-statusbaritems)                         |
+| Field                        | Purpose                                 | Docs                                                                  |
+| ---------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| `views`                      | UI surfaces (pages, panels)             | See `docs/views.md`                                                   |
+| `nav`                        | Left sidebar navigation items           |                                                                       |
+| `commands`                   | Command palette commands                |                                                                       |
+| `keybindings`                | Keyboard shortcuts                      |                                                                       |
+| `slashCommands`              | `/command` in composer                  |                                                                       |
+| `tools`                      | Agent-callable tools                    |                                                                       |
+| `mentions`                   | @-mention providers                     |                                                                       |
+| `skills`                     | Agent Skills (markdown)                 |                                                                       |
+| `themes`                     | Color themes                            |                                                                       |
+| `transcriptRenderers`        | Custom tool result rendering            |                                                                       |
+| `promptReferences`           | @-mention resolvers                     |                                                                       |
+| `quickOpen`                  | Quick-open providers                    |                                                                       |
+| `settings`                   | Settings schema contributions           | [See below](#settings)                                                |
+| `settingsComponent`          | Component panel in Settings             | [See below](#settings-component-settingscomponent)                    |
+| `topBarElements`             | Top bar indicator icons                 | [See below](#top-bar-elements-topbarelements)                         |
+| `conversationHeaderElements` | Badges in conversation header           | [See below](#conversation-header-elements-conversationheaderelements) |
+| `messageActions`             | Hover buttons on messages               | [See below](#message-actions-messageactions)                          |
+| `composerShelves`            | Sections above the composer             | [See below](#composer-shelves-composershelves)                        |
+| `newConversationPanels`      | Panels on the new conversation page     | [See below](#new-conversation-panels-newconversationpanels)           |
+| `composerButtons`            | Component buttons beside submit         | [See below](#composer-buttons-composerbuttons)                        |
+| `composerInputTools`         | Component tools beside attachment       | [See below](#composer-input-tools-composerinputtools)                 |
+| `toolbarActions`             | Icon buttons in composer toolbar        | [See below](#toolbar-actions-toolbaractions)                          |
+| `conversationDecorators`     | Badges on conversation list items       | [See below](#conversation-decorators-conversationdecorators)          |
+| `contextMenus`               | Right-click menu items                  | [See below](#context-menus-contextmenus)                              |
+| `threadHeaderActions`        | Component buttons in the Threads header | [See below](#thread-header-actions-threadheaderactions)               |
+| `statusBarItems`             | Labels in the composer status bar       | [See below](#status-bar-items-statusbaritems)                         |
 
 ### Views
 
@@ -365,6 +366,21 @@ Conversation list backend handler receives:
   cwd: string;
 }
 ```
+
+### Thread Header Actions (`threadHeaderActions`)
+
+Add compact component buttons beside the Threads sidebar header. Use this for thread-list actions such as importing a session.
+
+```json
+{
+  "id": "import-session",
+  "component": "ImportSessionButton",
+  "title": "Import Session",
+  "priority": 10
+}
+```
+
+The component receives `{ pa, actionContext }`; `actionContext` includes `activeConversationId` and `cwd` when available.
 
 ### Status Bar Items (`statusBarItems`)
 

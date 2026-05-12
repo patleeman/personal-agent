@@ -101,6 +101,7 @@ export interface ExtensionContributions {
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  threadHeaderActions?: ExtensionThreadHeaderActionContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
@@ -167,6 +168,13 @@ export interface ExtensionConversationHeaderContribution {
   id: string;
   component: string;
   label?: string;
+}
+
+export interface ExtensionThreadHeaderActionContribution {
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
 }
 
 export interface ExtensionStatusBarItemContribution {

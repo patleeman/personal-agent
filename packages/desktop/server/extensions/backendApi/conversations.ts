@@ -22,6 +22,7 @@ export {
   resumeSession,
   subscribe as subscribeLiveSession,
 } from '../../conversations/liveSessions.js';
+export { exportConversationSession, importConversationSession } from '../../conversations/sessionExchange.js';
 export { persistTraceContextPointerInspect } from '../../traces/tracePersistence.js';
 export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from '../runtimeAgentHooks.js';
 export { querySessionSuggestedPointerIds } from '@personal-agent/core';
