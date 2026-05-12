@@ -16,6 +16,7 @@ export * from './durable-run-attention.js';
 export * from './deferred-resume.js';
 export * from './alerts.js';
 export * from './app-telemetry-db.js';
+export * from './observability-db.js';
 export * from './trace-db.js';
 export * from './task-callback-bindings.js';
 export * from './conversation-project-links.js';

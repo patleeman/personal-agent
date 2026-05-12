@@ -9,6 +9,7 @@ export {
 export type { ExtensionInstallSummary } from '../extensions/types';
 export { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 export type {
+  AppTelemetryEventRow,
   CacheEfficiencyAggregate,
   ContextPointerUsageResult,
   GatewayConnection,

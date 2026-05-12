@@ -66,6 +66,7 @@ describe('trace-db', () => {
   beforeEach(() => {
     closeTraceDbs();
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
+    rmSync(join(testDir, 'observability'), { recursive: true, force: true });
 
     // Write some test data
     writeTraceStats({

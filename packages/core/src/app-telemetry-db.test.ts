@@ -37,6 +37,7 @@ describe('app-telemetry-db', () => {
     closeAppTelemetryDbs();
     delete process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
+    rmSync(join(testDir, 'observability'), { recursive: true, force: true });
   });
 
   it('writes and queries generic telemetry events', () => {
@@ -72,7 +73,7 @@ describe('app-telemetry-db', () => {
     }
     closeAppTelemetryDbs();
 
-    const db = openSqliteDatabase(join(testDir, 'pi-agent', 'state', 'trace', 'app-telemetry.db'));
+    const db = openSqliteDatabase(join(testDir, 'observability', 'observability.db'));
     const row = db.prepare('SELECT COUNT(*) AS count FROM app_telemetry_events').get() as { count: number };
     db.close();
 

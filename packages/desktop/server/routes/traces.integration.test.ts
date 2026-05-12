@@ -6,7 +6,14 @@
  * Core query logic is tested in packages/core/src/trace-db.test.ts.
  */
 
-import { closeTraceDbs, writeTraceContext, writeTraceStats, writeTraceToolCall } from '@personal-agent/core';
+import {
+  closeAppTelemetryDbs,
+  closeTraceDbs,
+  writeAppTelemetryEvent,
+  writeTraceContext,
+  writeTraceStats,
+  writeTraceToolCall,
+} from '@personal-agent/core';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -57,6 +64,14 @@ describe('traces API integration', () => {
       status: 'ok',
     });
     writeTraceContext({ sessionId: 's1', modelId: 'gpt-4o', totalTokens: 12000, contextWindow: 128000, pct: 9.4 });
+    writeAppTelemetryEvent({
+      source: 'server',
+      category: 'session_integrity',
+      name: 'prompt_cache_miss',
+      sessionId: 's1',
+      metadata: { oldSize: 10, newSize: 12, cacheLoader: 'fast-tail' },
+    });
+    writeAppTelemetryEvent({ source: 'server', category: 'api', name: 'request', route: '/health' });
 
     const router = {
       get: vi.fn((path: string, handler: any) => {
@@ -70,6 +85,7 @@ describe('traces API integration', () => {
 
   afterAll(() => {
     closeTraceDbs();
+    closeAppTelemetryDbs();
     if (originalRoot) process.env.PERSONAL_AGENT_STATE_ROOT = originalRoot;
     else delete process.env.PERSONAL_AGENT_STATE_ROOT;
     rmSync(testDir, { recursive: true, force: true });
@@ -107,6 +123,7 @@ describe('traces API integration', () => {
     expect(routes).toContain('GET /api/traces/tokens-daily');
     expect(routes).toContain('GET /api/traces/tool-flow');
     expect(routes).toContain('GET /api/traces/cost-by-conversation');
+    expect(routes).toContain('GET /api/traces/session-integrity');
   });
 
   it('summary returns aggregates', async () => {
@@ -160,6 +177,13 @@ describe('traces API integration', () => {
     expect(res.body.failureTrajectories).toBeInstanceOf(Array);
     expect(res.body.failureTrajectories.length).toBeGreaterThanOrEqual(1);
     expect(res.body.failureTrajectories[0].previousCalls).toEqual(['bash:git']);
+  });
+
+  it('session-integrity returns app telemetry from the observability database', async () => {
+    const res = await call('GET', '/api/traces/session-integrity');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ category: 'session_integrity', name: 'prompt_cache_miss', sessionId: 's1' });
   });
 
   it('tokens-daily returns daily data', async () => {

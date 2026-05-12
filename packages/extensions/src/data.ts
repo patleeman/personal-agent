@@ -1,5 +1,6 @@
 export type AskUserQuestionAnswers = unknown;
 export type AskUserQuestionPresentation = unknown;
+export type AppTelemetryEventRow = unknown;
 export type AutoModeSummary = unknown;
 export type CacheEfficiencyAggregate = unknown;
 export type ContextPointerUsageResult = unknown;

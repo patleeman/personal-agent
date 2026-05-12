@@ -9,10 +9,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'fs';
 
-import { getStateRoot } from './runtime/paths.js';
+import { ensureObservabilityDbDir, resolveLegacyTraceDbPath, resolveObservabilityDbPath } from './observability-db.js';
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite.js';
 import { applyMigrations, type Migration } from './sqlite-migrations.js';
 
@@ -214,12 +213,44 @@ export function closeTraceDbs(): void {
   dbCache.clear();
 }
 
-function resolveTraceDbDir(stateRoot?: string): string {
-  return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace');
+function resolveTraceDbPath(stateRoot?: string): string {
+  return resolveObservabilityDbPath(stateRoot);
 }
 
-function resolveTraceDbPath(stateRoot?: string): string {
-  return join(resolveTraceDbDir(stateRoot), 'trace.db');
+function importLegacyTraceRows(db: SqliteDatabase, stateRoot?: string): void {
+  const legacyPath = resolveLegacyTraceDbPath(stateRoot);
+  if (!existsSync(legacyPath) || legacyPath === resolveTraceDbPath(stateRoot)) return;
+
+  const imported = db.prepare(`SELECT value FROM observability_imports WHERE key = ?`).get('trace') as { value?: string } | undefined;
+  if (imported?.value === legacyPath) return;
+
+  try {
+    db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_trace`);
+    for (const table of [
+      'trace_stats',
+      'trace_tool_calls',
+      'trace_context',
+      'trace_compactions',
+      'trace_auto_mode',
+      'trace_suggested_context',
+      'trace_context_pointer_inspect',
+    ]) {
+      db.exec(`INSERT OR IGNORE INTO ${table} SELECT * FROM legacy_trace.${table}`);
+    }
+    db.prepare(`INSERT OR REPLACE INTO observability_imports (key, value, imported_at) VALUES (?, ?, ?)`).run(
+      'trace',
+      legacyPath,
+      new Date().toISOString(),
+    );
+  } catch {
+    // Legacy import is best-effort; new writes still use the unified DB.
+  } finally {
+    try {
+      db.exec(`DETACH DATABASE legacy_trace`);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 // Prune rows older than this many days on each DB open
@@ -230,10 +261,7 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
   const cached = dbCache.get(path);
   if (cached) return cached;
 
-  const dir = resolveTraceDbDir(stateRoot);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  ensureObservabilityDbDir(stateRoot);
 
   const db = openSqliteDatabase(path);
 
@@ -242,9 +270,11 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
 
   // Apply baseline schema (all IF NOT EXISTS — safe to run on any DB)
   db.exec(SCHEMA);
+  db.exec(`CREATE TABLE IF NOT EXISTS observability_imports (key TEXT PRIMARY KEY, value TEXT NOT NULL, imported_at TEXT NOT NULL)`);
 
   // Apply versioned migrations tracked via PRAGMA user_version
   applyMigrations(db, 'trace', TRACE_MIGRATIONS);
+  importLegacyTraceRows(db, stateRoot);
 
   // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {

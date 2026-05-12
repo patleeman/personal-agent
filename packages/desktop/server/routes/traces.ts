@@ -7,6 +7,7 @@
 
 import {
   queryAgentLoop,
+  queryAppTelemetryEvents,
   queryAutoMode,
   queryCacheEfficiency,
   queryCacheEfficiencyAggregate,
@@ -186,6 +187,17 @@ export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patc
       res.json(result);
     } catch (err) {
       logError('traces context-pointers error', { message: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/traces/session-integrity', (req, res) => {
+    try {
+      const since = parseRangeParam(req.query.range);
+      const events = queryAppTelemetryEvents({ since, limit: 200 }).filter((event) => event.category === 'session_integrity');
+      res.json(events);
+    } catch (err) {
+      logError('traces session-integrity error', { message: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ error: String(err) });
     }
   });

@@ -1379,6 +1379,24 @@ export interface UncommittedDiffResult {
 
 // ── Traces / Telemetry ─────────────────────────────────────────────────────
 
+export type AppTelemetrySource = 'server' | 'renderer' | 'agent' | 'system';
+
+export interface AppTelemetryEventRow {
+  id: string;
+  ts: string;
+  source: AppTelemetrySource;
+  category: string;
+  name: string;
+  sessionId: string | null;
+  runId: string | null;
+  route: string | null;
+  status: number | null;
+  durationMs: number | null;
+  count: number | null;
+  value: number | null;
+  metadataJson: string | null;
+}
+
 export interface TraceSummary {
   activeSessions: number;
   runsToday: number;

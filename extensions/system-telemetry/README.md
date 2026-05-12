@@ -10,11 +10,13 @@ This extension owns the product behavior documented below. Keep extension-specif
 
 Telemetry explains how Personal Agent records local trace data for the desktop monitoring page.
 
-The desktop app writes turn stats, context pressure, compactions, and tool calls into the local SQLite trace database. The Traces page reads aggregated views from `/api/traces/*` endpoints; writes are fire-and-forget through the trace worker so conversation execution does not wait on analytics.
+The desktop app writes turn stats, context pressure, compactions, tool calls, logs, app events, and lightweight metrics into one bounded local SQLite observability database at `observability/observability.db`. The Traces page reads aggregated views from `/api/traces/*` endpoints; writes are fire-and-forget through the trace and telemetry queues so conversation execution does not wait on analytics.
+
+Legacy `pi-agent/state/trace/trace.db` and `pi-agent/state/trace/app-telemetry.db` files are imported into the unified database once per state root, then left untouched.
 
 ## Application telemetry
 
-Application telemetry is a generic local event sink for signals that are useful to collect now before the UI has a first-class chart. It writes to `pi-agent/state/trace/app-telemetry.db` through `writeAppTelemetryEvent` and stores source, category, name, session/run ids, route, status, duration, counts, values, and bounded JSON metadata.
+Application telemetry is a generic local event sink for signals that are useful to collect now before the UI has a first-class chart. It writes to the shared observability database through `writeAppTelemetryEvent` and stores source, category, name, session/run ids, route, status, duration, counts, values, and bounded JSON metadata.
 
 Current producers include server API request timing, server warn/error logs, server app events, renderer route views/leaves, renderer visibility changes, renderer crashes/rejections, conversation stream connect/snapshot/reconnect events, conversation prompt submissions, tool execution detail, and agent loop lifecycle/latency/outcome events. The endpoint for renderer events is `POST /api/telemetry/event`; it is intentionally fire-and-forget and must never block or break the app. If the in-process app telemetry queue overflows, the app records a `system/telemetry/queue_drop` event before shedding old buffered entries.
 

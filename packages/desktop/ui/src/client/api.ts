@@ -12,6 +12,7 @@ import type {
 } from '../extensions/types';
 import type {
   AppStatus,
+  AppTelemetryEventRow,
   CacheEfficiencyAggregate,
   CacheEfficiencyPoint,
   ContextPointerUsageResult,
@@ -1487,6 +1488,7 @@ export const api = {
   tracesSystemPrompt: (range?: string) =>
     get<{ series: SystemPromptPoint[]; aggregate: SystemPromptAggregate }>(`/traces/system-prompt${range ? `?range=${range}` : ''}`),
   tracesContextPointers: (range?: string) => get<ContextPointerUsageResult>(`/traces/context-pointers${range ? `?range=${range}` : ''}`),
+  tracesSessionIntegrity: (range?: string) => get<AppTelemetryEventRow[]>(`/traces/session-integrity${range ? `?range=${range}` : ''}`),
 
   // ── Unified settings store ──────────────────────────────────────
 

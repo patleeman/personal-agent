@@ -4,6 +4,7 @@
  */
 
 import type {
+  AppTelemetryEventRow,
   AutoModeSummary,
   CacheEfficiencyAggregate,
   ContextPointerUsageResult,
@@ -45,6 +46,7 @@ export interface TracesData {
   cacheEfficiency: CacheEfficiencyAggregate | null;
   systemPrompt: SystemPromptAggregate | null;
   contextPointers: ContextPointerUsageResult | null;
+  sessionIntegrity: AppTelemetryEventRow[] | null;
   loading: boolean;
   error: string | null;
 }
@@ -65,6 +67,7 @@ const EMPTY: TracesData = {
   cacheEfficiency: null,
   systemPrompt: null,
   contextPointers: null,
+  sessionIntegrity: null,
   loading: true,
   error: null,
 };
@@ -121,7 +124,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         cacheEfficiency: cacheEff.aggregate,
         systemPrompt: sysPrompt.aggregate,
         contextPointers,
-        sessionIntegrity: sessionIntegrity as AppTelemetryEventRow[],
+        sessionIntegrity,
         loading: false,
         error: null,
       });

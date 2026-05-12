@@ -6,10 +6,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
-import { getStateRoot } from './runtime/paths.js';
+import { ensureObservabilityDbDir, resolveLegacyAppTelemetryDbPath, resolveObservabilityDbPath } from './observability-db.js';
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite.js';
 import { applyMigrations, type Migration } from './sqlite-migrations.js';
 
@@ -52,12 +51,42 @@ export function closeAppTelemetryDbs(): void {
   writeCounts.clear();
 }
 
-function resolveAppTelemetryDbDir(stateRoot?: string): string {
-  return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace');
+function resolveAppTelemetryDbPath(stateRoot?: string): string {
+  return resolveObservabilityDbPath(stateRoot);
 }
 
-function resolveAppTelemetryDbPath(stateRoot?: string): string {
-  return join(resolveAppTelemetryDbDir(stateRoot), 'app-telemetry.db');
+function importLegacyAppTelemetryEvents(db: SqliteDatabase, stateRoot?: string): void {
+  const legacyPath = resolveLegacyAppTelemetryDbPath(stateRoot);
+  if (!existsSync(legacyPath) || legacyPath === resolveAppTelemetryDbPath(stateRoot)) return;
+
+  const imported = db.prepare(`SELECT value FROM observability_imports WHERE key = ?`).get('app-telemetry') as
+    | { value?: string }
+    | undefined;
+  if (imported?.value === legacyPath) return;
+
+  try {
+    db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_app_telemetry`);
+    db.exec(`
+      INSERT OR IGNORE INTO app_telemetry_events (
+        id, ts, source, category, name, session_id, run_id, route, status, duration_ms, count, value, metadata_json
+      )
+      SELECT id, ts, source, category, name, session_id, run_id, route, status, duration_ms, count, value, metadata_json
+      FROM legacy_app_telemetry.app_telemetry_events
+    `);
+    db.prepare(`INSERT OR REPLACE INTO observability_imports (key, value, imported_at) VALUES (?, ?, ?)`).run(
+      'app-telemetry',
+      legacyPath,
+      new Date().toISOString(),
+    );
+  } catch {
+    // Legacy import is best-effort; new writes still use the unified DB.
+  } finally {
+    try {
+      db.exec(`DETACH DATABASE legacy_app_telemetry`);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 function getAppTelemetryDb(stateRoot?: string): SqliteDatabase {
@@ -65,12 +94,13 @@ function getAppTelemetryDb(stateRoot?: string): SqliteDatabase {
   const cached = dbCache.get(path);
   if (cached) return cached;
 
-  const dir = resolveAppTelemetryDbDir(stateRoot);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  ensureObservabilityDbDir(stateRoot);
 
   const db = openSqliteDatabase(path);
   db.exec(SCHEMA);
+  db.exec(`CREATE TABLE IF NOT EXISTS observability_imports (key TEXT PRIMARY KEY, value TEXT NOT NULL, imported_at TEXT NOT NULL)`);
   applyMigrations(db, 'app-telemetry-db', APP_TELEMETRY_MIGRATIONS);
+  importLegacyAppTelemetryEvents(db, stateRoot);
   dbCache.set(path, db);
   return db;
 }
