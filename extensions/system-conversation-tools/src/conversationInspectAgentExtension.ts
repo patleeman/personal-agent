@@ -9,7 +9,7 @@ import {
   executeConversationInspect,
   persistTraceContextPointerInspect,
   querySessionSuggestedPointerIds,
-} from '@personal-agent/extensions/backend';
+} from '@personal-agent/extensions/backend/conversations';
 import { Type } from '@sinclair/typebox';
 
 const ConversationInspectToolParams = Type.Object({

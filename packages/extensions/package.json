@@ -39,6 +39,46 @@
       "types": "./dist/backend.d.ts",
       "default": "./dist/backend.js"
     },
+    "./backend/automations": {
+      "types": "./dist/backend/automations.d.ts",
+      "default": "./dist/backend/automations.js"
+    },
+    "./backend/browser": {
+      "types": "./dist/backend/browser.d.ts",
+      "default": "./dist/backend/browser.js"
+    },
+    "./backend/conversations": {
+      "types": "./dist/backend/conversations.d.ts",
+      "default": "./dist/backend/conversations.js"
+    },
+    "./backend/events": {
+      "types": "./dist/backend/events.d.ts",
+      "default": "./dist/backend/events.js"
+    },
+    "./backend/images": {
+      "types": "./dist/backend/images.d.ts",
+      "default": "./dist/backend/images.js"
+    },
+    "./backend/knowledge": {
+      "types": "./dist/backend/knowledge.d.ts",
+      "default": "./dist/backend/knowledge.js"
+    },
+    "./backend/knowledgeVault": {
+      "types": "./dist/backend/knowledgeVault.d.ts",
+      "default": "./dist/backend/knowledgeVault.js"
+    },
+    "./backend/mcp": {
+      "types": "./dist/backend/mcp.d.ts",
+      "default": "./dist/backend/mcp.js"
+    },
+    "./backend/runs": {
+      "types": "./dist/backend/runs.d.ts",
+      "default": "./dist/backend/runs.js"
+    },
+    "./backend/runtime": {
+      "types": "./dist/backend/runtime.d.ts",
+      "default": "./dist/backend/runtime.js"
+    },
     "./backend/artifacts": {
       "types": "./dist/backend/artifacts.d.ts",
       "default": "./dist/backend/artifacts.js"

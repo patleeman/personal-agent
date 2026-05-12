@@ -14,7 +14,7 @@ import {
   promptSession,
   type QueuedPromptPreview,
   scheduleDeferredResumeForSessionFile,
-} from '@personal-agent/extensions/backend';
+} from '@personal-agent/extensions/backend/automations';
 
 const DELIVER_AS_VALUES = ['steer', 'followUp'] as const;
 type DeliverAs = (typeof DELIVER_AS_VALUES)[number];

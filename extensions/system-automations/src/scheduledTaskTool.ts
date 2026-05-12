@@ -22,7 +22,7 @@ import {
   type StoredAutomation,
   type TaskRuntimeEntry,
   updateStoredAutomation,
-} from '@personal-agent/extensions/backend';
+} from '@personal-agent/extensions/backend/automations';
 import { Type } from '@sinclair/typebox';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;

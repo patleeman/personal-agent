@@ -1,20 +1,22 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import {
   applyScheduledTaskThreadBinding,
-  cancelDurableRun,
   createStoredAutomation,
+  parseDeferredResumeDelayMs,
+  pingDaemon,
+  setTaskCallbackBinding,
+} from '@personal-agent/extensions/backend/automations';
+import {
+  cancelDurableRun,
   followUpDurableRun,
   getDurableRun,
   getDurableRunLog,
   invalidateAppTopics,
   listDurableRuns,
-  parseDeferredResumeDelayMs,
   persistAppTelemetryEvent,
-  pingDaemon,
   rerunDurableRun,
-  setTaskCallbackBinding,
   startBackgroundRun,
-} from '@personal-agent/extensions/backend';
+} from '@personal-agent/extensions/backend/runs';
 import { Type } from '@sinclair/typebox';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;

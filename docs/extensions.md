@@ -501,7 +501,7 @@ The `pa` client provides:
 
 See `packages/extensions/src/index.ts` for the full API.
 
-Backend-only host APIs that should stay narrow can also be exposed through focused SDK subpaths such as `@personal-agent/extensions/backend/artifacts`. Prefer a focused subpath over the broad backend barrel when bundling a system extension that only needs one backend service.
+Backend-only host APIs that should stay narrow can also be exposed through focused SDK subpaths such as `@personal-agent/extensions/backend/artifacts`, `/automations`, `/browser`, `/conversations`, `/images`, `/knowledge`, `/knowledgeVault`, `/mcp`, `/runs`, and `/runtime`. Prefer a focused subpath over the broad backend barrel when bundling a system extension that only needs one backend service.
 
 ## Main page layout
 

@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { normalizeGeneratedConversationTitle } from '@personal-agent/extensions/backend';
+import { normalizeGeneratedConversationTitle } from '@personal-agent/extensions/backend/conversations';
 import { Type } from '@sinclair/typebox';
 
 const ConversationTitleToolParams = Type.Object({

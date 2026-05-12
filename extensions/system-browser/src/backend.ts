@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { getWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '@personal-agent/extensions/backend';
+import { getWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '@personal-agent/extensions/backend/browser';
 import { Type } from '@sinclair/typebox';
 
 const BrowserToolNames = ['browser_snapshot', 'browser_cdp', 'browser_screenshot'] as const;

@@ -1,4 +1,5 @@
-import { knowledgeVault, readKnowledgeState, syncKnowledgeState, updateKnowledgeState } from '@personal-agent/extensions/backend';
+import { readKnowledgeState, syncKnowledgeState, updateKnowledgeState } from '@personal-agent/extensions/backend/knowledge';
+import { knowledgeVault } from '@personal-agent/extensions/backend/knowledgeVault';
 
 export function readState() {
   return readKnowledgeState();
