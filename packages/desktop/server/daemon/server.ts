@@ -1,6 +1,6 @@
 import { hydrateProcessEnvFromShell, resolveChildProcessEnv } from '@personal-agent/core';
 import { type ChildProcess, spawn } from 'child_process';
-import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { closeSync, cpSync, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
 
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from '../automation/tasks/index.js';
@@ -177,6 +177,29 @@ function isDaemonConfig(value: DaemonConfig | PersonalAgentDaemonOptions): value
   return 'modules' in value && 'queue' in value && 'ipc' in value;
 }
 
+function readExistingDaemonLockPid(lockPath: string): number | undefined {
+  try {
+    const firstLine = readFileSync(lockPath, 'utf-8').split('\n')[0]?.trim();
+    if (!firstLine) {
+      return undefined;
+    }
+
+    const pid = Number(firstLine);
+    return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
 export class PersonalAgentDaemon {
   private readonly config: DaemonConfig;
   private readonly paths: DaemonPaths;
@@ -191,6 +214,7 @@ export class PersonalAgentDaemon {
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
+  private lockFd?: number;
   private server?: Server;
   private companionServer?: DaemonCompanionServer;
   private timerHandles: NodeJS.Timeout[] = [];
@@ -232,6 +256,41 @@ export class PersonalAgentDaemon {
     return this.paths.socketPath;
   }
 
+  private acquireProcessLock(): void {
+    if (this.lockFd !== undefined) {
+      return;
+    }
+
+    const lockPath = `${this.paths.pidFile}.lock`;
+    try {
+      this.lockFd = openSync(lockPath, 'wx');
+      writeFileSync(this.lockFd, `${String(this.pid)}\n${new Date().toISOString()}\n`);
+      return;
+    } catch {
+      const existingPid = readExistingDaemonLockPid(lockPath);
+      if (existingPid && isProcessAlive(existingPid)) {
+        throw new Error(`personal-agentd is already running with pid=${String(existingPid)}; refusing to start a second daemon`);
+      }
+
+      rmSync(lockPath, { force: true });
+      this.lockFd = openSync(lockPath, 'wx');
+      writeFileSync(this.lockFd, `${String(this.pid)}\n${new Date().toISOString()}\n`);
+    }
+  }
+
+  private releaseProcessLock(): void {
+    if (this.lockFd !== undefined) {
+      try {
+        closeSync(this.lockFd);
+      } catch {
+        // Best-effort cleanup during shutdown.
+      }
+      this.lockFd = undefined;
+    }
+
+    rmSync(`${this.paths.pidFile}.lock`, { force: true });
+  }
+
   async start(): Promise<void> {
     if (this.running) {
       return;
@@ -240,41 +299,48 @@ export class PersonalAgentDaemon {
     this.stopping = false;
     ensureDaemonDirectories(this.paths);
     mkdirSync(this.runsRoot, { recursive: true, mode: 0o700 });
-    this.prepareSocket();
-    writeFileSync(this.paths.pidFile, String(this.pid));
+    this.acquireProcessLock();
 
-    await this.recoverInterruptedBackgroundRuns();
-    this.logDurableRunRecoverySummary('startup');
+    try {
+      this.prepareSocket();
+      writeFileSync(this.paths.pidFile, String(this.pid));
 
-    for (const moduleRuntime of this.modules) {
-      await moduleRuntime.module.start(this.createModuleContext(moduleRuntime.module.name));
-      this.registerModuleSubscriptions(moduleRuntime);
-      this.registerModuleTimers(moduleRuntime.module);
-    }
+      await this.recoverInterruptedBackgroundRuns();
+      this.logDurableRunRecoverySummary('startup');
 
-    this.server = createServer((socket) => {
-      this.attachConnection(socket);
-    });
+      for (const moduleRuntime of this.modules) {
+        await moduleRuntime.module.start(this.createModuleContext(moduleRuntime.module.name));
+        this.registerModuleSubscriptions(moduleRuntime);
+        this.registerModuleTimers(moduleRuntime.module);
+      }
 
-    await new Promise<void>((resolve, reject) => {
-      this.server?.once('error', reject);
-      this.server?.listen(this.paths.socketPath, () => {
-        resolve();
+      this.server = createServer((socket) => {
+        this.attachConnection(socket);
       });
-    });
 
-    this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
-    await this.companionServer.start();
-    const fallbackPort = this.companionServer.getPortFallbackFrom();
-    if (fallbackPort) {
-      this.log(
-        'warn',
-        `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`,
-      );
+      await new Promise<void>((resolve, reject) => {
+        this.server?.once('error', reject);
+        this.server?.listen(this.paths.socketPath, () => {
+          resolve();
+        });
+      });
+
+      this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+      await this.companionServer.start();
+      const fallbackPort = this.companionServer.getPortFallbackFrom();
+      if (fallbackPort) {
+        this.log(
+          'warn',
+          `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`,
+        );
+      }
+
+      this.running = true;
+      this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
+    } catch (error) {
+      this.releaseProcessLock();
+      throw error;
     }
-
-    this.running = true;
-    this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
   }
 
   async stop(): Promise<void> {
@@ -322,6 +388,8 @@ export class PersonalAgentDaemon {
     if (existsSync(this.paths.pidFile)) {
       rmSync(this.paths.pidFile, { force: true });
     }
+
+    this.releaseProcessLock();
 
     this.server = undefined;
     this.running = false;
