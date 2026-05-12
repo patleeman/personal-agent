@@ -48,6 +48,25 @@
         "title": "Copy Deeplink",
         "action": "copyDeeplink",
         "surface": "conversationList"
+      },
+      {
+        "id": "cycle-thread-color",
+        "title": "Cycle Thread Color",
+        "action": "cycleThreadColor",
+        "surface": "conversationList"
+      },
+      {
+        "id": "clear-thread-color",
+        "title": "Clear Thread Color",
+        "action": "clearThreadColor",
+        "surface": "conversationList"
+      }
+    ],
+    "activityTreeItemStyles": [
+      {
+        "id": "thread-colors",
+        "provider": "getThreadColorStyles",
+        "priority": 100
       }
     ],
     "commands": [{ "id": "open-thread-palette", "title": "Open thread palette", "action": "commandPalette:threads" }],
@@ -82,9 +101,24 @@
         "id": "copyDeeplink",
         "handler": "copyDeeplink",
         "title": "Copy deeplink"
+      },
+      {
+        "id": "cycleThreadColor",
+        "handler": "cycleThreadColor",
+        "title": "Cycle thread color"
+      },
+      {
+        "id": "clearThreadColor",
+        "handler": "clearThreadColor",
+        "title": "Clear thread color"
+      },
+      {
+        "id": "getThreadColorStyles",
+        "handler": "getThreadColorStyles",
+        "title": "Get thread color styles"
       }
     ],
     "agentExtension": "createConversationToolsAgentExtension"
   },
-  "permissions": ["conversations:readwrite", "ui:notify"]
+  "permissions": ["conversations:readwrite", "storage:readwrite", "ui:notify"]
 }
