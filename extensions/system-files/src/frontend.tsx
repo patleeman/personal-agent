@@ -27,6 +27,18 @@ export function WorkspaceFilesPanel({ context }: ExtensionSurfaceProps) {
     },
     [setSearchParams],
   );
+  const handleCloseFile = useCallback(
+    (path: string | null) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        if (!path || next.get(WORKSPACE_FILE_PARAM) === path) {
+          next.delete(WORKSPACE_FILE_PARAM);
+        }
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
 
   if (!context.cwd) {
     return <div className="px-4 py-5 text-[12px] text-dim">Open a local conversation to browse its workspace.</div>;
@@ -39,6 +51,7 @@ export function WorkspaceFilesPanel({ context }: ExtensionSurfaceProps) {
         railOnly
         activeFilePath={activeFilePath}
         onOpenFile={handleOpenFile}
+        onCloseFile={handleCloseFile}
         onDraftPrompt={(prompt) => {
           window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
         }}

@@ -38,6 +38,7 @@ interface WorkspaceExplorerProps {
   cwd: string | null;
   onDraftPrompt: (prompt: string) => void;
   onOpenFile?: (file: { cwd: string; path: string }) => void;
+  onCloseFile?: (path: string | null) => void;
   activeFilePath?: string | null;
   railOnly?: boolean;
 }
@@ -738,7 +739,7 @@ function WorkspaceTreeBranch(props: Parameters<typeof WorkspaceTreeRow>[0]) {
   return <WorkspaceTreeRow {...props} />;
 }
 
-export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePath = null, railOnly = false }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, onCloseFile, activeFilePath = null, railOnly = false }: WorkspaceExplorerProps) {
   const { theme } = useTheme();
   const [open, setOpen] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_OPEN_KEY, true));
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
@@ -931,14 +932,20 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
         writeWorkspaceOpenFiles(cwd, next);
         return next;
       });
+      if (activeFilePath === path) {
+        onCloseFile?.(path);
+      }
     },
-    [cwd],
+    [activeFilePath, cwd, onCloseFile],
   );
 
   const closeAllWorkspaceFiles = useCallback(() => {
     setOpenFilePaths([]);
     writeWorkspaceOpenFiles(cwd, []);
-  }, [cwd]);
+    if (activeFilePath) {
+      onCloseFile?.(null);
+    }
+  }, [activeFilePath, cwd, onCloseFile]);
 
   const [createPathPrompt, setCreatePathPrompt] = useState<{ kind: 'file' | 'folder'; directory: string } | null>(null);
   const [movePathPrompt, setMovePathPrompt] = useState<WorkspaceEntry | null>(null);
