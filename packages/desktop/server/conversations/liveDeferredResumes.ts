@@ -121,7 +121,12 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
           }
 
           try {
-            const deferredResumeBehavior = readyEntry.behavior ?? (liveEntry.session.isStreaming ? ('followUp' as const) : undefined);
+            const requestedDeferredResumeBehavior =
+              readyEntry.behavior ?? (liveEntry.session.isStreaming ? ('followUp' as const) : undefined);
+            const deferredResumeBehavior =
+              requestedDeferredResumeBehavior === 'followUp' && !liveEntry.session.isStreaming
+                ? undefined
+                : requestedDeferredResumeBehavior;
             const promptDelivery = buildPromptDeliveryForDeferredResume(readyEntry);
             for (const message of promptDelivery.contextMessages) {
               await queuePromptContext(session.id, message.customType, message.content);

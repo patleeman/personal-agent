@@ -189,6 +189,49 @@ describe('createLiveDeferredResumeFlusher', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('starts idle deferred resumes even when they were scheduled as follow-ups', async () => {
+    const ready = { ...createReadyResume(), behavior: 'followUp' as const };
+    getLiveSessionsMock.mockReturnValue([
+      {
+        id: 'conv-1',
+        cwd: '/repo',
+        sessionFile: '/tmp/session-1.jsonl',
+        title: 'Conversation 1',
+        isStreaming: false,
+        hasPendingHiddenTurn: false,
+      },
+    ]);
+    liveRegistry.set('conv-1', {
+      cwd: '/repo',
+      title: 'Conversation 1',
+      session: {
+        sessionFile: '/tmp/session-1.jsonl',
+        isStreaming: false,
+      },
+    });
+    activateDueDeferredResumesForSessionFileMock.mockReturnValue([]);
+    listDeferredResumesForSessionFileMock.mockReturnValue([ready]);
+    completeDeferredResumeForSessionFileMock.mockReturnValue(ready);
+
+    const flush = createLiveDeferredResumeFlusher({
+      getCurrentProfile: () => 'datadog',
+      getStateRoot: () => '/state',
+      resolveDaemonRoot: () => '/daemon',
+      publishConversationSessionMetaChanged: vi.fn(),
+    });
+
+    await flush();
+
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingOperation: expect.not.objectContaining({
+          behavior: 'followUp',
+        }),
+      }),
+    );
+    expect(promptSessionMock).toHaveBeenCalledWith('conv-1', 'Continue from here.', undefined);
+  });
+
   it('keeps background run callback details hidden behind a clean visible prompt', async () => {
     const ready = {
       ...createReadyResume('background-run-resume-1'),
