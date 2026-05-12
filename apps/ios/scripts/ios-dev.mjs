@@ -550,6 +550,88 @@ async function createHeadlessCompanionRuntime(localApi) {
       return parseDataUrlAsset(await localApi.readDesktopConversationAttachmentAsset(input));
     },
 
+    async listKnowledgeEntries(directoryId) {
+      return invokeLocalApi({
+        method: 'GET',
+        path: `/api/vault/tree${directoryId ? `?dir=${encodeURIComponent(directoryId)}` : ''}`,
+      });
+    },
+
+    async searchKnowledge(input) {
+      const query = input.query?.trim() ?? '';
+      const limit = Math.min(50, Math.max(1, Number(input.limit ?? 20) || 20));
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (query) {
+        params.set('q', query);
+      }
+      return invokeLocalApi({
+        method: 'GET',
+        path: `/api/vault/note-search?${params.toString()}`,
+      });
+    },
+
+    async readKnowledgeFile(fileId) {
+      return invokeLocalApi({
+        method: 'GET',
+        path: `/api/vault/file?id=${encodeURIComponent(fileId)}`,
+      });
+    },
+
+    async writeKnowledgeFile(input) {
+      return invokeLocalApi({
+        method: 'PUT',
+        path: '/api/vault/file',
+        body: {
+          id: input.fileId,
+          content: input.content,
+        },
+      });
+    },
+
+    async createKnowledgeFolder(folderId) {
+      return invokeLocalApi({
+        method: 'POST',
+        path: '/api/vault/folder',
+        body: { id: folderId },
+      });
+    },
+
+    async renameKnowledgeEntry(input) {
+      return invokeLocalApi({
+        method: 'POST',
+        path: '/api/vault/rename',
+        body: input,
+      });
+    },
+
+    async deleteKnowledgeEntry(id) {
+      return invokeLocalApi({
+        method: 'DELETE',
+        path: `/api/vault/file?id=${encodeURIComponent(id)}`,
+      });
+    },
+
+    async createKnowledgeImageAsset(input) {
+      const safeFileName = input.fileName?.trim() || 'image.png';
+      const mimeType = input.mimeType?.trim() || 'image/png';
+      return invokeLocalApi({
+        method: 'POST',
+        path: '/api/vault/image',
+        body: {
+          filename: safeFileName,
+          dataUrl: `data:${mimeType};base64,${input.dataBase64.trim()}`,
+        },
+      });
+    },
+
+    async importKnowledge(input) {
+      return invokeLocalApi({
+        method: 'POST',
+        path: '/api/vault/share-import',
+        body: input,
+      });
+    },
+
     async cancelConversationDeferredResume(input) {
       return localApi.cancelDesktopConversationDeferredResume(input);
     },

@@ -3697,6 +3697,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let runs = try await client.listRuns()
         XCTAssertNotNil(runs)
 
+        let knowledgeQaFolder = "Inbox/ios-live-qa-\(UUID().uuidString.lowercased())"
+        let knowledgeQaFile = "\(knowledgeQaFolder)/smoke.md"
+        _ = try await client.listKnowledgeEntries(directoryId: nil)
+        let createdFolder = try await client.createKnowledgeFolder(folderId: knowledgeQaFolder)
+        XCTAssertEqual(createdFolder.kind, "folder")
+        let createdNote = try await client.writeKnowledgeFile(fileId: knowledgeQaFile, content: "# iOS live QA\n\nCOMPANION-KNOWLEDGE-OK\n")
+        XCTAssertEqual(createdNote.id, knowledgeQaFile)
+        let folderEntries = try await client.listKnowledgeEntries(directoryId: knowledgeQaFolder)
+        XCTAssertTrue(folderEntries.entries.contains(where: { $0.id == knowledgeQaFile }))
+        let readNote = try await client.readKnowledgeFile(fileId: knowledgeQaFile)
+        XCTAssertTrue(readNote.content.contains("COMPANION-KNOWLEDGE-OK"))
+        let searchResults = try await client.searchKnowledge(query: "COMPANION-KNOWLEDGE-OK", limit: 5)
+        XCTAssertTrue(searchResults.results.contains(where: { $0.id == knowledgeQaFile }))
+        let renamedNote = try await client.renameKnowledgeEntry(id: knowledgeQaFile, newName: "smoke-renamed.md", parentId: nil)
+        XCTAssertTrue(renamedNote.id.hasSuffix("smoke-renamed.md"))
+        try await client.deleteKnowledgeEntry(id: knowledgeQaFolder + "/")
+
         let deviceState = try await client.readDeviceAdminState()
         XCTAssertTrue(deviceState.devices.contains(where: { $0.id == paired.device.id }))
 

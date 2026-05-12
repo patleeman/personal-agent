@@ -177,6 +177,7 @@ The test target includes a real-host round-trip that:
 - pairs against a live companion host
 - creates a conversation
 - creates and downloads an attachment
+- lists, creates, reads, searches, renames, and deletes a Knowledge note
 - fetches real conversation bootstrap state over the companion socket
 
 Fast path from the repo root:
@@ -230,4 +231,6 @@ PA_IOS_BOOTSTRAP_DEVICE_ID=device_...
 PA_IOS_BOOTSTRAP_DEVICE_LABEL=iPhone Simulator
 ```
 
-When these are present, the app inserts that host into local storage and stores the bearer token in Keychain so it is ready to pick from the host chooser.
+When these are present, the app inserts that host into local storage, stores the bearer token in Keychain, and auto-connects to the host for simulator QA.
+
+Simulator QA can also jump directly to a tab with `PA_IOS_AUTO_SELECT_TAB=chat|knowledge|archived|automations|settings`, open the first live conversation with `PA_IOS_AUTO_OPEN_FIRST_CONVERSATION=1`, or open a Knowledge note with `PA_IOS_AUTO_OPEN_KNOWLEDGE_NOTE=<file-id>`.

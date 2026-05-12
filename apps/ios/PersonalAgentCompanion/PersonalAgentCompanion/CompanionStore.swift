@@ -50,6 +50,7 @@ final class CompanionAppModel: ObservableObject {
         seedMockHostIfNeeded()
         seedBootstrapHostIfNeeded()
         bootstrapInitialSelection()
+        applyDebugKnowledgeNavigationIfNeeded()
         Task {
             await processPendingKnowledgeSharesIfPossible()
         }
@@ -296,15 +297,21 @@ final class CompanionAppModel: ObservableObject {
         guard let value = defaults.string(forKey: activeHostStorageKey), let id = UUID(uuidString: value), hosts.contains(where: { $0.id == id }) else {
             activeHostId = hosts.first?.id
             persistHosts()
-            autoConnectMockHostIfRequested()
+            autoConnectHostIfRequested()
             return
         }
         activeHostId = id
-        autoConnectMockHostIfRequested()
+        autoConnectHostIfRequested()
     }
 
-    private func autoConnectMockHostIfRequested() {
-        guard useMockMode, environment["PA_IOS_AUTO_CONNECT_MOCK_HOST"] == "1", let activeHostId else {
+    private func autoConnectHostIfRequested() {
+        guard let activeHostId else {
+            return
+        }
+        let shouldAutoConnect = useMockMode
+            ? environment["PA_IOS_AUTO_CONNECT_MOCK_HOST"] == "1"
+            : environment["PA_IOS_BOOTSTRAP_HOST_URL"]?.nilIfBlank != nil
+        guard shouldAutoConnect else {
             return
         }
         Task {
@@ -313,6 +320,16 @@ final class CompanionAppModel: ObservableObject {
     }
 
     private func applyDebugKnowledgeNavigationIfNeeded() {
+        if let tab = environment["PA_IOS_AUTO_SELECT_TAB"]?.nilIfBlank {
+            switch tab.lowercased() {
+            case "chat": selectedDashboardTab = .chat
+            case "knowledge": selectedDashboardTab = .knowledge
+            case "archived": selectedDashboardTab = .archived
+            case "automations": selectedDashboardTab = .automations
+            case "settings": selectedDashboardTab = .settings
+            default: break
+            }
+        }
         if environment["PA_IOS_AUTO_SELECT_KNOWLEDGE_TAB"] == "1" {
             selectedDashboardTab = .knowledge
         }

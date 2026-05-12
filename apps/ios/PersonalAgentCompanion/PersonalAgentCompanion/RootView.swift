@@ -451,8 +451,9 @@ struct ConversationListView: View {
     }
 
     private func autoOpenFirstConversationIfNeeded() {
+        let environment = ProcessInfo.processInfo.environment
         guard !autoOpenedDemoConversation,
-              ProcessInfo.processInfo.environment["PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION"] == "1",
+              (environment["PA_IOS_AUTO_OPEN_FIRST_CONVERSATION"] == "1" || environment["PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION"] == "1"),
               let firstConversationId = session.chatSections.first?.sessions.first?.id else {
             return
         }

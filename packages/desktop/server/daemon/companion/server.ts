@@ -65,7 +65,8 @@ import {
 
 const DEFAULT_DAEMON_VERSION = '0.0.0';
 const JSON_LIMIT_BYTES = 12 * 1024 * 1024;
-const MAX_COMPANION_TAIL_BLOCKS = 30;
+const MAX_COMPANION_TAIL_BLOCKS = 1;
+const MAX_COMPANION_SOCKET_STRING_LENGTH = 4_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -337,12 +338,26 @@ function buildSocketErrorResponse(id: string, error: unknown): CompanionSocketEr
   };
 }
 
+function truncateCompanionSocketPayload(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.length > MAX_COMPANION_SOCKET_STRING_LENGTH ? `${value.slice(0, MAX_COMPANION_SOCKET_STRING_LENGTH)}…` : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => truncateCompanionSocketPayload(entry));
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, truncateCompanionSocketPayload(entry)]));
+}
+
 function writeSocketMessage(socket: WebSocket, message: CompanionServerSocketMessage): void {
   if (socket.readyState !== socket.OPEN) {
     return;
   }
 
-  socket.send(JSON.stringify(message));
+  socket.send(JSON.stringify(truncateCompanionSocketPayload(message)));
 }
 
 export class DaemonCompanionServer {
