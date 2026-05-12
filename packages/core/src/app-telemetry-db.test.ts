@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeAppTelemetryDbs, queryAppTelemetryEvents, writeAppTelemetryEvent } from './app-telemetry-db.js';
 import { openSqliteDatabase } from './sqlite.js';
+import { closeTraceDbs, writeTraceStats } from './trace-db.js';
 
 describe('app-telemetry-db', () => {
   const testDir = join(tmpdir(), `app-telemetry-db-test-${randomUUID()}`);
@@ -20,6 +21,7 @@ describe('app-telemetry-db', () => {
 
   afterAll(() => {
     closeAppTelemetryDbs();
+    closeTraceDbs();
     if (originalRoot) {
       process.env.PERSONAL_AGENT_STATE_ROOT = originalRoot;
     } else {
@@ -35,6 +37,7 @@ describe('app-telemetry-db', () => {
 
   beforeEach(() => {
     closeAppTelemetryDbs();
+    closeTraceDbs();
     delete process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
     rmSync(join(testDir, 'observability'), { recursive: true, force: true });
@@ -63,6 +66,25 @@ describe('app-telemetry-db', () => {
     writeAppTelemetryEvent({ source: 'server', category: 'api', name: '' });
 
     expect(queryAppTelemetryEvents({ since: new Date(Date.now() - 60_000).toISOString() })).toHaveLength(0);
+  });
+
+  it('stores app telemetry and traces in the same observability database', () => {
+    writeAppTelemetryEvent({ source: 'server', category: 'api', name: 'request', route: '/health' });
+    writeTraceStats({ sessionId: 'shared-db-session', modelId: 'shared-model', tokensInput: 1, tokensOutput: 2, cost: 0.01 });
+    closeAppTelemetryDbs();
+    closeTraceDbs();
+
+    const db = openSqliteDatabase(join(testDir, 'observability', 'observability.db'));
+    const telemetry = db.prepare('SELECT COUNT(*) AS count FROM app_telemetry_events').get() as { count: number };
+    const traces = db.prepare('SELECT COUNT(*) AS count FROM trace_stats').get() as { count: number };
+    const namespaces = db.prepare('SELECT namespace FROM observability_schema_versions ORDER BY namespace').all() as Array<{
+      namespace: string;
+    }>;
+    db.close();
+
+    expect(telemetry.count).toBe(1);
+    expect(traces.count).toBe(1);
+    expect(namespaces.map((row) => row.namespace)).toEqual(['trace']);
   });
 
   it('caps stored telemetry events', () => {
