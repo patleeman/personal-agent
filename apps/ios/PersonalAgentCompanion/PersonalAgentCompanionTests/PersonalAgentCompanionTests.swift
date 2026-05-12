@@ -35,6 +35,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
         super.tearDown()
     }
 
+    func testComposerSendButtonIconStaysInsideFixedTapTargetAtAccessibilitySizes() {
+        XCTAssertLessThanOrEqual(ConversationComposerSendButtonMetrics.iconPointSize, ConversationComposerSendButtonMetrics.circleSize / 2)
+    }
+
     func testHostSessionBuildsPinnedOpenAndRecentSections() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()

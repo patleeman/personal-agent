@@ -526,8 +526,8 @@ struct ConversationScreen: View {
 
     private func sendButtonLabel(defaultMode: ConversationPromptSubmissionMode) -> some View {
         Image(systemName: defaultMode.systemImage)
-            .font(.headline.weight(.bold))
-            .frame(width: 36, height: 36)
+            .font(.system(size: ConversationComposerSendButtonMetrics.iconPointSize, weight: .bold))
+            .frame(width: ConversationComposerSendButtonMetrics.circleSize, height: ConversationComposerSendButtonMetrics.circleSize)
             .background(composerHasContent ? CompanionTheme.accent : CompanionTheme.panelBorder, in: Circle())
             .foregroundStyle(.white)
     }
@@ -552,6 +552,11 @@ struct ConversationScreen: View {
             Label(ConversationPromptSubmissionMode.parallel.title, systemImage: ConversationPromptSubmissionMode.parallel.systemImage)
         }
     }
+}
+
+struct ConversationComposerSendButtonMetrics {
+    static let circleSize: CGFloat = 36
+    static let iconPointSize: CGFloat = 17
 }
 
 private enum TranscriptRenderItem: Identifiable {
