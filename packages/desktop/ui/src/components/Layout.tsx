@@ -144,7 +144,7 @@ export function resolveActiveExtensionWorkbenchSurface({
   );
 }
 
-function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
+export function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
   const parsed = parseExtensionToolPanelMode(mode);
   return mode === 'diffs' || parsed?.extensionId === 'system-diffs';
 }
@@ -629,7 +629,7 @@ function WorkbenchKnowledgeRail({
   const [, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
   const artifactsEnabled = activeTool === 'artifacts' || activeArtifactId !== null;
-  const diffsEnabled = activeTool === 'diffs' || activeCheckpointId !== null;
+  const diffsEnabled = isDiffsRailMode(activeTool) || activeCheckpointId !== null;
   const runsEnabled = activeTool === 'runs' || activeRunId !== null;
   const {
     artifacts,

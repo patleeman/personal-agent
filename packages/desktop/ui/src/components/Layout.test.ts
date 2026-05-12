@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
   clearWorkbenchOnlySearchParamsForCompact,
+  isDiffsRailMode,
   readStoredPanelWidth,
   readStoredWorkbenchExplorerOpen,
   resolveActiveExtensionWorkbenchSurface,
@@ -107,6 +108,12 @@ describe('Layout workbench rail state', () => {
         extensionWorkbenchSurfaces: [{ extensionId: 'system-files', id: 'files-workbench' } as never],
       }),
     ).toEqual({ extensionId: 'system-files', id: 'files-workbench' });
+  });
+
+  it('recognizes extension-backed diffs as diffs rail mode', () => {
+    expect(isDiffsRailMode('diffs')).toBe(true);
+    expect(isDiffsRailMode('extension:system-diffs:conversation-diffs')).toBe(true);
+    expect(isDiffsRailMode('extension:system-files:file-explorer')).toBe(false);
   });
 
   it('defaults the diffs rail to uncommitted changes when present', () => {
