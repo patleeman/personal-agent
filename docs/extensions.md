@@ -112,7 +112,7 @@ The manifest declares what your extension contributes:
 | `themes`                     | Color themes                            |                                                                       |
 | `transcriptRenderers`        | Custom tool result rendering            |                                                                       |
 | `promptReferences`           | @-mention resolvers                     |                                                                       |
-| `quickOpen`                  | Command palette providers; use `section: "files"` and `title` to name the palette tab |                         |
+| `quickOpen`                  | Command palette surfaces/tabs backed by extension providers           | [See below](#quick-open-surfaces-quickopen)                           |
 | `settings`                   | Settings schema contributions           | [See below](#settings)                                                |
 | `settingsComponent`          | Component panel in Settings             | [See below](#settings-component-settingscomponent)                    |
 | `topBarElements`             | Top bar indicator icons                 | [See below](#top-bar-elements-topbarelements)                         |
@@ -192,6 +192,29 @@ Backend handler receives:
   conversationId: string;
 }
 ```
+
+### Quick-open surfaces (`quickOpen`)
+
+Add a top-level tab to the command palette. Each quick-open contribution registers one extension-owned surface. The palette uses `section` as the stable tab/surface id, `title` as the visible tab label, and `provider` as the frontend export that returns items.
+
+```json
+{
+  "contributes": {
+    "quickOpen": [
+      {
+        "id": "knowledge-files",
+        "provider": "knowledgeQuickOpenProvider",
+        "title": "Knowledge",
+        "section": "knowledge"
+      }
+    ]
+  }
+}
+```
+
+Provider items can omit `section`; omitted values are assigned to the contribution's `section` (or `id` if no section is set). Items with a different section are ignored by that tab. Providers may expose `list()` for default results and `search(query, limit)` for content-backed search.
+
+Keybindings can open a quick-open surface directly with `commandPalette:<section>`, for example `commandPalette:knowledge`.
 
 ### Settings Component (`settingsComponent`)
 

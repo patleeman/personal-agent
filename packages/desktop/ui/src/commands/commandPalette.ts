@@ -1,7 +1,9 @@
 import { fuzzyScore } from './slashMenu';
 
-export type CommandPaletteSection = 'open' | 'archived' | 'files';
-export type CommandPaletteScope = 'threads' | 'files';
+export type CommandPaletteSection = string;
+export type CommandPaletteScope = string;
+
+export const THREADS_COMMAND_PALETTE_SCOPE = 'threads';
 
 export interface CommandPaletteItem<TAction = unknown> {
   id: string;
@@ -26,21 +28,14 @@ interface CommandPaletteSectionResult<TAction = unknown> {
   total: number;
 }
 
-export const COMMAND_PALETTE_SCOPE_SECTIONS: Record<CommandPaletteScope, CommandPaletteSection[]> = {
-  threads: ['open', 'archived'],
-  files: ['files'],
-};
+export const THREAD_COMMAND_PALETTE_SECTIONS: CommandPaletteSection[] = ['open', 'archived'];
 
 export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, string> = {
   open: 'Open threads',
   archived: 'Archived threads',
-  files: 'Knowledge',
 };
 
-export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [
-  { value: 'threads', label: 'Threads' },
-  { value: 'files', label: 'Knowledge' },
-];
+export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [{ value: THREADS_COMMAND_PALETTE_SCOPE, label: 'Threads' }];
 
 export function shouldBootstrapCommandPaletteThreads(options: {
   open: boolean;
@@ -52,7 +47,7 @@ export function shouldBootstrapCommandPaletteThreads(options: {
     return false;
   }
 
-  return options.scope === 'threads';
+  return options.scope === THREADS_COMMAND_PALETTE_SCOPE;
 }
 
 export function isCommandPaletteThreadDataLoading(options: { sessions: unknown[] | null; sessionsLoading: boolean }): boolean {
@@ -89,26 +84,24 @@ export function selectCommandPaletteScopedItems<TAction>(input: {
   const fileItems = [...input.fileItems, ...(hasQuery ? input.searchedFileItems : [])];
 
   switch (input.scope) {
-    case 'threads':
+    case THREADS_COMMAND_PALETTE_SCOPE:
       return dedupeCommandPaletteItems(conversationItems);
-    case 'files':
-      return dedupeCommandPaletteItems(fileItems);
     default:
-      return [];
+      return dedupeCommandPaletteItems(fileItems.filter((item) => item.section === input.scope));
   }
 }
 
-const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
+const EMPTY_QUERY_LIMITS: Record<string, number> = {
   open: 12,
   archived: 8,
-  files: 30,
 };
+const DEFAULT_QUICK_OPEN_EMPTY_QUERY_LIMIT = 30;
 const MAX_EMPTY_QUERY_LIMIT = 100;
 
 function readEmptyQueryLimit(section: CommandPaletteSection, value: number | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
     ? Math.min(MAX_EMPTY_QUERY_LIMIT, value)
-    : EMPTY_QUERY_LIMITS[section];
+    : (EMPTY_QUERY_LIMITS[section] ?? DEFAULT_QUICK_OPEN_EMPTY_QUERY_LIMIT);
 }
 
 function tokenizeQuery(query: string): string[] {
@@ -198,12 +191,14 @@ export function searchCommandPaletteItems<TAction>(
   options: {
     query: string;
     scope: CommandPaletteScope;
+    scopeSections?: CommandPaletteSection[];
+    sectionLabels?: Partial<Record<CommandPaletteSection, string>>;
     emptyQueryLimits?: Partial<Record<CommandPaletteSection, number>>;
   },
 ): CommandPaletteSectionResult<TAction>[] {
   const query = options.query.trim();
   const emptyQuery = query.length === 0;
-  const visibleSections = COMMAND_PALETTE_SCOPE_SECTIONS[options.scope];
+  const visibleSections = options.scopeSections ?? (options.scope === THREADS_COMMAND_PALETTE_SCOPE ? THREAD_COMMAND_PALETTE_SECTIONS : [options.scope]);
 
   return visibleSections.flatMap((section) => {
     const sectionItems = items.filter((item) => item.section === section);
@@ -228,7 +223,7 @@ export function searchCommandPaletteItems<TAction>(
     return [
       {
         section,
-        label: COMMAND_PALETTE_SECTION_LABELS[section],
+        label: options.sectionLabels?.[section] ?? COMMAND_PALETTE_SECTION_LABELS[section] ?? section,
         total: rankedItems.length,
         items: limited.map(({ item, score }) => ({ ...item, score })),
       } satisfies CommandPaletteSectionResult<TAction>,

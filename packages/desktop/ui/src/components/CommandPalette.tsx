@@ -5,8 +5,9 @@ import { useAppData } from '../app/contexts';
 import { api } from '../client/api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
-  COMMAND_PALETTE_SCOPE_SECTIONS,
   COMMAND_PALETTE_SECTION_LABELS,
+  THREAD_COMMAND_PALETTE_SECTIONS,
+  THREADS_COMMAND_PALETTE_SCOPE,
   type CommandPaletteItem,
   type CommandPaletteScope,
   type CommandPaletteSection,
@@ -124,8 +125,8 @@ function normalizeQuickOpenItem(
   item: ExtensionQuickOpenItem,
   index: number,
 ): CommandPaletteItem<CommandPaletteAction> | null {
-  const section = item.section ?? registration.section;
-  if (section !== 'files' && section !== 'open' && section !== 'archived') return null;
+  const section = item.section ?? registration.section ?? registration.id;
+  if (!section || section === THREADS_COMMAND_PALETTE_SCOPE || section === 'open' || section === 'archived') return null;
   if (!item.action) return null;
   return {
     id: `extension-quick-open:${registration.extensionId}:${registration.id}:${item.id}`,
@@ -159,22 +160,10 @@ function buildConversationContentSearchItems(
 
 function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
   if (query.trim().length > 0) {
-    switch (scope) {
-      case 'files':
-        return `No files match “${query}”.`;
-      case 'threads':
-      default:
-        return `No threads match “${query}”.`;
-    }
+    return scope === THREADS_COMMAND_PALETTE_SCOPE ? `No threads match “${query}”.` : `No items match “${query}”.`;
   }
 
-  switch (scope) {
-    case 'files':
-      return 'No knowledge files yet.';
-    case 'threads':
-    default:
-      return 'No threads yet.';
-  }
+  return scope === THREADS_COMMAND_PALETTE_SCOPE ? 'No threads yet.' : 'No items yet.';
 }
 
 export function CommandPalette() {
@@ -212,10 +201,19 @@ export function CommandPalette() {
   const archivedConversationItems = useMemo(() => buildConversationItems('archived', archivedSessions), [archivedSessions]);
   const fileItems = quickOpenItems;
   const searchedFileItems = quickOpenSearchItems;
-  const quickOpenScopeLabel = quickOpenRegistrations.find((registration) => registration.section === 'files')?.title ?? 'Knowledge';
-  const scopeOptions = useMemo(
-    () => COMMAND_PALETTE_SCOPE_OPTIONS.map((option) => (option.value === 'files' ? { ...option, label: quickOpenScopeLabel } : option)),
-    [quickOpenScopeLabel],
+  const quickOpenScopes = useMemo(
+    () =>
+      quickOpenRegistrations.map((registration) => ({
+        value: registration.section ?? registration.id,
+        label: registration.title ?? registration.id,
+      })),
+    [quickOpenRegistrations],
+  );
+  const quickOpenScopeLabel = quickOpenScopes.find((option) => option.value === scope)?.label ?? 'items';
+  const scopeOptions = useMemo(() => [...COMMAND_PALETTE_SCOPE_OPTIONS, ...quickOpenScopes], [quickOpenScopes]);
+  const quickOpenSectionLabels = useMemo(
+    () => Object.fromEntries(quickOpenScopes.map((option) => [option.value, option.label])),
+    [quickOpenScopes],
   );
   const searchedConversationItems = useMemo(
     () => buildConversationContentSearchItems(conversationContentSearchResults, query.trim()),
@@ -242,12 +240,18 @@ export function CommandPalette() {
   ]);
 
   const emptyQueryLimits = useMemo(
-    () => (scope === 'threads' && query.trim().length === 0 ? { archived: archivedVisibleLimit } : undefined),
+    () => (scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 ? { archived: archivedVisibleLimit } : undefined),
     [archivedVisibleLimit, query, scope],
   );
   const groups = useMemo(
-    () => searchCommandPaletteItems(allItems, { query, scope, emptyQueryLimits }),
-    [allItems, emptyQueryLimits, query, scope],
+    () =>
+      searchCommandPaletteItems(allItems, {
+        query,
+        scope,
+        emptyQueryLimits,
+        sectionLabels: quickOpenSectionLabels,
+      }),
+    [allItems, emptyQueryLimits, query, quickOpenSectionLabels, scope],
   );
   const visibleItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
 
@@ -259,7 +263,7 @@ export function CommandPalette() {
 
   const openPalette = useCallback((options: OpenCommandPaletteDetail = {}) => {
     setQuery(options.query ?? '');
-    setScope(options.scope ?? 'threads');
+    setScope(options.scope ?? THREADS_COMMAND_PALETTE_SCOPE);
     setCursor(0);
     setBusyItemId(null);
     setActionError(null);
@@ -342,7 +346,7 @@ export function CommandPalette() {
 
   const archivedGroup = useMemo(() => groups.find((group) => group.section === 'archived') ?? null, [groups]);
   const canLoadMoreArchivedThreads = Boolean(
-    open && scope === 'threads' && query.trim().length === 0 && archivedGroup && archivedGroup.total > archivedGroup.items.length,
+    open && scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 && archivedGroup && archivedGroup.total > archivedGroup.items.length,
   );
 
   useEffect(() => {
@@ -362,9 +366,9 @@ export function CommandPalette() {
     setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
   }, [canLoadMoreArchivedThreads, groups]);
 
-  const shouldSearchFilesByContent = open && scope === 'files' && query.trim().length > 0;
+  const shouldSearchQuickOpenByContent = open && scope !== THREADS_COMMAND_PALETTE_SCOPE && query.trim().length > 0;
 
-  const shouldSearchConversationsByContent = open && scope === 'threads' && query.trim().length > 0;
+  const shouldSearchConversationsByContent = open && scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length > 0;
 
   useEffect(() => {
     if (!shouldSearchConversationsByContent) {
@@ -408,7 +412,7 @@ export function CommandPalette() {
   }, [query, shouldSearchConversationsByContent]);
 
   useEffect(() => {
-    if (!shouldSearchFilesByContent) {
+    if (!shouldSearchQuickOpenByContent) {
       setQuickOpenSearchLoading(false);
       setQuickOpenSearchError(null);
       setQuickOpenSearchItems([]);
@@ -457,7 +461,7 @@ export function CommandPalette() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [query, quickOpenRegistrations, shouldSearchFilesByContent]);
+  }, [query, quickOpenRegistrations, shouldSearchQuickOpenByContent]);
 
   const activateItem = useCallback(
     async (item: CommandPaletteItem<CommandPaletteAction>) => {
@@ -630,24 +634,24 @@ export function CommandPalette() {
     const threadSessionsLoading = isCommandPaletteThreadDataLoading({ sessions, sessionsLoading });
 
     if (threadSessionsLoading) {
-      for (const section of COMMAND_PALETTE_SCOPE_SECTIONS[scope]) {
-        if (section === 'open' || section === 'archived') {
+      if (scope === THREADS_COMMAND_PALETTE_SCOPE) {
+        for (const section of THREAD_COMMAND_PALETTE_SECTIONS) {
           sections.add(section);
         }
       }
     }
 
-    if (conversationContentSearchLoading && scope === 'threads') {
+    if (conversationContentSearchLoading && scope === THREADS_COMMAND_PALETTE_SCOPE) {
       sections.add('open');
       sections.add('archived');
     }
 
-    if (scope === 'files' && quickOpenLoading && fileItems.length === 0) {
-      sections.add('files');
+    if (scope !== THREADS_COMMAND_PALETTE_SCOPE && quickOpenLoading && fileItems.length === 0) {
+      sections.add(scope);
     }
 
-    if (scope === 'files' && quickOpenSearchLoading) {
-      sections.add('files');
+    if (scope !== THREADS_COMMAND_PALETTE_SCOPE && quickOpenSearchLoading) {
+      sections.add(scope);
     }
 
     return [...sections];
@@ -661,7 +665,7 @@ export function CommandPalette() {
     quickOpenSearchLoading,
   ]);
   const showSectionHeaders = groups.length > 1;
-  const searchPlaceholder = scope === 'threads' ? 'Search threads…' : `Open ${quickOpenScopeLabel.toLowerCase()}…`;
+  const searchPlaceholder = scope === THREADS_COMMAND_PALETTE_SCOPE ? 'Search threads…' : `Open ${quickOpenScopeLabel.toLowerCase()}…`;
 
   if (!open) {
     return null;
@@ -825,7 +829,7 @@ export function CommandPalette() {
                 );
               })}
 
-              {scope === 'threads' && query.trim().length === 0 && group.section === 'archived' && group.total > group.items.length ? (
+              {scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 && group.section === 'archived' && group.total > group.items.length ? (
                 <p className="px-2.5 py-2 text-[11px] text-dim font-mono">Scroll to load older threads…</p>
               ) : null}
             </section>
@@ -842,29 +846,29 @@ export function CommandPalette() {
             </section>
           ))}
 
-          {conversationContentSearchError && scope === 'threads' && (
+          {conversationContentSearchError && scope === THREADS_COMMAND_PALETTE_SCOPE && (
             <section className="pb-2 last:pb-0">
               <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search thread contents: {conversationContentSearchError}</p>
             </section>
           )}
 
-          {quickOpenError && scope === 'files' && (
+          {quickOpenError && scope !== THREADS_COMMAND_PALETTE_SCOPE && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load files: {quickOpenError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load {quickOpenScopeLabel.toLowerCase()}: {quickOpenError}</p>
             </section>
           )}
 
-          {quickOpenSearchError && scope === 'files' && (
+          {quickOpenSearchError && scope !== THREADS_COMMAND_PALETTE_SCOPE && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search file contents: {quickOpenSearchError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search {quickOpenScopeLabel.toLowerCase()}: {quickOpenSearchError}</p>
             </section>
           )}
 
           {visibleCount === 0 &&
             loadingSections.length === 0 &&
-            !(conversationContentSearchError && scope === 'threads') &&
-            !(quickOpenError && scope === 'files') &&
-            !(quickOpenSearchError && scope === 'files') && (
+            !(conversationContentSearchError && scope === THREADS_COMMAND_PALETTE_SCOPE) &&
+            !(quickOpenError && scope !== THREADS_COMMAND_PALETTE_SCOPE) &&
+            !(quickOpenSearchError && scope !== THREADS_COMMAND_PALETTE_SCOPE) && (
               <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
             )}
         </div>

@@ -33,7 +33,7 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
   },
   {
     id: 'file:guide',
-    section: 'files',
+    section: 'knowledge',
     title: 'Workspace Files',
     subtitle: 'notes/workspace-files.md',
     keywords: ['workspaces', 'workspace layout guide'],
@@ -43,11 +43,12 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
 ];
 
 describe('command palette search', () => {
-  it('filters file matches ahead of unrelated items in the files scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: 'workspace', scope: 'files' });
+  it('filters extension quick-open matches in the requested extension scope', () => {
+    const results = searchCommandPaletteItems(ITEMS, { query: 'workspace', scope: 'knowledge', sectionLabels: { knowledge: 'Knowledge' } });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('files');
+    expect(results[0]?.section).toBe('knowledge');
+    expect(results[0]?.label).toBe('Knowledge');
     expect(results[0]?.items.map((item) => item.id)).toEqual(['file:guide']);
   });
 
@@ -67,7 +68,7 @@ describe('command palette search', () => {
 
   it('keeps local file title matches while adding file content-search results', () => {
     const scoped = selectCommandPaletteScopedItems({
-      scope: 'files',
+      scope: 'knowledge',
       query: 'workspace',
       openConversationItems: [ITEMS[0]!],
       archivedConversationItems: [ITEMS[1]!],
@@ -84,7 +85,7 @@ describe('command palette search', () => {
 
     expect(scoped.map((item) => item.id)).toEqual(['file:guide', 'file-search:guide']);
 
-    const results = searchCommandPaletteItems(scoped, { query: 'workspace', scope: 'files' });
+    const results = searchCommandPaletteItems(scoped, { query: 'workspace', scope: 'knowledge' });
     expect(results.flatMap((group) => group.items.map((item) => item.id))).toContain('file:guide');
   });
 
@@ -146,7 +147,7 @@ describe('command palette search', () => {
     expect(
       shouldBootstrapCommandPaletteThreads({
         open: true,
-        scope: 'files',
+        scope: 'knowledge',
         sessions: null,
         alreadyRequested: false,
       }),
