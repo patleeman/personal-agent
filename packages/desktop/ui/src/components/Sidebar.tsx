@@ -37,7 +37,7 @@ import {
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
-import { getDesktopBridge } from '../desktop/desktopBridge';
+import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';
 import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
 import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
