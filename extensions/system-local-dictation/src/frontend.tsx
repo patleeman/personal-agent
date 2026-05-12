@@ -88,9 +88,13 @@ export function DictationButton({
   const [samples, setSamples] = useState<number[]>([]);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const captureRef = useRef<ComposerDictationCapture | null>(null);
+  const pendingStartRef = useRef<Promise<void> | null>(null);
   const pointerRef = useRef<{ pointerId: number; startedAt: number; startedExistingRecording: boolean } | null>(null);
 
   const stop = useCallback(async () => {
+    if (pendingStartRef.current) {
+      await pendingStartRef.current.catch(() => {});
+    }
     const capture = captureRef.current;
     if (!capture) return;
     captureRef.current = null;
@@ -115,24 +119,30 @@ export function DictationButton({
   }, [buttonContext, pa]);
 
   const start = useCallback(async () => {
-    if (buttonContext.composerDisabled || captureRef.current || state === 'transcribing') return;
-    try {
-      const settings = (await pa.extension.invoke('readSettings')) as DictationSettingsState;
-      if (!settings.settings.enabled) {
-        pa.ui.toast('Enable dictation in Settings first.');
-        return;
+    if (buttonContext.composerDisabled || captureRef.current || pendingStartRef.current || state === 'transcribing') return;
+    const pendingStart = (async () => {
+      try {
+        const settings = (await pa.extension.invoke('readSettings')) as DictationSettingsState;
+        if (!settings.settings.enabled) {
+          pa.ui.toast('Enable dictation in Settings first.');
+          return;
+        }
+        setSamples([]);
+        setStartedAt(performance.now());
+        setState('recording');
+        captureRef.current = await startComposerDictationCapture({
+          onLevel: (level) => setSamples((current) => [...current.slice(-71), level]),
+        });
+      } catch (error) {
+        setStartedAt(null);
+        setState('idle');
+        pa.ui.toast(error instanceof Error ? error.message : String(error));
+      } finally {
+        pendingStartRef.current = null;
       }
-      setSamples([]);
-      setStartedAt(performance.now());
-      captureRef.current = await startComposerDictationCapture({
-        onLevel: (level) => setSamples((current) => [...current.slice(-71), level]),
-      });
-      setState('recording');
-    } catch (error) {
-      setStartedAt(null);
-      setState('idle');
-      pa.ui.toast(error instanceof Error ? error.message : String(error));
-    }
+    })();
+    pendingStartRef.current = pendingStart;
+    await pendingStart;
   }, [buttonContext.composerDisabled, pa, state]);
 
   return (

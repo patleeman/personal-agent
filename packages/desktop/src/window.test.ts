@@ -23,6 +23,7 @@ import {
   canNavigateWindowInApp,
   constrainDesktopWindowBounds,
   getDesktopWindowChromeOptions,
+  shouldGrantDesktopMediaPermission,
   shouldOpenNavigationExternally,
   shouldOpenWindowExternally,
   toDesktopShellRoute,
@@ -109,6 +110,15 @@ describe('shouldOpenNavigationExternally', () => {
 
   it('keeps same-origin URLs in-app', () => {
     expect(shouldOpenNavigationExternally('https://app.dev', 'https://app.dev/settings')).toBe(false);
+  });
+});
+
+describe('shouldGrantDesktopMediaPermission', () => {
+  it('allows audio media capture for the desktop app origin only', () => {
+    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'media', ['audio'])).toBe(true);
+    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'media', ['video'])).toBe(false);
+    expect(shouldGrantDesktopMediaPermission('personal-agent://app/conversations/new', 'geolocation', ['audio'])).toBe(false);
+    expect(shouldGrantDesktopMediaPermission('https://example.com', 'media', ['audio'])).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { app, BrowserWindow, screen, shell, type WebContents } from 'electron';
+import { app, BrowserWindow, screen, type Session, session, shell, type WebContents } from 'electron';
 
 import { syncDesktopShellAppModeForWindows } from './app-mode.js';
 import { ensureDesktopAppProtocolForHost } from './app-protocol.js';
@@ -58,6 +58,7 @@ const DEFAULT_WINDOW_HEIGHT = 960;
 const MAX_SAVED_WINDOW_WIDTH = 4096;
 const MAX_SAVED_WINDOW_HEIGHT = 4096;
 const WINDOW_SHOW_FALLBACK_MS = 1500;
+const configuredMediaPermissionPartitions = new Set<string>();
 const EXTERNAL_WINDOW_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
 interface DesktopRectangle {
@@ -135,6 +136,34 @@ export function shouldOpenNavigationExternally(currentUrl: string, targetUrl: st
 export function buildWindowTitle(_host: DesktopHostRecord): string {
   const appName = typeof app.name === 'string' && app.name.trim().length > 0 ? app.name.trim() : 'Personal Agent';
   return appName;
+}
+
+export function shouldGrantDesktopMediaPermission(requestingUrl: string, permission: string, mediaTypes: string[] = []): boolean {
+  if (permission !== 'media' || !mediaTypes.includes('audio')) return false;
+  try {
+    const parsed = new URL(requestingUrl);
+    return parsed.protocol === 'personal-agent:' && parsed.hostname === 'app';
+  } catch {
+    return false;
+  }
+}
+
+function configureDesktopMediaPermissions(partition: string): void {
+  if (configuredMediaPermissionPartitions.has(partition)) return;
+  configuredMediaPermissionPartitions.add(partition);
+  const partitionSession = session.fromPartition(partition) as Session & {
+    setPermissionRequestHandler?: (
+      handler: (
+        webContents: WebContents,
+        permission: string,
+        callback: (permissionGranted: boolean) => void,
+        details: { requestingUrl?: string; mediaTypes?: string[] },
+      ) => void,
+    ) => void;
+  };
+  partitionSession.setPermissionRequestHandler?.((_webContents, permission, callback, details) => {
+    callback(shouldGrantDesktopMediaPermission(details.requestingUrl ?? '', permission, details.mediaTypes ?? []));
+  });
 }
 
 function intersectRectangleArea(left: DesktopRectangle, right: DesktopRectangle): number {
@@ -670,6 +699,7 @@ export class DesktopWindowController {
 
   private createWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {
     ensureDesktopAppProtocolForHost(this.hostManager, host.id);
+    configureDesktopMediaPermissions(partition);
 
     const config = loadDesktopConfig();
     const remoteOffset = role !== 'main' ? (this.countAdditionalWindows() + 1) * 28 : 0;
