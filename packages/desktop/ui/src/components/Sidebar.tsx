@@ -2264,17 +2264,8 @@ export function Sidebar() {
       byId.set(item.session.id, item.session);
     }
 
-    if (byId.size === 0) {
-      for (const session of archivedSessions.slice(0, 12)) {
-        const isAutomation = automationConversationIdSet.has(session.id);
-        if (threadsFilterMode === 'automation' && !isAutomation) continue;
-        if (threadsFilterMode === 'human' && isAutomation) continue;
-        byId.set(session.id, session);
-      }
-    }
-
     return [...byId.values()];
-  }, [archivedSessions, automationConversationIdSet, renderedConversationItems, threadsFilterMode]);
+  }, [renderedConversationItems]);
   const baseActivityTreeItems = useMemo(() => {
     const flatItems = buildActivityTreeItems({
       conversations: activityTreeSessions,
