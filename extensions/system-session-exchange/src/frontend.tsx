@@ -1,9 +1,22 @@
 import { type NativeExtensionClient } from '@personal-agent/extensions';
+import { api } from '@personal-agent/extensions/data';
 import { useState } from 'react';
+
+interface FilePickerResult {
+  paths: string[];
+  cancelled: boolean;
+}
 
 interface ImportSessionButtonProps {
   pa: NativeExtensionClient;
+  actionContext?: {
+    cwd?: string | null;
+  };
 }
+
+const dataApi = api as {
+  pickFiles(cwd?: string): Promise<FilePickerResult>;
+};
 
 function ImportIcon() {
   return (
@@ -15,20 +28,22 @@ function ImportIcon() {
   );
 }
 
-export function ImportSessionButton({ pa }: ImportSessionButtonProps) {
+export function ImportSessionButton({ pa, actionContext }: ImportSessionButtonProps) {
   const [busy, setBusy] = useState(false);
 
   async function importSession() {
     if (busy) return;
 
-    const filePath = window.prompt('Path to session .jsonl file');
-    if (!filePath?.trim()) return;
-
     setBusy(true);
     try {
-      await pa.extension.invoke('importSession', { filePath: filePath.trim() });
+      const cwd = actionContext?.cwd?.trim() || undefined;
+      const selection = await dataApi.pickFiles(cwd);
+      if (selection.cancelled || selection.paths.length === 0) return;
+
+      const [filePath] = selection.paths;
+      await pa.extension.invoke('importSession', { filePath });
     } catch (error) {
-      await pa.ui.toast(error instanceof Error ? error.message : String(error), 'error');
+      pa.ui.toast(error instanceof Error ? error.message : String(error), 'error');
     } finally {
       setBusy(false);
     }
