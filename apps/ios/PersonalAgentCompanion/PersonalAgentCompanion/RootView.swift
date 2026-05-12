@@ -307,6 +307,9 @@ struct ConversationListView: View {
             .onChange(of: session.chatSections) { _, _ in
                 autoOpenFirstConversationIfNeeded()
             }
+            .task(id: session.chatSections.first?.sessions.first?.id) {
+                autoOpenFirstConversationIfNeeded()
+            }
         }
     }
 
