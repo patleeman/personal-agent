@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 
 interface WorkerRequest {
@@ -68,6 +71,41 @@ function handleWorkerExit(code: number): void {
   workerInstance = null;
 }
 
+function resolveConversationInspectWorkerUrl(): URL {
+  // Normal server bundle path: server/dist/app/localApi.js -> server/dist/conversations/...
+  // Extension backend cache path: extension-cache/<extension>/backend.mjs, where the
+  // relative worker path does not exist. Fall back to repo/build locations so cached
+  // extension tools can still spawn the shared worker.
+  const relativeUrl = new URL('../conversations/conversationInspectWorker.js', import.meta.url);
+  try {
+    if (existsSync(fileURLToPath(relativeUrl))) {
+      return relativeUrl;
+    }
+  } catch {
+    // Keep walking fallbacks below.
+  }
+
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    ...(process.env.PERSONAL_AGENT_REPO_ROOT
+      ? [resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist/conversations/conversationInspectWorker.js')]
+      : []),
+    resolve(process.cwd(), 'packages/desktop/server/dist/conversations/conversationInspectWorker.js'),
+    resolve(currentDir, '../../packages/desktop/server/dist/conversations/conversationInspectWorker.js'),
+    resolve(currentDir, '../../../packages/desktop/server/dist/conversations/conversationInspectWorker.js'),
+    resolve(currentDir, '../server/dist/conversations/conversationInspectWorker.js'),
+    resolve(currentDir, 'server/dist/conversations/conversationInspectWorker.js'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return pathToFileURL(candidate);
+    }
+  }
+
+  return relativeUrl;
+}
+
 function getOrCreateWorker(): Worker {
   if (workerInstance) {
     return workerInstance;
@@ -75,10 +113,7 @@ function getOrCreateWorker(): Worker {
 
   workerError = null;
 
-  // Resolve the worker script URL relative to the main bundle location.
-  // The main bundle is at server/dist/app/localApi.js and the worker is at
-  // server/dist/conversations/conversationInspectWorker.js.
-  const workerUrl = new URL('../conversations/conversationInspectWorker.js', import.meta.url);
+  const workerUrl = resolveConversationInspectWorkerUrl();
 
   const worker = new Worker(workerUrl);
   worker.on('message', handleWorkerMessage);
