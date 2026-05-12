@@ -607,6 +607,11 @@ console.log(`Building signed desktop artifacts for ${tag} from the clean snapsho
 run('npm', ['run', 'desktop:dist'], { cwd: buildRoot, env });
 validatePackagedAutoUpdateConfig(releaseDir, releaseRepo);
 validatePackagedRuntimeDependencies(buildRoot, releaseDir);
+const packagedAppForExtensionCheck = collectPackagedAppPath(releaseDir);
+if (!packagedAppForExtensionCheck) {
+  fail('Packaged desktop app not found; cannot validate packaged extensions.');
+}
+run('node', ['scripts/check-packaged-extensions.mjs', packagedAppForExtensionCheck], { cwd: buildRoot, env });
 
 const files = collectReleaseFiles(releaseDir, version);
 notarizeDistributionContainers(env, files);

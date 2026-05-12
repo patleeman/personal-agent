@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-env node */
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
@@ -24,11 +24,13 @@ if (manifest.schemaVersion !== 2) {
 
 mkdirSync(join(packageRoot, 'dist'), { recursive: true });
 
+const buildOutputs = [];
+
 const frontendSource = join(packageRoot, 'src', 'frontend.tsx');
 if (manifest.frontend?.entry && existsSync(frontendSource)) {
   const outfile = join(packageRoot, manifest.frontend.entry);
   mkdirSync(dirname(outfile), { recursive: true });
-  await build({
+  const result = await build({
     entryPoints: [frontendSource],
     outfile,
     bundle: true,
@@ -47,7 +49,9 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
     },
     external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
     nodePaths: findAppNodeModules(),
+    metafile: true,
   });
+  recordBuildOutputs(buildOutputs, result.metafile);
 }
 
 const backendSource = join(packageRoot, 'src', 'backend.ts');
@@ -55,7 +59,7 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
   const backendEntry = String(manifest.backend.entry);
   const outfile = backendEntry.startsWith('src/') ? join(packageRoot, 'dist', 'backend.mjs') : join(packageRoot, backendEntry);
   mkdirSync(dirname(outfile), { recursive: true });
-  await build({
+  const result = await build({
     entryPoints: [backendSource],
     outfile,
     bundle: true,
@@ -80,9 +84,13 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     ],
     nodePaths: findAppNodeModules(),
     plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin(), createJsdomWorkerPlugin()],
+    metafile: true,
   });
-  copyJsdomSyncWorkerIfNeeded(outfile);
+  recordBuildOutputs(buildOutputs, result.metafile);
+  copyJsdomSyncWorkerIfNeeded(outfile, buildOutputs);
 }
+
+writeBuildManifest(buildOutputs);
 
 function createExtensionBackendApiPlugin() {
   return {
@@ -94,9 +102,10 @@ function createExtensionBackendApiPlugin() {
       buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend\/(.+)$/ }, (args) => ({
         path: join(repoRoot, `packages/desktop/server/extensions/backendApi/${args.path.split('/').pop()}.ts`),
       }));
-      buildContext.onResolve({ filter: /^@personal-agent\/daemon$/ }, () => ({
-        path: join(repoRoot, 'packages/desktop/server/dist/daemon/index.js'),
-      }));
+      buildContext.onResolve({ filter: /^@personal-agent\/daemon$/ }, (args) => {
+        const desktopDaemonBundle = join(repoRoot, 'packages/desktop/server/dist/daemon/index.js');
+        return existsSync(desktopDaemonBundle) ? { path: desktopDaemonBundle } : { path: args.path, external: true };
+      });
     },
   };
 }
@@ -123,12 +132,42 @@ function createJsdomWorkerPlugin() {
   };
 }
 
-function copyJsdomSyncWorkerIfNeeded(outfile) {
+function recordBuildOutputs(buildOutputs, metafile) {
+  for (const [outputPath, output] of Object.entries(metafile.outputs ?? {})) {
+    buildOutputs.push({
+      path: relativeToPackage(outputPath),
+      bytes: output.bytes ?? 0,
+      imports: (output.imports ?? []).map((item) => item.path).sort(),
+    });
+  }
+}
+
+function writeBuildManifest(buildOutputs) {
+  writeJson(join(packageRoot, 'dist', 'build-manifest.json'), {
+    extensionId: manifest.id,
+    builtAt: new Date().toISOString(),
+    frontendEntry: manifest.frontend?.entry ?? null,
+    backendEntry: manifest.backend?.entry ?? null,
+    outputs: buildOutputs.sort((left, right) => left.path.localeCompare(right.path)),
+  });
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function relativeToPackage(path) {
+  return path.startsWith(`${packageRoot}/`) ? path.slice(packageRoot.length + 1) : path;
+}
+
+function copyJsdomSyncWorkerIfNeeded(outfile, buildOutputs) {
   const bundledSource = readFileSync(outfile, 'utf8');
   if (!bundledSource.includes('xhr-sync-worker.js')) return;
   const workerSource = join(repoRoot, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'xhr', 'xhr-sync-worker.js');
   if (!existsSync(workerSource)) return;
-  copyFileSync(workerSource, join(dirname(outfile), 'xhr-sync-worker.js'));
+  const workerOutput = join(dirname(outfile), 'xhr-sync-worker.js');
+  copyFileSync(workerSource, workerOutput);
+  buildOutputs.push({ path: relativeToPackage(workerOutput), bytes: readFileSync(workerOutput).byteLength, imports: [] });
 }
 
 function findAppNodeModules() {

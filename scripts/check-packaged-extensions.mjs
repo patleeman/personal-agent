@@ -10,7 +10,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 process.setMaxListeners(0);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const extensionsRoot = join(repoRoot, 'extensions');
+const inputRoot = process.argv[2] ? resolve(process.argv[2]) : repoRoot;
+const extensionsRoot = inputRoot.endsWith('.app') ? join(inputRoot, 'Contents', 'Resources', 'extensions') : join(inputRoot, 'extensions');
 
 const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 const allowedBackendBareImports = new Set([
@@ -98,6 +99,58 @@ function frontendEntryPath(extensionDir, manifest) {
   return entry ? join(extensionDir, entry) : undefined;
 }
 
+function safeActionInputFor(manifest, actionId) {
+  const tool = manifest.contributes?.tools?.find((candidate) => candidate.action === actionId);
+  const safeListTools = new Set(['scheduled_task', 'conversation_queue', 'run']);
+  if (!tool?.name || !safeListTools.has(tool.name)) return undefined;
+  const actionEnum = tool.inputSchema?.properties?.action?.enum;
+  if (Array.isArray(actionEnum) && actionEnum.includes('list')) return { action: 'list' };
+  return undefined;
+}
+
+function createSmokeContext(extensionId) {
+  const noop = () => undefined;
+  return {
+    extensionId,
+    profile: 'shared',
+    toolContext: { cwd: repoRoot },
+    ui: { invalidate: noop },
+    log: { info: noop, warn: noop, error: noop },
+    runtime: { getRepoRoot: () => repoRoot, getLiveSessionResourceOptions: () => ({}) },
+    storage: {
+      get: async () => null,
+      put: async () => ({ ok: true }),
+      delete: async () => ({ ok: true, deleted: false }),
+      list: async () => [],
+    },
+    notify: {
+      toast: noop,
+      system: () => false,
+      setBadge: () => ({ badge: 0, aggregated: 0 }),
+      clearBadge: noop,
+      isSystemAvailable: () => false,
+    },
+    events: { publish: async () => undefined, subscribe: () => ({ unsubscribe: noop }) },
+    extensions: { callAction: async () => undefined, listActions: () => [], getStatus: () => ({ enabled: true, healthy: true }) },
+  };
+}
+
+async function smokeBackendActions(id, manifest, backendModule) {
+  for (const action of manifest.backend?.actions ?? []) {
+    const handlerName = action.handler ?? action.id;
+    const handler = backendModule[handlerName];
+    if (typeof handler !== 'function') {
+      throw new Error(`missing backend action handler export "${handlerName}"`);
+    }
+    const input = safeActionInputFor(manifest, action.id);
+    if (input === undefined) continue;
+    const result = await handler(input, createSmokeContext(id));
+    if (result && typeof result === 'object' && 'ok' in result && result.ok === false) {
+      throw new Error(`action "${action.id}" smoke call returned failure: ${result.error ?? JSON.stringify(result)}`);
+    }
+  }
+}
+
 await init;
 
 const failures = [];
@@ -109,7 +162,11 @@ for (const extensionDir of listSystemExtensionDirs()) {
   const id = manifest.id ?? extensionDir;
   const backendPath = backendEntryPath(extensionDir, manifest);
   const frontendPath = frontendEntryPath(extensionDir, manifest);
-  const row = { id, backend: 'none', frontend: 'none', actions: manifest.backend?.actions?.length ?? 0 };
+  const buildManifestPath = join(extensionDir, 'dist', 'build-manifest.json');
+  const row = { id, backend: 'none', frontend: 'none', actions: manifest.backend?.actions?.length ?? 0, manifest: 'missing' };
+  const hasBuildManifest = existsSync(buildManifestPath);
+
+  if (hasBuildManifest) row.manifest = 'ok';
 
   if (backendPath) {
     if (!existsSync(backendPath)) {
@@ -122,7 +179,8 @@ for (const extensionDir of listSystemExtensionDirs()) {
       if (forbidden.length > 0) failures.push(`${id}: backend bundle contains forbidden packaged-runtime imports: ${forbidden.join(', ')}`);
       if (unexpected.length > 0) failures.push(`${id}: backend bundle contains unexpected bare imports: ${unexpected.join(', ')}`);
       try {
-        await import(pathToFileURL(backendPath).href);
+        const backendModule = await import(pathToFileURL(backendPath).href);
+        await smokeBackendActions(id, manifest, backendModule);
         row.backend = bareImports.length > 0 ? `ok (${bareImports.length} external)` : 'ok';
       } catch (error) {
         failures.push(`${id}: backend import failed: ${error instanceof Error ? error.message : String(error)}`);

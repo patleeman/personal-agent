@@ -17,7 +17,12 @@ import { createExtensionConversationsCapability } from './extensionConversations
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
 import { createExtensionModelsCapability } from './extensionModels.js';
 import { isSystemNotificationAvailable, sendNotifyAsSystemNotification, setExtensionBadge } from './extensionNotifications.js';
-import { findExtensionEntry, listExtensionInstallSummaries } from './extensionRegistry.js';
+import {
+  clearExtensionHealthError,
+  findExtensionEntry,
+  listExtensionInstallSummaries,
+  setExtensionHealthError,
+} from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
 import { createExtensionGitCapability, createExtensionShellCapability } from './extensionShell.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
@@ -696,6 +701,33 @@ export async function invokeExtensionAction(
  * server context (no tool context). Errors are logged per-extension but do
  * not block other extensions from starting.
  */
+export async function checkEnabledExtensionBackendHealth(): Promise<Array<{ extensionId: string; ok: boolean; error?: string }>> {
+  const results: Array<{ extensionId: string; ok: boolean; error?: string }> = [];
+
+  for (const summary of listExtensionInstallSummaries()) {
+    if (summary.status !== 'enabled' || !summary.manifest.backend?.entry) continue;
+    try {
+      await loadExtensionBackend(summary.id);
+      clearExtensionHealthError(summary.id);
+      results.push({ extensionId: summary.id, ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExtensionHealthError(summary.id, message);
+      logError('extension backend health check failed', { extensionId: summary.id, message });
+      publishAppEvent({
+        type: 'notification',
+        extensionId: summary.id,
+        message: `Extension backend failed to load: ${message}`,
+        severity: 'error',
+      });
+      results.push({ extensionId: summary.id, ok: false, error: message });
+    }
+  }
+
+  invalidateAppTopics('extensions');
+  return results;
+}
+
 export async function startExtensionStartupActions(
   serverContext?: ExtensionBackendServerContext,
 ): Promise<Array<{ extensionId: string; ok: boolean; error?: string }>> {
@@ -742,6 +774,7 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
   const packagedPrebuilt = resolvePackagedExtensionBackendLoadTarget(entry, backendEntry);
   if (packagedPrebuilt) {
     await loadCompiledExtensionBackendModule(extensionId, packagedPrebuilt);
+    clearExtensionHealthError(extensionId);
     return { ok: true, extensionId, rebuilt: false };
   }
   if (isPrebuiltOnlyExtensionRuntime()) {
@@ -753,5 +786,6 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
   assertInside(packageRoot, entryPath);
   const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: false });
   await loadCompiledExtensionBackendModule(extensionId, compiled);
+  clearExtensionHealthError(extensionId);
   return { ok: true, extensionId, rebuilt: compiled.rebuilt };
 }

@@ -367,6 +367,7 @@ export interface ExtensionInstallSummary {
   errors?: string[];
   diagnostics?: string[];
   buildError?: string;
+  healthError?: string;
   description?: string;
   version?: string;
   packageRoot?: string;

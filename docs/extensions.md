@@ -927,11 +927,20 @@ npm test
 
 `npm run check:extensions` and `npm run check:extensions:quick` also run
 `scripts/check-packaged-extensions.mjs`. That check imports every system
-extension backend from its built `dist/` output and fails on forbidden bare
-imports that are not available inside the packaged desktop app, such as
-`@earendil-works/pi-coding-agent`, `@personal-agent/core`, `@personal-agent/daemon`,
-`jsdom`, and `@sinclair/typebox`. This catches the “works from repo node_modules,
-breaks in the signed app” class of extension bug before release.
+extension backend from its built `dist/` output, verifies backend action handler
+exports, smoke-calls known safe `list` tools (`scheduled_task`, `conversation_queue`,
+`run`), and fails on forbidden bare imports that are not available inside the
+packaged desktop app, such as `@earendil-works/pi-coding-agent`,
+`@personal-agent/core`, `@personal-agent/daemon`, `jsdom`, and `@sinclair/typebox`.
+This catches the “works from repo node_modules, breaks in the signed app” class
+of extension bug before release.
+
+The desktop server also runs an enabled-extension backend health check on startup.
+Failures are logged, surfaced as extension diagnostics, and shown by Extension
+Manager instead of silently making tools or actions disappear. Extension builds
+write `dist/build-manifest.json` with output files, byte sizes, and remaining
+external imports. The release publisher reruns the packaged-extension check
+against the built `.app` before notarization/upload.
 
 The integration suite covers 79 tests across 12 categories:
 

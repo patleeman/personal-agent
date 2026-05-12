@@ -27,8 +27,9 @@ import {
 import { listExtensionPackagePaths } from './extensionPackagePaths.js';
 import { SYSTEM_EXTENSION_ENTRIES } from './systemExtensions.js';
 
-// Per-extension build errors stored in memory. Cleared on successful build or reload.
+// Per-extension health errors stored in memory. Cleared on successful load/reload.
 const buildErrors = new Map<string, string>();
+const healthErrors = new Map<string, string>();
 
 export function setBuildError(extensionId: string, error: string): void {
   buildErrors.set(extensionId, error);
@@ -36,6 +37,14 @@ export function setBuildError(extensionId: string, error: string): void {
 
 export function clearBuildError(extensionId: string): void {
   buildErrors.delete(extensionId);
+}
+
+export function setExtensionHealthError(extensionId: string, error: string): void {
+  healthErrors.set(extensionId, error);
+}
+
+export function clearExtensionHealthError(extensionId: string): void {
+  healthErrors.delete(extensionId);
 }
 
 export interface InvalidExtensionEntry {
@@ -104,6 +113,8 @@ export interface ExtensionInstallSummary {
   status: 'enabled' | 'disabled' | 'invalid';
   errors?: string[];
   diagnostics?: string[];
+  buildError?: string;
+  healthError?: string;
   description?: string;
   version?: string;
   packageRoot?: string;
@@ -1265,14 +1276,19 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
     const enabled = isExtensionEnabled(manifest.id, stateRoot);
     const diagnostics = listExtensionContributionDiagnostics(entry);
     const buildError = buildErrors.get(manifest.id);
+    const healthError = healthErrors.get(manifest.id);
     return {
       id: manifest.id,
       name: manifest.name,
       packageType: manifest.packageType ?? 'user',
       enabled,
       status: enabled ? ('enabled' as const) : ('disabled' as const),
-      ...(diagnostics.length > 0 ? { diagnostics } : {}),
       ...(buildError ? { buildError } : {}),
+      ...(healthError
+        ? { healthError, diagnostics: [...diagnostics, `Backend health check failed: ${healthError}`] }
+        : diagnostics.length > 0
+          ? { diagnostics }
+          : {}),
       ...(manifest.description ? { description: manifest.description } : {}),
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(entry.packageRoot ? { packageRoot: entry.packageRoot } : {}),
