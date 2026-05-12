@@ -25,13 +25,14 @@ type ExtensionComponent = ComponentType<{
   params: Record<string, string>;
 }>;
 
-function loadExtensionModule(surface: NativeExtensionViewSummary, revision: number): Promise<Record<string, unknown>> {
+function loadExtensionModule(surface: NativeExtensionViewSummary, revision: number, retryNonce?: number): Promise<Record<string, unknown>> {
   const systemLoader = systemExtensionModules.get(surface.extensionId);
   if (systemLoader) return systemLoader();
   const entry = surface.frontend?.entry;
   if (!entry) throw new Error(`Extension ${surface.extensionId} has no frontend entry.`);
+  const query = retryNonce === undefined ? `v=${revision}` : `v=${revision}&retry=${retryNonce}`;
   const source = buildApiPath(
-    `/extensions/${encodeURIComponent(surface.extensionId)}/files/${entry.split('/').map(encodeURIComponent).join('/')}?v=${revision}`,
+    `/extensions/${encodeURIComponent(surface.extensionId)}/files/${entry.split('/').map(encodeURIComponent).join('/')}?${query}`,
   );
   return import(/* @vite-ignore */ source) as Promise<Record<string, unknown>>;
 }
@@ -42,7 +43,15 @@ function extensionModuleKey(surface: NativeExtensionViewSummary): string {
 
 function lazyExtensionComponent(surface: NativeExtensionViewSummary, revision: number) {
   return lazy(async () => {
-    const module = await loadExtensionModule(surface, revision);
+    let module: Record<string, unknown>;
+    try {
+      module = await loadExtensionModule(surface, revision);
+    } catch (error) {
+      // Browser module loaders permanently cache failed dynamic imports by URL.
+      // If an extension was rebuilt after an earlier bad bundle, retry once with
+      // a fresh URL so the fixed dist/frontend.js can load without an app restart.
+      module = await loadExtensionModule(surface, revision, Date.now());
+    }
     const component = module[surface.component];
     if (typeof component !== 'function') {
       throw new Error(`Extension component not found: ${surface.component}`);
