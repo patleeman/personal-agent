@@ -122,7 +122,13 @@ export function ActivityTreeView({
                 ...(accentColor ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : {}),
               }}
               title={typeof item.metadata?.tooltip === 'string' ? item.metadata.tooltip : item.subtitle}
-              onClick={() => onOpenItem?.(item)}
+              onClick={() => {
+                if (item.kind === 'group') {
+                  toggleGroupCollapsed(item.id);
+                  return;
+                }
+                onOpenItem?.(item);
+              }}
               onContextMenu={(event) => {
                 if (!renderContextMenu) return;
                 event.preventDefault();
