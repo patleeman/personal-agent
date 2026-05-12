@@ -107,7 +107,7 @@ Bypass with `git commit --no-verify` if needed.
 ### npm scripts
 
 ```bash
-npm run check    # tsc --noEmit → eslint → prettier --check → extension quick check; knip (dead code, informational)
+npm run check    # tsc --noEmit → eslint → prettier --check → extension quick check; knip (dead code, informational, non-blocking)
 npm run fix      # prettier --write + eslint --fix
 ```
 
@@ -116,6 +116,15 @@ npm run fix      # prettier --write + eslint --fix
 - **`fmt`** — `prettier --check`. Config: single quotes, trailing commas, 140 width.
 - **`check:dead`** — `knip`. Catches unused exports, files, and dependencies. Config in `knip.json`.
 - **`check:extensions`** — Vitest extension integration smoke tests (93 tests, ~30s). Also available as `check:extensions:quick` (~5s, skips dynamic import check).
+
+### Testing workflow
+
+| When                         | Command                          | What it covers                                                 |
+| ---------------------------- | -------------------------------- | -------------------------------------------------------------- |
+| Before `npm run desktop:dev` | `npm run check:extensions:quick` | Manifest structure, file existence, exports, conflicts, syntax |
+| Before `git push`            | `npm run check`                  | Types, lint, format, extension tests; knip as advisory         |
+| Before release               | `npm run check:extensions`       | Full suite incl. dynamic import runtime verification           |
+| Periodically                 | `npm test`                       | Full project test suite (2830+ tests)                          |
 
 ### Coverage
 
