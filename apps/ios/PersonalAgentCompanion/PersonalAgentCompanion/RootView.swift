@@ -35,6 +35,7 @@ struct RootView: View {
 
 private struct HostChooserRootView: View {
     @ObservedObject var appModel: CompanionAppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var editingHost: CompanionHostRecord?
     @State private var showingPairHost = false
 
@@ -42,18 +43,7 @@ private struct HostChooserRootView: View {
         NavigationStack {
             List {
                 if appModel.hosts.isEmpty {
-                    ContentUnavailableView {
-                        Label("Pair a host", systemImage: "server.rack")
-                    } description: {
-                        Text("Choose a Personal Agent host first, then work with chats, automations, and settings for that host.")
-                    } actions: {
-                        Button("Pair host") {
-                            showingPairHost = true
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 36)
-                    .listRowBackground(Color.clear)
+                    emptyHostRow
                 } else {
                     Section("Hosts") {
                         ForEach(appModel.hosts, id: \.id) { host in
@@ -121,6 +111,43 @@ private struct HostChooserRootView: View {
             .sheet(isPresented: $showingPairHost) {
                 PairHostView(appModel: appModel)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyHostRow: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 52, weight: .semibold))
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                Text("Pair a host")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(CompanionTheme.textPrimary)
+                Text("Connect to a Personal Agent host to use chats, automations, and settings.")
+                    .font(.body)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                Button("Pair host") {
+                    showingPairHost = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 24)
+            .listRowBackground(Color.clear)
+        } else {
+            ContentUnavailableView {
+                Label("Pair a host", systemImage: "server.rack")
+            } description: {
+                Text("Choose a Personal Agent host first, then work with chats, automations, and settings for that host.")
+            } actions: {
+                Button("Pair host") {
+                    showingPairHost = true
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 36)
+            .listRowBackground(Color.clear)
         }
     }
 }
