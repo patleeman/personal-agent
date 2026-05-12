@@ -603,24 +603,28 @@ private struct SwipeableConversationCard<Content: View>: View {
 }
 
 private struct ArchivedEmptyState: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 12 : 18) {
             Image(systemName: "archivebox")
-                .font(.system(size: 48, weight: .semibold))
+                .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 36 : 48, weight: .semibold))
             Text("No archived conversations")
-                .font(.title2.weight(.bold))
+                .font((dynamicTypeSize.isAccessibilitySize ? Font.headline : Font.title2).weight(.bold))
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Archived and older hidden threads show up here. Unarchive one to move it back into Chat.")
-                .font(.body)
+            Text(dynamicTypeSize.isAccessibilitySize
+                 ? "Hidden threads show up here."
+                 : "Archived and older hidden threads show up here. Unarchive one to move it back into Chat.")
+                .font(dynamicTypeSize.isAccessibilitySize ? .callout : .body)
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(CompanionTheme.textSecondary)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 48)
+        .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 28 : 48)
         .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
     }
