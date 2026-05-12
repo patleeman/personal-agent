@@ -391,7 +391,10 @@ function writeWorkspaceOpenFiles(cwd: string | null, paths: readonly string[]): 
 }
 
 function addWorkspaceOpenFile(paths: readonly string[], path: string): string[] {
-  return [path, ...paths.filter((value) => value !== path)].slice(0, MAX_WORKSPACE_OPEN_FILES);
+  if (paths.includes(path)) {
+    return [...paths];
+  }
+  return [path, ...paths].slice(0, MAX_WORKSPACE_OPEN_FILES);
 }
 
 function removeWorkspaceOpenFile(paths: readonly string[], path: string): string[] {
