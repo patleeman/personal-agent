@@ -2258,6 +2258,10 @@ export function Sidebar() {
     [filteredConversationItems, runs],
   );
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
+  const conversationItemBySessionId = useMemo(
+    () => new Map(renderedConversationItems.map((item) => [item.session.id, item] as const)),
+    [renderedConversationItems],
+  );
   const canReorderConversationRows = threadsFilterMode === 'all';
   const canReorderConversationGroups = canReorderConversationRows && threadsOrganizeMode === 'project';
   const hotkeyConversationItems = useMemo(
@@ -3475,34 +3479,95 @@ export function Sidebar() {
                     navigate(item.route);
                   }
                 }}
-                renderContextMenu={(item, context) => (
-                  <div className="ui-context-menu min-w-[12rem] py-1" role="menu">
-                    <button
-                      type="button"
-                      className="ui-context-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        context.close();
-                        if (item.route) {
-                          navigate(item.route);
-                        }
-                      }}
-                    >
-                      Open
-                    </button>
-                    <button
-                      type="button"
-                      className="ui-context-menu-item"
-                      role="menuitem"
-                      onClick={() => {
-                        context.close();
-                        handleThreadsActivityTreeToggle();
-                      }}
-                    >
-                      Use Classic List
-                    </button>
-                  </div>
-                )}
+                renderContextMenu={(item, context) => {
+                  const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
+                  const conversationItem = conversationId ? conversationItemBySessionId.get(conversationId) : null;
+                  const isConversation = item.kind === 'conversation' && conversationId && conversationItem;
+                  return (
+                    <div className="ui-context-menu min-w-[12rem] py-1" role="menu">
+                      <button
+                        type="button"
+                        className="ui-context-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          context.close();
+                          if (item.route) {
+                            navigate(item.route);
+                          }
+                        }}
+                      >
+                        Open
+                      </button>
+                      {isConversation ? (
+                        <>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              if (conversationItem.pinned) {
+                                unpinSession(conversationId);
+                              } else {
+                                pinSession(conversationId);
+                              }
+                            }}
+                          >
+                            {conversationItem.pinned ? 'Unpin Thread' : 'Pin Thread'}
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              if (conversationItem.pinned) {
+                                handleClosePinnedConversation(conversationId);
+                              } else {
+                                handleCloseConversation(conversationId);
+                              }
+                            }}
+                          >
+                            Close Thread
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              handleArchiveConversation(conversationId);
+                            }}
+                          >
+                            Archive Thread
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              void handleCopyConversationId(conversationId);
+                            }}
+                          >
+                            Copy Session ID
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="ui-context-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          context.close();
+                          handleThreadsActivityTreeToggle();
+                        }}
+                      >
+                        Use Classic List
+                      </button>
+                    </div>
+                  );
+                }}
               />
             ) : threadsOrganizeMode === 'project' ? (
               groupedConversationRows.map((group) => {
