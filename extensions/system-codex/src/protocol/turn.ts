@@ -226,9 +226,7 @@ export const turn = {
     }
     subs.add(unsubscribe);
 
-    try {
-      await ctx.conversations.sendMessage(threadId, text);
-    } catch (error) {
+    void ctx.conversations.sendMessage(threadId, text).catch((error) => {
       conn.activeTurnThreads.delete(threadId);
       if (!turnDone) {
         turnDone = true;
@@ -241,7 +239,7 @@ export const turn = {
           cleanupTurnSubscriptions(threadId);
         }
       }
-    }
+    });
 
     return {
       turn: codexTurn(turnId, 'inProgress'),
