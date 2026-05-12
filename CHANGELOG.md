@@ -3,6 +3,8 @@
 ## 0.7.9-rc.9 — 2026-05-11
 
 - fix: add missing async to extension enable route handler
+- fix: guard session info title update against undefined name
+- fix: clean up rc.9 changelog (remove duplicate entries)
 - fix: align system extension backend builds
 - fix: avoid duplicate desktop runtime setup
 - fix: avoid recursive workspace watch on desktop startup

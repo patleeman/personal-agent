@@ -312,7 +312,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'session_info_changed') {
-    entry.title = event.name;
+    if (event.name) entry.title = event.name;
     callbacks.broadcastTitle(entry);
   }
 
