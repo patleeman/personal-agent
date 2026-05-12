@@ -349,6 +349,48 @@ describe('system-goal-mode extension', () => {
     expect(result?.content?.[0]?.text).toBe('Goal already complete.');
   });
 
+  it('syncs active goal tools at agent start for goals set through the UI/API', async () => {
+    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
+    const setActiveTools = vi.fn();
+    const factory = createConversationAutoModeAgentExtension();
+    const pi = {
+      registerTool: vi.fn(),
+      registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => ['set_goal', 'bash']),
+      setActiveTools,
+      sendMessage: vi.fn(),
+      appendEntry: vi.fn(),
+      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
+        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+      }),
+    } as unknown as ExtensionAPI;
+
+    factory(pi);
+
+    await handlers.get('agent_start')?.[0]?.(
+      {},
+      {
+        sessionManager: {
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-goal',
+              data: {
+                objective: 'ship goal mode',
+                status: 'active',
+                tasks: [],
+                stopReason: null,
+                updatedAt: '2026-05-09T00:00:00.000Z',
+              },
+            },
+          ],
+        },
+      },
+    );
+
+    expect(setActiveTools).toHaveBeenLastCalledWith(['bash', 'update_goal']);
+  });
+
   it('registers only goal set and update tools', () => {
     const registeredTools: Array<{ name: string }> = [];
     const factory = createConversationAutoModeAgentExtension();

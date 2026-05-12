@@ -296,6 +296,12 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       },
     });
 
+    // Keep tool availability aligned with goal state even when the UI/API writes goal state directly.
+    pi.on('agent_start', (_event, ctx) => {
+      const state = readGoalState(ctx.sessionManager);
+      syncGoalTools(pi, state.status === 'active');
+    });
+
     // ── Turn end: schedule continuation if goal is active ──────────────
     pi.on('turn_end', async (event, ctx) => {
       const state = readGoalState(ctx.sessionManager);
