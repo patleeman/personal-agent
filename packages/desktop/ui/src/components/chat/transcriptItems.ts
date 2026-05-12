@@ -1,4 +1,5 @@
 import type { MessageBlock } from '../../shared/types';
+import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
 
 export type TraceConversationBlock = Extract<MessageBlock, { type: 'thinking' | 'tool_use' | 'subagent' | 'error' }>;
 
@@ -39,7 +40,7 @@ function isTraceConversationBlock(block: MessageBlock, standaloneTools: Set<stri
     case 'error':
       return true;
     case 'tool_use':
-      return !standaloneTools.has(block.tool);
+      return !isTerminalBashToolBlock(block) && !standaloneTools.has(block.tool);
     default:
       return false;
   }

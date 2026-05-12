@@ -73,8 +73,7 @@ describe('chat transcript items', () => {
     expect(items.every((item) => item.type === 'message')).toBe(true);
   });
 
-  it('keeps terminal-style bash blocks visible as standalone message items', () => {
-    const standaloneTools = new Set(['bash']);
+  it('keeps terminal-style bash blocks visible as standalone message items even without extension registration', () => {
     const messages: MessageBlock[] = [
       { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'Retry it directly.' },
       {
@@ -88,7 +87,7 @@ describe('chat transcript items', () => {
       },
     ];
 
-    const items = buildChatRenderItems(messages, standaloneTools);
+    const items = buildChatRenderItems(messages);
 
     expect(items).toHaveLength(2);
     expect(items.every((item) => item.type === 'message')).toBe(true);

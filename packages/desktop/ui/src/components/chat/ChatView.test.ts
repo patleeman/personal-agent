@@ -1152,7 +1152,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('Conversation 2 — Auto mode wakeups');
   });
 
-  it('renders generic tool blocks for bash without extension', () => {
+  it('renders terminal bash blocks without extension registration', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -1173,8 +1173,10 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Internal work');
-    expect(html).toContain('1 step');
+    expect(html).not.toContain('Internal work');
+    expect(html).toContain('ui-terminal-block');
+    expect(html).toContain('npm run release:publish');
+    expect(html).toContain('/bin/bash: npm: command not found');
   });
 
   it('renders a continue action for the tail internal-work cluster when recovery is available', () => {

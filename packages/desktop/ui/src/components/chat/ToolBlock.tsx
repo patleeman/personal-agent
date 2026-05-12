@@ -3,8 +3,10 @@ import { useMemo, useState } from 'react';
 import { NativeExtensionToolBlockHost } from '../../extensions/NativeExtensionToolBlockHost';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
+import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
+import { TerminalToolBlock } from './TerminalToolBlock.js';
 import { type DisclosurePreference, resolveDisclosureOpen, toggleDisclosurePreference, toolMeta } from './toolPresentation.js';
 
 const MAX_VISIBLE_LINKED_RUNS = 5;
@@ -53,6 +55,10 @@ export function ToolBlock({
   }, [block.tool, extensionRegistry.extensions]);
   const meta = toolMeta(block.tool);
   const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
+
+  if (isTerminalBashToolBlock(block)) {
+    return <TerminalToolBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
+  }
 
   if (extensionRenderer && extensionRenderer.renderer.tool !== 'ask_user_question') {
     // ask_user_question is handled as a local fallback below so the question
