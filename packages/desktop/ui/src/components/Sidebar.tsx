@@ -1559,10 +1559,23 @@ function OpenConversationRow({
         }
       }
 
-      await getPaClient(menu.extensionId).extension.invoke(menu.action, {
+      const input = {
         conversationId: session.id,
         sessionTitle: session.title,
         cwd: session.cwd,
+      };
+
+      if (menu.extensionId === 'system-session-exchange' && menu.action === 'exportSession') {
+        await api.invokeExtensionAction(menu.extensionId, menu.action, input);
+        return;
+      }
+
+      await getPaClient(menu.extensionId).extension.invoke(menu.action, input);
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: error instanceof Error ? error.message : String(error),
+        source: menu.title,
       });
     } finally {
       setBusyExtensionMenuId(null);
