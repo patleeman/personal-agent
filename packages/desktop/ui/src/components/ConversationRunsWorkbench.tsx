@@ -69,11 +69,11 @@ export function useConversationRunList(
   }, [conversationId, lookups, runs]);
 }
 
-type RunGroup = 'shell' | 'agent';
+type RunGroup = 'command' | 'subagent';
 
 const RUN_GROUP_CONFIG: Record<RunGroup, { label: string; icon: string; tone: string }> = {
-  shell: { label: 'Shell', icon: '›_', tone: 'text-accent/70' },
-  agent: { label: 'Agent', icon: '✦', tone: 'text-accent' },
+  command: { label: 'Background commands', icon: '›_', tone: 'text-accent/70' },
+  subagent: { label: 'Subagents', icon: '✦', tone: 'text-accent' },
 };
 
 export function ConversationRunsRailContent({
@@ -91,9 +91,9 @@ export function ConversationRunsRailContent({
 }) {
   const connectedRuns = useConversationRunList(conversationId, runs, lookups);
   const grouped = useMemo(() => {
-    const groups: Record<RunGroup, DurableRunRecord[]> = { shell: [], agent: [] };
+    const groups: Record<RunGroup, DurableRunRecord[]> = { command: [], subagent: [] };
     for (const run of connectedRuns) {
-      const group: RunGroup = isShellRun(run) ? 'shell' : 'agent';
+      const group: RunGroup = isShellRun(run) ? 'command' : 'subagent';
       groups[group].push(run);
     }
     for (const key of Object.keys(groups) as RunGroup[]) {
@@ -102,17 +102,17 @@ export function ConversationRunsRailContent({
     return groups;
   }, [connectedRuns]);
 
-  const orderedGroups: RunGroup[] = ['shell', 'agent'];
+  const orderedGroups: RunGroup[] = ['command', 'subagent'];
   const hasRuns = connectedRuns.length > 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 px-3 py-2">
-        <p className="ui-section-label">Runs</p>
+        <p className="ui-section-label">Background work</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
         {!hasRuns ? (
-          <div className="px-3 py-4 text-[12px] text-dim">No runs for this conversation.</div>
+          <div className="px-3 py-4 text-[12px] text-dim">No background commands or subagents for this conversation.</div>
         ) : (
           <div className="flex flex-col gap-3">
             {orderedGroups.map((group) => {
@@ -197,9 +197,11 @@ export function ConversationRunWorkbenchPane({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center select-text">
         <div className="max-w-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Runs</p>
-          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Select a run</h2>
-          <p className="mt-2 text-[13px] leading-6 text-secondary">Pick background work from the Runs rail or the conversation shelf.</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Background work</p>
+          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Select background work</h2>
+          <p className="mt-2 text-[13px] leading-6 text-secondary">
+            Pick a background command or subagent from the rail or conversation shelf.
+          </p>
         </div>
       </div>
     );
@@ -211,9 +213,9 @@ export function ConversationRunWorkbenchPane({
 function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentationLookups }) {
   const { detail, log, loading, error, reconnect } = useDurableRunStream(runId, 360);
 
-  if (loading && !detail) return <LoadingState label="Loading run…" className="justify-center h-full" />;
+  if (loading && !detail) return <LoadingState label="Loading background work…" className="justify-center h-full" />;
   if (error && !detail) return <ErrorState message={error} className="px-4 py-4" />;
-  if (!detail) return <div className="px-5 py-5 text-[12px] text-dim">Run not found.</div>;
+  if (!detail) return <div className="px-5 py-5 text-[12px] text-dim">Background work not found.</div>;
 
   const run = detail.run;
   const shell = isShellRun(run);
@@ -277,7 +279,7 @@ function ShellRunDetail({
                   'inline-flex items-center gap-1 rounded-md border border-accent/20 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent/70',
                 )}
               >
-                ›_ Shell
+                ›_ Background command
               </span>
               <span className={cx('font-medium', statusTone(run))}>{statusLabel(run)}</span>
             </div>
@@ -401,7 +403,7 @@ function AgentRunDetail({
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-secondary">
               <span className="inline-flex items-center gap-1 rounded-md border border-accent/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-accent">
-                ✦ Agent
+                ✦ Subagent
               </span>
               <span className={cx('font-medium', statusTone(run))}>{statusLabel(run)}</span>
               {model ? <span className="truncate text-dim">{model}</span> : null}
@@ -462,7 +464,7 @@ function AgentRunDetail({
           <div className="mt-4 min-h-[420px]">
             <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border-subtle bg-black/35">
               <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-dim">
-                <span>Run output</span>
+                <span>Subagent output</span>
                 <div className="flex items-center gap-2">
                   {running && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />}
                   <span className="truncate font-mono normal-case tracking-normal">{log?.path?.split('/').pop() ?? 'output.log'}</span>

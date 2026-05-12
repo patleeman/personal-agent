@@ -523,7 +523,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'npm --prefix packages/desktop run dev',
-      summary: 'Shell command · ui-smoke',
+      summary: 'Background command · ui-smoke',
     });
   });
 
@@ -547,7 +547,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'npm --prefix packages/desktop run dev',
-      summary: 'Shell command',
+      summary: 'Background command',
     });
   });
 
@@ -596,7 +596,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'printf ok',
-      summary: 'Shell command · ui-preview-check',
+      summary: 'Background command · ui-preview-check',
     });
   });
 
@@ -628,7 +628,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'Inspect git diff and summarize the result.',
-      summary: 'Agent task · ui-polish',
+      summary: 'Subagent · ui-polish',
     });
   });
 

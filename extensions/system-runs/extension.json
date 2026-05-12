@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
   "id": "system-runs",
-  "name": "Runs",
+  "name": "Background Work",
   "packageType": "system",
-  "description": "Inspect and manage background work linked to the active conversation.",
+  "description": "Inspect background commands and subagents linked to the active conversation.",
   "version": "0.2.0",
   "frontend": {
     "entry": "dist/frontend.js",
@@ -15,7 +15,17 @@
       {
         "id": "run",
         "handler": "run",
-        "title": "Run"
+        "title": "Run (legacy)"
+      },
+      {
+        "id": "background_command",
+        "handler": "background_command",
+        "title": "Background Command"
+      },
+      {
+        "id": "subagent",
+        "handler": "subagent",
+        "title": "Subagent"
       }
     ]
   },
@@ -24,8 +34,8 @@
       {
         "id": "run",
         "name": "run",
-        "title": "Run",
-        "description": "Inspect and manage durable daemon-backed background runs.",
+        "title": "Run (legacy)",
+        "description": "Legacy compatibility surface for durable background commands and subagents.",
         "action": "run",
         "inputSchema": {
           "type": "object",
@@ -85,12 +95,113 @@
           "required": ["action"],
           "additionalProperties": false
         }
+      },
+      {
+        "id": "background_command",
+        "name": "background_command",
+        "title": "Background Command",
+        "description": "Start, inspect, log, rerun, or cancel daemon-backed shell commands.",
+        "action": "background_command",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["list", "get", "logs", "start", "rerun", "cancel"]
+            },
+            "runId": {
+              "type": "string"
+            },
+            "taskSlug": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "tail": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "deliverResultToConversation": {
+              "type": "boolean"
+            }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "subagent",
+        "name": "subagent",
+        "title": "Subagent",
+        "description": "Start, inspect, follow up, rerun, or cancel daemon-backed subagent tasks.",
+        "action": "subagent",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["list", "get", "logs", "start", "rerun", "follow_up", "cancel"]
+            },
+            "runId": {
+              "type": "string"
+            },
+            "taskSlug": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "tail": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "deliverResultToConversation": {
+              "type": "boolean"
+            },
+            "loop": {
+              "type": "boolean"
+            },
+            "loopDelay": {
+              "type": "string"
+            },
+            "loopMaxIterations": {
+              "type": "number"
+            },
+            "allowedTools": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
       }
     ],
     "views": [
       {
         "id": "conversation-runs",
-        "title": "Runs",
+        "title": "Background work",
         "location": "rightRail",
         "scope": "conversation",
         "component": "ConversationRunsPanel",
@@ -101,7 +212,7 @@
       },
       {
         "id": "conversation-run-detail",
-        "title": "Run detail",
+        "title": "Background work detail",
         "location": "workbench",
         "component": "ConversationRunDetailPanel",
         "placement": "workbench-tool",
@@ -113,15 +224,15 @@
       {
         "id": "activity-shelf",
         "component": "ActivityShelf",
-        "title": "Active runs",
+        "title": "Active background work",
         "placement": "bottom"
       }
     ],
     "skills": [
       {
         "id": "runs",
-        "title": "Runs",
-        "description": "Built-in guidance for detached durable background runs, inspection, and follow-up behavior.",
+        "title": "Background work",
+        "description": "Built-in guidance for detached background commands, subagents, inspection, and follow-up behavior.",
         "path": "skills/runs/SKILL.md"
       }
     ]

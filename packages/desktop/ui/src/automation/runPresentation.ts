@@ -482,11 +482,11 @@ function sourceKindLabel(run: DurableRunRecord): string {
   }
 
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
-    return 'Agent task';
+    return 'Subagent';
   }
 
   if (run.manifest?.kind === 'raw-shell') {
-    return 'Shell command';
+    return 'Background command';
   }
 
   if (run.manifest?.kind === 'workflow') {
@@ -534,7 +534,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const shellCommand = excerptShellCommand(getRunTargetCommand(run));
     const taskSlug = getRunTaskSlug(run);
     const headline = agentPrompt ?? shellCommand ?? taskSlug ?? run.runId;
-    const kindLabel = agentPrompt ? 'Agent task' : shellCommand ? 'Shell command' : 'Agent task';
+    const kindLabel = agentPrompt ? 'Subagent' : shellCommand ? 'Background command' : 'Subagent';
     const summary =
       taskSlug && headline !== taskSlug
         ? `${kindLabel} · ${taskSlug}`
@@ -551,7 +551,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const detail = taskSlug && taskSlug !== title ? taskSlug : undefined;
     return {
       title,
-      summary: detail ? `Shell command · ${detail}` : shellCommand ? 'Shell command' : sourceKindLabel(run),
+      summary: detail ? `Background command · ${detail}` : shellCommand ? 'Background command' : sourceKindLabel(run),
     };
   }
 

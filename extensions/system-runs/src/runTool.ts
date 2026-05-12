@@ -23,6 +23,34 @@ const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun
 
 type RunAction = (typeof RUN_ACTION_VALUES)[number];
 
+type RunToolExecutionParams = {
+  action?: unknown;
+  runId?: string;
+  taskSlug?: string;
+  command?: string;
+  prompt?: string;
+  model?: string;
+  profile?: string;
+  cwd?: string;
+  tail?: unknown;
+  deliverResultToConversation?: boolean;
+  defer?: string;
+  cron?: string;
+  at?: string;
+  loop?: boolean;
+  loopDelay?: string;
+  loopMaxIterations?: unknown;
+  allowedTools?: unknown;
+};
+
+type RunToolExecutionContext = {
+  cwd?: string;
+  sessionManager: {
+    getSessionId(): string;
+    getSessionFile(): string | undefined;
+  };
+};
+
 const RunToolParams = Type.Object({
   action: Type.Union(RUN_ACTION_VALUES.map((value) => Type.Literal(value))),
   runId: Type.Optional(Type.String({ description: 'Run id for get/logs/rerun/follow_up/cancel actions.' })),
@@ -197,23 +225,27 @@ export function createRunAgentExtension(options: {
   profilesRoot: string;
 }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
-    pi.registerTool({
+    const legacyRunTool = {
       name: 'run',
-      label: 'Run',
-      description: 'Inspect and manage durable daemon-backed background runs.',
-      promptSnippet: 'Use the run tool for daemon-backed background runs that should outlive the current turn.',
+      label: 'Run (legacy)',
+      description: 'Legacy compatibility tool for durable background commands and subagents. Prefer background_command or subagent.',
+      promptSnippet: 'Prefer background_command for shell work and subagent for delegated agent work; use run only for legacy inspection.',
       promptGuidelines: [
-        'Use this tool for durable background jobs that should keep running outside the current turn.',
-        'Prefer one focused run per independent task slug.',
-        'Use start for detached shell work, start_agent for detached subagents, rerun to replay a stopped run, follow_up to continue a stopped background agent run, get/logs for inspection, and cancel to stop a run.',
+        'Prefer background_command for daemon-backed shell commands.',
+        'Prefer subagent for detached agent delegation and follow-up.',
+        'Use run only when you need the legacy generic list/get/logs/rerun/cancel surface.',
         'Runs are detached by default. Only set deliverResultToConversation=true when the result should flow back to this conversation.',
-        'For time-based runs, use defer/cron/at with start_agent; scheduled agent prompts become automations.',
-        'For looping agents, use loop=true with start_agent.',
+        'For persistent time-based automations, prefer scheduled_task.',
         'For pure conversation follow-up later, prefer conversation_queue with trigger="after_turn", "delay", or "at" instead.',
-        'For editing or inspecting saved automations directly, use scheduled_task or the Automations UI.',
       ],
       parameters: RunToolParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      async execute(
+        _toolCallId: string,
+        params: RunToolExecutionParams,
+        _signal: unknown,
+        _onUpdate: unknown,
+        ctx: RunToolExecutionContext,
+      ) {
         try {
           switch (params.action as RunAction) {
             case 'list': {
@@ -340,7 +372,7 @@ export function createRunAgentExtension(options: {
                 content: [
                   {
                     type: 'text' as const,
-                    text: `Started durable run ${result.runId} for ${taskSlug}.`,
+                    text: `Started background command ${result.runId} for ${taskSlug}.`,
                   },
                 ],
                 details: {
@@ -527,7 +559,7 @@ export function createRunAgentExtension(options: {
               });
               invalidateAppTopics('runs');
 
-              let message = `Started durable agent run ${result.runId} for ${taskSlug}`;
+              let message = `Started subagent ${result.runId} for ${taskSlug}`;
               if (loop) {
                 message += ' [loop]';
               }
@@ -647,7 +679,7 @@ export function createRunAgentExtension(options: {
               recordTelemetryEvent({ source: 'agent', category: 'durable_run', name: 'cancel', runId, status: 200 });
               invalidateAppTopics('runs');
               return {
-                content: [{ type: 'text' as const, text: `Cancelled durable run ${runId}.` }],
+                content: [{ type: 'text' as const, text: `Cancelled background work ${runId}.` }],
                 details: {
                   action: 'cancel',
                   runId,
@@ -668,6 +700,65 @@ export function createRunAgentExtension(options: {
             },
           };
         }
+      },
+    };
+
+    pi.registerTool(legacyRunTool);
+
+    pi.registerTool({
+      name: 'background_command',
+      label: 'Background Command',
+      description: 'Start, inspect, log, rerun, or cancel daemon-backed shell commands.',
+      promptSnippet: 'Use background_command for shell commands that should run durably outside the current turn.',
+      promptGuidelines: [
+        'Use start for shell commands that should continue outside the current turn.',
+        'Use get/logs/rerun/cancel for background command lifecycle management.',
+        'Use subagent for delegated agent work instead of shell commands.',
+      ],
+      parameters: Type.Object({
+        action: Type.Union(['list', 'get', 'logs', 'start', 'rerun', 'cancel'].map((value) => Type.Literal(value))),
+        runId: Type.Optional(Type.String({ description: 'Background command id for get/logs/rerun/cancel actions.' })),
+        taskSlug: Type.Optional(Type.String({ description: 'Short task slug for start.' })),
+        command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
+        cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
+        tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
+        deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether completion should wake this conversation.' })),
+      }),
+      execute(toolCallId: string, params: RunToolExecutionParams, signal: unknown, onUpdate: unknown, ctx: RunToolExecutionContext) {
+        return legacyRunTool.execute(toolCallId, params, signal, onUpdate, ctx);
+      },
+    });
+
+    pi.registerTool({
+      name: 'subagent',
+      label: 'Subagent',
+      description: 'Start, inspect, follow up, rerun, or cancel daemon-backed subagent tasks.',
+      promptSnippet: 'Use subagent for delegated agent work that should run durably outside the current turn.',
+      promptGuidelines: [
+        'Use start for detached agent delegation.',
+        'Use follow_up to continue a previous subagent.',
+        'Use scheduled_task for persistent recurring automations instead of cron/defer here.',
+        'Use background_command for shell commands instead of subagent.',
+      ],
+      parameters: Type.Object({
+        action: Type.Union(['list', 'get', 'logs', 'start', 'rerun', 'follow_up', 'cancel'].map((value) => Type.Literal(value))),
+        runId: Type.Optional(Type.String({ description: 'Subagent id for get/logs/rerun/follow_up/cancel actions.' })),
+        taskSlug: Type.Optional(Type.String({ description: 'Short task slug for start.' })),
+        prompt: Type.Optional(Type.String({ description: 'Agent prompt for start, or follow-up prompt for follow_up.' })),
+        model: Type.Optional(Type.String({ description: 'Optional full model ref.' })),
+        cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
+        tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
+        deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether completion should wake this conversation.' })),
+        loop: Type.Optional(Type.Boolean({ description: 'Enable loop mode - agent schedules its own next iteration.' })),
+        loopDelay: Type.Optional(Type.String({ description: 'Default delay between loop iterations, for example 1h.' })),
+        loopMaxIterations: Type.Optional(Type.Number({ description: 'Maximum number of loop iterations.' })),
+        allowedTools: Type.Optional(
+          Type.Union([Type.String({ description: 'Comma-separated allowed tool names.' }), Type.Array(Type.String())]),
+        ),
+      }),
+      execute(toolCallId: string, params: RunToolExecutionParams, signal: unknown, onUpdate: unknown, ctx: RunToolExecutionContext) {
+        const action = params.action === 'start' ? 'start_agent' : params.action;
+        return legacyRunTool.execute(toolCallId, { ...params, action }, signal, onUpdate, ctx);
       },
     });
   };

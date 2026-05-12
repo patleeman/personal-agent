@@ -40,7 +40,7 @@ async function executeRegisteredTool(factory: ReturnType<typeof createRunAgentEx
   });
 }
 
-export async function run(input: unknown, ctx: NativeBackendContext) {
+async function executeRunInput(input: unknown, ctx: NativeBackendContext) {
   const result = (await executeRegisteredTool(
     createRunAgentExtension({
       getCurrentProfile: () => 'shared',
@@ -55,4 +55,20 @@ export async function run(input: unknown, ctx: NativeBackendContext) {
     ? result.content.map((item) => (item.type === 'text' ? (item.text ?? '') : JSON.stringify(item))).join('\n')
     : JSON.stringify(result, null, 2);
   return { text, ...(result?.details ? { details: result.details } : {}) };
+}
+
+export async function run(input: unknown, ctx: NativeBackendContext) {
+  return executeRunInput(input, ctx);
+}
+
+export async function background_command(input: unknown, ctx: NativeBackendContext) {
+  return executeRunInput(input, ctx);
+}
+
+export async function subagent(input: unknown, ctx: NativeBackendContext) {
+  const params = typeof input === 'object' && input !== null && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
+  if (params.action === 'start') {
+    params.action = 'start_agent';
+  }
+  return executeRunInput(params, ctx);
 }

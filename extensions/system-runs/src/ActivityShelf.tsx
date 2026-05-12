@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function ActivityShelf({
   pa,
@@ -8,7 +8,6 @@ export function ActivityShelf({
   shelfContext: { conversationId: string };
 }) {
   const [runCount, setRunCount] = useState<number | null>(null);
-  const [cancellingRunIds, setCancellingRunIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -33,22 +32,6 @@ export function ActivityShelf({
     };
   }, [pa, shelfContext.conversationId]);
 
-  const handleCancel = useCallback(
-    async (runId: string) => {
-      setCancellingRunIds((prev) => new Set(prev).add(runId));
-      try {
-        await pa.runs.cancel(runId);
-      } finally {
-        setCancellingRunIds((prev) => {
-          const next = new Set(prev);
-          next.delete(runId);
-          return next;
-        });
-      }
-    },
-    [pa],
-  );
-
   if (!runCount || runCount === 0) return null;
 
   return (
@@ -57,9 +40,8 @@ export function ActivityShelf({
         <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
       </span>
       <span className="text-secondary">
-        {runCount} active run{runCount === 1 ? '' : 's'}
+        {runCount} active background item{runCount === 1 ? '' : 's'}
       </span>
-      {cancellingRunIds.size > 0 && <span className="text-dim">Cancelling…</span>}
     </div>
   );
 }
