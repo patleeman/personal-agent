@@ -12,6 +12,7 @@ export interface ActivityTreeItem {
   status: ActivityTreeItemStatus;
   route?: string;
   accentColor?: string;
+  backgroundColor?: string;
   updatedAt?: string;
   metadata?: Record<string, unknown>;
 }

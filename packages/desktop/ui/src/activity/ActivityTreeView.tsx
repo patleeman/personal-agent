@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useFileTreeModel } from '../components/shared/useFileTreeModel';
 import type { ActivityTreeItem } from './activityTree';
 import { buildActivityTreePathModel } from './activityTreePaths';
+import { buildActivityTreeUnsafeCss } from './activityTreeStyles';
 
 interface ActivityTreeViewProps {
   items: readonly ActivityTreeItem[];
@@ -24,6 +25,7 @@ const ACTIVITY_TREE_STYLE = {
 export function ActivityTreeView({ items, activeItemId, className, style, onOpenItem, renderContextMenu }: ActivityTreeViewProps) {
   const pathModel = useMemo(() => buildActivityTreePathModel(items), [items]);
   const selectedPath = activeItemId ? pathModel.pathById.get(activeItemId) : undefined;
+  const unsafeCSS = useMemo(() => buildActivityTreeUnsafeCss(pathModel), [pathModel]);
   const handleSelectionChange = useCallback(
     (paths: readonly string[]) => {
       const path = paths[0];
@@ -56,6 +58,7 @@ export function ActivityTreeView({ items, activeItemId, className, style, onOpen
     dragAndDrop: false,
     onSelectionChange: handleSelectionChange,
     renderRowDecoration,
+    unsafeCSS,
   });
 
   useEffect(() => {

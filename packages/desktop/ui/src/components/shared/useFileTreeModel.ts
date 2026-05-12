@@ -60,6 +60,8 @@ export interface UseFileTreeModelOptions {
   onRename?: (event: FileTreeRenameEvent) => void;
   /** Optional lightweight row decoration renderer. */
   renderRowDecoration?: FileTreeRowDecorationRenderer;
+  /** Optional CSS injected into the tree shadow root. Prefer tokens and keep this narrow. */
+  unsafeCSS?: string;
 }
 
 export interface UseFileTreeModelResult {
@@ -92,6 +94,7 @@ export function useFileTreeModel({
   onSelectionChange,
   onRename,
   renderRowDecoration,
+  unsafeCSS,
 }: UseFileTreeModelOptions): UseFileTreeModelResult {
   const selectedPathsRef = useRef<readonly string[]>([]);
   const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
@@ -120,6 +123,7 @@ export function useFileTreeModel({
         onSelectionChange: (paths) => selectionChangeRef.current(paths),
         renaming: { onRename: (event) => renameRef.current(event) },
         ...(renderRowDecoration ? { renderRowDecoration } : {}),
+        ...(unsafeCSS ? { unsafeCSS } : {}),
         ...(dragAndDrop !== false
           ? {
               dragAndDrop: {
@@ -140,7 +144,7 @@ export function useFileTreeModel({
           : {}),
       }),
     // These are the immutable options — the model must be rebuilt when they change.
-    [search, contextMenuTrigger, renderRowDecoration, useNativeContextMenu],
+    [search, contextMenuTrigger, renderRowDecoration, unsafeCSS, useNativeContextMenu],
   );
 
   const resetTree = useCallback(
