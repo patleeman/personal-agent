@@ -903,22 +903,22 @@ npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.tes
 npm test
 ```
 
-The integration suite covers 65 tests across 12 categories:
+The integration suite covers 70 tests across 13 categories:
 
-| Category                  | What it validates                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Manifest structure        | JSON parses, schemaVersion, required fields, permissions format, routes, startup action references, dual entry files      |
-| Tool schema               | `inputSchema` has `type:object` + `properties`, `replaces` targets valid built-ins                                        |
-| Action references         | All `action` fields in context menus, commands, toolbar actions reference known backend handlers or valid system patterns |
-| Settings/Secrets          | Setting type/default consistency, select enum values, secret env var format                                               |
-| Frontend components       | Every component field in views/buttons/shelves/panels exists in the frontend bundle                                       |
-| Cross-extension conflicts | Duplicate IDs, routes, tool names, commands, keybindings, settings, secrets                                               |
-| Registry sanity           | All 25 system extensions registered, routes point to real extensions                                                      |
-| Backend files             | `dist/backend.mjs` exists, source files present, handler names match                                                      |
-| Frontend files            | `dist/frontend.js` exists, style files present                                                                            |
-| Agent extensions          | Registration listing, export names, backend entry references                                                              |
-| Skills                    | File existence, valid Agent Skills frontmatter                                                                            |
-| Summary report            | Printed overview with counts across 21 registration categories                                                            |
+| Category                  | What it validates                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manifest structure        | JSON parses, schemaVersion, version field, required fields, permissions format, routes, startup action validity, backend/no-backend consistency |
+| Tool schema               | `inputSchema` has `type:object` + `properties`, `replaces` targets valid built-ins                                                              |
+| Action references         | All `action` fields in context menus, commands, toolbar actions, nav badge actions reference known backend handlers or valid system patterns    |
+| Settings/Secrets          | Setting type/default consistency, select enum values, dot-separated key format, secret env var format                                           |
+| Frontend components       | Every component field in views/buttons/shelves/panels exists in the frontend bundle                                                             |
+| Cross-extension conflicts | Duplicate IDs, routes, tool names, commands, keybindings, settings, secrets, secret env variable names                                          |
+| Registry sanity           | All 25 system extensions registered, routes point to real extensions                                                                            |
+| Backend files             | `dist/backend.mjs` exists, source files present, handler names match                                                                            |
+| Frontend files            | `dist/frontend.js` exists, style files present                                                                                                  |
+| Agent extensions          | Registration listing, export names, backend entry references                                                                                    |
+| Skills                    | File existence, valid Agent Skills frontmatter                                                                                                  |
+| Summary report            | Printed overview with counts across 21 registration categories                                                                                  |
 
 ### Debugging
 

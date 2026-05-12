@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -917,6 +918,24 @@ describe('extension backends - file existence and structural checks', () => {
         const mapPath = resolve(s.packageRoot ?? '', 'dist', sourceMapMatch[1]);
         expect(existsSync(mapPath), `${s.id}: source map ${sourceMapMatch[1]} not found`).toBe(true);
       }
+    }
+  });
+
+  it('prebuilt backend files pass Node.js syntax check', () => {
+    for (const s of summaries) {
+      if (s.packageType !== 'system') continue;
+      const backendEntry = s.manifest.backend?.entry;
+      if (!backendEntry) continue;
+
+      const backendPath = resolve(s.packageRoot ?? '', 'dist', 'backend.mjs');
+      if (!existsSync(backendPath)) continue;
+
+      // Running node --check validates syntax without executing the module
+      // This catches import-time syntax errors that would surface when the app starts
+      expect(
+        () => execFileSync('node', ['--check', backendPath], { encoding: 'utf-8', timeout: 10000 }),
+        `${s.id}: dist/backend.mjs has syntax errors`,
+      ).not.toThrow();
     }
   });
 });
