@@ -1,4 +1,5 @@
 import { registerAppTelemetryRoutes } from './appTelemetry.js';
+import { registerCompanionProxyRoutes } from './companionProxy.js';
 import type { RegisterServerRoutesInput } from './context.js';
 import { registerConversationRoutes } from './conversations.js';
 import { registerConversationStateRoutes } from './conversationState.js';
@@ -24,6 +25,8 @@ import { registerWorkspaceExplorerRoutes } from './workspaceExplorer.js';
 
 export function registerServerRoutes({ app, context }: RegisterServerRoutesInput): void {
   registerAppTelemetryRoutes(app);
+
+  registerCompanionProxyRoutes(app);
 
   registerDaemonRoutes(app);
 

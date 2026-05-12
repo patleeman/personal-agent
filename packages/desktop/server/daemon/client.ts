@@ -167,6 +167,23 @@ export async function getDaemonStatus(config?: DaemonConfig): Promise<DaemonStat
   );
 }
 
+export async function getCompanionUrl(config?: DaemonConfig): Promise<string | null> {
+  const transport = getTransport();
+  if (transport?.getCompanionUrl) {
+    return transport.getCompanionUrl(config);
+  }
+
+  const resolvedConfig = config ?? loadDaemonConfig();
+  if (resolvedConfig.companion?.enabled === false) {
+    return null;
+  }
+
+  const host = resolvedConfig.companion?.host ?? '127.0.0.1';
+  const port = resolvedConfig.companion?.port ?? 3843;
+  const formattedHost = host.includes(':') ? `[${host}]` : host;
+  return `http://${formattedHost}:${String(port)}`;
+}
+
 export async function stopDaemon(config?: DaemonConfig): Promise<void> {
   const transport = getTransport();
   if (transport) {
