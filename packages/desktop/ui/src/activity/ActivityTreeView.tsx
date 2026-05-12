@@ -1,12 +1,9 @@
-import type { FileTreeContextMenuItem, FileTreeContextMenuOpenContext, FileTreeRowDecorationRenderer } from '@pierre/trees';
-import { FileTree as TreesFileTree } from '@pierre/trees/react';
+import type { FileTreeContextMenuOpenContext } from '@pierre/trees';
 import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { useFileTreeModel } from '../components/shared/useFileTreeModel';
 import type { ActivityTreeItem } from './activityTree';
 import { buildActivityTreePathModel } from './activityTreePaths';
-import { buildActivityTreeUnsafeCss } from './activityTreeStyles';
 
 interface ActivityTreeViewProps {
   items: readonly ActivityTreeItem[];
@@ -17,72 +14,82 @@ interface ActivityTreeViewProps {
   renderContextMenu?: (item: ActivityTreeItem, context: FileTreeContextMenuOpenContext) => ReactNode;
 }
 
-const ACTIVITY_TREE_STYLE = {
-  '--trees-selected-bg-override': 'color-mix(in srgb, var(--color-accent, #8b5cf6) 15%, transparent)',
-  '--trees-border-color-override': 'transparent',
-} as CSSProperties;
+interface ActivityTreeContextMenuState {
+  item: ActivityTreeItem;
+  x: number;
+  y: number;
+}
 
 export function ActivityTreeView({ items, activeItemId, className, style, onOpenItem, renderContextMenu }: ActivityTreeViewProps) {
   const pathModel = useMemo(() => buildActivityTreePathModel(items), [items]);
   const selectedPath = activeItemId ? pathModel.pathById.get(activeItemId) : undefined;
-  const unsafeCSS = useMemo(() => buildActivityTreeUnsafeCss(pathModel), [pathModel]);
-  const handleSelectionChange = useCallback(
-    (paths: readonly string[]) => {
-      const path = paths[0];
-      if (!path) return;
-      const item = pathModel.itemByPath.get(path);
-      if (item) onOpenItem?.(item);
-    },
-    [onOpenItem, pathModel],
-  );
-  const renderRowDecoration = useCallback<FileTreeRowDecorationRenderer>(
-    ({ item }) => {
-      const activityItem = pathModel.itemByPath.get(item.path);
-      if (!activityItem) return null;
+  const [contextMenu, setContextMenu] = useState<ActivityTreeContextMenuState | null>(null);
 
-      if (activityItem.kind === 'run') {
-        return { text: formatActivityTreeStatus(activityItem.status), title: `Run · ${activityItem.status}` };
-      }
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-      if (activityItem.status === 'running' || activityItem.status === 'failed') {
-        return { text: formatActivityTreeStatus(activityItem.status), title: activityItem.status };
-      }
-
-      return null;
-    },
-    [pathModel],
-  );
-
-  const { model, resetTree } = useFileTreeModel({
-    useNativeContextMenu: false,
-    dragAndDrop: false,
-    onSelectionChange: handleSelectionChange,
-    renderRowDecoration,
-    unsafeCSS,
-  });
-
-  useEffect(() => {
-    resetTree(pathModel.paths, {
-      initialExpandedPaths: pathModel.paths,
-      initialSelectedPaths: selectedPath ? [selectedPath] : [],
-    });
-  }, [pathModel, resetTree, selectedPath]);
-
-  const renderTreeContextMenu = useCallback(
-    (treeItem: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
-      const item = pathModel.itemByPath.get(treeItem.path);
-      return item ? renderContextMenu?.(item, context) : null;
-    },
-    [pathModel, renderContextMenu],
-  );
+  if (pathModel.entries.length === 0) {
+    return <p className="px-4 py-2 text-[12px] text-dim">No threads yet.</p>;
+  }
 
   return (
-    <TreesFileTree
-      className={className}
-      model={model}
-      renderContextMenu={renderContextMenu ? renderTreeContextMenu : undefined}
-      style={{ ...ACTIVITY_TREE_STYLE, ...style }}
-    />
+    <div className={className} style={style} onClick={contextMenu ? closeContextMenu : undefined}>
+      <div role="tree" aria-label="Threads" className="space-y-px px-1 py-0.5">
+        {pathModel.entries.map(({ item, path }) => {
+          const depth = item.parentId ? Math.max(1, path.split('/').length - 1) : 0;
+          const active = path === selectedPath;
+          const accentColor = sanitizeCssColor(item.accentColor);
+          const backgroundColor = sanitizeCssColor(item.backgroundColor);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="treeitem"
+              aria-selected={active ? 'true' : 'false'}
+              className={[
+                'ui-sidebar-session-row flex w-full items-center gap-1 select-none text-left',
+                active && 'ui-sidebar-session-row-active',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={{
+                paddingLeft: `${0.5 + depth * 0.5}rem`,
+                ...(backgroundColor ? { backgroundColor } : {}),
+                ...(accentColor ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : {}),
+              }}
+              title={typeof item.metadata?.tooltip === 'string' ? item.metadata.tooltip : item.subtitle}
+              onClick={() => onOpenItem?.(item)}
+              onContextMenu={(event) => {
+                if (!renderContextMenu) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setContextMenu({ item, x: event.clientX, y: event.clientY });
+              }}
+            >
+              {depth > 0 ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-subtle" aria-hidden="true" /> : null}
+              <span className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] text-primary">{item.title}</span>
+              {item.status !== 'idle' ? (
+                <span className="shrink-0 text-[10px] text-dim">{formatActivityTreeStatus(item.status)}</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      {contextMenu && renderContextMenu ? (
+        <div
+          data-file-tree-context-menu-root="true"
+          className="fixed z-[1000]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {renderContextMenu(contextMenu.item, {
+            anchorElement: document.body,
+            anchorRect: { x: contextMenu.x, y: contextMenu.y, width: 1, height: 1 },
+            close: closeContextMenu,
+            restoreFocus: () => {},
+          } as FileTreeContextMenuOpenContext)}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -100,6 +107,15 @@ function formatActivityTreeStatus(status: ActivityTreeItem['status']): string {
     default:
       return 'idle';
   }
+}
+
+function sanitizeCssColor(value: string | undefined): string | null {
+  const color = value?.trim();
+  if (!color) return null;
+  if (/^#[0-9a-fA-F]{3,8}$/.test(color)) return color;
+  if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/.test(color)) return color;
+  if (/^color-mix\(in srgb, #[0-9a-fA-F]{3,8} \d{1,3}%, transparent\)$/.test(color)) return color;
+  return null;
 }
 
 export function useActivityTreeModel(items: readonly ActivityTreeItem[], activeItemId?: string | null) {
