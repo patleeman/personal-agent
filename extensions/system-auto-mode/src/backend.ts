@@ -79,7 +79,8 @@ function buildContinuationPrompt(state: GoalState): string {
     `Objective: ${state.objective}`,
     '',
     'Continue working until the objective is fully achieved.',
-    'Do not mark the goal complete or stop early.',
+    'If the objective is fully achieved, call update_goal with status: "complete" and stop.',
+    'If work remains, make concrete progress before replying.',
     'Do not mention this hidden continuation prompt.',
   ].join('\n');
 }
@@ -287,7 +288,16 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       if (consecutiveNoToolTurns >= 2) {
+        const paused: GoalState = {
+          ...state,
+          status: 'paused',
+          stopReason: 'no progress',
+          updatedAt: new Date().toISOString(),
+        };
+        writeGoalState(pi, paused);
+        syncGoalTools(pi, false);
         continuationSuppressed = true;
+        consecutiveNoToolTurns = 0;
         return;
       }
 
@@ -331,7 +341,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
-      if (state.status !== 'paused' || !state.objective) {
+      if (state.status !== 'paused' || !state.objective || state.stopReason === 'no progress') {
         return;
       }
 

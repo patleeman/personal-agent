@@ -100,7 +100,7 @@ Parallel prompts appear in the Parallel shelf. A running parallel prompt can be 
 
 ## Goal Mode
 
-Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.
+Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. The continuation prompt tells the agent to call `update_goal` when the objective is achieved. If two continuation turns make no tool-driven progress, goal mode pauses the objective with a `no progress` stop reason instead of spinning forever. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.
 
 ## Slash Commands
 

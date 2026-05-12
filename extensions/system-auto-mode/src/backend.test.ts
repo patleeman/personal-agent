@@ -58,6 +58,7 @@ describe('system-goal-mode extension', () => {
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         customType: 'goal-continuation',
+        content: expect.stringContaining('call update_goal with status: "complete"'),
         display: false,
         details: expect.objectContaining({ source: 'goal-mode', continuationId: expect.any(String) }),
       }),
@@ -65,9 +66,10 @@ describe('system-goal-mode extension', () => {
     );
   });
 
-  it('suppresses continuation after two consecutive no-progress active goal turns', async () => {
+  it('pauses the active goal after two consecutive no-progress active goal turns', async () => {
     const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
     const sendMessage = vi.fn();
+    const appendEntry = vi.fn();
     const factory = createConversationAutoModeAgentExtension();
     const pi = {
       registerTool: vi.fn(),
@@ -75,7 +77,7 @@ describe('system-goal-mode extension', () => {
       getActiveTools: vi.fn(() => []),
       setActiveTools: vi.fn(),
       sendMessage,
-      appendEntry: vi.fn(),
+      appendEntry,
       on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
         handlers.set(name, [...(handlers.get(name) ?? []), handler]);
       }),
@@ -111,6 +113,7 @@ describe('system-goal-mode extension', () => {
     await turnEnd?.({ toolResults: [] }, ctx);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'paused', stopReason: 'no progress' }));
   });
 
   it('treats tool turns as progress', async () => {

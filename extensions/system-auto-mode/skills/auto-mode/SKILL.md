@@ -34,4 +34,4 @@ The system automatically schedules a continuation turn after each turn while the
 
 ## No-tool suppression
 
-If continuation turns produce no tool calls, automatic continuation is suppressed after two no-progress turns. Starting, updating, or completing a goal resets this.
+If continuation turns produce no tool calls, the active goal is paused after two no-progress turns so it cannot spin forever. Starting, updating, or completing a goal resets this.
