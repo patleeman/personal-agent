@@ -1,8 +1,6 @@
 import {
-  applyScheduledTaskThreadBinding,
   cancelDeferredResumeForSessionFile,
   cancelQueuedPrompt,
-  createStoredAutomation,
   DEFAULT_DEFERRED_RESUME_PROMPT,
   type DeferredResumeSummary,
   deleteStoredAutomation,
@@ -15,6 +13,7 @@ import {
   parseFutureHumanDateTime,
   promptSession,
   type QueuedPromptPreview,
+  scheduleDeferredResumeForSessionFile,
 } from '@personal-agent/extensions/backend';
 
 const DELIVER_AS_VALUES = ['steer', 'followUp'] as const;
@@ -201,7 +200,6 @@ function findConversationAutomation(id: string, sessionFile: string) {
 export async function conversationQueue(input: ConversationQueueInput, ctx: ConversationQueueContext) {
   const sessionId = readOptionalString(ctx.toolContext?.sessionId);
   const sessionFile = readOptionalString(ctx.toolContext?.sessionFile);
-  const cwd = ctx.toolContext?.cwd;
 
   switch (input.action) {
     case 'list': {
@@ -227,36 +225,33 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
         };
       }
       if (!sessionFile || !sessionId) throw new Error('Time-based queue entries require a persisted conversation.');
-      const scheduled = resolveScheduledAt({
-        delay: trigger === 'delay' ? readRequiredString(input.delay, 'delay') : undefined,
-        at: trigger === 'at' ? readRequiredString(input.at, 'at') : undefined,
-      });
-      const automation = createStoredAutomation({
-        profile: ctx.profile,
-        title: summarizeAutomationTitle(prompt, input.title),
-        enabled: true,
-        at: scheduled.dueAt,
+      const delay = trigger === 'delay' ? readRequiredString(input.delay, 'delay') : undefined;
+      const at = trigger === 'at' ? readRequiredString(input.at, 'at') : undefined;
+      const scheduled = resolveScheduledAt({ delay, at });
+      const resume = await scheduleDeferredResumeForSessionFile({
+        sessionFile,
+        conversationId: sessionId,
+        delay,
+        at: trigger === 'at' ? scheduled.dueAt : undefined,
         prompt,
-        cwd,
-        targetType: 'conversation',
-        conversationBehavior: deliverAs,
+        title: summarizeAutomationTitle(prompt, input.title),
+        kind: 'continue',
+        behavior: deliverAs,
+        notify: 'passive',
+        requireAck: false,
+        autoResumeIfOpen: true,
+        source: { kind: 'conversation-queue-tool' },
       });
-      const task = applyScheduledTaskThreadBinding(automation.id, {
-        threadMode: 'existing',
-        threadConversationId: sessionId,
-        threadSessionFile: sessionFile,
-        cwd,
-      });
-      ctx.ui.invalidate(['tasks', 'sessions']);
+      ctx.ui.invalidate(['sessions', 'runs']);
       return {
-        text: `Queued conversation continuation ${task.id} (${trigger === 'delay' ? `in ${input.delay}` : `for ${scheduled.interpretation ?? scheduled.dueAt}`}).`,
+        text: `Queued conversation continuation ${resume.id} (${trigger === 'delay' ? `in ${delay}` : `for ${scheduled.interpretation ?? resume.dueAt}`}).`,
         action: 'add',
         trigger,
         sessionId,
         sessionFile,
-        id: task.id,
-        prompt: task.prompt,
-        dueAt: scheduled.dueAt,
+        id: resume.id,
+        prompt: resume.prompt,
+        dueAt: resume.dueAt,
         ...(scheduled.interpretation ? { localDueAt: scheduled.interpretation } : {}),
         ...(scheduled.timeExpression ? { timeExpression: scheduled.timeExpression } : {}),
         ...(deliverAs ? { deliverAs } : {}),

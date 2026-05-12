@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mockScheduleDeferredResume = vi.fn();
 const mockParseFutureDateTime = vi.fn();
+const mockParseDeferredResumeDelayMs = vi.fn();
 const mockInvalidateTopics = vi.fn();
 
 // Mock the backend API for the reminder handler
@@ -25,7 +26,7 @@ vi.mock('@personal-agent/extensions/backend', () => ({
   normalizeAutomationTargetTypeForSelection: vi.fn(),
   invalidateAppTopics: (...args: unknown[]) => mockInvalidateTopics(...args),
   pingDaemon: vi.fn().mockResolvedValue(true),
-  parseDeferredResumeDelayMs: vi.fn(),
+  parseDeferredResumeDelayMs: (...args: unknown[]) => mockParseDeferredResumeDelayMs(...args),
   persistAppTelemetryEvent: vi.fn(),
   promptSession: vi.fn(),
   readSessionConversationId: vi.fn(),
@@ -128,6 +129,36 @@ describe('system-automations backend', () => {
 
     it('throws for cancel action without id', async () => {
       await expect(conversationQueue({ action: 'cancel' } as never, createCtx())).rejects.toThrow('id is required');
+    });
+
+    it('schedules time-based queue entries as visible deferred resumes', async () => {
+      const invalidate = vi.fn();
+      mockParseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
+      mockScheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
+
+      const result = await conversationQueue(
+        { action: 'add', trigger: 'delay', delay: '4h', prompt: 'Keep going', deliverAs: 'followUp', title: 'Resume later' },
+        createCtx({ ui: { invalidate } }),
+      );
+
+      expect(result.id).toBe('resume-1');
+      expect(result.text).toContain('in 4h');
+      expect(mockScheduleDeferredResume).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionFile: '/tmp/session.json',
+          conversationId: 'sess-1',
+          delay: '4h',
+          prompt: 'Keep going',
+          title: 'Resume later',
+          kind: 'continue',
+          behavior: 'followUp',
+          notify: 'passive',
+          requireAck: false,
+          autoResumeIfOpen: true,
+          source: { kind: 'conversation-queue-tool' },
+        }),
+      );
+      expect(invalidate).toHaveBeenCalledWith(['sessions', 'runs']);
     });
 
     it('throws for unsupported action', async () => {

@@ -126,7 +126,30 @@ This is the right fit for:
 
 Use conversation_queue when the user does **not** need a direct reminder. If the user explicitly wants "tell me later," use a reminder instead.
 
-For time-based follow-up, `conversation_queue` now creates a saved automation targeting the same conversation thread. For immediate continuation after the current turn, it still uses the live conversation queue.
+For time-based follow-up, `conversation_queue` creates a deferred resume on the same conversation so the composer shelf shows the pending wakeup. For immediate continuation after the current turn, it uses the live conversation queue.
+
+### Correct tool shape
+
+For `conversation_queue` with `action: "add"`, always include `trigger`:
+
+- `trigger: "after_turn"` queues work immediately after the current turn; do not include `delay` or `at`.
+- `trigger: "delay"` queues a later continuation; include compact duration syntax like `30s`, `10m`, `2h`, `4h`, or `1d`. Do **not** write `4 hours`.
+- `trigger: "at"` queues a later continuation for a specific time; include `at` as a timestamp or human time phrase.
+
+Example:
+
+```json
+{
+  "action": "add",
+  "trigger": "delay",
+  "delay": "4h",
+  "deliverAs": "followUp",
+  "title": "Cut next RC release after active threads finish",
+  "prompt": "Wake up and cut a new RC release, but first inspect active runs/tasks/conversations; if anything is still active, requeue instead of releasing."
+}
+```
+
+Use `conversation_queue` with `action: "list"` before assuming no wakeups are pending, and use `action: "cancel"` with the listed `id` to remove one.
 
 ## Scheduled-task callbacks
 
