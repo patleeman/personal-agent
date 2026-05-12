@@ -2385,9 +2385,10 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
+    setActivityTreeItems(baseActivityTreeItems);
+
     const styleProviders = extensionRegistry.activityTreeItemStyles;
-    if (styleProviders.length === 0) {
-      setActivityTreeItems(baseActivityTreeItems);
+    if (styleProviders.length === 0 || baseActivityTreeItems.length === 0) {
       return;
     }
 
