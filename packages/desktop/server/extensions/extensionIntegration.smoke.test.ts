@@ -927,6 +927,42 @@ describe('extension backends - file existence and structural checks', () => {
     }
   });
 
+  it('prebuilt dist files are newer than their source files (build is not stale)', () => {
+    for (const s of summaries) {
+      if (s.packageType !== 'system') continue;
+      const backendEntry = s.manifest.backend?.entry;
+      const frontendEntry = s.manifest.frontend?.entry;
+
+      // Check backend: src/backend.ts must be older than dist/backend.mjs
+      if (backendEntry) {
+        const sourcePath = resolve(s.packageRoot ?? '', backendEntry);
+        const builtPath = resolve(s.packageRoot ?? '', 'dist', 'backend.mjs');
+        if (existsSync(sourcePath) && existsSync(builtPath)) {
+          const sourceMtime = statSync(sourcePath).mtimeMs;
+          const builtMtime = statSync(builtPath).mtimeMs;
+          expect(
+            builtMtime >= sourceMtime - 1000, // 1s grace for filesystem timestamp rounding
+            `${s.id}: dist/backend.mjs (${new Date(builtMtime).toISOString()}) is older than ${backendEntry} (${new Date(sourceMtime).toISOString()}) — rebuild needed`,
+          ).toBe(true);
+        }
+      }
+
+      // Check frontend: src/frontend.tsx must be older than dist/frontend.js
+      if (frontendEntry) {
+        const sourcePath = resolve(s.packageRoot ?? '', 'src', 'frontend.tsx');
+        const builtPath = resolve(s.packageRoot ?? '', frontendEntry);
+        if (existsSync(sourcePath) && existsSync(builtPath)) {
+          const sourceMtime = statSync(sourcePath).mtimeMs;
+          const builtMtime = statSync(builtPath).mtimeMs;
+          expect(
+            builtMtime >= sourceMtime - 1000,
+            `${s.id}: ${frontendEntry} (${new Date(builtMtime).toISOString()}) is older than src/frontend.tsx (${new Date(sourceMtime).toISOString()}) — rebuild needed`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
   it('backend action handler names exist as exports in the prebuilt bundle', () => {
     for (const s of summaries) {
       if (s.packageType !== 'system') continue;
