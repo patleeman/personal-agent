@@ -1019,7 +1019,7 @@ function WorkbenchKnowledgeRail({
                   'ui-sidebar-nav-item-active',
               )}
               title={labelForExtensionToolPanel(surface)}
-              onClick={() => handleExtensionToolPanelSelect(surface)}
+              onClick={() => (surface.extensionId === 'system-diffs' ? handleDiffsModeSelect() : handleExtensionToolPanelSelect(surface))}
             >
               <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
                 {iconGlyphForExtensionSurface(surface.icon)}
