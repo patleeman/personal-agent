@@ -41,10 +41,22 @@ export function ActivityTreeView({
     }
     return counts;
   }, [items]);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [contextMenu, setContextMenu] = useState<ActivityTreeContextMenuState | null>(null);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const toggleGroupCollapsed = useCallback((itemId: string) => {
+    setCollapsedGroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
   const toggleExpanded = useCallback((itemId: string) => {
     setExpandedIds((current) => {
       const next = new Set(current);
@@ -62,9 +74,10 @@ export function ActivityTreeView({
       pathModel.entries.filter(({ item }) => {
         if (!item.parentId) return true;
         const parent = itemById.get(item.parentId);
-        return parent?.kind === 'group' || expandedIds.has(item.parentId);
+        if (parent?.kind === 'group') return !collapsedGroupIds.has(parent.id);
+        return expandedIds.has(item.parentId);
       }),
-    [expandedIds, itemById, pathModel.entries],
+    [collapsedGroupIds, expandedIds, itemById, pathModel.entries],
   );
 
   if (pathModel.entries.length === 0) {
@@ -80,7 +93,7 @@ export function ActivityTreeView({
           const accentColor = sanitizeCssColor(item.accentColor);
           const backgroundColor = sanitizeCssColor(item.backgroundColor);
           const childCount = childCountByParentId.get(item.id) ?? 0;
-          const expanded = item.kind === 'group' || expandedIds.has(item.id);
+          const expanded = item.kind === 'group' ? !collapsedGroupIds.has(item.id) : expandedIds.has(item.id);
           const canArchive = item.kind === 'conversation' && onArchiveItem;
           return (
             <button
@@ -110,8 +123,18 @@ export function ActivityTreeView({
               }}
             >
               {item.kind === 'group' ? (
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-dim" aria-hidden="true">
-                  ▾
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  className="-ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-dim hover:text-primary"
+                  aria-label={expanded ? 'Collapse workspace' : 'Expand workspace'}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleGroupCollapsed(item.id);
+                  }}
+                >
+                  {expanded ? '▾' : '▸'}
                 </span>
               ) : childCount > 0 ? (
                 <span
