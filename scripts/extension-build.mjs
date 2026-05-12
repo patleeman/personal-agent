@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-env node */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
@@ -47,7 +47,7 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
       '.ttf': 'dataurl',
       '.otf': 'dataurl',
     },
-    external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
+    plugins: [createFrontendExtensionSdkPlugin()],
     nodePaths: findAppNodeModules(),
     metafile: true,
   });
@@ -91,6 +91,29 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
 }
 
 writeBuildManifest(buildOutputs);
+
+function createFrontendExtensionSdkPlugin() {
+  const moduleFiles = {
+    '@personal-agent/extensions/host': 'host.ts',
+    '@personal-agent/extensions/ui': 'ui.ts',
+    '@personal-agent/extensions/workbench': 'workbench.ts',
+    '@personal-agent/extensions/data': 'data.ts',
+    '@personal-agent/extensions/settings': 'settings.ts',
+  };
+  return {
+    name: 'personal-agent-frontend-extension-sdk',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/(host|ui|workbench|data|settings)$/ }, (args) => {
+        const moduleFile = moduleFiles[args.path];
+        const resolved = moduleFile ? join(repoRoot, 'packages/desktop/ui/src/extensions', moduleFile) : null;
+        if (!resolved || !existsSync(resolved)) {
+          return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
+        }
+        return { path: resolved };
+      });
+    },
+  };
+}
 
 function createExtensionBackendApiPlugin() {
   return {

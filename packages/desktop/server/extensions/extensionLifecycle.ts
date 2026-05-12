@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { getStateRoot } from '@personal-agent/core';
+import type { Plugin } from 'esbuild';
 
 import { isPrebuiltOnlyExtensionRuntime } from './extensionBackendLoadTarget.js';
 import {
@@ -278,7 +279,7 @@ export async function buildRuntimeExtension(extensionId: string) {
       target: 'es2022',
       jsx: 'automatic',
       sourcemap: true,
-      external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
+      plugins: [createFrontendExtensionSdkPlugin()],
       nodePaths: findAppNodeModules(),
     });
     outputs.push(outfile);
@@ -371,6 +372,45 @@ function findAppNodeModules(): string[] {
     paths.push(resolve(currentDir, ...Array(depth).fill('..'), 'node_modules'));
   }
   return paths;
+}
+
+function resolveDesktopUiExtensionModule(moduleName: string): string | null {
+  const moduleFiles: Record<string, string> = {
+    '@personal-agent/extensions/host': 'host.ts',
+    '@personal-agent/extensions/ui': 'ui.ts',
+    '@personal-agent/extensions/workbench': 'workbench.ts',
+    '@personal-agent/extensions/data': 'data.ts',
+    '@personal-agent/extensions/settings': 'settings.ts',
+  };
+  const moduleFile = moduleFiles[moduleName];
+  if (!moduleFile) {
+    return null;
+  }
+
+  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    ...(repoRoot ? [resolve(repoRoot, 'packages', 'desktop', 'ui', 'src', 'extensions', moduleFile)] : []),
+    resolve(currentDir, '..', '..', 'ui', 'src', 'extensions', moduleFile),
+    resolve(currentDir, '..', '..', '..', 'ui', 'src', 'extensions', moduleFile),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function createFrontendExtensionSdkPlugin(): Plugin {
+  return {
+    name: 'personal-agent-frontend-extension-sdk',
+    setup(build) {
+      build.onResolve({ filter: /^@personal-agent\/extensions\/(host|ui|workbench|data|settings)$/ }, (args) => {
+        const resolved = resolveDesktopUiExtensionModule(args.path);
+        if (!resolved) {
+          return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
+        }
+        return { path: resolved };
+      });
+    },
+  };
 }
 
 export function importRuntimeExtensionBundle(input: { zipPath?: unknown }, stateRoot: string = getStateRoot()) {

@@ -99,34 +99,34 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                        | Purpose                                 | Docs                                                                  |
-| ---------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
-| `views`                      | UI surfaces (pages, panels)             | See `docs/views.md`                                                   |
-| `nav`                        | Left sidebar navigation items           |                                                                       |
-| `commands`                   | Extension actions invokable by command IDs |                                                                    |
-| `keybindings`                | Keyboard shortcuts                      |                                                                       |
-| `slashCommands`              | `/command` in composer                  |                                                                       |
-| `tools`                      | Agent-callable tools                    |                                                                       |
-| `mentions`                   | @-mention providers                     |                                                                       |
-| `skills`                     | Agent Skills (markdown)                 |                                                                       |
-| `themes`                     | Color themes                            |                                                                       |
-| `transcriptRenderers`        | Custom tool result rendering            |                                                                       |
-| `promptReferences`           | @-mention resolvers                     |                                                                       |
-| `quickOpen`                  | Command palette surfaces/tabs backed by extension providers           | [See below](#quick-open-surfaces-quickopen)                           |
-| `settings`                   | Settings schema contributions           | [See below](#settings)                                                |
-| `settingsComponent`          | Component panel in Settings             | [See below](#settings-component-settingscomponent)                    |
-| `topBarElements`             | Top bar indicator icons                 | [See below](#top-bar-elements-topbarelements)                         |
-| `conversationHeaderElements` | Badges in conversation header           | [See below](#conversation-header-elements-conversationheaderelements) |
-| `messageActions`             | Hover buttons on messages               | [See below](#message-actions-messageactions)                          |
-| `composerShelves`            | Sections above the composer             | [See below](#composer-shelves-composershelves)                        |
-| `newConversationPanels`      | Panels on the new conversation page     | [See below](#new-conversation-panels-newconversationpanels)           |
-| `composerButtons`            | Component buttons beside submit         | [See below](#composer-buttons-composerbuttons)                        |
-| `composerInputTools`         | Component tools beside attachment       | [See below](#composer-input-tools-composerinputtools)                 |
-| `toolbarActions`             | Icon buttons in composer toolbar        | [See below](#toolbar-actions-toolbaractions)                          |
-| `conversationDecorators`     | Badges on conversation list items       | [See below](#conversation-decorators-conversationdecorators)          |
-| `contextMenus`               | Right-click menu items                  | [See below](#context-menus-contextmenus)                              |
-| `threadHeaderActions`        | Component buttons in the Threads header | [See below](#thread-header-actions-threadheaderactions)               |
-| `statusBarItems`             | Labels in the composer status bar       | [See below](#status-bar-items-statusbaritems)                         |
+| Field                        | Purpose                                                     | Docs                                                                  |
+| ---------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| `views`                      | UI surfaces (pages, panels)                                 | See `docs/views.md`                                                   |
+| `nav`                        | Left sidebar navigation items                               |                                                                       |
+| `commands`                   | Extension actions invokable by command IDs                  |                                                                       |
+| `keybindings`                | Keyboard shortcuts                                          |                                                                       |
+| `slashCommands`              | `/command` in composer                                      |                                                                       |
+| `tools`                      | Agent-callable tools                                        |                                                                       |
+| `mentions`                   | @-mention providers                                         |                                                                       |
+| `skills`                     | Agent Skills (markdown)                                     |                                                                       |
+| `themes`                     | Color themes                                                |                                                                       |
+| `transcriptRenderers`        | Custom tool result rendering                                |                                                                       |
+| `promptReferences`           | @-mention resolvers                                         |                                                                       |
+| `quickOpen`                  | Command palette surfaces/tabs backed by extension providers | [See below](#quick-open-surfaces-quickopen)                           |
+| `settings`                   | Settings schema contributions                               | [See below](#settings)                                                |
+| `settingsComponent`          | Component panel in Settings                                 | [See below](#settings-component-settingscomponent)                    |
+| `topBarElements`             | Top bar indicator icons                                     | [See below](#top-bar-elements-topbarelements)                         |
+| `conversationHeaderElements` | Badges in conversation header                               | [See below](#conversation-header-elements-conversationheaderelements) |
+| `messageActions`             | Hover buttons on messages                                   | [See below](#message-actions-messageactions)                          |
+| `composerShelves`            | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                        |
+| `newConversationPanels`      | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)           |
+| `composerButtons`            | Component buttons beside submit                             | [See below](#composer-buttons-composerbuttons)                        |
+| `composerInputTools`         | Component tools beside attachment                           | [See below](#composer-input-tools-composerinputtools)                 |
+| `toolbarActions`             | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                          |
+| `conversationDecorators`     | Badges on conversation list items                           | [See below](#conversation-decorators-conversationdecorators)          |
+| `contextMenus`               | Right-click menu items                                      | [See below](#context-menus-contextmenus)                              |
+| `threadHeaderActions`        | Component buttons in the Threads header                     | [See below](#thread-header-actions-threadheaderactions)               |
+| `statusBarItems`             | Labels in the composer status bar                           | [See below](#status-bar-items-statusbaritems)                         |
 
 ### Views
 
@@ -947,7 +947,11 @@ Extensions need to be built before they can be loaded:
 POST /api/extensions/my-ext/build
 
 # Or from the extension manager UI, click "Build"
+# Or from the repo for a local extension directory:
+npm run extension:build -- /path/to/my-extension
 ```
+
+Frontend builds bundle the authoring SDK UI modules (`@personal-agent/extensions/ui`, `/host`, `/workbench`, `/data`, and `/settings`) into `dist/frontend.js`. The browser loads that built file directly from `/api/extensions/<id>/files/...`, so frontend dist output must not leave `@personal-agent/extensions/*` as bare runtime imports.
 
 ### Hot Reload
 
