@@ -99,6 +99,10 @@ Useful dev commands:
 npm run desktop:start      # launch the Electron app
 npm run desktop:dev        # same dev launcher
 npm run ios:dev            # iOS companion against local dev host
+
+# Extension integration validation (run before starting the app)
+npm run check:extensions        # full suite (~30s, includes module runtime checks)
+npm run check:extensions:quick  # quick check (~5s, skips slow dynamic import)
 ```
 
 Platform prerequisites:
