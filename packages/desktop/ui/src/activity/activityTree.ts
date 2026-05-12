@@ -107,9 +107,15 @@ function getRunConversationId(run: DurableRunRecord): string | undefined {
   return (
     getStringField(spec, 'conversationId') ??
     getStringField(spec, 'threadConversationId') ??
+    getSourceConversationId(run.manifest?.source) ??
     getStringField(run.result, 'conversationId') ??
     getStringField(run.checkpoint?.payload, 'conversationId')
   );
+}
+
+function getSourceConversationId(source: { type: string; id?: string } | undefined): string | undefined {
+  if (!source?.id) return undefined;
+  return source.type === 'conversation' || source.type === 'thread' ? source.id : undefined;
 }
 
 function getStringField(source: Record<string, unknown> | undefined, key: string): string | undefined {

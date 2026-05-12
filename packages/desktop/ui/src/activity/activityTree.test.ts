@@ -91,6 +91,30 @@ describe('buildActivityTreeItems', () => {
     ]);
   });
 
+  it('uses manifest source metadata to nest runs under conversations', () => {
+    const items = buildActivityTreeItems({
+      conversations: [session({ id: 'conv-source', title: 'Source conversation' })],
+      runs: [
+        run({
+          runId: 'run-source',
+          manifest: {
+            version: 1,
+            id: 'run-source',
+            kind: 'background-agent',
+            resumePolicy: 'never',
+            createdAt: '2026-05-12T10:01:00.000Z',
+            spec: { title: 'Source-linked run' },
+            source: { type: 'conversation', id: 'conv-source' },
+          },
+        }),
+      ],
+    });
+
+    expect(items.find((item) => item.id === buildRunActivityId('run-source'))).toEqual(
+      expect.objectContaining({ parentId: buildConversationActivityId('conv-source') }),
+    );
+  });
+
   it('keeps unlinked runs as root items', () => {
     const items = buildActivityTreeItems({
       conversations: [session({ id: 'conv-1', title: 'Build the thing' })],
