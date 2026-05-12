@@ -1025,6 +1025,44 @@ describe('conversation titles', () => {
     expect(isPlaceholderConversationTitle('Actual title')).toBe(false);
   });
 
+  it('prefers the session manager name for stable live titles', () => {
+    expect(
+      resolveStableSessionTitle({
+        sessionName: undefined,
+        sessionManager: {
+          getSessionName: () => 'Tool-set title',
+        },
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Fallback first prompt' }],
+            },
+          ],
+        },
+      } as unknown as LiveRegistryEntry['session']),
+    ).toBe('Tool-set title');
+  });
+
+  it('prefers session manager names set by agent tools', () => {
+    expect(
+      resolveStableSessionTitle({
+        sessionManager: {
+          getSessionName: () => 'Tool-set title',
+        },
+        sessionName: undefined,
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Fallback prompt' }],
+            },
+          ],
+        },
+      } as unknown as LiveRegistryEntry['session']),
+    ).toBe('Tool-set title');
+  });
+
   it('ignores placeholder persisted titles until a real title exists', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);

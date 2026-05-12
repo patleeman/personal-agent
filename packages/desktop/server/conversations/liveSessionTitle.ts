@@ -76,7 +76,7 @@ export function isPlaceholderConversationTitle(title: string | null | undefined)
 }
 
 export function resolveStableSessionTitle(session: AgentSession): string {
-  const sessionName = session.sessionName?.trim();
+  const sessionName = session.sessionManager?.getSessionName?.()?.trim() || session.sessionName?.trim();
   if (sessionName) {
     return sessionName;
   }
