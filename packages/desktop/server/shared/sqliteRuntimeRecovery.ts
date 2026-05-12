@@ -8,15 +8,25 @@ function timestampSegment(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
-function readIntegrityCheck(db: SqliteDatabase): string {
-  const rows = db.prepare('PRAGMA integrity_check').all();
-  const first = rows[0];
-  if (!first || typeof first !== 'object') {
-    return 'integrity_check returned no rows';
+function readIntegrityCheck(db: SqliteDatabase): string[] {
+  const rows = db.prepare('PRAGMA integrity_check').all() as Record<string, unknown>[];
+  if (rows.length === 0) {
+    return ['integrity_check returned no rows'];
   }
 
-  const value = Object.values(first as Record<string, unknown>)[0];
-  return typeof value === 'string' ? value : String(value);
+  return rows.map((row) => {
+    const value = Object.values(row)[0];
+    return typeof value === 'string' ? value : String(value);
+  });
+}
+
+/**
+ * Returns true when every integrity issue is an out-of-sync index
+ * (e.g. "row 5 missing from index idx_runs_status_updated_at").
+ * These are safely fixable with REINDEX.
+ */
+function isIndexOnlyCorruption(issues: string[]): boolean {
+  return issues.length > 0 && issues.every((line) => /^row \d+ missing from index /i.test(line));
 }
 
 function isCorruptSqliteError(error: unknown): boolean {
@@ -56,7 +66,8 @@ function validateRecoveredDb(dbPath: string): boolean {
   let db: SqliteDatabase | undefined;
   try {
     db = openSqliteDatabase(dbPath);
-    return readIntegrityCheck(db) === 'ok';
+    const issues = readIntegrityCheck(db);
+    return issues.length === 1 && issues[0] === 'ok';
   } catch {
     return false;
   } finally {
@@ -101,12 +112,22 @@ function openConfiguredSqliteDb(dbPath: string): SqliteDatabase {
     db.pragma('foreign_keys = ON');
     db.pragma('busy_timeout = 5000');
 
-    const integrity = readIntegrityCheck(db);
-    if (integrity !== 'ok') {
-      throw new Error(`SQLite integrity check failed for ${dbPath}: ${integrity}`);
+    const issues = readIntegrityCheck(db);
+    if (issues.length === 1 && issues[0] === 'ok') {
+      return db;
     }
 
-    return db;
+    // Index-only corruption (e.g. "row N missing from index X") is safely
+    // repairable in-place with REINDEX — no need for full .recover.
+    if (isIndexOnlyCorruption(issues)) {
+      db.exec('REINDEX');
+      const recheck = readIntegrityCheck(db);
+      if (recheck.length === 1 && recheck[0] === 'ok') {
+        return db;
+      }
+    }
+
+    throw new Error(`SQLite integrity check failed for ${dbPath}: ${issues.join('; ')}`);
   } catch (error) {
     try {
       db.close();
