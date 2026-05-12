@@ -564,6 +564,30 @@ private struct SwipeableConversationCard<Content: View>: View {
     }
 }
 
+private struct ArchivedEmptyState: View {
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "archivebox")
+                .font(.system(size: 48, weight: .semibold))
+            Text("No archived conversations")
+                .font(.title2.weight(.bold))
+                .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Archived and older hidden threads show up here. Unarchive one to move it back into Chat.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(CompanionTheme.textSecondary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct ArchivedConversationListView: View {
     @ObservedObject var session: HostSessionModel
     @State private var path: [String] = []
@@ -573,12 +597,7 @@ struct ArchivedConversationListView: View {
             List {
                 if session.archivedSessions.isEmpty && !session.isLoading {
                     Section {
-                        ContentUnavailableView(
-                            "No archived conversations",
-                            systemImage: "archivebox",
-                            description: Text("Archived and older hidden threads show up here. Unarchive one to move it back into Chat.")
-                        )
-                        .foregroundStyle(CompanionTheme.textSecondary)
+                        ArchivedEmptyState()
                     }
                 } else {
                     Section("Archived") {
