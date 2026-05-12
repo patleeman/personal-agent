@@ -63,7 +63,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(session.chatSections.last?.sessions.map(\.id), ["conv-2"])
     }
 
-    func testNewConversationIsRestoredToOpenOrderingWhenCreateResponseOmitsIt() async throws {
+    func testNewConversationAppearsOpenWhenCreateResponseOmitsOrdering() async throws {
         let client = MockCompanionClient()
         client.createConversationOmitsOpenOrdering = true
         let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
@@ -78,8 +78,8 @@ final class PersonalAgentCompanionTests: XCTestCase {
 
         XCTAssertFalse(session.archivedSessions.contains(where: { $0.id == createdId }))
         let state = try await client.listConversations()
-        XCTAssertEqual(state.ordering.sessionIds.first, createdId)
         XCTAssertFalse(state.ordering.archivedSessionIds.contains(createdId))
+        XCTAssertEqual(client.updateConversationTabsCount, 0)
     }
 
     func testArchivingConversationRemovesItFromOpenOrderingBeforeSaving() async throws {
