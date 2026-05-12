@@ -2275,13 +2275,28 @@ export function Sidebar() {
     () => (threadsOrganizeMode === 'project' ? groupedConversationRows.flatMap((group) => group.items) : filteredConversationItems),
     [filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
+  const activityTreeSessions = useMemo(() => {
+    const byId = new Map<string, SessionMeta>();
+    for (const item of renderedConversationItems) {
+      byId.set(item.session.id, item.session);
+    }
+
+    for (const session of archivedSessions) {
+      const isAutomation = automationConversationIdSet.has(session.id);
+      if (threadsFilterMode === 'automation' && !isAutomation) continue;
+      if (threadsFilterMode === 'human' && isAutomation) continue;
+      byId.set(session.id, session);
+    }
+
+    return [...byId.values()];
+  }, [archivedSessions, automationConversationIdSet, renderedConversationItems, threadsFilterMode]);
   const baseActivityTreeItems = useMemo(
     () =>
       buildActivityTreeItems({
-        conversations: filteredConversationItems.map((item) => item.session),
+        conversations: activityTreeSessions,
         runs: runs?.runs ?? [],
       }),
-    [filteredConversationItems, runs],
+    [activityTreeSessions, runs],
   );
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const [activityTreeStyleRevision, setActivityTreeStyleRevision] = useState(0);
