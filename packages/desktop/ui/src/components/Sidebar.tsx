@@ -10,7 +10,8 @@ import {
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
-import { buildActivityTreeItems, buildConversationActivityId } from '../activity/activityTree';
+import { type ActivityTreeItem, buildActivityTreeItems, buildConversationActivityId } from '../activity/activityTree';
+import { applyActivityTreeItemStyleProviders } from '../activity/activityTreeExtensionStyles';
 import { ActivityTreeView } from '../activity/ActivityTreeView';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
@@ -1852,6 +1853,7 @@ export function Sidebar() {
   const location = useLocation();
   const { versions } = useAppEvents();
   const { sessions, tasks, runs } = useAppData();
+  const extensionRegistry = useExtensionRegistry();
   const {
     pinnedIds,
     openIds,
@@ -2249,7 +2251,7 @@ export function Sidebar() {
     () => (threadsOrganizeMode === 'project' ? groupedConversationRows.flatMap((group) => group.items) : filteredConversationItems),
     [filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
-  const activityTreeItems = useMemo(
+  const baseActivityTreeItems = useMemo(
     () =>
       buildActivityTreeItems({
         conversations: filteredConversationItems.map((item) => item.session),
@@ -2257,6 +2259,7 @@ export function Sidebar() {
       }),
     [filteredConversationItems, runs],
   );
+  const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const conversationItemBySessionId = useMemo(
     () => new Map(renderedConversationItems.map((item) => [item.session.id, item] as const)),
@@ -2340,6 +2343,25 @@ export function Sidebar() {
     setThreadsSortMode(value);
     writeThreadsSortMode(value);
   }, []);
+
+  useEffect(() => {
+    const styleProviders = extensionRegistry.activityTreeItemStyles;
+    if (styleProviders.length === 0) {
+      setActivityTreeItems(baseActivityTreeItems);
+      return;
+    }
+
+    let cancelled = false;
+    void applyActivityTreeItemStyleProviders(baseActivityTreeItems, styleProviders).then((styledItems) => {
+      if (!cancelled) {
+        setActivityTreeItems(styledItems);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseActivityTreeItems, extensionRegistry.activityTreeItemStyles]);
 
   const handleThreadsActivityTreeToggle = useCallback(() => {
     setThreadsActivityTreeEnabled((current) => {
@@ -3359,7 +3381,6 @@ export function Sidebar() {
     );
   }
 
-  const extensionRegistry = useExtensionRegistry();
   const extensionNavItems = useMemo(() => {
     const legacy = extensionRegistry.surfaces
       .filter(isExtensionLeftNavItemSurface)
