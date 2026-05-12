@@ -3037,6 +3037,7 @@ private struct RunDetailView: View {
 struct HostSettingsView: View {
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingHostSelection = false
     @State private var showingPairHost = false
     @State private var deviceState: CompanionDeviceAdminState?
@@ -3050,9 +3051,9 @@ struct HostSettingsView: View {
         NavigationStack {
             List {
                 Section("Host") {
-                    LabeledContent("Label") { Text(session.host.hostLabel) }
-                    LabeledContent("URL") { Text(session.host.baseURL) }
-                    LabeledContent("This device") { Text(session.host.deviceLabel) }
+                    hostInfoRow("Label", value: session.host.hostLabel)
+                    hostInfoRow("URL", value: session.host.baseURL)
+                    hostInfoRow("This device", value: session.host.deviceLabel)
                     Button("Choose saved host") {
                         showingHostSelection = true
                     }
@@ -3188,6 +3189,25 @@ struct HostSettingsView: View {
                 SshTargetEditorView(target: nil) { id, label, sshTarget in
                     _ = await session.saveSshTarget(id: id, label: label, sshTarget: sshTarget)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func hostInfoRow(_ title: String, value: String) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .foregroundStyle(CompanionTheme.textPrimary)
+                Text(value)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            LabeledContent(title) {
+                Text(value)
+                    .textSelection(.enabled)
             }
         }
     }
