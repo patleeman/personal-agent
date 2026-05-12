@@ -80,11 +80,12 @@ function normalizeHeaderValue(input: string | string[] | undefined): string {
 
 function readBearerToken(request: IncomingMessage): string {
   const authorization = normalizeHeaderValue(request.headers.authorization).trim();
-  if (!authorization.toLowerCase().startsWith('bearer ')) {
-    return '';
+  if (authorization.toLowerCase().startsWith('bearer ')) {
+    return authorization.slice(7).trim();
   }
 
-  return authorization.slice(7).trim();
+  const requestUrl = new URL(request.url || '/', 'http://localhost');
+  return requestUrl.searchParams.get('token')?.trim() ?? '';
 }
 
 function isLoopbackAddress(value: string | undefined): boolean {

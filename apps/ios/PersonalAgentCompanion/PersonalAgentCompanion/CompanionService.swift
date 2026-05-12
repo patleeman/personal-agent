@@ -987,6 +987,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         components.path = "/companion/v1/socket"
         components.scheme = (components.scheme == "https") ? "wss" : "ws"
+        components.queryItems = [URLQueryItem(name: "token", value: token)]
         return components.url!
     }
 
