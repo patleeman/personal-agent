@@ -42,6 +42,7 @@ import {
 import { persistForkPromptDraft } from '../conversation/forking';
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';
 import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
+import { createNativeExtensionClient } from '../extensions/nativePaClient';
 import { ThreadHeaderActionHost } from '../extensions/ThreadHeaderActionHost';
 import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
@@ -57,7 +58,6 @@ import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
 import { addNotification } from './notifications/notificationStore';
-import { TextPromptDialog } from './shared/TextPromptDialog';
 import { TextPromptDialog } from './shared/TextPromptDialog';
 
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
@@ -2368,6 +2368,60 @@ export function Sidebar() {
     setActivityTreeStyleRevision((revision) => revision + 1);
   }, []);
 
+  const activityTreeExtensionContextMenus = useMemo(
+    () =>
+      extensionRegistry.contextMenus.filter(
+        (menu) =>
+          menu.surface === 'conversationList' &&
+          !(
+            menu.extensionId === 'system-conversation-tools' &&
+            ['duplicateConversation', 'copyWorkingDirectory', 'copyConversationId', 'copyDeeplink'].includes(menu.action)
+          ),
+      ),
+    [extensionRegistry.contextMenus],
+  );
+  const activityTreePaClientByExtension = useRef<Map<string, ReturnType<typeof createNativeExtensionClient>>>(new Map());
+  const getActivityTreePaClient = useCallback((extensionId: string) => {
+    let client = activityTreePaClientByExtension.current.get(extensionId);
+    if (!client) {
+      client = createNativeExtensionClient(extensionId);
+      activityTreePaClientByExtension.current.set(extensionId, client);
+    }
+    return client;
+  }, []);
+  const handleActivityTreeExtensionContextMenu = useCallback(
+    async (
+      menu: (typeof activityTreeExtensionContextMenus)[number],
+      input: { conversationId: string; sessionTitle: string; cwd: string | undefined },
+    ) => {
+      try {
+        if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
+          navigate(`/conversations/${encodeURIComponent(input.conversationId)}?gateway=1`);
+          return;
+        }
+
+        if (
+          menu.extensionId === 'system-conversation-tools' &&
+          (menu.action === 'cycleThreadColor' || menu.action === 'clearThreadColor')
+        ) {
+          await api.invokeExtensionAction(menu.extensionId, menu.action, input);
+          refreshActivityTreeStyles();
+          return;
+        }
+
+        if (menu.extensionId === 'system-session-exchange' && menu.action === 'exportSession') {
+          await api.invokeExtensionAction(menu.extensionId, menu.action, input);
+          return;
+        }
+
+        await getActivityTreePaClient(menu.extensionId).extension.invoke(menu.action, input);
+      } catch (error) {
+        showSidebarNotice('danger', `${menu.title} failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+      }
+    },
+    [getActivityTreePaClient, navigate, refreshActivityTreeStyles, showSidebarNotice],
+  );
+
   const handleThreadsActivityTreeToggle = useCallback(() => {
     setThreadsActivityTreeEnabled((current) => {
       const next = !current;
@@ -3613,54 +3667,24 @@ export function Sidebar() {
                               Copy Working Directory
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            className="ui-context-menu-item"
-                            role="menuitem"
-                            onClick={() => {
-                              context.close();
-                              void api
-                                .invokeExtensionAction('system-conversation-tools', 'cycleThreadColor', {
+                          {activityTreeExtensionContextMenus.map((menu) => (
+                            <button
+                              key={`${menu.extensionId}:${menu.id}`}
+                              type="button"
+                              className="ui-context-menu-item"
+                              role="menuitem"
+                              onClick={() => {
+                                context.close();
+                                void handleActivityTreeExtensionContextMenu(menu, {
                                   conversationId,
                                   sessionTitle: conversationItem.session.title,
                                   cwd: conversationItem.session.cwd,
-                                })
-                                .then(refreshActivityTreeStyles)
-                                .catch((error) => {
-                                  showSidebarNotice(
-                                    'danger',
-                                    `Thread color failed: ${error instanceof Error ? error.message : String(error)}`,
-                                    4000,
-                                  );
                                 });
-                            }}
-                          >
-                            Cycle Thread Color
-                          </button>
-                          <button
-                            type="button"
-                            className="ui-context-menu-item"
-                            role="menuitem"
-                            onClick={() => {
-                              context.close();
-                              void api
-                                .invokeExtensionAction('system-conversation-tools', 'clearThreadColor', {
-                                  conversationId,
-                                  sessionTitle: conversationItem.session.title,
-                                  cwd: conversationItem.session.cwd,
-                                })
-                                .then(refreshActivityTreeStyles)
-                                .catch((error) => {
-                                  showSidebarNotice(
-                                    'danger',
-                                    `Clear thread color failed: ${error instanceof Error ? error.message : String(error)}`,
-                                    4000,
-                                  );
-                                });
-                            }}
-                          >
-                            Clear Thread Color
-                          </button>
+                              }}
+                            >
+                              {menu.title}
+                            </button>
+                          ))}
                         </>
                       ) : null}
                       <button
