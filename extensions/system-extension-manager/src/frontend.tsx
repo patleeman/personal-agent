@@ -118,6 +118,7 @@ function ExtensionActionsMenu({
   onSnapshot,
   onExport,
   onCopyDiagnostics,
+  onSelfTest,
 }: {
   extension: ExtensionInstallSummary;
   onOpenFolder: () => void;
@@ -126,6 +127,7 @@ function ExtensionActionsMenu({
   onSnapshot: () => void;
   onExport: () => void;
   onCopyDiagnostics: () => void;
+  onSelfTest: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -188,6 +190,12 @@ function ExtensionActionsMenu({
             onClick={(event) => run(event, onReload)}
           >
             Reload
+          </button>
+          <button
+            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+            onClick={(event) => run(event, onSelfTest)}
+          >
+            Run self-test
           </button>
           <button
             className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
@@ -685,6 +693,28 @@ export function ExtensionManagerPage() {
     }
   }, []);
 
+  const selfTestExtension = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      setBusyId(extension.id);
+      setNotice(null);
+      try {
+        const result = await api.extensionSelfTest(extension.id);
+        const failed = result.checks.filter((check) => !check.ok);
+        setNotice(
+          failed.length
+            ? `${extension.name} self-test failed: ${failed.map((check) => check.error ?? check.name).join('; ')}`
+            : `${extension.name} self-test passed.`,
+        );
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [load],
+  );
+
   const visibleExtensions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return extensions.filter((extension) => {
@@ -857,6 +887,7 @@ export function ExtensionManagerPage() {
                                     onSnapshot={() => void snapshotExtension(extension)}
                                     onExport={() => void exportExtension(extension)}
                                     onCopyDiagnostics={() => void copyExtensionDiagnostics(extension)}
+                                    onSelfTest={() => void selfTestExtension(extension)}
                                   />
                                 </div>
                               </td>

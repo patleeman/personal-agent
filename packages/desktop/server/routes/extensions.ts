@@ -4,7 +4,12 @@ import { resolve, sep } from 'node:path';
 import type { Express, Request, Response } from 'express';
 
 import { pingDaemon, startBackgroundRun } from '../daemon/index.js';
-import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
+import {
+  invokeExtensionAction,
+  listExtensionActionTelemetry,
+  reloadExtensionBackend,
+  runExtensionSelfTest,
+} from '../extensions/extensionBackend.js';
 import { listExtensionEventSubscriptions } from '../extensions/extensionEventBus.js';
 import {
   buildRuntimeExtension,
@@ -102,6 +107,15 @@ export function registerExtensionRoutes(
       res.json(readExtensionSchema());
     } catch (err) {
       sendRouteError(res, 'extensions schema error', err);
+    }
+  });
+
+  router.get('/api/extensions/telemetry', (req, res) => {
+    try {
+      const extensionId = typeof req.query.extensionId === 'string' ? req.query.extensionId : undefined;
+      res.json(listExtensionActionTelemetry(extensionId));
+    } catch (err) {
+      sendRouteError(res, 'extensions telemetry error', err);
     }
   });
 
@@ -480,6 +494,14 @@ export function registerExtensionRoutes(
           : 500;
       logError('extension build error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
+    }
+  });
+
+  router.post('/api/extensions/:id/self-test', async (req, res) => {
+    try {
+      res.json(await runExtensionSelfTest(req.params.id));
+    } catch (err) {
+      sendRouteError(res, 'extension self-test error', err);
     }
   });
 

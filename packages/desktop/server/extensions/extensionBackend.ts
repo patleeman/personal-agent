@@ -130,6 +130,26 @@ export interface ExtensionBackendContext {
 
 type ExtensionBackendModule = Record<string, unknown>;
 
+export interface ExtensionActionTelemetryEntry {
+  extensionId: string;
+  actionId: string;
+  ok: boolean;
+  durationMs: number;
+  at: string;
+  error?: string;
+}
+
+const actionTelemetry: ExtensionActionTelemetryEntry[] = [];
+
+function recordActionTelemetry(entry: ExtensionActionTelemetryEntry): void {
+  actionTelemetry.unshift(entry);
+  actionTelemetry.splice(100);
+}
+
+export function listExtensionActionTelemetry(extensionId?: string): ExtensionActionTelemetryEntry[] {
+  return actionTelemetry.filter((entry) => !extensionId || entry.extensionId === extensionId);
+}
+
 const EXTENSION_BACKEND_BUILD_CACHE_VERSION = 'bundle-host-runtime-externals-v3';
 const backendModuleCache = new Map<string, { cacheKey: string; module: Promise<ExtensionBackendModule> }>();
 const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
@@ -660,6 +680,7 @@ export async function invokeExtensionAction(
   toolContext?: ExtensionBackendContext['toolContext'],
   agentToolContext?: unknown,
 ): Promise<ExtensionActionInvokeResult> {
+  const started = Date.now();
   try {
     const entry = findExtensionEntry(extensionId);
     if (!entry) {
@@ -685,14 +706,52 @@ export async function invokeExtensionAction(
       input,
       createBackendContext(extensionId, serverContext, toolContext, agentToolContext),
     );
+    recordActionTelemetry({ extensionId, actionId, ok: true, durationMs: Date.now() - started, at: new Date().toISOString() });
     return { ok: true, result };
   } catch (error) {
-    if (error instanceof ExtensionLoadError) {
-      return { ok: false, error: error.message };
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: `Extension "${extensionId}" action "${actionId}" failed: ${message}` };
+    const message =
+      error instanceof ExtensionLoadError
+        ? error.message
+        : `Extension "${extensionId}" action "${actionId}" failed: ${error instanceof Error ? error.message : String(error)}`;
+    recordActionTelemetry({
+      extensionId,
+      actionId,
+      ok: false,
+      durationMs: Date.now() - started,
+      at: new Date().toISOString(),
+      error: message,
+    });
+    return { ok: false, error: message };
   }
+}
+
+export async function runExtensionSelfTest(
+  extensionId: string,
+): Promise<{ ok: boolean; extensionId: string; checks: Array<{ name: string; ok: boolean; error?: string }> }> {
+  const checks: Array<{ name: string; ok: boolean; error?: string }> = [];
+  const entry = findExtensionEntry(extensionId);
+  if (!entry) throw new Error('Extension not found.');
+  if (!entry.manifest.backend?.entry) return { ok: true, extensionId, checks: [{ name: 'backend', ok: true }] };
+
+  try {
+    const backend = await loadExtensionBackend(extensionId);
+    clearExtensionHealthError(extensionId);
+    checks.push({ name: 'backend import', ok: true });
+    for (const action of entry.manifest.backend.actions ?? []) {
+      const handlerName = action.handler ?? action.id;
+      checks.push({
+        name: `action export: ${action.id}`,
+        ok: typeof backend[handlerName] === 'function',
+        ...(typeof backend[handlerName] === 'function' ? {} : { error: `Missing export ${handlerName}` }),
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setExtensionHealthError(extensionId, message);
+    checks.push({ name: 'backend import', ok: false, error: message });
+  }
+  invalidateAppTopics('extensions');
+  return { ok: checks.every((check) => check.ok), extensionId, checks };
 }
 
 /**

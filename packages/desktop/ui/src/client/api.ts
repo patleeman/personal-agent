@@ -329,6 +329,14 @@ export const api = {
     >('/extensions/actions'),
   extensionStatus: async (extensionId: string) =>
     get<{ enabled: boolean; healthy: boolean; errors?: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/status`),
+  extensionSelfTest: async (extensionId: string) =>
+    post<{ ok: boolean; extensionId: string; checks: Array<{ name: string; ok: boolean; error?: string }> }>(
+      `/extensions/${encodeURIComponent(extensionId)}/self-test`,
+    ),
+  extensionTelemetry: async (extensionId?: string) =>
+    get<Array<{ extensionId: string; actionId: string; ok: boolean; durationMs: number; at: string; error?: string }>>(
+      `/extensions/telemetry${extensionId ? `?extensionId=${encodeURIComponent(extensionId)}` : ''}`,
+    ),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary; actionResult?: { ok: boolean; result?: unknown; error?: string } }>(
