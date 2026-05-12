@@ -167,7 +167,7 @@ describe('trace-db', () => {
     db.prepare(`UPDATE trace_suggested_context SET ts = ? WHERE session_id = ?`).run(eightDaysAgo, 'stale-suggested-context');
     db.close();
 
-    writeTraceStats({ sessionId: 'trigger-prune', modelId: 'gpt-4o' });
+    writeTraceStats({ sessionId: 'trigger-prune', modelId: 'gpt-4o', tokensInput: 0, tokensOutput: 0, cost: 0 });
     closeTraceDbs();
 
     const prunedDb = openSqliteDatabase(dbPath);
