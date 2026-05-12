@@ -23,6 +23,7 @@ export type {
 } from '../automation/store.js';
 export {
   appendAutomationActivityEntry,
+  checkpointAutomationDbsPassive,
   closeAutomationDbs,
   createStoredAutomation,
   deleteStoredAutomation,
@@ -85,6 +86,7 @@ export type {
 } from '../runs/store.js';
 export {
   appendDurableRunEvent,
+  checkpointRuntimeDbsPassive,
   closeRuntimeDbs,
   createDurableRunManifest,
   createInitialDurableRunStatus,
@@ -167,3 +169,13 @@ export type {
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
 } from '../daemon/types.js';
+
+// SQLite database lifecycle
+export {
+  checkpointAllDbsPassive,
+  closeAllDbs,
+  pruneStaleRecoveryFiles,
+  registerProcessExitSafetyNet,
+  startPeriodicWalCheckpoint,
+  stopPeriodicWalCheckpoint,
+} from '../shared/sqliteDbLifecycle.js';

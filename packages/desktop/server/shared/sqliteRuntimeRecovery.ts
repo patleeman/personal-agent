@@ -108,7 +108,7 @@ function openConfiguredSqliteDb(dbPath: string): SqliteDatabase {
   const db = openSqliteDatabase(dbPath);
   try {
     db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
+    db.pragma('synchronous = FULL');
     db.pragma('foreign_keys = ON');
     db.pragma('busy_timeout = 5000');
 

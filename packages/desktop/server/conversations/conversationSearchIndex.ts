@@ -295,11 +295,20 @@ export function searchIndexedConversationDocuments(input: {
     }));
 }
 
-export function resetConversationSearchIndexForTests(): void {
+export function closeConversationSearchIndexDb(): void {
   if (db) {
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Best-effort checkpoint before close.
+    }
     db.close();
     db = null;
   }
+}
+
+export function resetConversationSearchIndexForTests(): void {
+  closeConversationSearchIndexDb();
   indexingScheduled = false;
   indexingActive = false;
 }

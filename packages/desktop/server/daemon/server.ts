@@ -3,10 +3,16 @@ import { type ChildProcess, spawn } from 'child_process';
 import { closeSync, cpSync, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
 
-import { closeAutomationDbs } from '../automation/store.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from '../automation/tasks/index.js';
 import { type DaemonConfig, loadDaemonConfig, type LogLevel } from '../config.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from '../paths.js';
+import {
+  closeAllDbs,
+  pruneStaleRecoveryFiles,
+  registerProcessExitSafetyNet,
+  startPeriodicWalCheckpoint,
+  stopPeriodicWalCheckpoint,
+} from '../shared/sqliteDbLifecycle.js';
 import { deliverBackgroundRunCallbackWakeup } from '../runs/background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from '../runs/background-run-deferred-resumes.js';
 import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from '../runs/background-run-replays.js';
@@ -20,7 +26,6 @@ import {
   type StartBackgroundRunInput,
 } from '../runs/background-runs.js';
 import {
-  closeRuntimeDbs,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
   scanDurableRun,
@@ -338,6 +343,18 @@ export class PersonalAgentDaemon {
       }
 
       this.running = true;
+
+      // Register a process.on('exit') safety net so databases are checkpointed
+      // even if the process is terminated without a graceful stop().
+      registerProcessExitSafetyNet();
+
+      // Periodically flush WAL data to reduce the corruption window on
+      // ungraceful kills and keep WAL files from growing unbounded.
+      startPeriodicWalCheckpoint((level, msg) => this.log(level as LogLevel, msg));
+
+      // Clean up old quarantine / backup files from previous recovery events.
+      pruneStaleRecoveryFiles(this.paths.root, (level, msg) => this.log(level as LogLevel, msg));
+
       this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
     } catch (error) {
       this.releaseProcessLock();
@@ -383,20 +400,11 @@ export class PersonalAgentDaemon {
       this.server.close(() => resolve());
     });
 
+    stopPeriodicWalCheckpoint();
+
     // Checkpoint and close all cached SQLite databases so WAL data is
     // flushed to the main DB file before we release the process lock.
-    // Without this, an unclean kill during a subsequent startup can leave
-    // the WAL in an inconsistent state, causing index corruption.
-    try {
-      closeRuntimeDbs();
-    } catch (error) {
-      this.log('warn', `failed to close runtime DBs: ${(error as Error).message}`);
-    }
-    try {
-      closeAutomationDbs();
-    } catch (error) {
-      this.log('warn', `failed to close automation DBs: ${(error as Error).message}`);
-    }
+    closeAllDbs((level, msg) => this.log(level as LogLevel, msg));
 
     if (existsSync(this.paths.socketPath)) {
       rmSync(this.paths.socketPath, { force: true });

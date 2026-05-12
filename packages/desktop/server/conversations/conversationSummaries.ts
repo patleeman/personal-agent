@@ -638,6 +638,18 @@ export function startConversationSummaryBackfillLoop(input: {
   interval.unref?.();
 }
 
+export function closeConversationSummariesDb(): void {
+  if (db) {
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Best-effort checkpoint before close.
+    }
+    db.close();
+    db = null;
+  }
+}
+
 export function readConversationSummaryIndexCapability(input: { sessionIds?: unknown } = {}) {
   const rawSessionIds = Array.isArray(input.sessionIds) ? input.sessionIds : [];
   const sessionIds = rawSessionIds

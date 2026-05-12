@@ -324,6 +324,13 @@ const LEGACY_TASK_FILE_SUFFIX = '.task.md';
 const AUTOMATION_ACTIVITY_RETENTION_LIMIT = 100;
 const dbCache = new Map<string, SqliteDatabase>();
 
+/** Run a PASSIVE WAL checkpoint on all cached automation databases (non-blocking). */
+export function checkpointAutomationDbsPassive(): void {
+  for (const db of dbCache.values()) {
+    db.pragma('wal_checkpoint(PASSIVE)');
+  }
+}
+
 export function closeAutomationDbs(): void {
   for (const db of dbCache.values()) {
     try {

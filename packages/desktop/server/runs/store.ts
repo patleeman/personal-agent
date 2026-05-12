@@ -100,6 +100,13 @@ type StoredEventRow = {
 
 const runtimeDbCache = new Map<string, SqliteDatabase>();
 
+/** Run a PASSIVE WAL checkpoint on all cached runtime databases (non-blocking). */
+export function checkpointRuntimeDbsPassive(): void {
+  for (const db of runtimeDbCache.values()) {
+    db.pragma('wal_checkpoint(PASSIVE)');
+  }
+}
+
 export function closeRuntimeDbs(): void {
   for (const db of runtimeDbCache.values()) {
     try {

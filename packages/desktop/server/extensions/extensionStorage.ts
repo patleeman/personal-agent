@@ -137,9 +137,19 @@ export function listExtensionState<T = unknown>(extensionId: string, prefix = ''
   return rows.map((row) => rowToDocument<T>(row));
 }
 
-export function clearExtensionStateDbCacheForTests(): void {
+export function closeExtensionStateDbs(): void {
   for (const db of dbCache.values()) {
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Best-effort checkpoint before close.
+    }
     db.close();
   }
   dbCache.clear();
+}
+
+/** @deprecated Use {@link closeExtensionStateDbs} instead. */
+export function clearExtensionStateDbCacheForTests(): void {
+  closeExtensionStateDbs();
 }
