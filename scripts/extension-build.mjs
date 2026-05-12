@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
-const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
-  /^(@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
+const HOST_RUNTIME_EXTERNAL_IMPORT_RE = /^(@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = resolve(process.argv[2] || process.cwd());
