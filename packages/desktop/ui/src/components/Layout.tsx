@@ -641,7 +641,7 @@ function WorkbenchKnowledgeRail({
     loading: checkpointsLoading,
     error: checkpointsError,
   } = useConversationCheckpointSummaries(diffsEnabled ? conversationId : null);
-  const { result: uncommittedResult, loading: uncommittedLoading } = useUncommittedDiff(diffsEnabled ? workspaceCwd : null);
+  const { result: uncommittedResult } = useUncommittedDiff(diffsEnabled ? workspaceCwd : null);
   const runLookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
   const connectedRuns = useConversationRunList(runsEnabled ? conversationId : null, runs, runLookups);
   const activeRunConnected = activeRunId !== null && connectedRuns.some((run) => run.runId === activeRunId);
@@ -882,38 +882,6 @@ function WorkbenchKnowledgeRail({
       );
     }
   }, [activeCheckpointId, activeTool, onCheckpointSelect, setSearchParams, uncommittedResult]);
-
-  useEffect(() => {
-    if (
-      isDiffsRailMode(activeTool) &&
-      !activeCheckpointId &&
-      !checkpointsLoading &&
-      !uncommittedLoading &&
-      checkpoints.length === 0 &&
-      !uncommittedResult
-    ) {
-      onActiveToolChange('files');
-      onCheckpointSelect(null);
-      setSearchParams(
-        (current) => {
-          const next = new URLSearchParams(current);
-          next.delete('checkpoint');
-          return next;
-        },
-        { replace: true },
-      );
-    }
-  }, [
-    activeCheckpointId,
-    activeTool,
-    checkpoints.length,
-    checkpointsLoading,
-    uncommittedLoading,
-    uncommittedResult,
-    onActiveToolChange,
-    onCheckpointSelect,
-    setSearchParams,
-  ]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
