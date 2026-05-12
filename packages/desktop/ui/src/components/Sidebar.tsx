@@ -3536,6 +3536,17 @@ export function Sidebar() {
                             role="menuitem"
                             onClick={() => {
                               context.close();
+                              void handleDuplicateConversation(conversationItem.session);
+                            }}
+                          >
+                            Duplicate Thread
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
                               handleArchiveConversation(conversationId);
                             }}
                           >
@@ -3552,6 +3563,30 @@ export function Sidebar() {
                           >
                             Copy Session ID
                           </button>
+                          <button
+                            type="button"
+                            className="ui-context-menu-item"
+                            role="menuitem"
+                            onClick={() => {
+                              context.close();
+                              void handleCopyConversationDeeplink(conversationId);
+                            }}
+                          >
+                            Copy Deeplink
+                          </button>
+                          {conversationItem.session.cwd?.trim() ? (
+                            <button
+                              type="button"
+                              className="ui-context-menu-item"
+                              role="menuitem"
+                              onClick={() => {
+                                context.close();
+                                void handleCopyConversationWorkingDirectory(conversationItem.session.cwd);
+                              }}
+                            >
+                              Copy Working Directory
+                            </button>
+                          ) : null}
                         </>
                       ) : null}
                       <button
