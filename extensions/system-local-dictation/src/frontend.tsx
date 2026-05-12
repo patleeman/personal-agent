@@ -132,11 +132,15 @@ export function DictationButton({
         text?: string;
       };
       const text = result.text?.trim();
-      if (!text) return;
+      if (!text) {
+        pa.ui.toast('Dictation did not detect any speech.');
+        return;
+      }
       buttonContext.insertText(text);
       pa.ui.toast('Dictation inserted.');
     } catch (error) {
-      pa.ui.toast(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      pa.ui.toast(message.toLowerCase().includes('empty transcript') ? 'Dictation did not detect any speech.' : message);
     } finally {
       setState('idle');
     }

@@ -2800,6 +2800,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
+      const el = textareaRef.current;
+      if (el) {
+        el.value = insertion.nextInput;
+      }
       setInput(insertion.nextInput);
       window.requestAnimationFrame(() => {
         const el = textareaRef.current;
