@@ -352,6 +352,48 @@ describe('durable run store', () => {
     ]);
   });
 
+  it('does not mark idle web live sessions as recoverable when they have no pending operation', () => {
+    const runsRoot = createTempDir('durable-runs-store-web-live-idle-');
+    const idlePaths = resolveDurableRunPaths(runsRoot, 'conversation-live-idle');
+
+    saveDurableRunManifest(
+      idlePaths.manifestPath,
+      createDurableRunManifest({
+        id: 'conversation-live-idle',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T18:00:00Z',
+        source: { type: 'web-live-session', id: 'idle' },
+      }),
+    );
+    saveDurableRunStatus(
+      idlePaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'conversation-live-idle',
+        status: 'waiting',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 0,
+      }),
+    );
+    saveDurableRunCheckpoint(idlePaths.checkpointPath, {
+      version: 1,
+      runId: 'conversation-live-idle',
+      updatedAt: '2026-03-12T18:00:00Z',
+      payload: { conversationId: 'idle' },
+    });
+
+    expect(scanDurableRun(runsRoot, 'conversation-live-idle')).toEqual(expect.objectContaining({ recoveryAction: 'none' }));
+
+    saveDurableRunCheckpoint(idlePaths.checkpointPath, {
+      version: 1,
+      runId: 'conversation-live-idle',
+      updatedAt: '2026-03-12T18:00:00Z',
+      payload: { conversationId: 'idle', pendingOperation: { type: 'turn' } },
+    });
+
+    expect(scanDurableRun(runsRoot, 'conversation-live-idle')).toEqual(expect.objectContaining({ recoveryAction: 'resume' }));
+  });
+
   it('marks invalid sqlite rows during recovery scan', () => {
     const runsRoot = createTempDir('durable-runs-store-invalid-');
     const db = openSqliteDatabase(join(runsRoot, 'runtime.db'));

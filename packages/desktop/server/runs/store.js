@@ -190,11 +190,22 @@ function readJsonFile(path) {
 function terminalStatus(status) {
   return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
-function determineRecoveryAction(manifest, status) {
+function hasPendingWebLiveOperation(checkpoint) {
+  const pendingOperation = checkpoint?.payload?.pendingOperation;
+  return isRecord(pendingOperation) && typeof pendingOperation.type === 'string' && pendingOperation.type.trim().length > 0;
+}
+function determineRecoveryAction(manifest, status, checkpoint) {
   if (!manifest || !status) {
     return 'invalid';
   }
   if (terminalStatus(status.status)) {
+    return 'none';
+  }
+  if (
+    manifest.source?.type === 'web-live-session' &&
+    (status.status === 'waiting' || status.status === 'interrupted') &&
+    !hasPendingWebLiveOperation(checkpoint)
+  ) {
     return 'none';
   }
   if (manifest.resumePolicy === 'continue') {
@@ -576,7 +587,7 @@ export function scanDurableRun(runsRoot, runId) {
     checkpoint,
     result,
     problems,
-    recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
+    recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status, checkpoint),
   };
 }
 export function scanDurableRunsForRecovery(runsRoot) {
@@ -611,7 +622,7 @@ export function scanDurableRunsForRecovery(runsRoot) {
       checkpoint,
       result,
       problems,
-      recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
+      recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status, checkpoint),
     };
   });
 }

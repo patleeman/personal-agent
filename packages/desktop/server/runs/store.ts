@@ -324,15 +324,29 @@ function terminalStatus(status: DurableRunStatus): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
 
+function hasPendingWebLiveOperation(checkpoint: DurableRunCheckpointFile | undefined): boolean {
+  const pendingOperation = checkpoint?.payload?.pendingOperation;
+  return isRecord(pendingOperation) && typeof pendingOperation.type === 'string' && pendingOperation.type.trim().length > 0;
+}
+
 function determineRecoveryAction(
   manifest: DurableRunManifest | undefined,
   status: DurableRunStatusFile | undefined,
+  checkpoint: DurableRunCheckpointFile | undefined,
 ): DurableRunRecoveryAction {
   if (!manifest || !status) {
     return 'invalid';
   }
 
   if (terminalStatus(status.status)) {
+    return 'none';
+  }
+
+  if (
+    manifest.source?.type === 'web-live-session' &&
+    (status.status === 'waiting' || status.status === 'interrupted') &&
+    !hasPendingWebLiveOperation(checkpoint)
+  ) {
     return 'none';
   }
 
@@ -777,7 +791,7 @@ export function scanDurableRun(runsRoot: string, runId: string): ScannedDurableR
     checkpoint,
     result,
     problems,
-    recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
+    recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status, checkpoint),
   } satisfies ScannedDurableRun;
 }
 
@@ -819,7 +833,7 @@ export function scanDurableRunsForRecovery(runsRoot: string): ScannedDurableRun[
       checkpoint,
       result,
       problems,
-      recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
+      recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status, checkpoint),
     } satisfies ScannedDurableRun;
   });
 }
