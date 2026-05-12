@@ -68,7 +68,7 @@ When adding companion API calls, build query strings through `URLComponents`-bac
 npm run ios:dev
 ```
 
-This script handles provisioning, building, and launching the app on a connected device or simulator.
+This script handles provisioning, building, and launching the app on a connected device or simulator. The dev companion host keeps daemon runtime files in an isolated `ios-dev-daemon` directory under `PA_IOS_DEV_STATE_ROOT` by default, so live iOS testing does not share the desktop app's `daemon/runtime.db`. Override `PA_IOS_DEV_DAEMON_ROOT` or `PA_IOS_DEV_DAEMON_SOCKET_PATH` only when you intentionally want a custom host daemon location.
 
 ## Companion API
 

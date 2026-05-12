@@ -1,6 +1,8 @@
-import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+import type { SqliteDatabase } from '@personal-agent/core';
 import { existsSync, mkdirSync } from 'fs';
 import { basename, dirname, join } from 'path';
+
+import { openRecoveringRuntimeSqliteDb } from '../shared/sqliteRuntimeRecovery.js';
 
 export type DurableRunKind = 'scheduled-task' | 'conversation' | 'workflow' | 'raw-shell' | 'background-run';
 export type DurableRunStatus = 'queued' | 'running' | 'recovering' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
@@ -396,11 +398,7 @@ function openRuntimeDb(dbPath: string): SqliteDatabase {
   }
 
   mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
-  const db = openSqliteDatabase(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
+  const db = openRecoveringRuntimeSqliteDb(dbPath);
   db.exec(`
     CREATE TABLE IF NOT EXISTS runs (
       run_id TEXT PRIMARY KEY,

@@ -54,13 +54,15 @@ The companion API serves the iOS app.
 
 ## State Storage
 
-The daemon stores its state in `<state-root>/daemon/`:
+The daemon stores its state in `<state-root>/daemon/` by default. If `PERSONAL_AGENT_DAEMON_SOCKET_PATH` is set, daemon runtime files live beside that explicit socket path instead; this lets dev hosts isolate their runtime DB from the desktop app.
 
 | Path         | Content                                         |
 | ------------ | ----------------------------------------------- |
 | `runtime.db` | SQLite database for runs, tasks, reminders      |
 | `socket`     | Local Unix socket for desktop app communication |
 | `logs/`      | Run output logs                                 |
+
+On startup, the runtime DB is integrity-checked before schema setup. If SQLite reports corruption, the app tries to recover it with `sqlite3 .recover`, quarantines the original files under `.corrupt/`, and recreates a healthy DB if recovery is unavailable.
 
 ## Configuration
 

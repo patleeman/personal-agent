@@ -1,7 +1,7 @@
 import { resolveStatePaths } from '@personal-agent/core';
 import { mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import type { DaemonPaths } from './daemon/types.js';
 
@@ -19,8 +19,8 @@ function expandHome(path: string): string {
 
 export function resolveDaemonPaths(explicitSocketPath?: string): DaemonPaths {
   const statePaths = resolveStatePaths();
-  const root = join(statePaths.root, 'daemon');
-  const socketPath = explicitSocketPath ? resolve(expandHome(explicitSocketPath)) : join(root, 'personal-agentd.sock');
+  const socketPath = explicitSocketPath ? resolve(expandHome(explicitSocketPath)) : join(statePaths.root, 'daemon', 'personal-agentd.sock');
+  const root = explicitSocketPath ? dirname(socketPath) : join(statePaths.root, 'daemon');
 
   return {
     stateRoot: statePaths.root,

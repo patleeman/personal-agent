@@ -9,6 +9,8 @@ import { spawn, spawnSync } from 'node:child_process';
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDir, '..', '..', '..');
 const stateRoot = process.env.PA_IOS_DEV_STATE_ROOT?.trim() || '/tmp/personal-agent-ios-dev-state';
+const daemonRoot = process.env.PA_IOS_DEV_DAEMON_ROOT?.trim() || join(stateRoot, 'ios-dev-daemon');
+const daemonSocketPath = process.env.PA_IOS_DEV_DAEMON_SOCKET_PATH?.trim() || join(daemonRoot, 'personal-agentd.sock');
 const derivedDataPath = process.env.PA_IOS_DERIVED_DATA_PATH?.trim() || '/tmp/personal-agent-ios-deriveddata';
 const hostPort = Number.parseInt(process.env.PA_IOS_DEV_PORT?.trim() || '3845', 10);
 const hostBaseUrl = process.env.PA_IOS_DEV_BASE_URL?.trim() || `http://127.0.0.1:${String(hostPort)}`;
@@ -796,6 +798,7 @@ async function hostCommand() {
   loadDevEnvDefaults();
   ensureBuildArtifacts();
   process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+  process.env.PERSONAL_AGENT_DAEMON_SOCKET_PATH = daemonSocketPath;
   process.env.PERSONAL_AGENT_DESKTOP_VARIANT = process.env.PERSONAL_AGENT_DESKTOP_VARIANT || 'testing';
 
   const core = await importBuiltModule('packages/core/dist/index.js');
@@ -806,6 +809,7 @@ async function hostCommand() {
 
   const runtime = await createHeadlessCompanionRuntime(localApi);
   const config = daemonModule.loadDaemonConfig();
+  config.ipc.socketPath = daemonSocketPath;
   config.companion = {
     enabled: true,
     host: '127.0.0.1',
@@ -823,6 +827,8 @@ async function hostCommand() {
   const hello = await fetchJson(`${hostBaseUrl}/companion/v1/hello`);
   writeJson(hostMetadataFile, {
     stateRoot,
+    daemonRoot,
+    daemonSocketPath,
     baseURL: hostBaseUrl,
     hostLabel: hello.hostLabel,
     hostInstanceId: hello.hostInstanceId,
@@ -834,6 +840,7 @@ async function hostCommand() {
 
   log(`iOS dev companion host running at ${hostBaseUrl}`);
   log(`State root: ${stateRoot}`);
+  log(`Daemon root: ${daemonRoot}`);
   log(`Metadata: ${hostMetadataFile}`);
   log('Use another terminal for:');
   log('  npm run ios:dev:sim');

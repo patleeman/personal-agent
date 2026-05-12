@@ -5,7 +5,6 @@ import { basename, dirname, join, resolve } from 'node:path';
 import {
   migrateWithBackup,
   type Migration,
-  openSqliteDatabase,
   readTableColumnNames,
   safeRebuildTable,
   setSchemaVersion,
@@ -16,6 +15,7 @@ import {
 import { loadDaemonConfig } from '../config.js';
 import { resolveDaemonPaths } from '../paths.js';
 import { resolveRuntimeDbPath } from '../runs/store.js';
+import { openRecoveringRuntimeSqliteDb } from '../shared/sqliteRuntimeRecovery.js';
 import { parseCronExpression, type ParsedTaskDefinition, type ParsedTaskSchedule, parseTaskDefinition } from './tasks/tasks-parser.js';
 import { loadTaskState, type TaskRuntimeState } from './tasks/tasks-store.js';
 
@@ -446,11 +446,7 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
   }
 
   mkdirSync(dirname(resolved), { recursive: true });
-  const db = openSqliteDatabase(resolved);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
+  const db = openRecoveringRuntimeSqliteDb(resolved);
   db.exec(`
     CREATE TABLE IF NOT EXISTS automations (
       id TEXT PRIMARY KEY,
