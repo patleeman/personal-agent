@@ -8,6 +8,23 @@ function uid(prefix = ''): string {
   return `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function codexTurn(id: string, status: 'inProgress' | 'completed' | 'failed', error: string | null = null) {
+  return {
+    id,
+    items: [],
+    itemsView: 'full',
+    status,
+    error,
+    startedAt: null,
+    completedAt: status === 'inProgress' ? null : Math.floor(Date.now() / 1000),
+    durationMs: null,
+  };
+}
+
+function nowMs(): number {
+  return Date.now();
+}
+
 /** Clean up all turn subscriptions for a given thread. */
 export function cleanupTurnSubscriptions(threadId: string): void {
   const subs = turnSubscriptions.get(threadId);
@@ -57,20 +74,23 @@ export const turn = {
     // Notify turn started
     notify('turn/started', {
       threadId,
-      turn: { id: turnId, status: 'inProgress', items: [], error: null },
+      turn: codexTurn(turnId, 'inProgress'),
     });
 
     // User message item
     const userItemId = uid('item-');
+    const userItem = { id: userItemId, type: 'userMessage', content: [{ type: 'text', text, textElements: [] }] };
     notify('item/started', {
       threadId,
       turnId,
-      item: { id: userItemId, type: 'userMessage', role: 'user', status: 'started' },
+      item: userItem,
+      startedAtMs: nowMs(),
     });
     notify('item/completed', {
       threadId,
       turnId,
-      item: { id: userItemId, type: 'userMessage', role: 'user', status: 'completed' },
+      item: userItem,
+      completedAtMs: nowMs(),
     });
 
     // Subscribe to PA session events and forward them as Codex notifications.
@@ -92,7 +112,8 @@ export const turn = {
           notify('item/started', {
             threadId,
             turnId,
-            item: { id: agentItemId, type: 'agentMessage', status: 'inProgress' },
+            item: { id: agentItemId, type: 'agentMessage', text: '' },
+            startedAtMs: nowMs(),
           });
           break;
         }
@@ -104,7 +125,7 @@ export const turn = {
               threadId,
               turnId,
               itemId: agentItemId,
-              delta: { text: delta },
+              delta,
             });
           }
           break;
@@ -116,7 +137,8 @@ export const turn = {
               threadId,
               turnId,
               itemId: agentItemId,
-              delta: { text: delta },
+              delta,
+              summaryIndex: 0,
             });
           }
           break;
@@ -159,9 +181,9 @@ export const turn = {
               item: {
                 id: agentItemId,
                 type: 'agentMessage',
-                status: 'completed',
                 text: agentText,
               },
+              completedAtMs: nowMs(),
             });
           }
           break;
@@ -175,7 +197,7 @@ export const turn = {
           }
           notify('turn/completed', {
             threadId,
-            turn: { id: turnId, status: 'completed', error: null },
+            turn: codexTurn(turnId, 'completed'),
           });
           break;
         }
@@ -189,7 +211,7 @@ export const turn = {
           }
           notify('turn/completed', {
             threadId,
-            turn: { id: turnId, status: 'failed', error: errorMsg ?? 'Unknown error' },
+            turn: codexTurn(turnId, 'failed', errorMsg ?? 'Unknown error'),
           });
           break;
         }
@@ -212,7 +234,7 @@ export const turn = {
         turnDone = true;
         notify('turn/completed', {
           threadId,
-          turn: { id: turnId, status: 'failed', error: error instanceof Error ? error.message : String(error) },
+          turn: codexTurn(turnId, 'failed', error instanceof Error ? error.message : String(error)),
         });
         if (unsubscribe) {
           unsubscribe();
@@ -222,7 +244,7 @@ export const turn = {
     }
 
     return {
-      turn: { id: turnId, status: 'inProgress', items: [], error: null },
+      turn: codexTurn(turnId, 'inProgress'),
     };
   }) as MethodHandler,
 
@@ -248,20 +270,28 @@ export const turn = {
   /**
    * `turn/interrupt` — interrupt a running turn.
    */
-  interrupt: (async (params, ctx) => {
+  interrupt: (async (params, ctx, _conn, notify) => {
     const p = params as Record<string, unknown> | undefined;
     const threadId = p?.threadId as string | undefined;
     if (!threadId) throw new Error('threadId is required');
 
-    // Clean up turn subscriptions for this thread
-    cleanupTurnSubscriptions(threadId);
+    // Notify the client that the turn was interrupted, so it doesn't hang
+    // waiting for turn/completed that will never arrive.
+    notify('turn/interrupted', {
+      threadId,
+      turn: codexTurn((p?.turnId as string) ?? `interrupted-${Date.now()}`, 'failed', 'Turn interrupted by user'),
+    });
 
-    // Send abort command to interrupt the current turn
+    // Send abort command before cleaning up subscriptions, so any turn_end
+    // events from the PA backend can still flow through to the handler.
     try {
       await ctx.conversations.sendMessage(threadId, '/abort');
     } catch {
       // Best effort
     }
+
+    // Clean up after the fact — the subscription is done regardless.
+    cleanupTurnSubscriptions(threadId);
 
     return {};
   }) as MethodHandler,
