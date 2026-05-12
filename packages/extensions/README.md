@@ -346,17 +346,25 @@ Mention providers run in the frontend and return selectable `@` menu items:
 }
 ```
 
-Quick-open providers also run in the frontend and feed command palette scopes such as `files`:
+Quick-open providers also run in the frontend and add extension-owned command palette tabs:
 
 ```json
 {
   "contributes": {
-    "quickOpen": [{ "id": "agent-board-cards", "provider": "agentBoardQuickOpenProvider", "section": "files" }]
+    "quickOpen": [
+      {
+        "id": "agent-board-cards",
+        "provider": "agentBoardQuickOpenProvider",
+        "title": "Cards",
+        "section": "agent-board-cards",
+        "order": 20
+      }
+    ]
   }
 }
 ```
 
-The provider export can implement `list()` for empty-query browsing and `search(query, limit)` for content search. Returned items include `title`, optional `subtitle`/`meta`/`keywords`, and an action such as `{ "kind": "navigate", "to": "/ext/agent-board" }` or `{ "kind": "openFile", "fileId": "notes/example.md" }`.
+The provider export can implement `list()` for empty-query browsing and `search(query, limit)` for content search. Returned items include `title`, optional `subtitle`/`meta`/`keywords`, and an action such as `{ "kind": "navigate", "to": "/ext/agent-board" }` or `{ "kind": "openFile", "fileId": "notes/example.md" }`. Omit item `section` to use the contribution's tab; set it only when deliberately returning items for another quick-open surface.
 
 Prompt reference resolvers run in the backend during prompt submission. Use them when an `@` mention should inject hidden context into the agent turn:
 

@@ -163,6 +163,7 @@ export interface ExtensionQuickOpenContribution {
   provider: string;
   title?: string;
   section?: string;
+  order?: number;
 }
 
 export interface ExtensionThemeContribution {
