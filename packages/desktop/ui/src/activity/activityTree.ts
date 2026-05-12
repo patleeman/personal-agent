@@ -44,6 +44,10 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
   }));
 
   for (const run of runs) {
+    if (isLiveConversationRun(run)) {
+      continue;
+    }
+
     const parentConversationId = getRunConversationId(run);
     items.push({
       id: buildRunActivityId(run.runId),
@@ -71,6 +75,12 @@ function compareActivityTreeItems(left: ActivityTreeItem, right: ActivityTreeIte
     return String(left.parentId).localeCompare(String(right.parentId));
   }
   return getTimestamp(right.updatedAt) - getTimestamp(left.updatedAt) || left.title.localeCompare(right.title);
+}
+
+function isLiveConversationRun(run: DurableRunRecord): boolean {
+  return (
+    run.manifest?.kind === 'conversation' || run.manifest?.spec?.mode === 'web-live-session' || run.runId.startsWith('conversation-live-')
+  );
 }
 
 function getTimestamp(value: string | undefined): number {

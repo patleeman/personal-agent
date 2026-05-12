@@ -115,6 +115,27 @@ describe('buildActivityTreeItems', () => {
     );
   });
 
+  it('skips live conversation runtime runs', () => {
+    const items = buildActivityTreeItems({
+      conversations: [session({ id: 'conv-1', title: 'Build the thing' })],
+      runs: [
+        run({
+          runId: 'conversation-live-conv-1',
+          manifest: {
+            version: 1,
+            id: 'conversation-live-conv-1',
+            kind: 'conversation',
+            resumePolicy: 'continue',
+            createdAt: '2026-05-12T10:03:00.000Z',
+            spec: { mode: 'web-live-session', conversationId: 'conv-1' },
+          },
+        }),
+      ],
+    });
+
+    expect(items).toEqual([expect.objectContaining({ id: buildConversationActivityId('conv-1') })]);
+  });
+
   it('keeps unlinked runs as root items', () => {
     const items = buildActivityTreeItems({
       conversations: [session({ id: 'conv-1', title: 'Build the thing' })],
