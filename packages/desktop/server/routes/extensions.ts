@@ -83,7 +83,7 @@ function readExtensionFile(req: Request, res: Response): void {
       return;
     }
     if (filePath.endsWith('.js')) {
-      res.type('js').send(readFileSync(filePath, 'utf-8'));
+      res.type('text/javascript; charset=utf-8').send(readFileSync(filePath, 'utf-8'));
       return;
     }
 

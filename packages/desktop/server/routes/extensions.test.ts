@@ -166,7 +166,7 @@ describe('registerExtensionRoutes', () => {
     const res = createResponse();
     harness.getHandler('/api/extensions/:id/files/*')({ params: { id: 'agent-board', 0: 'dist/frontend.js' } }, res);
 
-    expect(res.type).toHaveBeenCalledWith('js');
+    expect(res.type).toHaveBeenCalledWith('text/javascript; charset=utf-8');
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining('AgentBoardPage'));
   });
 
