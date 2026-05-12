@@ -3612,7 +3612,10 @@ export function Sidebar() {
                   const conversationItem = conversationId ? conversationItemBySessionId.get(conversationId) : null;
                   const isConversation = item.kind === 'conversation' && conversationId && conversationItem;
                   return (
-                    <div className="ui-context-menu min-w-[12rem] py-1" role="menu">
+                    <div
+                      className="ui-menu-shell ui-context-menu-shell static bottom-auto left-auto right-auto top-auto mb-0 min-w-[224px]"
+                      role="menu"
+                    >
                       <button
                         type="button"
                         className="ui-context-menu-item"

@@ -148,7 +148,7 @@ export function ActivityTreeView({
       {contextMenu && renderContextMenu ? (
         <div
           data-file-tree-context-menu-root="true"
-          className="fixed z-[1000] rounded-lg border border-border-subtle bg-elevated/98 p-1 text-primary shadow-xl backdrop-blur"
+          className="fixed z-[1000]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}
         >
