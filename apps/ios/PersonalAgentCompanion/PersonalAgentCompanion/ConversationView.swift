@@ -3068,10 +3068,12 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
             let measuredHeight = ceil(textView.sizeThatFits(CGSize(width: targetWidth, height: .greatestFiniteMagnitude)).height)
             let clampedHeight = min(ConversationComposerTextEditor.maxHeight, max(ConversationComposerTextEditor.minHeight, measuredHeight))
             textView.isScrollEnabled = measuredHeight > ConversationComposerTextEditor.maxHeight
-            guard abs(parent.height - clampedHeight) > 0.5 else {
-                return
+            DispatchQueue.main.async { [weak self] in
+                guard let self, abs(self.parent.height - clampedHeight) > 0.5 else {
+                    return
+                }
+                self.parent.height = clampedHeight
             }
-            parent.height = clampedHeight
         }
     }
 }

@@ -180,13 +180,17 @@ private struct ConversationListSectionGroup: Identifiable {
     let cwdGroups: [ConversationListCwdGroup]
 }
 
+private final class DemoConversationAutoOpenCoordinator: ObservableObject {
+    var didOpen = false
+}
+
 struct ConversationListView: View {
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
     @State private var path: [String] = []
     @State private var showingHostSelection = false
     @State private var isCreatingConversation = false
-    @State private var autoOpenedDemoConversation = false
+    @StateObject private var demoAutoOpenCoordinator = DemoConversationAutoOpenCoordinator()
 
     private var groupedChatSections: [ConversationListSectionGroup] {
         let labelsByCwd = buildCompanionConversationGroupLabels(
@@ -456,18 +460,22 @@ struct ConversationListView: View {
 
     private func autoOpenFirstConversationIfNeeded() {
         let environment = ProcessInfo.processInfo.environment
-        guard !autoOpenedDemoConversation,
-              (environment["PA_IOS_AUTO_OPEN_FIRST_CONVERSATION"] == "1" || environment["PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION"] == "1"),
+        guard environment["PA_IOS_AUTO_OPEN_FIRST_CONVERSATION"] == "1" || environment["PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION"] == "1",
               let firstConversationId = session.chatSections.first?.sessions.first?.id else {
             return
         }
-        autoOpenedDemoConversation = true
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard path.isEmpty else {
+        DispatchQueue.main.async {
+            guard !demoAutoOpenCoordinator.didOpen else {
                 return
             }
-            path = [firstConversationId]
+            demoAutoOpenCoordinator.didOpen = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                guard path.isEmpty else {
+                    return
+                }
+                path = [firstConversationId]
+            }
         }
     }
 }
