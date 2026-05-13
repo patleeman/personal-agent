@@ -198,6 +198,37 @@ describe('image agent extension', () => {
     ).toThrow('Image generation returned malformed image data.');
   });
 
+  it('executes without a session manager when no reference image context is available', async () => {
+    const imageTool = registerImageTool();
+    const codexModel = createModel({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://chatgpt.com/backend-api',
+    });
+    const token = createJwtWithAccountId('acct-123');
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ctx = createToolContext({
+      currentModel: codexModel,
+      models: [codexModel],
+      authByProvider: {
+        'openai-codex': { apiKey: token },
+      },
+    }) as Record<string, unknown>;
+    delete ctx.sessionManager;
+
+    const result = await imageTool.execute('tool-no-session-manager', { prompt: 'A tiny orange robot waving.' }, undefined, undefined, ctx);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as { input: Array<{ content: Array<{ type: string }> }> };
+    expect(JSON.stringify(body)).not.toContain('input_image');
+    expect(result.details?.source).toBe('none');
+    expect(result.details?.sourceImageCount).toBe(0);
+  });
+
   it('executes against the codex responses backend and returns an inline image', async () => {
     const imageTool = registerImageTool();
     const codexModel = createModel({

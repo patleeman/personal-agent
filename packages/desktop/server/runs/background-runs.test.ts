@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { buildBackgroundAgentArgv } from '../daemon/background-run-agent.js';
 import {
   createBackgroundRunId,
   createBackgroundRunRecord,
@@ -40,6 +41,15 @@ describe('background runs', () => {
 
     const fallback = createBackgroundRunId('   ', '2026-03-19T20:00:00.123Z');
     expect(fallback).toMatch(/^run-background-2026-03-19T20-00-00-123Z-[a-f0-9]{8}$/);
+  });
+
+  it('builds background agent argv from the bundled pi coding agent CLI instead of requiring pa on PATH', () => {
+    const argv = buildBackgroundAgentArgv({ prompt: 'Review the latest diff' });
+
+    expect(argv[0]).toBe(process.execPath);
+    expect(argv[1]).toMatch(/@earendil-works\/pi-coding-agent\/dist\/cli\.js$|packages\/cli\/dist\/index\.js$/);
+    expect(argv).toEqual(expect.arrayContaining(['--plain', 'tui', '--', '-p', 'Review the latest diff']));
+    expect(argv[0]).not.toBe('pa');
   });
 
   it('materializes agent runs into durable argv and stores the structured agent spec', async () => {
