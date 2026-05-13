@@ -87,31 +87,31 @@ Built-in runtime behavior is packaged as system extensions under [`extensions/`]
 For contributors building from source:
 
 ```bash
-npm install
-npm run setup:hooks   # optional: enable the tracked pre-commit hook
-npm run build
-npm test
-npm run lint
+pnpm install
+pnpm run setup:hooks   # optional: enable the tracked pre-commit hook
+pnpm run build
+pnpm test
+pnpm run lint
 ```
 
-This repo intentionally has no first-party `postinstall`. Third-party packages still use install scripts for Electron, esbuild, and native modules, so `--ignore-scripts` is for auditing or isolated installs, not a working dev setup.
+This repo intentionally has no first-party `postinstall`. Third-party build scripts are allowlisted in `pnpm-workspace.yaml`; review anything newly blocked with `pnpm ignored-builds`.
 
 Useful dev commands:
 
 ```bash
-npm run desktop:start      # launch the Electron app
-npm run desktop:dev        # same dev launcher
-npm run ios:dev            # iOS companion against local dev host
+pnpm run desktop:start      # launch the Electron app
+pnpm run desktop:dev        # same dev launcher
+pnpm run ios:dev            # iOS companion against local dev host
 
 # Extension integration validation (run before starting the app)
-npm run check:extensions        # full suite (~30s, includes module runtime checks)
-npm run check:extensions:quick  # quick check (~5s, skips slow dynamic import)
+pnpm run check:extensions        # full suite (~30s, includes module runtime checks)
+pnpm run check:extensions:quick  # quick check (~5s, skips slow dynamic import)
 ```
 
 Platform prerequisites:
 
 - **macOS arm64** (the desktop app targets macOS; no Windows or Linux build)
-- **Node.js 20+** and **npm 11+** recommended
+- **Node.js 20+** and **pnpm 11+** recommended
 - **Xcode** (only needed for iOS companion development)
 
 Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to skip code signing for local Electron builds.
@@ -125,9 +125,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for PR policy and issue guidelines.
 Desktop releases are built, signed, notarized, and published to GitHub Releases locally.
 
 ```bash
-npm run release:desktop:patch
-npm run release:desktop:minor
-npm run release:desktop:major
+pnpm run release:desktop:patch
+pnpm run release:desktop:minor
+pnpm run release:desktop:major
 ```
 
 See [`docs/release-cycle.md`](docs/release-cycle.md) for the full details.

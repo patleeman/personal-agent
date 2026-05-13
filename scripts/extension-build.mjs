@@ -229,13 +229,19 @@ function copyJsdomSyncWorkerIfNeeded(outfile, buildOutputs) {
 }
 
 function findAppNodeModules() {
-  const paths = [resolve(process.cwd(), 'node_modules')];
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(currentDir, '..');
+  const paths = [
+    resolve(process.cwd(), 'node_modules'),
+    resolve(repoRoot, 'packages', 'desktop', 'node_modules'),
+    resolve(repoRoot, 'packages', 'core', 'node_modules'),
+    resolve(repoRoot, 'node_modules'),
+  ];
   if (typeof process.resourcesPath === 'string') {
     paths.push(resolve(process.resourcesPath, 'app.asar.unpacked/node_modules'));
   }
-  const currentDir = dirname(fileURLToPath(import.meta.url));
   for (let depth = 2; depth <= 5; depth++) {
     paths.push(resolve(currentDir, ...Array(depth).fill('..'), 'node_modules'));
   }
-  return paths;
+  return [...new Set(paths)];
 }

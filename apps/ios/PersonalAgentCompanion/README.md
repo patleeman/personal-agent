@@ -45,13 +45,13 @@ xcodebuild test \
 For the fastest local UI smoke tests without a running host:
 
 ```bash
-npm run ios:demo
+pnpm run ios:demo
 ```
 
 If you want to open straight into a simulated in-progress turn so you can test steer, follow-up, and parallel prompts:
 
 ```bash
-npm run ios:demo:running
+pnpm run ios:demo:running
 ```
 
 That command:
@@ -68,7 +68,7 @@ That command:
 If you just want to refresh the local demo transcript snapshot without launching the app:
 
 ```bash
-npm run ios:demo:refresh
+pnpm run ios:demo:refresh
 ```
 
 Manual mock-mode launch still works too:
@@ -117,18 +117,18 @@ Use the simulator against a loopback-only local companion host. This is the fast
 From the repo root:
 
 ```bash
-npm run ios:dev:prepare
-npm run ios:dev
+pnpm run ios:dev:prepare
+pnpm run ios:dev
 ```
 
-`npm run ios:dev` starts the local companion host, boots the simulator, installs the app, and launches it already paired.
+`pnpm run ios:dev` starts the local companion host, boots the simulator, installs the app, and launches it already paired.
 
 If you want to manage the pieces separately, use:
 
 Terminal 1:
 
 ```bash
-npm run ios:dev:host
+pnpm run ios:dev:host
 ```
 
 That starts a headless local companion host on:
@@ -140,7 +140,7 @@ http://127.0.0.1:3845
 Terminal 2:
 
 ```bash
-npm run ios:dev:sim
+pnpm run ios:dev:sim
 ```
 
 That will:
@@ -155,7 +155,7 @@ That will:
 For onboarding/deeplink work, open a fresh setup link directly in the simulator:
 
 ```bash
-npm run ios:dev:setup-url
+pnpm run ios:dev:setup-url
 ```
 
 That bypasses phone cameras and QR scanning while still exercising the real `pa-companion://pair?...` flow.
@@ -166,8 +166,8 @@ The live app expects the desktop runtime or headless local dev host to be runnin
 
 Typical fast local-dev path:
 
-1. start the local dev host with `npm run ios:dev:host`
-2. launch the simulator with `npm run ios:dev:sim`
+1. start the local dev host with `pnpm run ios:dev:host`
+2. launch the simulator with `pnpm run ios:dev:sim`
 3. only use a real phone for final LAN/Tailnet smoke tests
 
 ## Live integration test
@@ -183,7 +183,7 @@ The test target includes a real-host round-trip that:
 Fast path from the repo root:
 
 ```bash
-npm run ios:test:live
+pnpm run ios:test:live
 ```
 
 That targets only the real-host iOS integration tests against the local dev host and rewrites the config file automatically. By default it does not send a real model prompt, so it stays fast and works even when you do not have model credentials loaded.

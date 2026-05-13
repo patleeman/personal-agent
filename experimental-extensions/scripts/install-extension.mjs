@@ -10,7 +10,7 @@ const labsRoot = resolve(repoRoot, 'experimental-extensions');
 const extensionId = readFlag('--extension') ?? process.argv[2];
 const target = readFlag('--target') ?? 'testing';
 
-if (!extensionId) fail('Usage: npm run install -- --extension <extension-id> [--target testing|production|/custom/state/root]');
+if (!extensionId) fail('Usage: pnpm run install -- --extension <extension-id> [--target testing|production|/custom/state/root]');
 
 const extensionRoot = resolve(labsRoot, 'extensions', extensionId);
 if (!existsSync(resolve(extensionRoot, 'extension.json'))) fail(`No extension found at ${extensionRoot}`);

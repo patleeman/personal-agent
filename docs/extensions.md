@@ -958,7 +958,7 @@ POST /api/extensions/my-ext/build
 
 # Or from the extension manager UI, click "Build"
 # Or from the repo for a local extension directory:
-npm run extension:build -- /path/to/my-extension
+pnpm run extension:build -- /path/to/my-extension
 ```
 
 Frontend builds bundle the authoring SDK UI modules (`@personal-agent/extensions/ui`, `/host`, `/workbench`, `/data`, and `/settings`) into `dist/frontend.js`. The browser loads that built file directly from `/api/extensions/<id>/files/...`, so frontend dist output must not leave `@personal-agent/extensions/*` as bare runtime imports.
@@ -983,20 +983,20 @@ backend import failures):
 
 ```bash
 # Run the full extension integration suite (includes ~25s dynamic import check)
-npm run check:extensions
+pnpm run check:extensions
 
 # Quick check (skips slow dynamic import test, ~5s)
-npm run check:extensions:quick
+pnpm run check:extensions:quick
 
 # Run alongside the server endpoint smoke tests
 npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts \
   packages/desktop/server/routes/registerAll.smoke.test.ts
 
 # Or include in the full test suite
-npm test
+pnpm test
 ```
 
-`npm run check:extensions` and `npm run check:extensions:quick` also run
+`pnpm run check:extensions` and `pnpm run check:extensions:quick` also run
 `scripts/check-packaged-extensions.mjs`. That check imports every system
 extension backend from its built `dist/` output, verifies backend action handler
 exports, smoke-calls known safe `list` tools (`scheduled_task`, `conversation_queue`,

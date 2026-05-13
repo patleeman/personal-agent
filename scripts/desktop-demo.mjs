@@ -769,7 +769,7 @@ write(
 console.log(`Desktop demo state created at ${stateRoot}`);
 console.log(`Env file: ${envFile}`);
 console.log('Launch with:');
-console.log(`  source ${envFile} && npm run desktop:start -- --no-quit-confirmation`);
+console.log(`  source ${envFile} && pnpm run desktop:start -- --no-quit-confirmation`);
 console.log(`Initial route: ${initialRoute}`);
 console.log(
   'Seeded conversations: demo-empty, demo-normal, demo-tools, demo-running, demo-rich, demo-reminder, demo-auto-review, demo-parent, demo-subagent-child, demo-parallel-parent, demo-attention, demo-remote, demo-related-context',

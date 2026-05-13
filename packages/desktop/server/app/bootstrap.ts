@@ -177,7 +177,7 @@ export function mountStaticServerApps(options: { app: Express; distDir: string }
         '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">' +
           'personal-agent desktop renderer\n\n' +
           'SPA not built yet.\n' +
-          'Run: npm run build in packages/desktop\n' +
+          'Run: pnpm run build in packages/desktop\n' +
           '</pre>',
       );
     });

@@ -2,14 +2,19 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = resolve(currentDir, '..');
 const repoRoot = resolve(packageDir, '..', '..');
-const electronVersionFile = resolve(repoRoot, 'node_modules', 'electron', 'dist', 'version');
-const betterSqlitePackagePath = resolve(repoRoot, 'node_modules', 'better-sqlite3', 'package.json');
+const desktopRequire = createRequire(resolve(packageDir, 'package.json'));
+const coreRequire = createRequire(resolve(repoRoot, 'packages', 'core', 'package.json'));
+const electronPackageJsonPath = desktopRequire.resolve('electron/package.json');
+const electronPackageDir = dirname(electronPackageJsonPath);
+const electronVersionFile = resolve(electronPackageDir, 'dist', 'version');
+const betterSqlitePackagePath = coreRequire.resolve('better-sqlite3/package.json');
 const nativeModulesDir = resolve(repoRoot, 'dist', 'dev-desktop', 'native-modules');
 const nativeModulesPackagePath = resolve(nativeModulesDir, 'package.json');
 const nativeBetterSqliteBinary = resolve(nativeModulesDir, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');

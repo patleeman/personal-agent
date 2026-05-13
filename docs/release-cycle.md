@@ -6,13 +6,13 @@ Desktop releases are built, signed, notarized, and published locally. Pushing a 
 
 ```bash
 # Patch release (0.5.35 -> 0.5.36)
-npm run release:desktop:patch
+pnpm run release:desktop:patch
 
 # Minor release (0.5.35 -> 0.6.0)
-npm run release:desktop:minor
+pnpm run release:desktop:minor
 
 # Major release (0.5.35 -> 1.0.0)
-npm run release:desktop:major
+pnpm run release:desktop:major
 ```
 
 ## RC App Identity
@@ -25,9 +25,9 @@ Stable versions keep the existing app name, bundle identifier, and `Personal-Age
 
 Each release command performs these steps in order:
 
-1. **Version bump** — `npm version` bumps the version following semver
+1. **Version bump** — `pnpm version` bumps the version following semver
 2. **Pi update** — refreshes the direct Pi runtime packages to the latest published version
-3. **Dependency sync** — updates workspace package versions and regenerates `package-lock.json`
+3. **Dependency sync** — updates workspace package versions and regenerates `pnpm-lock.yaml`
 4. **Changelog update** — adds a dated `CHANGELOG.md` section for the new version from commits since the previous tag
 5. **Build** — builds signed desktop artifacts locally
 6. **Notarize** — submits the built `.app` for Apple notarization
@@ -52,7 +52,7 @@ The check verifies:
 5. The Knowledge route renders
 6. A conversation route renders
 
-`npm run build` also verifies the current daemon output under `packages/desktop/dist/server/daemon/` and rebuilds system extension backends with the same backend API alias used by the runtime loader. If a tool extension fails with missing `@personal-agent/extensions/backend` exports, rerun the full build before cutting the release.
+`pnpm run build` also verifies the current daemon output under `packages/desktop/dist/server/daemon/` and rebuilds system extension backends with the same backend API alias used by the runtime loader. If a tool extension fails with missing `@personal-agent/extensions/backend` exports, rerun the full build before cutting the release.
 
 ### Manual smoke test
 
@@ -69,7 +69,7 @@ The script will stop and ask you to manually test the built `.app` before contin
 If the version bump and build succeeded but the publish step failed:
 
 ```bash
-npm run release:publish
+pnpm run release:publish
 ```
 
 This runs the smoke test, push, and GitHub release creation without repeating the version bump, changelog update, and build steps.

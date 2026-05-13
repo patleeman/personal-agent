@@ -27,9 +27,9 @@ pipeline.
 ## Always validate your work!
 
 - After you complete a feature, make sure you actually inspect your work.
-- If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `npm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/browser.md` and the agent-browser skill for more information.
-- When launching the test desktop app for QA, pass `--no-quit-confirmation` (or `--skip-quit-confirmation`) so cleanup is non-interactive, e.g. `npm run desktop:dev -- --remote-debugging-port=9222 --no-quit-confirmation`.
-- After QA, close the test app and browser session before reporting done: quit `Personal Agent Testing.app` and run `npm run ab:cleanup -- --session <name>` if you used the wrapper.
+- If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `pnpm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/browser.md` and the agent-browser skill for more information.
+- When launching the test desktop app for QA, pass `--no-quit-confirmation` (or `--skip-quit-confirmation`) so cleanup is non-interactive, e.g. `pnpm run desktop:dev -- --remote-debugging-port=9222 --no-quit-confirmation`.
+- After QA, close the test app and browser session before reporting done: quit `Personal Agent Testing.app` and run `pnpm run ab:cleanup -- --session <name>` if you used the wrapper.
 - Make sure the work is complete, to spec, works without bugs, and looks good.
 
 ## UI Design Bans
@@ -48,25 +48,25 @@ Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.7.9-rc
 ### Highlights
 
 - Fixed dev app startup: repo root resolution, missing preload/worker bundles, daemon inlining, codex port conflict.
-- `npm run dev` in `packages/desktop` now works end-to-end: builds, launches the testing app bundle, and loads the UI with all API endpoints responding.
+- `pnpm run dev` in `packages/desktop` now works end-to-end: builds, launches the testing app bundle, and loads the UI with all API endpoints responding.
 - The signed `.app` build (`desktop:dist`) is blocked by ~40 pre-existing TypeScript errors in the server code that cause `tsc --build --force` to exit non-zero. These are baseline issues, not introduced by these changes.
 
 ### How to run the dev app
 
 ```bash
-cd packages/desktop && npm run dev
+cd packages/desktop && pnpm run dev
 # or:
-npm run desktop:dev
+pnpm run desktop:dev
 ```
 
 ## Release flow
 
 If the goal is to publish a downloadable installable macOS app on GitHub Releases, use the local signed release flow.
 
-1. From the repo root, run `npm run release:desktop:patch`, `npm run release:desktop:minor`, or `npm run release:desktop:major`.
+1. From the repo root, run `pnpm run release:desktop:patch`, `pnpm run release:desktop:minor`, or `pnpm run release:desktop:major`.
 2. That flow bumps the version, uses the local `Developer ID Application` certificate from Keychain, notarizes with local Apple credentials, pushes the commit and tag, and creates or updates the matching GitHub Release in the same repo.
 3. Before pushing/uploading, the publish script requires a smoke test of the built `.app` from `dist/release/mac-arm64/Personal Agent.app`; only continue once startup plus one conversation and Knowledge-page route pass. For non-interactive reruns of an already-tested build, set `PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1`.
-4. `npm run release:publish` is the standalone publish step if the version bump already happened and you just need to rebuild/retry the signed release.
+4. `pnpm run release:publish` is the standalone publish step if the version bump already happened and you just need to rebuild/retry the signed release.
 5. The publish script auto-loads Apple credentials from `PERSONAL_AGENT_RELEASE_ENV` when set, otherwise falls back to `.env` in the repo root and then `~/.config/personal-agent/release-env`. It maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for notarization and can target another public release repo with `PERSONAL_AGENT_RELEASE_REPO`.
 6. Release assets must include the Electron updater metadata (`latest-mac.yml`) plus the signed macOS `.zip` / `.zip.blockmap`, and optionally the `.dmg` / `.dmg.blockmap`.
 
@@ -74,11 +74,11 @@ Important: pushing commits or tags to `master` does not create a GitHub release 
 
 ### Release gotchas
 
-- `npm version prerelease --preid=rc` bumps the RC version and creates a git tag but does **not** build or upload artifacts. Run `npm run release:publish` for the full signed build.
+- `pnpm version prerelease --preid=rc` bumps the RC version and creates a git tag but does **not** build or upload artifacts. Run `pnpm run release:publish` for the full signed build.
 - `desktop:dist` runs `tsc --build --force` as part of the desktop package `build` script. There are ~40 pre-existing TypeScript errors in `packages/desktop/server/` — they don't block the esbuild-produced bundled output but do cause `tsc` to exit non-zero, which halts the build chain. To work around this, run the esbuild steps directly:
   ```bash
   cd packages/desktop
-  npm run build:deps     # ui, server bundle, extensions
+  pnpm run build:deps    # ui, server bundle, extensions
   node scripts/build-main.mjs  # main process + preload + workers
   npx electron-builder --config electron-builder.config.mjs --publish never
   ```
@@ -105,11 +105,11 @@ This repo has automated checks to keep the codebase clean.
 Runs on every commit — gitleaks, typecheck, prettier, and eslint on staged files.
 Bypass with `git commit --no-verify` if needed.
 
-### npm scripts
+### Package scripts
 
 ```bash
-npm run check    # tsc --noEmit → eslint → prettier --check → extension quick check; knip (dead code, informational, non-blocking)
-npm run fix      # prettier --write + eslint --fix
+pnpm run check    # tsc --noEmit → eslint → prettier --check → extension quick check; knip (dead code, informational, non-blocking)
+pnpm run fix      # prettier --write + eslint --fix
 ```
 
 - **`check:types`** — `tsc --noEmit` (0.3s). Catches type errors and unused imports.
@@ -120,24 +120,24 @@ npm run fix      # prettier --write + eslint --fix
 
 ### Testing workflow
 
-| When                         | Command                          | What it covers                                                 |
-| ---------------------------- | -------------------------------- | -------------------------------------------------------------- |
-| Before `npm run desktop:dev` | `npm run check:extensions:quick` | Manifest structure, file existence, exports, conflicts, syntax |
-| Before `git push`            | `npm run check`                  | Types, lint, format, extension tests; knip as advisory         |
-| Before release               | `npm run check:extensions`       | Full suite incl. dynamic import runtime verification           |
-| Periodically                 | `npm test`                       | Full project test suite (2830+ tests)                          |
+| When                          | Command                           | What it covers                                                 |
+| ----------------------------- | --------------------------------- | -------------------------------------------------------------- |
+| Before `pnpm run desktop:dev` | `pnpm run check:extensions:quick` | Manifest structure, file existence, exports, conflicts, syntax |
+| Before `git push`             | `pnpm run check`                  | Types, lint, format, extension tests; knip as advisory         |
+| Before release                | `pnpm run check:extensions`       | Full suite incl. dynamic import runtime verification           |
+| Periodically                  | `pnpm test`                       | Full project test suite (2830+ tests)                          |
 
 ### Coverage
 
 ```bash
-npm run check:coverage  # ~30s, shows statement/branch/function/line coverage
+pnpm run check:coverage  # ~30s, shows statement/branch/function/line coverage
 ```
 
-Not part of `npm run check` (too slow). Run periodically to spot uncovered areas. Warns on issues, doesn't block.
+Not part of `pnpm run check` (too slow). Run periodically to spot uncovered areas. Warns on issues, doesn't block.
 
 ### What to do before committing
 
-Run `npm run fix` to auto-format and fix import ordering, then `npm run check` to verify everything passes. If the pre-commit hook blocks on pre-existing lint issues (there are ~80 baseline errors in untouched files), that's fine — just ensure your new code doesn't add more.
+Run `pnpm run fix` to auto-format and fix import ordering, then `pnpm run check` to verify everything passes. If the pre-commit hook blocks on pre-existing lint issues (there are ~80 baseline errors in untouched files), that's fine — just ensure your new code doesn't add more.
 
 ## Secret scanning
 
@@ -145,6 +145,6 @@ This repo has a gitleaks pre-commit hook that scans staged changes for secrets b
 
 - The hook lives at `.githooks/pre-commit` (tracked in the repo).
 - Config is at `.gitleaks.toml`.
-- Enable the hook explicitly with `npm run setup:hooks` (or `git config core.hooksPath .githooks`) after cloning; the repo intentionally does not use a root `postinstall`.
+- Enable the hook explicitly with `pnpm run setup:hooks` (or `git config core.hooksPath .githooks`) after cloning; the repo intentionally does not use a root `postinstall`, and third-party build scripts are allowlisted in `pnpm-workspace.yaml`.
 - If gitleaks finds something, the commit aborts. Review the finding and either fix it or bypass with `git commit --no-verify` if it's a false positive.
 - Install gitleaks locally with `brew install gitleaks` if it's not already present (the hook skips gracefully if missing).

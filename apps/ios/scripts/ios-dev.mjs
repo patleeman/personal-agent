@@ -79,7 +79,7 @@ function ensureBuildArtifacts() {
   ];
   const missing = required.filter((relativePath) => !existsSync(resolve(repoRoot, relativePath)));
   if (missing.length > 0) {
-    fail(`Missing build artifacts:\n${missing.map((entry) => `- ${entry}`).join('\n')}\nRun \`npm run ios:dev:prepare\` first.`);
+    fail(`Missing build artifacts:\n${missing.map((entry) => `- ${entry}`).join('\n')}\nRun \`pnpm run ios:dev:prepare\` first.`);
   }
 }
 
@@ -843,10 +843,10 @@ async function hostCommand() {
   log(`Daemon root: ${daemonRoot}`);
   log(`Metadata: ${hostMetadataFile}`);
   log('Use another terminal for:');
-  log('  npm run ios:dev:sim');
-  log('  npm run ios:demo');
-  log('  npm run ios:dev:setup-url');
-  log('  npm run ios:test:live');
+  log('  pnpm run ios:dev:sim');
+  log('  pnpm run ios:demo');
+  log('  pnpm run ios:dev:setup-url');
+  log('  pnpm run ios:test:live');
 
   const shutdown = async () => {
     await daemon.stop();

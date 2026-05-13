@@ -30,7 +30,7 @@ if (!envLine) {
 }
 
 const envFile = envLine.slice('Env file: '.length).trim();
-const launch = spawnSync('bash', ['-lc', `source ${JSON.stringify(envFile)} && npm run desktop:start -- --no-quit-confirmation`], {
+const launch = spawnSync('bash', ['-lc', `source ${JSON.stringify(envFile)} && pnpm run desktop:start -- --no-quit-confirmation`], {
   cwd: repoRoot,
   stdio: 'inherit',
   env: process.env,

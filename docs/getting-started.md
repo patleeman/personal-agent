@@ -7,17 +7,17 @@ Install Personal Agent from source and verify the setup.
 ```bash
 git clone <repo-url>
 cd personal-agent
-npm install
-npm run setup:hooks   # optional: enable the tracked pre-commit hook
-npm run build
+pnpm install
+pnpm run setup:hooks   # optional: enable the tracked pre-commit hook
+pnpm run build
 ```
 
-The repo intentionally has no first-party `postinstall`. If you install with `--ignore-scripts`, Electron, esbuild, and native dependency setup will be skipped.
+The repo intentionally has no first-party `postinstall`. Third-party build scripts are pinned in `pnpm-workspace.yaml`; review anything newly blocked with `pnpm ignored-builds`.
 
 ## Start the desktop app
 
 ```bash
-npm run desktop:start
+pnpm run desktop:start
 ```
 
 The desktop app manages the local daemon automatically.

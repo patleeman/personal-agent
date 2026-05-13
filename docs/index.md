@@ -5,13 +5,13 @@ Personal Agent is a durable AI agent runtime with a desktop app, background auto
 ## Quick start
 
 ```bash
-npm install
-npm run setup:hooks   # optional: enable the tracked pre-commit hook
-npm run build
-npm run desktop:start
+pnpm install
+pnpm run setup:hooks   # optional: enable the tracked pre-commit hook
+pnpm run build
+pnpm run desktop:start
 ```
 
-The repo intentionally avoids a root `postinstall`; install-time scripts come from third-party dependencies only.
+The repo intentionally avoids a root `postinstall`; third-party build scripts are allowlisted in `pnpm-workspace.yaml`, and anything new shows up in `pnpm ignored-builds`.
 
 See [Getting Started](getting-started.md) for the full setup.
 

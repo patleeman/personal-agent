@@ -5,6 +5,9 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dir = resolve(fileURLToPath(import.meta.url), '..', '..');
+const packageNodeModules = resolve(dir, 'node_modules');
+const rootNodeModules = resolve(dir, '..', '..', 'node_modules');
+const nodePaths = [packageNodeModules, rootNodeModules];
 
 // Build main process bundle
 await build({
@@ -22,7 +25,7 @@ await build({
   },
   external: ['electron', 'fsevents'],
   logLevel: 'info',
-  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+  nodePaths,
 });
 
 // Build preload script (must be CommonJS for Electron sandbox)
@@ -35,7 +38,7 @@ await build({
   target: 'node20',
   external: ['electron'],
   logLevel: 'info',
-  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+  nodePaths,
 });
 
 // Build local API workers (runs the server bundle in worker threads)
@@ -48,7 +51,7 @@ await build({
   target: 'node20',
   external: ['electron'],
   logLevel: 'info',
-  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+  nodePaths,
 });
 await build({
   entryPoints: [resolve(dir, 'src', 'readonly-local-api-worker.ts')],
@@ -59,5 +62,5 @@ await build({
   target: 'node20',
   external: ['electron'],
   logLevel: 'info',
-  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+  nodePaths,
 });

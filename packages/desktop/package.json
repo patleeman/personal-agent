@@ -12,17 +12,17 @@
   "scripts": {
     "build:ui": "cd ui && vite build",
     "build:server": "node scripts/build-server-bundle.mjs",
-    "build:deps": "npm --prefix ../core run build && npm run build:ui && npm run build:server && node ../../scripts/build-system-extensions.mjs",
+    "build:deps": "pnpm --dir ../core run build && pnpm run build:ui && pnpm run build:server && node ../../scripts/build-system-extensions.mjs",
     "build:main": "node scripts/build-main.mjs",
-    "build": "npm run clean && npm run build:deps && npm run build:main && tsc --build --force",
+    "build": "pnpm run clean && pnpm run build:deps && pnpm run build:main && tsc --build --force",
     "launch": "node scripts/launch-dev-app.mjs",
-    "start": "npm run build && npm run launch --",
-    "dev": "npm run clean && npm run build:deps && npm run build:main && npm run launch --",
+    "start": "pnpm run build && pnpm run launch --",
+    "dev": "pnpm run clean && pnpm run build:deps && pnpm run build:main && pnpm run launch --",
     "clean": "rm -rf dist ui/dist server/dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "@personal-agent/core": "*",
+    "@personal-agent/core": "workspace:*",
     "electron-updater": "^6.8.3",
     "jsdom": "^24.1.3",
     "whisper-cpp-node": "0.2.12"

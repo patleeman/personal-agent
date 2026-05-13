@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureElectronNativeModules, readElectronNativeModulesDir } from './ensure-electron-native-modules.mjs';
@@ -9,11 +10,14 @@ import { ensureElectronNativeModules, readElectronNativeModulesDir } from './ens
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = resolve(currentDir, '..');
 const repoRoot = resolve(packageDir, '..', '..');
+const desktopRequire = createRequire(resolve(packageDir, 'package.json'));
+const electronPackageJsonPath = desktopRequire.resolve('electron/package.json');
+const electronPackageDir = dirname(electronPackageJsonPath);
+const electronCliPath = resolve(electronPackageDir, 'cli.js');
 const desktopMainFile = resolve(packageDir, 'dist', 'main.js');
 const desktopPackageJson = resolve(packageDir, 'package.json');
 const desktopIconFile = resolve(packageDir, 'assets', 'icon.icns');
-const electronBinary = resolve(repoRoot, 'node_modules', '.bin', 'electron');
-const sourceMacAppBundle = resolve(repoRoot, 'node_modules', 'electron', 'dist', 'Electron.app');
+const sourceMacAppBundle = resolve(electronPackageDir, 'dist', 'Electron.app');
 const macDevAppDir = resolve(repoRoot, 'dist', 'dev-desktop');
 const desktopVariant = 'testing';
 const testingProductSuffix = ' Testing';
@@ -86,7 +90,7 @@ function runChecked(command, args) {
 }
 
 function readElectronVersion() {
-  return readFileSync(resolve(repoRoot, 'node_modules', 'electron', 'dist', 'version'), 'utf-8').trim();
+  return readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf-8').trim();
 }
 
 function createMacDevAppStamp(productName, appVersion) {
@@ -224,7 +228,7 @@ if (process.platform === 'darwin') {
 }
 
 const { electronSwitches, appArgs } = splitDesktopLaunchArgs(desktopLaunchArgs);
-const result = spawnSync(electronBinary, [...electronSwitches, desktopMainFile, ...appArgs], {
+const result = spawnSync(process.execPath, [electronCliPath, ...electronSwitches, desktopMainFile, ...appArgs], {
   stdio: 'inherit',
   cwd: packageDir,
   env: buildDesktopLaunchEnv(process.env, desktopLaunchArgs),

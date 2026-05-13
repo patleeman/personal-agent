@@ -25,7 +25,7 @@ if (missingArtifacts.length > 0) {
   }
 
   console.error('');
-  console.error('Re-run with a full rebuild: npm run clean --workspaces --if-present && npm run build');
+  console.error('Re-run with a full rebuild: pnpm -r run clean --if-present && pnpm run build');
   process.exit(1);
 }
 

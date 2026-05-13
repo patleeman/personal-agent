@@ -9,7 +9,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const labsRoot = resolve(repoRoot, 'experimental-extensions');
 const extensionId = readFlag('--extension') ?? process.argv[2];
 
-if (!extensionId) fail('Usage: npm run build -- --extension <extension-id>');
+if (!extensionId) fail('Usage: pnpm run build -- --extension <extension-id>');
 
 const extensionRoot = resolve(labsRoot, 'extensions', extensionId);
 if (!existsSync(resolve(extensionRoot, 'extension.json'))) fail(`No extension found at ${extensionRoot}`);

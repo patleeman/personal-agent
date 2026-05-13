@@ -6,13 +6,13 @@ The Electron desktop app is the primary Personal Agent operator UI. It hosts the
 
 ```bash
 # Stable production build
-npm run desktop:start
+pnpm run desktop:start
 
 # Development mode with hot reload
-npm run desktop:dev
+pnpm run desktop:dev
 
 # Demo mode with seeded data
-npm run desktop:demo
+pnpm run desktop:demo
 ```
 
 Both `desktop:start` and `desktop:dev` build the Electron shell and launch it through `packages/desktop/scripts/launch-dev-app.mjs`.
@@ -105,4 +105,4 @@ All desktop shortcuts are configurable in Settings. Defaults:
 
 ## Demo Mode
 
-`npm run desktop:demo` creates an isolated temporary state root with seeded conversations, automations, runs, and assets for UI development and testing. Seeded content includes conversations with artifacts, checkpoints, reminders, subagent demos, and pathological fixtures.
+`pnpm run desktop:demo` creates an isolated temporary state root with seeded conversations, automations, runs, and assets for UI development and testing. Seeded content includes conversations with artifacts, checkpoints, reminders, subagent demos, and pathological fixtures.

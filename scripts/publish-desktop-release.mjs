@@ -158,7 +158,7 @@ function ensureTagAtHead(tag) {
     .filter(Boolean);
 
   if (!tags.includes(tag)) {
-    fail(`HEAD is not tagged with ${tag}. Run npm run release:patch|minor|major first.`);
+    fail(`HEAD is not tagged with ${tag}. Run pnpm run release:patch|minor|major first.`);
   }
 }
 
@@ -275,8 +275,8 @@ function createCleanReleaseSnapshot(env) {
     },
   });
 
-  console.log('Installing clean release snapshot dependencies with npm ci...');
-  run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
+  console.log('Installing clean release snapshot dependencies with pnpm install --frozen-lockfile...');
+  run('pnpm', ['install', '--frozen-lockfile'], {
     cwd: buildRoot,
     env,
   });
@@ -604,7 +604,7 @@ const releaseDir = resolve(buildRoot, 'dist', 'release');
 rmSync(releaseDir, { recursive: true, force: true });
 
 console.log(`Building signed desktop artifacts for ${tag} from the clean snapshot...`);
-run('npm', ['run', 'desktop:dist'], { cwd: buildRoot, env });
+run('pnpm', ['run', 'desktop:dist'], { cwd: buildRoot, env });
 validatePackagedAutoUpdateConfig(releaseDir, releaseRepo);
 validatePackagedRuntimeDependencies(buildRoot, releaseDir);
 const packagedAppForExtensionCheck = collectPackagedAppPath(releaseDir);

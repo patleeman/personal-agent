@@ -86,7 +86,7 @@ function assertRuntimeExtensionBuildSupported(): void {
 }
 
 function starterHelpText(): string {
-  return 'Edit <code>src/frontend.tsx</code>, run <code>npm run extension:build -- &lt;extension-dir&gt;</code> from the personal-agent repo, then reload extensions.';
+  return 'Edit <code>src/frontend.tsx</code>, run <code>pnpm run extension:build -- &lt;extension-dir&gt;</code> from the personal-agent repo, then reload extensions.';
 }
 
 function createStarterFrontend(name: string, template: RuntimeExtensionTemplate): string {
