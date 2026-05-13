@@ -235,6 +235,10 @@ function isLocked(extension: ExtensionInstallSummary): boolean {
   return LOCKED_EXTENSION_IDS.includes(extension.id);
 }
 
+function isExperimentalExtension(extension: ExtensionInstallSummary): boolean {
+  return extension.manifest?.defaultEnabled === false;
+}
+
 function StatusToggle({ extension, busy, onToggle }: { extension: ExtensionInstallSummary; busy: boolean; onToggle: () => void }) {
   const locked = isLocked(extension);
   return (
@@ -450,6 +454,7 @@ export function ExtensionManagerPage() {
   const [detailsExtensionId, setDetailsExtensionId] = useState<string | null>(null);
   const [createDraft, setCreateDraft] = useState<ExtensionCreateDraft | null>(null);
   const [importDraft, setImportDraft] = useState(false);
+  const [showExperimental, setShowExperimental] = useState(false);
 
   const load = useCallback((options: { showLoading?: boolean } = {}) => {
     if (options.showLoading) {
@@ -742,6 +747,117 @@ export function ExtensionManagerPage() {
     });
   }, [extensions, filter, query]);
 
+  const visibleStandardExtensions = useMemo(
+    () => visibleExtensions.filter((extension) => !isExperimentalExtension(extension)),
+    [visibleExtensions],
+  );
+  const visibleExperimentalExtensions = useMemo(() => visibleExtensions.filter(isExperimentalExtension), [visibleExtensions]);
+
+  const renderExtensionRows = (items: ExtensionInstallSummary[]) =>
+    items.map((extension) => {
+      const route = firstRoute(extension);
+      const counts = contributionCounts(extension);
+      const busy = busyId === extension.id;
+      return (
+        <tr key={extension.id} className="group border-t border-border-subtle/70 transition-colors hover:bg-surface/30">
+          <td className="min-w-0 py-3 pr-4 align-middle">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="truncate text-[14px] font-semibold text-primary">{extension.name}</div>
+                <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">
+                  {extension.packageType ?? 'user'}
+                </span>
+              </div>
+              <div className="mt-0.5 max-w-[44rem] whitespace-normal break-words text-[12px] leading-5 text-secondary">
+                {extension.description || 'No description provided.'}
+              </div>
+            </div>
+          </td>
+          <td className="px-3 py-3 align-middle">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <CompactCount icon={<PageIcon />} count={counts.pages} title="Pages" />
+              <CompactCount icon={<RailIcon />} count={counts.rails} title="Right rail panels" />
+              <CompactCount icon={<WorkbenchIcon />} count={counts.workbench} title="Workbench details" />
+              <CompactCount icon={<ToolIcon />} count={counts.tools} title="Agent tools" />
+              <CompactCount icon={<KeybindingIcon />} count={counts.keybindings} title="Keyboard shortcuts" />
+              <CompactCount icon={<AgentHookIcon />} count={counts.agentHooks} title="Agent lifecycle hooks" />
+              <CompactCount icon={<BackendIcon />} count={counts.backend} title="Backend actions" />
+              <CompactCount icon={<SkillIcon />} count={counts.skills} title="Skills" />
+              {extension.diagnostics?.length ? <span className="text-[12px] text-danger">!</span> : null}
+              {extension.buildError ? (
+                <span className="text-[12px] text-danger" title={extension.buildError}>
+                  Build failed
+                </span>
+              ) : null}
+              {Object.values(counts).every((count) => count === 0) && !extension.diagnostics?.length && !extension.buildError ? (
+                <span className="text-dim">—</span>
+              ) : null}
+            </div>
+          </td>
+          <td className="whitespace-nowrap px-3 py-3 align-middle">
+            {extension.status === 'invalid' ? (
+              <span className="text-[12px] text-danger">Invalid</span>
+            ) : (
+              <StatusToggle extension={extension} busy={busy} onToggle={() => toggleExtension(extension)} />
+            )}
+          </td>
+          <td className="py-3 pl-3 align-middle">
+            <div className="flex items-center justify-end gap-1.5">
+              {route && extension.enabled ? (
+                <Link
+                  className="ui-icon-button ui-icon-button-compact"
+                  to={route}
+                  title={`Open ${extension.name}`}
+                  aria-label={`Open ${extension.name}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <OpenIcon />
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                className="ui-icon-button ui-icon-button-compact"
+                title={`Details for ${extension.name}`}
+                aria-label={`Details for ${extension.name}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDetailsExtensionId(extension.id);
+                }}
+              >
+                <DetailsIcon />
+              </button>
+              <ExtensionActionsMenu
+                extension={extension}
+                onOpenFolder={() => openFolder(extension)}
+                onBuild={() => void buildExtension(extension)}
+                onReload={() => void reloadExtension(extension)}
+                onSnapshot={() => void snapshotExtension(extension)}
+                onExport={() => void exportExtension(extension)}
+                onCopyDiagnostics={() => void copyExtensionDiagnostics(extension)}
+                onSelfTest={() => void selfTestExtension(extension)}
+              />
+            </div>
+          </td>
+        </tr>
+      );
+    });
+
+  const renderExtensionTable = (items: ExtensionInstallSummary[]) => (
+    <section className="min-w-0 overflow-auto">
+      <table className="w-full border-collapse text-left text-[13px]">
+        <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
+          <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+            <th className="py-2 pr-4 font-semibold">Name</th>
+            <th className="py-2 px-3 font-semibold">Contributes</th>
+            <th className="py-2 px-3 font-semibold">Status</th>
+            <th className="py-2 pl-3 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody>{renderExtensionRows(items)}</tbody>
+      </table>
+    </section>
+  );
+
   if (loading) {
     return <LoadingState label="Loading extensions…" />;
   }
@@ -800,110 +916,29 @@ export function ExtensionManagerPage() {
               {visibleExtensions.length === 0 ? (
                 <EmptyState title="No matching extensions" body="Adjust the filter or search query." />
               ) : (
-                <div>
-                  <section className="min-w-0 overflow-auto">
-                    <table className="w-full border-collapse text-left text-[13px]">
-                      <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
-                        <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
-                          <th className="py-2 pr-4 font-semibold">Name</th>
-                          <th className="py-2 px-3 font-semibold">Contributes</th>
-                          <th className="py-2 px-3 font-semibold">Status</th>
-                          <th className="py-2 pl-3 text-right font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleExtensions.map((extension) => {
-                          const route = firstRoute(extension);
-                          const counts = contributionCounts(extension);
-                          const busy = busyId === extension.id;
-                          return (
-                            <tr key={extension.id} className="group border-t border-border-subtle/70 transition-colors hover:bg-surface/30">
-                              <td className="min-w-0 py-3 pr-4 align-middle">
-                                <div className="min-w-0">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <div className="truncate text-[14px] font-semibold text-primary">{extension.name}</div>
-                                    <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">
-                                      {extension.packageType ?? 'user'}
-                                    </span>
-                                  </div>
-                                  <div className="mt-0.5 max-w-[44rem] whitespace-normal break-words text-[12px] leading-5 text-secondary">
-                                    {extension.description || 'No description provided.'}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-3 py-3 align-middle">
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                  <CompactCount icon={<PageIcon />} count={counts.pages} title="Pages" />
-                                  <CompactCount icon={<RailIcon />} count={counts.rails} title="Right rail panels" />
-                                  <CompactCount icon={<WorkbenchIcon />} count={counts.workbench} title="Workbench details" />
-                                  <CompactCount icon={<ToolIcon />} count={counts.tools} title="Agent tools" />
-                                  <CompactCount icon={<KeybindingIcon />} count={counts.keybindings} title="Keyboard shortcuts" />
-                                  <CompactCount icon={<AgentHookIcon />} count={counts.agentHooks} title="Agent lifecycle hooks" />
-                                  <CompactCount icon={<BackendIcon />} count={counts.backend} title="Backend actions" />
-                                  <CompactCount icon={<SkillIcon />} count={counts.skills} title="Skills" />
-                                  {extension.diagnostics?.length ? <span className="text-[12px] text-danger">!</span> : null}
-                                  {extension.buildError ? (
-                                    <span className="text-[12px] text-danger" title={extension.buildError}>
-                                      Build failed
-                                    </span>
-                                  ) : null}
-                                  {Object.values(counts).every((count) => count === 0) &&
-                                  !extension.diagnostics?.length &&
-                                  !extension.buildError ? (
-                                    <span className="text-dim">—</span>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 align-middle">
-                                {extension.status === 'invalid' ? (
-                                  <span className="text-[12px] text-danger">Invalid</span>
-                                ) : (
-                                  <StatusToggle extension={extension} busy={busy} onToggle={() => toggleExtension(extension)} />
-                                )}
-                              </td>
-                              <td className="py-3 pl-3 align-middle">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {route && extension.enabled ? (
-                                    <Link
-                                      className="ui-icon-button ui-icon-button-compact"
-                                      to={route}
-                                      title={`Open ${extension.name}`}
-                                      aria-label={`Open ${extension.name}`}
-                                      onClick={(event) => event.stopPropagation()}
-                                    >
-                                      <OpenIcon />
-                                    </Link>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    className="ui-icon-button ui-icon-button-compact"
-                                    title={`Details for ${extension.name}`}
-                                    aria-label={`Details for ${extension.name}`}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setDetailsExtensionId(extension.id);
-                                    }}
-                                  >
-                                    <DetailsIcon />
-                                  </button>
-                                  <ExtensionActionsMenu
-                                    extension={extension}
-                                    onOpenFolder={() => openFolder(extension)}
-                                    onBuild={() => void buildExtension(extension)}
-                                    onReload={() => void reloadExtension(extension)}
-                                    onSnapshot={() => void snapshotExtension(extension)}
-                                    onExport={() => void exportExtension(extension)}
-                                    onCopyDiagnostics={() => void copyExtensionDiagnostics(extension)}
-                                    onSelfTest={() => void selfTestExtension(extension)}
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </section>
+                <div className="space-y-6">
+                  {visibleStandardExtensions.length ? renderExtensionTable(visibleStandardExtensions) : null}
+                  {visibleExperimentalExtensions.length ? (
+                    <section className="space-y-3 border-t border-border-subtle/70 pt-4">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                        onClick={() => setShowExperimental((value) => !value)}
+                        aria-expanded={showExperimental}
+                      >
+                        <div>
+                          <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-dim">Experimental</div>
+                          <div className="mt-1 text-[12px] text-secondary">
+                            Off by default. Enable only when you want to try unfinished extension surfaces.
+                          </div>
+                        </div>
+                        <span className="text-[12px] text-dim">
+                          {visibleExperimentalExtensions.length} {showExperimental ? 'Hide' : 'Show'}
+                        </span>
+                      </button>
+                      {showExperimental ? renderExtensionTable(visibleExperimentalExtensions) : null}
+                    </section>
+                  ) : null}
                 </div>
               )}
             </div>

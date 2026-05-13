@@ -330,6 +330,7 @@ export interface ExtensionManifest {
   id: string;
   name: string;
   packageType?: ExtensionPackageType;
+  defaultEnabled?: boolean;
   description?: string;
   version?: string;
   frontend?: ExtensionFrontendManifest;
