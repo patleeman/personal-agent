@@ -14,6 +14,7 @@ pipeline.
 ## Development
 
 - Prefer correct full implementations over backwards-compatibility layers. I don't want to implement the fastest smallest improvement most of the time.
+- Do not hide incomplete platform work behind a narrow "safe cut" when the real requirement is a cross-cutting seam. If a feature needs a shared boundary (process execution, security policy, persistence, routing, etc.), implement the actual shared boundary and wire all first-class call sites through it rather than patching one visible path.
 - Build all new product features as extensions by default. First ask: “could this be an extension?” The answer should be yes unless the work is core runtime, security, persistence, extension-host infrastructure, or app-shell plumbing.
 - If the extensions API is not powerful enough for the feature, improve the extensions API with general-purpose capabilities instead of hardcoding a one-off app feature. Every new extension should be able to reuse the new capability.
 - The core of PA is the small, stable platform: agent/conversation runtime, model/tool execution protocol, transcript/event stream, durable storage primitives, knowledge/system-prompt assembly, extension host/manifest/API/permissions, security boundaries, desktop/web app shell, routing, install/update plumbing, and shared UI primitives.
