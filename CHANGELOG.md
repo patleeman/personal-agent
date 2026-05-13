@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0-rc.1 — 2026-05-13
+
+- chore: package experimental extensions for release
+- fix: retry failed desktop local API startup
+
 ## 0.8.0-rc.0 — 2026-05-13
 
 - Guard trace-db token counters against fractional/NaN values
