@@ -29,27 +29,56 @@ else
 fi
 
 # ── 2. Resolve pnpm ──────────────────────────────────────
-# Git hooks run in a non-interactive bash shell. Do not source interactive
-# shell rc files here: zsh/bash rc files often assume shell-specific variables
-# and can abort under `set -u`. Instead add the common package-manager bins
-# directly.
-if ! command -v pnpm &>/dev/null; then
-  export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/Library/pnpm:$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
-fi
+# Git hooks run via this file's shebang, not the user's interactive shell.
+# Do not source shell rc files here; resolve pnpm explicitly and keep PATH
+# untouched except for whatever Git inherited.
+resolve_pnpm() {
+  if command -v pnpm &>/dev/null; then
+    command -v pnpm
+    return 0
+  fi
 
-PNPM=$(command -v pnpm || true)
+  for candidate in "/opt/homebrew/bin/pnpm" "/usr/local/bin/pnpm" "$HOME/Library/pnpm/pnpm" "$HOME/.local/bin/pnpm" "$HOME/.npm-global/bin/pnpm"; do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  if command -v corepack &>/dev/null; then
+    printf 'corepack pnpm\n'
+    return 0
+  fi
+
+  return 1
+}
+
+PNPM=$(resolve_pnpm || true)
 if [ -z "$PNPM" ]; then
-  red "✗ pnpm not found — install it with: npm install -g pnpm"
+  red "✗ pnpm not found — install it with: corepack enable or npm install -g pnpm"
   exit 1
 fi
 
+run_pnpm() {
+  if [ "$PNPM" = "corepack pnpm" ]; then
+    corepack pnpm "$@"
+    return
+  fi
+
+  # Homebrew pnpm uses `#!/usr/bin/env node`, so an absolute pnpm path still
+  # needs a PATH that can find node. Scope that PATH only to pnpm subprocesses.
+  local pnpm_dir
+  pnpm_dir=$(dirname "$PNPM")
+  PATH="$pnpm_dir:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH" "$PNPM" "$@"
+}
+
 # ── 3. Typecheck (fast — whole project) ──────────────────
 
-if "$PNPM" run check:types &>/dev/null; then
+if run_pnpm run check:types &>/dev/null; then
   green "✓ typecheck passed"
 else
   echo ""
-  "$PNPM" run check:types 2>&1
+  run_pnpm run check:types 2>&1
   red "✗ typecheck failed — fix errors above"
   exit 1
 fi
@@ -58,11 +87,11 @@ fi
 
 STAGED_FILES_STR=$(staged_files | grep -E '\.(ts|tsx|js|jsx|cjs|mjs|json|md|yml|yaml)$' | tr '\n' ' ' || true)
 if [ -n "$STAGED_FILES_STR" ]; then
-  if "$PNPM" exec prettier --check $STAGED_FILES_STR &>/dev/null; then
+  if run_pnpm exec prettier --check $STAGED_FILES_STR &>/dev/null; then
     green "✓ formatting passed"
   else
     echo ""
-    "$PNPM" exec prettier --check $STAGED_FILES_STR 2>&1
+    run_pnpm exec prettier --check $STAGED_FILES_STR 2>&1
     red "✗ formatting failed — run 'pnpm run fmt:fix'"
     exit 1
   fi
@@ -76,11 +105,11 @@ LINT_FILES=$(staged_files | grep -cE '\.(ts|tsx)$' || true)
 if [ "$LINT_FILES" -gt 0 ]; then
   FILES=$(staged_files | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
   if [ -n "$FILES" ]; then
-    if "$PNPM" exec eslint $FILES &>/dev/null; then
+    if run_pnpm exec eslint $FILES &>/dev/null; then
       green "✓ lint passed"
     else
       echo ""
-      "$PNPM" exec eslint $FILES 2>&1
+      run_pnpm exec eslint $FILES 2>&1
       red "✗ lint failed — run 'pnpm run lint:fix'"
       exit 1
     fi
