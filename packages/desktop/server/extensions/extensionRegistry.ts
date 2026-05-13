@@ -1281,12 +1281,12 @@ export function readRuntimeExtensionEntries(stateRoot: string = getStateRoot()):
 
 export function listExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {
   const entries = [
-    ...SYSTEM_EXTENSION_ENTRIES.map((entry) => ({ manifest: entry.manifest, packageRoot: entry.packageRoot, source: 'system' as const })),
     ...EXPERIMENTAL_EXTENSION_ENTRIES.map((entry) => ({
       manifest: entry.manifest,
       packageRoot: entry.packageRoot,
       source: 'runtime' as const,
     })),
+    ...SYSTEM_EXTENSION_ENTRIES.map((entry) => ({ manifest: entry.manifest, packageRoot: entry.packageRoot, source: 'system' as const })),
     ...readRuntimeExtensionEntries(stateRoot),
   ];
   const seen = new Set<string>();

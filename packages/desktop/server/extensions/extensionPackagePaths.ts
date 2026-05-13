@@ -19,8 +19,8 @@ function candidateBundledExtensionRoots(): string[] {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   return [
     process.env.PERSONAL_AGENT_REPO_ROOT ? resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'extensions') : null,
-    typeof process.resourcesPath === 'string' ? resolve(process.resourcesPath, 'extensions') : null,
     resolve(process.cwd(), 'extensions'),
+    typeof process.resourcesPath === 'string' ? resolve(process.resourcesPath, 'extensions') : null,
     resolve(currentDir, '../../../../extensions'),
     resolve(currentDir, '../../../../../extensions'),
   ].filter((value): value is string => Boolean(value));
@@ -66,8 +66,15 @@ export function listExtensionPackagePaths(options: { runtimeRoot?: string } = {}
     ...splitPathList(process.env.PERSONAL_AGENT_EXTENSION_PATHS).map((path) => ({ path, source: 'external' as const })),
   ];
 
+  const cwd = resolve(process.cwd());
   return inputs
     .flatMap(({ path, source }) => expandExtensionPath(path, source))
+    .sort((left, right) => {
+      const leftInCwd = left.packageRoot === cwd || left.packageRoot.startsWith(`${cwd}/`);
+      const rightInCwd = right.packageRoot === cwd || right.packageRoot.startsWith(`${cwd}/`);
+      if (leftInCwd !== rightInCwd) return leftInCwd ? -1 : 1;
+      return 0;
+    })
     .filter((entry) => {
       const key = entry.packageRoot;
       if (seen.has(key)) return false;
