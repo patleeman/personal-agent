@@ -37,7 +37,7 @@ Bundled first-party extensions live in the repo/app bundle under `extensions/` a
 
 The loader also includes repo-local experimental extensions from `experimental-extensions/extensions/` as external extension packages. They should declare `defaultEnabled: false`, which keeps them visible in Extension Manager's collapsed Experimental section without registering routes/tools until enabled.
 
-The loader also accepts package roots through `PERSONAL_AGENT_EXTENSION_PATHS`. Each path can point directly at a folder with `extension.json`, or at a parent folder containing many extension packages.
+The loader scans the default runtime install location `<state-root>/extensions`. Users can add more package roots or parent folders through the `extensions.additionalPaths` setting exposed by this extension; entries may be comma- or newline-separated. The loader also accepts package roots through `PERSONAL_AGENT_EXTENSION_PATHS` for process-level overrides.
 
 Extension Manager can build runtime extensions in-app when running from an unpackaged/dev desktop bundle. Use the per-extension **Build** action or the `extension_manager` tool's `build` action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** / `reload` to refresh backend modules and registry surfaces. Use `validate` after each build; the extension doctor checks manifest references, dist files, stale output, frontend/backend exports, tool schemas, skill files, forbidden process imports, non-portable bundled imports, and backend import crashes. Packaged desktop releases are prebuilt-only: they load existing `dist/` bundles and reject runtime compilation. Starter creation supports three templates: `main-page`, `right-rail`, and `workbench-detail`.
 

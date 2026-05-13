@@ -22,6 +22,16 @@
     ]
   },
   "contributes": {
+    "settings": {
+      "extensions.additionalPaths": {
+        "type": "string",
+        "default": "",
+        "description": "Additional extension package roots or parent directories to scan. The default user install location is <state-root>/extensions; separate extra paths with commas or new lines.",
+        "group": "Extensions",
+        "placeholder": "/Users/patrick/path/to/extensions",
+        "order": 10
+      }
+    },
     "nav": [
       {
         "id": "extensions-nav",

@@ -2,17 +2,11 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { readConfiguredExtensionPaths, readEnvironmentExtensionPaths } from './extensionSearchPaths.js';
+
 export interface ExtensionPackagePath {
   packageRoot: string;
   source: 'bundled' | 'experimental' | 'external';
-}
-
-function splitPathList(value: string | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(/[,:]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
 }
 
 function candidateBundledExtensionRoots(): string[] {
@@ -63,7 +57,8 @@ export function listExtensionPackagePaths(options: { runtimeRoot?: string } = {}
     ...candidateBundledExtensionRoots().map((path) => ({ path, source: 'bundled' as const })),
     ...candidateExperimentalExtensionRoots().map((path) => ({ path, source: 'experimental' as const })),
     ...(options.runtimeRoot ? [{ path: options.runtimeRoot, source: 'external' as const }] : []),
-    ...splitPathList(process.env.PERSONAL_AGENT_EXTENSION_PATHS).map((path) => ({ path, source: 'external' as const })),
+    ...readConfiguredExtensionPaths().map((path) => ({ path, source: 'external' as const })),
+    ...readEnvironmentExtensionPaths().map((path) => ({ path, source: 'external' as const })),
   ];
 
   const cwd = resolve(process.cwd());
