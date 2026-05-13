@@ -158,7 +158,8 @@
         "detailView": "knowledge-file",
         "placement": "workbench-tool",
         "activation": "on-open",
-        "persistOpen": true
+        "persistOpen": true,
+        "toolSlot": "knowledge"
       },
       {
         "id": "knowledge-file",

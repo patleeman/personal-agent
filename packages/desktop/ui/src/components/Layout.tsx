@@ -1234,6 +1234,10 @@ export function Layout() {
     () => findExtensionToolPanelBySlot(extensionRightToolPanels, 'diffs'),
     [extensionRightToolPanels],
   );
+  const systemKnowledgeExtensionSurface = useMemo(
+    () => findExtensionToolPanelBySlot(extensionRightToolPanels, 'knowledge'),
+    [extensionRightToolPanels],
+  );
   const routePrimaryRailSurface = useMemo(() => {
     if (showWorkbench) return null;
     const pageSurface = extensionRegistry.surfaces.find(
