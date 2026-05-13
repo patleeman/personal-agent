@@ -118,7 +118,7 @@ export function CodexSettingsPanel({ pa }: CodexSettingsPanelProps) {
               </button>
             </div>
             <p className={NOTE_CLASS}>
-              Use this token in your Codex client (e.g. Litter) as the Bearer token when connecting to{' '}
+              Use this token in your companion app as the Bearer token when connecting to{' '}
               <span className="font-mono">ws://&lt;this-computer&gt;:{status.port}</span>
             </p>
           </>

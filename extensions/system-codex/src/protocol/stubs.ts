@@ -3,7 +3,7 @@ import type { MethodHandler } from '../server.js';
 /**
  * Stub handlers for Codex API methods that don't have PA equivalents.
  * These return empty/not-implemented responses to avoid client errors
- * when Litter or other Codex clients call them.
+ * when companion apps or other Codex clients call them.
  */
 
 function notImplemented(method: string): MethodHandler {

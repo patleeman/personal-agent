@@ -39,7 +39,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Auto Mode](../extensions/system-auto-mode/README.md)
 - [Automations](../extensions/system-automations/README.md)
 - [Browser](../extensions/system-browser/README.md)
-- [Codex Protocol](../extensions/system-codex/README.md)
+- [Codex Protocol for Companion App](../extensions/system-codex/README.md)
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)
 - [Extension Manager](../extensions/system-extension-manager/README.md)

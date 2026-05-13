@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
   "id": "system-codex",
-  "name": "Codex Protocol",
+  "name": "Codex Protocol for Companion App",
   "packageType": "system",
-  "description": "Codex App Server JSON-RPC 2.0 protocol over WebSocket. Allows Codex-compatible clients like Litter to connect and interact with conversations.",
+  "description": "Codex App Server JSON-RPC 2.0 protocol over WebSocket for companion apps to connect and interact with conversations.",
   "version": "0.1.0",
   "frontend": {
     "entry": "dist/frontend.js",
@@ -41,7 +41,7 @@
       "component": "CodexSettingsPanel",
       "sectionId": "settings-codex",
       "label": "Remote Access (Codex)",
-      "description": "Codex App Server protocol for mobile clients. Connect via Litter or any Codex-compatible app.",
+      "description": "Codex App Server protocol for companion apps and other Codex-compatible clients.",
       "order": 20
     }
   },
