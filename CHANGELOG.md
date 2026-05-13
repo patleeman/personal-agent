@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0-rc.2 — 2026-05-13
+
+- fix: bundle desktop renderer API dependencies
+
 ## 0.8.0-rc.1 — 2026-05-13
 
 - chore: package experimental extensions for release
