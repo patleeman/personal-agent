@@ -3476,12 +3476,14 @@ export function Sidebar() {
     const legacy = extensionRegistry.surfaces
       .filter(isExtensionLeftNavItemSurface)
       .map((item) => ({ ...item, section: 'primary' as const }));
-    const native = extensionRegistry.extensions.flatMap((extension) =>
-      (extension.contributes?.nav ?? []).map(
-        (item) =>
-          ({ ...item, extensionId: extension.id, packageType: extension.packageType ?? 'user' }) as ExtensionSurfaceSummary & typeof item,
-      ),
-    );
+    const native = extensionRegistry.extensions
+      .filter((extension) => extension.enabled)
+      .flatMap((extension) =>
+        (extension.contributes?.nav ?? []).map(
+          (item) =>
+            ({ ...item, extensionId: extension.id, packageType: extension.packageType ?? 'user' }) as ExtensionSurfaceSummary & typeof item,
+        ),
+      );
     return [...legacy, ...native];
   }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
   const primaryNavItems = useMemo(() => extensionNavItems.filter((item) => (item.section ?? 'primary') === 'primary'), [extensionNavItems]);

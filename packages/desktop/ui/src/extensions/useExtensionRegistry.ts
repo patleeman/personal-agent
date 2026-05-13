@@ -545,27 +545,28 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         .then(([extensions, routes, surfaces]) => {
           if (cancelled) return;
           const registryExtensions = normalizeRegistryExtensions(extensions);
-          const settingsComponents = normalizeSettingsComponents(registryExtensions);
+          const enabledRegistryExtensions = registryExtensions.filter((extension) => extension.enabled);
+          const settingsComponents = normalizeSettingsComponents(enabledRegistryExtensions);
           setState({
             extensions: registryExtensions,
             routes,
             surfaces,
-            topBarElements: normalizeTopBarElements(registryExtensions),
-            messageActions: normalizeMessageActions(registryExtensions),
-            composerShelves: normalizeComposerShelves(registryExtensions),
-            newConversationPanels: normalizeNewConversationPanels(registryExtensions),
+            topBarElements: normalizeTopBarElements(enabledRegistryExtensions),
+            messageActions: normalizeMessageActions(enabledRegistryExtensions),
+            composerShelves: normalizeComposerShelves(enabledRegistryExtensions),
+            newConversationPanels: normalizeNewConversationPanels(enabledRegistryExtensions),
             settingsComponents,
             settingsComponent: settingsComponents[0] ?? null,
-            composerButtons: normalizeComposerButtons(registryExtensions),
-            composerInputTools: normalizeComposerInputTools(registryExtensions),
-            toolbarActions: normalizeToolbarActions(registryExtensions),
-            contextMenus: normalizeContextMenus(registryExtensions),
-            threadHeaderActions: normalizeThreadHeaderActions(registryExtensions),
-            statusBarItems: normalizeStatusBarItems(registryExtensions),
-            conversationHeaderElements: normalizeConversationHeaderElements(registryExtensions),
-            conversationDecorators: normalizeConversationDecorators(registryExtensions),
-            activityTreeItemElements: normalizeActivityTreeItemElements(registryExtensions),
-            activityTreeItemStyles: normalizeActivityTreeItemStyles(registryExtensions),
+            composerButtons: normalizeComposerButtons(enabledRegistryExtensions),
+            composerInputTools: normalizeComposerInputTools(enabledRegistryExtensions),
+            toolbarActions: normalizeToolbarActions(enabledRegistryExtensions),
+            contextMenus: normalizeContextMenus(enabledRegistryExtensions),
+            threadHeaderActions: normalizeThreadHeaderActions(enabledRegistryExtensions),
+            statusBarItems: normalizeStatusBarItems(enabledRegistryExtensions),
+            conversationHeaderElements: normalizeConversationHeaderElements(enabledRegistryExtensions),
+            conversationDecorators: normalizeConversationDecorators(enabledRegistryExtensions),
+            activityTreeItemElements: normalizeActivityTreeItemElements(enabledRegistryExtensions),
+            activityTreeItemStyles: normalizeActivityTreeItemStyles(enabledRegistryExtensions),
             loading: false,
             error: null,
           });

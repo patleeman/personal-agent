@@ -162,6 +162,36 @@ describe('useExtensionRegistry', () => {
     ]);
   });
 
+  it('keeps disabled extensions visible but removes their active contributions', async () => {
+    vi.mocked(api.extensionInstallations).mockResolvedValue([
+      {
+        id: 'disabled-extension',
+        name: 'Disabled Extension',
+        enabled: false,
+        status: 'disabled',
+        manifest: {
+          schemaVersion: 2,
+          id: 'disabled-extension',
+          name: 'Disabled Extension',
+          frontend: { entry: 'dist/frontend.js', styles: [] },
+          contributes: {
+            composerButtons: [{ id: 'disabled-button', component: 'DisabledButton', placement: 'actions' }],
+            statusBarItems: [{ id: 'disabled-status', label: 'Disabled status', component: 'DisabledStatus', alignment: 'right' }],
+          },
+        },
+      },
+    ] as never);
+    vi.mocked(api.extensionRoutes).mockResolvedValue([]);
+    vi.mocked(api.extensionSurfaces).mockResolvedValue([]);
+
+    const { result } = renderHook(() => useExtensionRegistry());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.extensions.map((entry) => entry.id)).toEqual(['disabled-extension']);
+    expect(result.current.composerButtons).toEqual([]);
+    expect(result.current.statusBarItems).toEqual([]);
+  });
+
   it('reloads when the extensions app topic is invalidated', async () => {
     let extensionsVersion = 0;
     const wrapper = ({ children }: { children: ReactNode }) => (
