@@ -289,6 +289,27 @@ describe('registerExtensionRoutes', () => {
     });
   });
 
+  it('validates runtime extensions through the extension doctor route', async () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const harness = createHarness();
+
+    const createRes = createResponse();
+    harness.postHandler('/api/extensions')({ body: { id: 'agent-board', name: 'Agent Board' } }, createRes);
+
+    const res = createResponse();
+    await harness.postHandler('/api/extensions/:id/validate')({ params: { id: 'agent-board' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: false,
+        extensionId: 'agent-board',
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'missing-frontend-dist' })]),
+      }),
+    );
+  });
+
   it('creates paired workbench starter runtime extensions', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

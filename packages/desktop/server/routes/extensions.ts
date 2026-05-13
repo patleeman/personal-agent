@@ -10,6 +10,7 @@ import {
   reloadExtensionBackend,
   runExtensionSelfTest,
 } from '../extensions/extensionBackend.js';
+import { validateExtensionPackage } from '../extensions/extensionDoctor.js';
 import { listExtensionEventSubscriptions } from '../extensions/extensionEventBus.js';
 import {
   buildRuntimeExtension,
@@ -502,6 +503,27 @@ export function registerExtensionRoutes(
       res.json(await runExtensionSelfTest(req.params.id));
     } catch (err) {
       sendRouteError(res, 'extension self-test error', err);
+    }
+  });
+
+  router.post('/api/extensions/:id/validate', async (req, res) => {
+    try {
+      const report = await validateExtensionPackage({ extensionId: req.params.id });
+      res.status(report.ok ? 200 : 400).json(report);
+    } catch (err) {
+      sendRouteError(res, 'extension validate error', err);
+    }
+  });
+
+  router.post('/api/extensions/validate', async (req, res) => {
+    try {
+      const body = req.body as { id?: unknown; extensionId?: unknown; packageRoot?: unknown };
+      const extensionId = typeof body.extensionId === 'string' ? body.extensionId : typeof body.id === 'string' ? body.id : undefined;
+      const packageRoot = typeof body.packageRoot === 'string' ? body.packageRoot : undefined;
+      const report = await validateExtensionPackage({ extensionId, packageRoot });
+      res.status(report.ok ? 200 : 400).json(report);
+    } catch (err) {
+      sendRouteError(res, 'extension validate error', err);
     }
   });
 
