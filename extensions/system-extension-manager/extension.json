@@ -37,6 +37,12 @@
         "title": "Skills and Runtime Capabilities",
         "description": "Guidance for distinguishing reusable workflow skills from runtime features and extensions.",
         "path": "skills/skills-and-capabilities/SKILL.md"
+      },
+      {
+        "id": "local-extension-development",
+        "title": "Local Extension Development",
+        "description": "Workflow for creating, building, validating, reloading, and debugging native extensions from the built app.",
+        "path": "skills/local-extension-development/SKILL.md"
       }
     ]
   },
