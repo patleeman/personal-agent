@@ -1,8 +1,17 @@
 import type { NativeExtensionClient } from '@personal-agent/extensions';
 import type { ScheduledTaskSchedulerHealth, ScheduledTaskSummary } from '@personal-agent/extensions/data';
 import { timeAgo } from '@personal-agent/extensions/data';
-import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '@personal-agent/extensions/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AppPageIntro,
+  AppPageLayout,
+  cx,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  LoadingState,
+  ToolbarButton,
+} from '@personal-agent/extensions/ui';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface AutomationFormState {
   title: string;
@@ -20,6 +29,16 @@ interface AutomationFormState {
   enabled: boolean;
 }
 
+type AutomationFilter = 'all' | 'current' | 'past-due' | 'failed' | 'disabled';
+
+const FILTER_LABELS: Record<AutomationFilter, string> = {
+  all: 'All',
+  current: 'Current',
+  'past-due': 'Past due',
+  failed: 'Failed',
+  disabled: 'Disabled',
+};
+
 const emptyForm: AutomationFormState = {
   title: '',
   prompt: '',
@@ -36,13 +55,17 @@ const emptyForm: AutomationFormState = {
   enabled: true,
 };
 
-function taskName(task: ScheduledTaskSummary) {
+function taskName(task: Pick<ScheduledTaskSummary, 'id' | 'title'>) {
   return (task.title || '').trim() || task.id;
+}
+
+function isFailedTask(task: ScheduledTaskSummary) {
+  return task.lastStatus === 'failed' || task.lastStatus === 'failure';
 }
 
 function taskRank(task: ScheduledTaskSummary) {
   if (task.running) return 0;
-  if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 1;
+  if (isFailedTask(task)) return 1;
   if (task.enabled) return 2;
   return 3;
 }
@@ -77,7 +100,7 @@ function statusText(task: ScheduledTaskSummary, nowMs = Date.now()) {
   if (task.running) return 'Running';
   if (isPastDueOneTimeTask(task, nowMs)) return 'Past due';
   if (!task.enabled) return 'Disabled';
-  if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'Needs attention';
+  if (isFailedTask(task)) return 'Needs attention';
   if (task.lastStatus === 'success') return 'Active';
   return task.cron || task.at ? 'Active' : 'Manual';
 }
@@ -86,7 +109,7 @@ function statusClass(task: ScheduledTaskSummary, nowMs = Date.now()) {
   if (task.running) return 'bg-accent border-accent';
   if (isPastDueOneTimeTask(task, nowMs)) return 'bg-warning border-warning';
   if (!task.enabled) return 'opacity-40';
-  if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'bg-danger border-danger';
+  if (isFailedTask(task)) return 'bg-danger border-danger';
   if (task.lastStatus === 'success') return 'bg-success border-success';
   return 'border-secondary';
 }
@@ -95,7 +118,7 @@ function statusTextClass(task: ScheduledTaskSummary, nowMs = Date.now()) {
   if (task.running) return 'text-accent';
   if (isPastDueOneTimeTask(task, nowMs)) return 'text-warning';
   if (!task.enabled) return 'text-dim';
-  if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'text-danger';
+  if (isFailedTask(task)) return 'text-danger';
   return 'text-success';
 }
 
@@ -122,6 +145,46 @@ function taskScheduleSummary(task: ScheduledTaskSummary) {
 function taskLastRunText(task: ScheduledTaskSummary, nowMs = Date.now()) {
   if (isPastDueOneTimeTask(task, nowMs)) return 'Scheduled time passed';
   return task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Not run yet';
+}
+
+function taskTargetLabel(task: ScheduledTaskSummary) {
+  return task.targetType === 'conversation' ? 'Thread' : 'Job';
+}
+
+function taskSearchText(task: ScheduledTaskSummary) {
+  return [
+    task.id,
+    task.title,
+    task.prompt,
+    task.cron,
+    task.at,
+    task.cwd,
+    task.threadConversationId,
+    task.threadTitle,
+    task.targetType,
+    taskScheduleSummary(task),
+    taskLastRunText(task),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function matchesAutomationFilter(task: ScheduledTaskSummary, filter: AutomationFilter, nowMs: number) {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'current':
+      return !isPastDueOneTimeTask(task, nowMs);
+    case 'past-due':
+      return isPastDueOneTimeTask(task, nowMs);
+    case 'failed':
+      return isFailedTask(task);
+    case 'disabled':
+      return task.enabled === false;
+    default:
+      return true;
+  }
 }
 
 function numberOrNull(value: string) {
@@ -166,13 +229,26 @@ function readFormInput(form: AutomationFormState) {
   };
 }
 
-function HealthLine({ health }: { health: ScheduledTaskSchedulerHealth | null }) {
-  if (!health?.lastEvaluatedAt) return <span>Scheduler has not checked automations yet.</span>;
+function schedulerHealthLabel(health: ScheduledTaskSchedulerHealth | null) {
+  if (!health?.lastEvaluatedAt) {
+    return 'Scheduler has not checked automations yet.';
+  }
+  return health.status === 'stale'
+    ? `Scheduler stale. Last checked ${timeAgo(health.lastEvaluatedAt)}.`
+    : `Scheduler healthy. Last checked ${timeAgo(health.lastEvaluatedAt)}.`;
+}
+
+function SchedulerHealthDot({ health }: { health: ScheduledTaskSchedulerHealth | null }) {
+  const label = schedulerHealthLabel(health);
+  const statusClass = health?.status === 'stale' ? 'bg-warning' : health?.status === 'healthy' ? 'bg-success' : 'bg-dim';
   return (
-    <span>
-      {health.status === 'stale'
-        ? `Scheduler stale. Last checked ${timeAgo(health.lastEvaluatedAt)}.`
-        : `Scheduler healthy. Last checked ${timeAgo(health.lastEvaluatedAt)}.`}
+    <span
+      tabIndex={0}
+      title={label}
+      aria-label={label}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-secondary outline-none transition-colors hover:bg-surface/40 focus:bg-surface/40"
+    >
+      <span className={cx('h-2.5 w-2.5 rounded-full', statusClass)} />
     </span>
   );
 }
@@ -200,7 +276,133 @@ function fieldClass() {
   return 'w-full rounded-lg border border-border-subtle bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent';
 }
 
-function AutomationRows({
+function MoreIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4" fill="currentColor">
+      <circle cx="3" cy="8" r="1.2" />
+      <circle cx="8" cy="8" r="1.2" />
+      <circle cx="13" cy="8" r="1.2" />
+    </svg>
+  );
+}
+
+function OpenIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M6 4h6v6" />
+      <path d="M12 4 5 11" />
+      <path d="M3.5 6.5v6h6" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M3.5 11.8 4 9.5 10.8 2.7a1.4 1.4 0 0 1 2 2L6 11.5l-2.5.3Z" />
+      <path d="M9.6 4 12 6.4" />
+      <path d="M3 13h10" />
+    </svg>
+  );
+}
+
+function RunIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4" fill="currentColor">
+      <path d="M5 3.2v9.6L12.6 8 5 3.2Z" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M12.5 7.5a4.5 4.5 0 1 1-1.2-3.1" />
+      <path d="M10 2.8h3v3" />
+    </svg>
+  );
+}
+
+function TaskActionsMenu({
+  task,
+  busy,
+  logOpen,
+  onToggleLog,
+  onDelete,
+}: {
+  task: ScheduledTaskSummary;
+  busy: boolean;
+  logOpen: boolean;
+  onToggleLog: () => void;
+  onDelete: () => void;
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && rootRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
+  const menuButtonClass =
+    'w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:cursor-not-allowed disabled:opacity-50';
+
+  return (
+    <div ref={rootRef} className="relative" onClick={(event) => event.stopPropagation()}>
+      <IconButton
+        compact
+        disabled={busy}
+        title={`More actions for ${taskName(task)}`}
+        aria-label={`More actions for ${taskName(task)}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        <MoreIcon />
+      </IconButton>
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-40 rounded-xl border border-border-subtle bg-surface p-1.5 shadow-xl" role="menu">
+          <button
+            type="button"
+            className={menuButtonClass}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+              onToggleLog();
+            }}
+          >
+            {logOpen ? 'Hide log' : 'Show log'}
+          </button>
+          <button
+            type="button"
+            className={cx(menuButtonClass, 'text-danger hover:text-danger')}
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AutomationTable({
   tasks,
   logById,
   busy,
@@ -208,6 +410,7 @@ function AutomationRows({
   onRunTask,
   onOpenEditor,
   onToggleLog,
+  onDeleteTask,
 }: {
   tasks: ScheduledTaskSummary[];
   logById: Record<string, string>;
@@ -216,58 +419,113 @@ function AutomationRows({
   onRunTask: (taskId: string) => void;
   onOpenEditor: (task: ScheduledTaskSummary) => void;
   onToggleLog: (taskId: string) => void;
+  onDeleteTask: (task: ScheduledTaskSummary) => void;
 }) {
   return (
-    <div>
-      {tasks.map((task) => {
-        const scope = taskScopeText(task);
-        return (
-          <article key={task.id} className="group border-b border-border-subtle py-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_auto] lg:items-start">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={cx('h-2.5 w-2.5 rounded-full border', statusClass(task, nowMs))} />
-                  <h3 className="truncate text-[15px] font-semibold text-primary">{taskName(task)}</h3>
-                  {scope ? <span className="truncate text-[13px] text-dim">{scope}</span> : null}
-                </div>
-                <p className="mt-1 text-[12px] text-secondary">
-                  <span className={statusTextClass(task, nowMs)}>{statusText(task, nowMs)}</span>
-                  <span className="opacity-40 mx-1.5">·</span>
-                  {task.targetType === 'conversation' && task.threadConversationId ? (
-                    <a className="text-accent hover:underline" href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}>
-                      Thread
-                    </a>
-                  ) : task.targetType === 'conversation' ? (
-                    'Thread'
-                  ) : (
-                    'Job'
-                  )}
-                  <span className="opacity-40 mx-1.5">·</span>
-                  {taskLastRunText(task, nowMs)}
-                </p>
+    <section className="min-w-0 overflow-auto">
+      <table className="w-full border-collapse text-left text-[13px]">
+        <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
+          <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+            <th className="py-2 pr-4 font-semibold">Name</th>
+            <th className="py-2 px-3 font-semibold">Schedule</th>
+            <th className="py-2 px-3 font-semibold">Status</th>
+            <th className="py-2 pl-3 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map((task) => {
+            const scope = taskScopeText(task);
+            const taskBusy = busy === `run:${task.id}` || busy === `delete:${task.id}`;
+            return (
+              <Fragment key={task.id}>
+                <tr className="group border-t border-border-subtle/70 transition-colors hover:bg-surface/30">
+                  <td className="min-w-0 py-3 pr-4 align-middle">
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full border', statusClass(task, nowMs))} />
+                        <div className="truncate text-[14px] font-semibold text-primary">{taskName(task)}</div>
+                      </div>
+                      <div className="mt-0.5 max-w-[44rem] whitespace-normal break-words text-[12px] leading-5 text-secondary">
+                        {task.prompt || 'No prompt summary.'}
+                      </div>
+                      <div className="mt-1 text-[11px] text-dim">
+                        {task.id} · {taskTargetLabel(task)}
+                        {scope ? ` · ${scope}` : ''}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 align-middle">
+                    <div className="text-[13px] text-primary">{taskScheduleSummary(task)}</div>
+                    <div className="mt-0.5 break-all font-mono text-[11px] text-dim">{task.cron ?? task.at ?? 'Manual'}</div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 align-middle">
+                    <div className={cx('text-[12px]', statusTextClass(task, nowMs))}>{statusText(task, nowMs)}</div>
+                    <div className="mt-0.5 text-[12px] text-secondary">{taskLastRunText(task, nowMs)}</div>
+                  </td>
+                  <td className="py-3 pl-3 align-middle">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {taskBusy ? <span className="text-[11px] text-dim">Working…</span> : null}
+                      {task.threadConversationId ? (
+                        <a
+                          className="ui-icon-button ui-icon-button-compact"
+                          href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}
+                          title={`Open thread for ${taskName(task)}`}
+                          aria-label={`Open thread for ${taskName(task)}`}
+                        >
+                          <OpenIcon />
+                        </a>
+                      ) : null}
+                      <IconButton
+                        compact
+                        disabled={taskBusy}
+                        title={`Run ${taskName(task)} now`}
+                        aria-label={`Run ${taskName(task)} now`}
+                        onClick={() => onRunTask(task.id)}
+                      >
+                        <RunIcon />
+                      </IconButton>
+                      <IconButton
+                        compact
+                        disabled={taskBusy}
+                        title={`Edit ${taskName(task)}`}
+                        aria-label={`Edit ${taskName(task)}`}
+                        onClick={() => onOpenEditor(task)}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <TaskActionsMenu
+                        task={task}
+                        busy={taskBusy}
+                        logOpen={Boolean(logById[task.id])}
+                        onToggleLog={() => onToggleLog(task.id)}
+                        onDelete={() => onDeleteTask(task)}
+                      />
+                    </div>
+                  </td>
+                </tr>
                 {logById[task.id] ? (
-                  <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[12px] leading-5 text-secondary">
-                    {logById[task.id]}
-                  </pre>
+                  <tr className="border-t border-border-subtle/40 bg-surface/20">
+                    <td colSpan={4} className="px-4 py-3">
+                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[12px] leading-5 text-secondary">
+                        {logById[task.id]}
+                      </pre>
+                    </td>
+                  </tr>
                 ) : null}
-              </div>
-              <p className="text-[13px] text-secondary lg:text-right">{taskScheduleSummary(task)}</p>
-              <div className="flex flex-wrap gap-2 opacity-100 lg:justify-end lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-within:opacity-100">
-                {task.threadConversationId ? (
-                  <a className={cx('ui-toolbar-button')} href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}>
-                    Open thread
-                  </a>
-                ) : null}
-                <ToolbarButton disabled={busy === task.id} onClick={() => onRunTask(task.id)}>
-                  Run
-                </ToolbarButton>
-                <ToolbarButton onClick={() => onOpenEditor(task)}>Edit</ToolbarButton>
-                <ToolbarButton onClick={() => onToggleLog(task.id)}>{logById[task.id] ? 'Hide log' : 'Log'}</ToolbarButton>
-              </div>
-            </div>
-          </article>
-        );
-      })}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function SectionHeader({ title, count, tone = 'default' }: { title: string; count: string; tone?: 'default' | 'warning' }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <h2 className="text-[18px] font-semibold tracking-tight text-primary">{title}</h2>
+      <span className={cx('text-[12px]', tone === 'warning' ? 'text-warning' : 'text-dim')}>{count}</span>
     </div>
   );
 }
@@ -283,6 +541,8 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
   const [form, setForm] = useState<AutomationFormState>(emptyForm);
   const [logById, setLogById] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [filter, setFilter] = useState<AutomationFilter>('all');
+  const [query, setQuery] = useState('');
 
   const load = useCallback(async () => {
     setError(null);
@@ -298,12 +558,33 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
       setLoading(false);
       pa.ui.notify({ type: 'error', message: `Failed to load automations: ${err.message}`, source: 'system-automations' });
     });
-  }, [load]);
+  }, [load, pa]);
+
+  const reload = useCallback(async () => {
+    setBusy('reload');
+    setNotice(null);
+    try {
+      await load();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      pa.ui.notify({ type: 'error', message: `Failed to reload automations: ${msg}`, source: 'system-automations' });
+    } finally {
+      setBusy(null);
+    }
+  }, [load, pa]);
 
   const openEditor = useCallback((task?: ScheduledTaskSummary) => {
     setEditingId(task?.id ?? null);
     setEditorOpen(true);
     setForm(task ? formFromTask(task) : { ...emptyForm });
+    setNotice(null);
+  }, []);
+
+  const closeEditor = useCallback(() => {
+    setEditingId(null);
+    setEditorOpen(false);
+    setForm(emptyForm);
   }, []);
 
   const save = useCallback(
@@ -318,9 +599,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
           await pa.automations.create(readFormInput(form));
           setNotice('Automation created.');
         }
-        setEditingId(null);
-        setEditorOpen(false);
-        setForm(emptyForm);
+        closeEditor();
         await load();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -330,12 +609,12 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         setBusy(null);
       }
     },
-    [editingId, form, load, pa],
+    [closeEditor, editingId, form, load, pa],
   );
 
   const runTask = useCallback(
     async (taskId: string) => {
-      setBusy(taskId);
+      setBusy(`run:${taskId}`);
       try {
         await pa.automations.run(taskId);
         setNotice('Automation run started.');
@@ -351,24 +630,32 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
     [load, pa],
   );
 
-  const deleteTask = useCallback(async () => {
-    if (!editingId || !window.confirm(`Delete ${editingId}?`)) return;
-    setBusy('delete');
-    try {
-      await pa.automations.delete(editingId);
-      setNotice('Automation deleted.');
-      setEditingId(null);
-      setEditorOpen(false);
-      setForm(emptyForm);
-      await load();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
-      pa.ui.notify({ type: 'error', message: `Failed to delete automation: ${msg}`, source: 'system-automations' });
-    } finally {
-      setBusy(null);
-    }
-  }, [editingId, load, pa]);
+  const deleteTask = useCallback(
+    async (task: Pick<ScheduledTaskSummary, 'id' | 'title'>) => {
+      const confirmed = await pa.ui.confirm({
+        title: 'Delete automation',
+        message: `Delete ${taskName(task)}? This cannot be undone.`,
+      });
+      if (!confirmed) return;
+
+      setBusy(`delete:${task.id}`);
+      try {
+        await pa.automations.delete(task.id);
+        setNotice('Automation deleted.');
+        if (editingId === task.id) {
+          closeEditor();
+        }
+        await load();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        pa.ui.notify({ type: 'error', message: `Failed to delete automation: ${msg}`, source: 'system-automations' });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [closeEditor, editingId, load, pa],
+  );
 
   const toggleLog = useCallback(
     async (taskId: string) => {
@@ -399,9 +686,28 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
   const enabledLabel = useMemo(() => (enabledCount === 1 ? '1 enabled' : `${enabledCount} enabled`), [enabledCount]);
   const countLabel = useMemo(() => (tasks.length === 1 ? '1 automation' : `${tasks.length} automations`), [tasks.length]);
   const nowMs = Date.now();
-  const pastDueTasks = sortPastDueTasks(tasks.filter((task) => isPastDueOneTimeTask(task, nowMs)));
-  const currentTasks = tasks.filter((task) => !isPastDueOneTimeTask(task, nowMs));
-  const pastDueLabel = pastDueTasks.length === 1 ? '1 past due' : `${pastDueTasks.length} past due`;
+  const allPastDueTasks = useMemo(() => sortPastDueTasks(tasks.filter((task) => isPastDueOneTimeTask(task, nowMs))), [tasks, nowMs]);
+  const pastDueLabel = allPastDueTasks.length === 1 ? '1 past due' : `${allPastDueTasks.length} past due`;
+
+  const filteredTasks = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return tasks.filter((task) => {
+      if (!matchesAutomationFilter(task, filter, nowMs)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      return taskSearchText(task).includes(normalizedQuery);
+    });
+  }, [filter, nowMs, query, tasks]);
+
+  const visibleCurrentTasks = useMemo(() => filteredTasks.filter((task) => !isPastDueOneTimeTask(task, nowMs)), [filteredTasks, nowMs]);
+  const visiblePastDueTasks = useMemo(
+    () => sortPastDueTasks(filteredTasks.filter((task) => isPastDueOneTimeTask(task, nowMs))),
+    [filteredTasks, nowMs],
+  );
+  const shouldSplitSections = filter === 'all';
 
   if (loading) {
     return (
@@ -427,14 +733,22 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
             <AppPageIntro
               title="Automations"
               summary="Scheduled prompts and background jobs that run without babysitting."
-              actions={<ToolbarButton onClick={() => openEditor()}>+ New automation</ToolbarButton>}
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  <ToolbarButton onClick={() => openEditor()}>New automation</ToolbarButton>
+                  <IconButton title="Reload automations" aria-label="Reload automations" onClick={() => void reload()}>
+                    <RefreshIcon />
+                  </IconButton>
+                  <SchedulerHealthDot health={health} />
+                </div>
+              }
             />
 
-            <div className="border border-border-subtle px-4 py-4 text-[13px] text-secondary">
-              <HealthLine health={health} />
-            </div>
-
-            {notice ? <div className="text-[13px] text-accent">{notice}</div> : null}
+            {notice ? (
+              <div className="sticky top-0 z-20 border-b border-border-subtle/60 bg-base/95 py-2 text-[13px] text-secondary backdrop-blur">
+                {notice}
+              </div>
+            ) : null}
           </>
         )}
 
@@ -452,13 +766,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                 <ToolbarButton type="submit" disabled={busy === 'save'}>
                   {busy === 'save' ? 'Saving…' : 'Save'}
                 </ToolbarButton>
-                <ToolbarButton
-                  onClick={() => {
-                    setEditingId(null);
-                    setEditorOpen(false);
-                    setForm(emptyForm);
-                  }}
-                >
+                <ToolbarButton type="button" onClick={closeEditor}>
                   Cancel
                 </ToolbarButton>
               </div>
@@ -591,19 +899,17 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
             <div className="flex flex-wrap justify-between gap-2 border-t border-border-subtle pt-5">
               <div>
                 {editingId ? (
-                  <ToolbarButton type="button" disabled={busy === 'delete'} onClick={() => void deleteTask()}>
+                  <ToolbarButton
+                    type="button"
+                    disabled={busy === `delete:${editingId}`}
+                    onClick={() => void deleteTask({ id: editingId, title: form.title })}
+                  >
                     Delete
                   </ToolbarButton>
                 ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
-                <ToolbarButton
-                  onClick={() => {
-                    setEditingId(null);
-                    setEditorOpen(false);
-                    setForm(emptyForm);
-                  }}
-                >
+                <ToolbarButton type="button" onClick={closeEditor}>
                   Cancel
                 </ToolbarButton>
                 <ToolbarButton type="submit" disabled={busy === 'save'}>
@@ -615,14 +921,17 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         )}
 
         {!editorOpen && (
-          <section>
-            <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle pb-4">
-              <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
-              <span className="text-[12px] text-dim">
-                {enabledLabel} · {countLabel}
-                {pastDueTasks.length > 0 ? ` · ${pastDueLabel}` : ''}
-              </span>
+          <div className="space-y-4">
+            <div className="flex items-baseline justify-between gap-4">
+              <div>
+                <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current health</h2>
+                <p className="mt-1 text-[12px] text-secondary">
+                  {enabledLabel} · {countLabel}
+                  {allPastDueTasks.length > 0 ? ` · ${pastDueLabel}` : ''}
+                </p>
+              </div>
             </div>
+
             {tasks.length === 0 ? (
               <EmptyState
                 title="No automations yet"
@@ -630,41 +939,84 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                 className="py-10"
               />
             ) : (
-              <div>
-                {currentTasks.length > 0 ? (
-                  <AutomationRows
-                    tasks={currentTasks}
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-1 rounded-xl bg-surface/40 p-1">
+                    {(Object.keys(FILTER_LABELS) as AutomationFilter[]).map((nextFilter) => (
+                      <button
+                        key={nextFilter}
+                        type="button"
+                        className={cx(
+                          'rounded-lg px-3 py-1.5 text-[12px] transition-colors',
+                          filter === nextFilter ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:text-primary',
+                        )}
+                        onClick={() => setFilter(nextFilter)}
+                      >
+                        {FILTER_LABELS[nextFilter]}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search automations…"
+                    className="w-72 rounded-xl border border-border-subtle bg-surface/40 px-3 py-2 text-[13px] text-primary outline-none transition-colors placeholder:text-dim focus:border-accent/50"
+                  />
+                </div>
+
+                {filteredTasks.length === 0 ? (
+                  <EmptyState title="No matching automations" body="Adjust the filter or search query." />
+                ) : shouldSplitSections ? (
+                  <div className="space-y-6">
+                    <section className="space-y-3">
+                      <SectionHeader title="Current" count={`${visibleCurrentTasks.length} shown`} />
+                      {visibleCurrentTasks.length > 0 ? (
+                        <AutomationTable
+                          tasks={visibleCurrentTasks}
+                          logById={logById}
+                          busy={busy}
+                          nowMs={nowMs}
+                          onRunTask={(taskId) => void runTask(taskId)}
+                          onOpenEditor={openEditor}
+                          onToggleLog={(taskId) => void toggleLog(taskId)}
+                          onDeleteTask={(task) => void deleteTask(task)}
+                        />
+                      ) : (
+                        <div className="py-2 text-[13px] text-secondary">No current automations.</div>
+                      )}
+                    </section>
+
+                    {visiblePastDueTasks.length > 0 ? (
+                      <section className="space-y-3 border-t border-border-subtle/70 pt-4">
+                        <SectionHeader title="Past due" count={`${visiblePastDueTasks.length} shown`} tone="warning" />
+                        <AutomationTable
+                          tasks={visiblePastDueTasks}
+                          logById={logById}
+                          busy={busy}
+                          nowMs={nowMs}
+                          onRunTask={(taskId) => void runTask(taskId)}
+                          onOpenEditor={openEditor}
+                          onToggleLog={(taskId) => void toggleLog(taskId)}
+                          onDeleteTask={(task) => void deleteTask(task)}
+                        />
+                      </section>
+                    ) : null}
+                  </div>
+                ) : (
+                  <AutomationTable
+                    tasks={filter === 'past-due' ? visiblePastDueTasks : filteredTasks}
                     logById={logById}
                     busy={busy}
                     nowMs={nowMs}
                     onRunTask={(taskId) => void runTask(taskId)}
                     onOpenEditor={openEditor}
                     onToggleLog={(taskId) => void toggleLog(taskId)}
+                    onDeleteTask={(task) => void deleteTask(task)}
                   />
-                ) : (
-                  <div className="py-6 text-[13px] text-secondary">No current automations.</div>
                 )}
-
-                {pastDueTasks.length > 0 ? (
-                  <section className="pt-8">
-                    <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle pb-4">
-                      <h3 className="text-[16px] font-semibold tracking-tight text-primary">Past due</h3>
-                      <span className="text-[12px] text-warning">{pastDueLabel}</span>
-                    </div>
-                    <AutomationRows
-                      tasks={pastDueTasks}
-                      logById={logById}
-                      busy={busy}
-                      nowMs={nowMs}
-                      onRunTask={(taskId) => void runTask(taskId)}
-                      onOpenEditor={openEditor}
-                      onToggleLog={(taskId) => void toggleLog(taskId)}
-                    />
-                  </section>
-                ) : null}
               </div>
             )}
-          </section>
+          </div>
         )}
       </AppPageLayout>
     </div>

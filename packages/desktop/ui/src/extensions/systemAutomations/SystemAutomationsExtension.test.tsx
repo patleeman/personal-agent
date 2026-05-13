@@ -18,12 +18,15 @@ afterEach(() => {
   mountedRoots.length = 0;
 });
 
-function createPa(overrides: Partial<NativeExtensionClient['automations']> = {}): NativeExtensionClient {
+function createPa(
+  overrides: Partial<NativeExtensionClient['automations']> = {},
+  uiOverrides: Partial<NativeExtensionClient['ui']> = {},
+): NativeExtensionClient {
   return {
     extension: { invoke: vi.fn(), getManifest: vi.fn(), listSurfaces: vi.fn() },
     runs: { start: vi.fn(), get: vi.fn(), list: vi.fn(), readLog: vi.fn(), cancel: vi.fn() },
     storage: { get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn() },
-    ui: { toast: vi.fn(), confirm: vi.fn() },
+    ui: { toast: vi.fn(), notify: vi.fn(), confirm: vi.fn(async () => true), ...uiOverrides },
     automations: {
       list: vi.fn(async () => [
         {
@@ -75,7 +78,7 @@ describe('AutomationsPage', () => {
     const { container } = await renderPage();
 
     expect(container.textContent).toContain('Automations');
-    expect(container.textContent).toContain('Scheduler healthy');
+    expect(container.innerHTML).toContain('aria-label="Scheduler healthy.');
     expect(container.textContent).toContain('Daily check');
     expect(container.textContent).toContain('Cron 0 9 * * 1-5');
   });
@@ -83,7 +86,7 @@ describe('AutomationsPage', () => {
   it('starts an automation run from the row action', async () => {
     const pa = createPa();
     const { container } = await renderPage(pa);
-    const runButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Run');
+    const runButton = container.querySelector('button[aria-label="Run Daily check now"]');
     if (!runButton) throw new Error('Run button not found');
 
     await act(async () => {
@@ -91,6 +94,28 @@ describe('AutomationsPage', () => {
     });
 
     expect(pa.automations.run).toHaveBeenCalledWith('daily-check');
+  });
+
+  it('deletes an automation from the row actions menu', async () => {
+    const confirm = vi.fn(async () => true);
+    const pa = createPa({}, { confirm });
+    const { container } = await renderPage(pa);
+    const moreButton = container.querySelector('button[aria-label="More actions for Daily check"]');
+    if (!moreButton) throw new Error('More actions button not found');
+
+    await act(async () => {
+      moreButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    if (!deleteButton) throw new Error('Delete button not found');
+
+    await act(async () => {
+      deleteButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(confirm).toHaveBeenCalledWith({ title: 'Delete automation', message: 'Delete Daily check? This cannot be undone.' });
+    expect(pa.automations.delete).toHaveBeenCalledWith('daily-check');
   });
 
   it('moves overdue one-time automations into a past-due section', async () => {
@@ -150,10 +175,8 @@ describe('AutomationsPage', () => {
       }),
     );
 
-    const threadLink = Array.from(container.querySelectorAll('a')).find((link) => link.textContent === 'Thread');
-    const openThreadLink = Array.from(container.querySelectorAll('a')).find((link) => link.textContent === 'Open thread');
+    const openThreadLink = container.querySelector('a[aria-label="Open thread for Thread check"]');
 
-    expect(threadLink?.getAttribute('href')).toBe('/conversations/conv-123');
     expect(openThreadLink?.getAttribute('href')).toBe('/conversations/conv-123');
   });
 });

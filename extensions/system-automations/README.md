@@ -12,15 +12,17 @@ Automations is the desktop UI for managing scheduled background tasks. Navigate 
 
 ## List View
 
-The automations list groups active schedules under **Current**. Enabled one-time automations whose scheduled time has already passed without a recorded run move into a **Past due** section so they stay visible without looking like upcoming work.
+The automations list uses the same table-first layout pattern as the Extensions page: filter chips, search, compact row actions, a dense multi-column table, and a compact scheduler-health dot instead of a full-width banner.
+
+Enabled one-time automations whose scheduled time has already passed without a recorded run move into a **Past due** section so they stay visible without looking like upcoming work.
 
 Each row shows:
 
-- automation name and scope
-- schedule
-- delivery target
+- automation name, prompt summary, and scope
+- schedule summary plus raw cron or timestamp
 - current status and last-run state
-- row actions for run, edit, and log access
+- compact icon actions for run, edit, open thread, and more actions
+- delete from the row actions menu or the editor view
 
 ## Detail View
 
