@@ -457,7 +457,29 @@ function collectExpectedRuntimePackages(buildRoot) {
       return;
     }
 
-    const packageDir = resolveInstalledPackageDir(buildRoot, requesterDir, packageName);
+    let packageDir = resolveInstalledPackageDir(buildRoot, requesterDir, packageName);
+
+    // pnpm aliases (e.g. string-width-cjs: string-width@4.2.3) resolve to a
+    // different package than the alias name. Fall back to Node's own resolution.
+    if (!packageDir) {
+      try {
+        const buildRequire = createRequire(resolve(buildRoot, 'package.json'));
+        const resolved = buildRequire.resolve(packageName);
+        // Find package.json for the resolved module
+        let dir = dirname(resolved);
+        while (dir !== resolve(buildRoot) && dir !== dirname(dir)) {
+          const pkgJson = resolve(dir, 'package.json');
+          if (existsSync(pkgJson)) {
+            packageDir = dir;
+            break;
+          }
+          dir = dirname(dir);
+        }
+      } catch {
+        // Could not resolve via Node's resolution
+      }
+    }
+
     if (!packageDir) {
       fail(`Could not resolve installed runtime dependency ${packageName} from ${requesterDir}.`);
     }
