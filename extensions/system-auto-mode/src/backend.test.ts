@@ -271,7 +271,9 @@ describe('system-goal-mode extension', () => {
     factory(pi);
 
     const updateGoal = registeredTools.find((tool) => tool.name === 'update_goal');
+    const abort = vi.fn();
     const result = await updateGoal?.execute('goal-2', { status: 'complete' }, new AbortController().signal, vi.fn(), {
+      abort,
       sessionManager: {
         getEntries: () => [
           {
@@ -296,6 +298,47 @@ describe('system-goal-mode extension', () => {
     expect(result?.details).toEqual({
       state: expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved' }),
     });
+    expect(abort).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks setting a new goal from a hidden goal continuation', async () => {
+    const registeredTools: Array<{ name: string; execute: (...args: any[]) => Promise<unknown> }> = [];
+    const factory = createConversationAutoModeAgentExtension();
+    const pi = {
+      registerTool: vi.fn((tool: { name: string; execute: (...args: any[]) => Promise<unknown> }) => registeredTools.push(tool)),
+      registerCommand: vi.fn(),
+      sendMessage: vi.fn(),
+      appendEntry: vi.fn(),
+      on: vi.fn(),
+    } as unknown as ExtensionAPI;
+
+    factory(pi);
+
+    const setGoal = registeredTools.find((tool) => tool.name === 'set_goal');
+    await expect(
+      setGoal?.execute('goal-1', { objective: 'start another loop' }, new AbortController().signal, vi.fn(), {
+        sessionManager: {
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'goal-continuation',
+              content: 'Goal continuation.',
+            },
+            {
+              type: 'custom',
+              customType: 'conversation-goal',
+              data: {
+                objective: '',
+                status: 'complete',
+                tasks: [],
+                stopReason: 'goal achieved',
+                updatedAt: '2026-05-09T00:00:00.000Z',
+              },
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow('Goal continuations cannot start a new goal');
   });
 
   it('treats completion of an inactive goal as an idempotent no-op', async () => {

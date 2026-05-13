@@ -36,4 +36,6 @@ The system automatically schedules a continuation turn after each turn while the
 
 If continuation turns produce no tool calls, the active goal is paused after two no-progress turns so it cannot spin forever. Starting, updating, or completing a goal resets this.
 
-Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Goal mode should end quietly once the objective is complete.
+Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Completing a goal aborts the current agent turn so the model cannot keep working after the stop signal.
+
+Hidden goal continuations cannot start a new goal. Goal mode should end quietly once the objective is complete.

@@ -83,6 +83,27 @@ function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolea
   return toolResults.length === 0;
 }
 
+function isGoalContinuationTurn(sessionManager: { getEntries: () => unknown[] }): boolean {
+  const entries = sessionManager.getEntries();
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!isRecord(entry)) continue;
+
+    if (entry.type === 'custom' && entry.customType === GOAL_STATE_CUSTOM_TYPE) {
+      continue;
+    }
+
+    if (entry.type === 'custom' && entry.customType === CONTINUATION_CUSTOM_TYPE) {
+      return true;
+    }
+
+    if (entry.type === 'user' || entry.role === 'user') {
+      return false;
+    }
+  }
+  return false;
+}
+
 // ── Tool parameter schemas ───────────────────────────────────────────────────
 
 const SetGoalParams = Type.Object({
@@ -127,6 +148,10 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       ],
       parameters: SetGoalParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        if (isGoalContinuationTurn(ctx.sessionManager)) {
+          throw new Error('Goal continuations cannot start a new goal. Finish the current turn instead.');
+        }
+
         const state = readGoalState(ctx.sessionManager);
         if (state.status === 'active') {
           throw new Error('A goal is already active. Mark it complete first with update_goal.');
@@ -221,6 +246,9 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
+        if (newState.status === 'complete') {
+          ctx.abort?.();
+        }
 
         const text = newState.status === 'complete' ? 'Goal complete!' : `Goal updated: "${newState.objective}"`;
         return {
