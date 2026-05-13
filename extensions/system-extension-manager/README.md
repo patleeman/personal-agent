@@ -17,6 +17,7 @@ The Extension Manager should make that loop boring:
 - show manifest, surfaces, commands, routes, build status, and permissions
 - build/rebuild an extension
 - reload extension registry/runtime
+- keep per-extension actions visibly acknowledged with inline progress and result notices even when the list is scrolled
 - enable/disable user extensions without replacing the Extension Manager page; registry-backed navigation and surfaces refresh in place
 - export/import extension packages
 - snapshot a user extension before agent edits

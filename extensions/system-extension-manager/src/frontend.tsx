@@ -1,3 +1,4 @@
+import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import type { ExtensionInstallSummary } from '@personal-agent/extensions/data';
 import { api, EXTENSION_REGISTRY_CHANGED_EVENT, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
 import { SettingsField, type UnifiedSettingsEntry, useApi } from '@personal-agent/extensions/settings';
@@ -120,6 +121,7 @@ function CompactCount({ icon, count, title }: { icon: ReactNode; count: number; 
 
 function ExtensionActionsMenu({
   extension,
+  busy,
   onOpenFolder,
   onBuild,
   onReload,
@@ -129,6 +131,7 @@ function ExtensionActionsMenu({
   onSelfTest,
 }: {
   extension: ExtensionInstallSummary;
+  busy: boolean;
   onOpenFolder: () => void;
   onBuild: () => void;
   onReload: () => void;
@@ -158,16 +161,19 @@ function ExtensionActionsMenu({
     setOpen(false);
     action();
   }, []);
+  const menuButtonClass =
+    'w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div ref={rootRef} className="relative" onClick={(event) => event.stopPropagation()}>
       <button
         type="button"
         className="ui-icon-button ui-icon-button-compact"
-        title="More actions"
-        aria-label="More actions"
+        title={busy ? 'Working…' : 'More actions'}
+        aria-label={busy ? 'Working…' : 'More actions'}
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={busy}
         onClick={(event) => {
           event.stopPropagation();
           setOpen((current) => !current);
@@ -179,48 +185,27 @@ function ExtensionActionsMenu({
         <div className="absolute right-0 z-20 mt-2 w-40 rounded-xl border border-border-subtle bg-surface p-1.5 shadow-xl" role="menu">
           {extension.packageRoot ? (
             <>
-              <button
-                className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-                onClick={(event) => run(event, onOpenFolder)}
-              >
+              <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onOpenFolder)}>
                 Open folder
               </button>
-              <button
-                className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-                onClick={(event) => run(event, onBuild)}
-              >
+              <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onBuild)}>
                 Build
               </button>
             </>
           ) : null}
-          <button
-            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-            onClick={(event) => run(event, onReload)}
-          >
+          <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onReload)}>
             Reload
           </button>
-          <button
-            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-            onClick={(event) => run(event, onSelfTest)}
-          >
+          <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onSelfTest)}>
             Run self-test
           </button>
-          <button
-            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-            onClick={(event) => run(event, onSnapshot)}
-          >
+          <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onSnapshot)}>
             Snapshot
           </button>
-          <button
-            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-            onClick={(event) => run(event, onExport)}
-          >
+          <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onExport)}>
             Export
           </button>
-          <button
-            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-            onClick={(event) => run(event, onCopyDiagnostics)}
-          >
+          <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onCopyDiagnostics)}>
             Copy diagnostics
           </button>
         </div>
@@ -441,7 +426,7 @@ function formatExtensionDiagnostics(extension: ExtensionInstallSummary): string 
   );
 }
 
-export function ExtensionManagerPage() {
+export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
   const [extensions, setExtensions] = useState<ExtensionInstallSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -456,26 +441,44 @@ export function ExtensionManagerPage() {
   const [importDraft, setImportDraft] = useState(false);
   const [showExperimental, setShowExperimental] = useState(false);
 
-  const load = useCallback((options: { showLoading?: boolean } = {}) => {
+  const load = useCallback(async (options: { showLoading?: boolean } = {}) => {
     if (options.showLoading) {
       setLoading(true);
     }
     setError(null);
-    api
-      .extensionInstallations()
-      .then((items) => {
-        setExtensions(items);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    try {
+      const items = await api.extensionInstallations();
+      setExtensions(items);
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setLoading(false);
+    }
   }, []);
 
+  const showActionNotice = useCallback(
+    (message: string, type: 'info' | 'warning' | 'error' = 'info') => {
+      setNotice(message);
+      if (type !== 'info') {
+        pa.ui.notify({ message, type, source: 'system-extension-manager' });
+      }
+    },
+    [pa],
+  );
+
+  const showActionError = useCallback(
+    (message: string, details?: string) => {
+      setNotice(message);
+      pa.ui.notify({ message, details, type: 'error', source: 'system-extension-manager' });
+    },
+    [pa],
+  );
+
   useEffect(() => {
-    load({ showLoading: true });
-    const refresh = () => load({ showLoading: false });
+    void load({ showLoading: true });
+    const refresh = () => {
+      void load({ showLoading: false });
+    };
     window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
     return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
   }, [load]);
@@ -632,23 +635,24 @@ export function ExtensionManagerPage() {
       setNotice(null);
       try {
         const result = await api.buildExtension(extension.id);
-        setNotice(
+        showActionNotice(
           result.outputs.length > 0
             ? `Built ${result.outputs.length} bundle output${result.outputs.length === 1 ? '' : 's'}.`
             : 'Nothing to build.',
         );
         await api.reloadExtension(extension.id).catch((reloadError: Error) => {
-          setNotice(`Build finished, but reload failed: ${reloadError.message}`);
+          showActionNotice(`Build finished, but reload failed: ${reloadError.message}`, 'warning');
         });
         notifyExtensionRegistryChanged();
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        showActionError(`Build failed for ${extension.name}: ${message}`, err instanceof Error ? err.stack : undefined);
       } finally {
         setBusyId(null);
       }
     },
-    [load],
+    [load, showActionError, showActionNotice],
   );
 
   const reloadExtension = useCallback(
@@ -657,53 +661,71 @@ export function ExtensionManagerPage() {
       setNotice(null);
       try {
         const result = await api.reloadExtension(extension.id);
-        setNotice(result.message ?? `Reloaded ${extension.name}.`);
+        showActionNotice(result.message ?? `Reloaded ${extension.name}.`);
         notifyExtensionRegistryChanged();
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        showActionError(`Reload failed for ${extension.name}: ${message}`, err instanceof Error ? err.stack : undefined);
       } finally {
         setBusyId(null);
       }
     },
-    [load],
+    [load, showActionError, showActionNotice],
   );
 
-  const snapshotExtension = useCallback(async (extension: ExtensionInstallSummary) => {
-    setBusyId(extension.id);
-    setNotice(null);
-    try {
-      const result = await api.snapshotExtension(extension.id);
-      setNotice(`Snapshot saved to ${result.snapshotPath}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
-  }, []);
+  const snapshotExtension = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      setBusyId(extension.id);
+      setNotice(null);
+      try {
+        const result = await api.snapshotExtension(extension.id);
+        showActionNotice(`Snapshot saved to ${result.snapshotPath}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showActionError(`Snapshot failed for ${extension.name}: ${message}`, err instanceof Error ? err.stack : undefined);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [showActionError, showActionNotice],
+  );
 
-  const exportExtension = useCallback(async (extension: ExtensionInstallSummary) => {
-    setBusyId(extension.id);
-    setNotice(null);
-    try {
-      const result = await api.exportExtension(extension.id);
-      setNotice(`Exported bundle to ${result.exportPath}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
-  }, []);
+  const exportExtension = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      setBusyId(extension.id);
+      setNotice(null);
+      try {
+        const result = await api.exportExtension(extension.id);
+        showActionNotice(`Exported bundle to ${result.exportPath}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showActionError(`Export failed for ${extension.name}: ${message}`, err instanceof Error ? err.stack : undefined);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [showActionError, showActionNotice],
+  );
 
-  const copyExtensionDiagnostics = useCallback(async (extension: ExtensionInstallSummary) => {
-    const diagnostics = formatExtensionDiagnostics(extension);
-    try {
-      await navigator.clipboard.writeText(diagnostics);
-      setNotice(`Copied diagnostics for ${extension.name}.`);
-    } catch {
-      setNotice(diagnostics);
-    }
-  }, []);
+  const copyExtensionDiagnostics = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      const diagnostics = formatExtensionDiagnostics(extension);
+      try {
+        await navigator.clipboard.writeText(diagnostics);
+        showActionNotice(`Copied diagnostics for ${extension.name}.`);
+      } catch {
+        setNotice(diagnostics);
+        pa.ui.notify({
+          message: `Clipboard unavailable. Showing diagnostics for ${extension.name}.`,
+          details: diagnostics,
+          type: 'warning',
+          source: 'system-extension-manager',
+        });
+      }
+    },
+    [pa, showActionNotice],
+  );
 
   const selfTestExtension = useCallback(
     async (extension: ExtensionInstallSummary) => {
@@ -712,19 +734,21 @@ export function ExtensionManagerPage() {
       try {
         const result = await api.extensionSelfTest(extension.id);
         const failed = result.checks.filter((check) => !check.ok);
-        setNotice(
+        showActionNotice(
           failed.length
             ? `${extension.name} self-test failed: ${failed.map((check) => check.error ?? check.name).join('; ')}`
             : `${extension.name} self-test passed.`,
+          failed.length ? 'warning' : 'info',
         );
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        showActionError(`Self-test failed for ${extension.name}: ${message}`, err instanceof Error ? err.stack : undefined);
       } finally {
         setBusyId(null);
       }
     },
-    [load],
+    [load, showActionError, showActionNotice],
   );
 
   const visibleExtensions = useMemo(() => {
@@ -803,6 +827,7 @@ export function ExtensionManagerPage() {
           </td>
           <td className="py-3 pl-3 align-middle">
             <div className="flex items-center justify-end gap-1.5">
+              {busy ? <span className="text-[11px] text-dim">Working…</span> : null}
               {route && extension.enabled ? (
                 <Link
                   className="ui-icon-button ui-icon-button-compact"
@@ -828,6 +853,7 @@ export function ExtensionManagerPage() {
               </button>
               <ExtensionActionsMenu
                 extension={extension}
+                busy={busy}
                 onOpenFolder={() => openFolder(extension)}
                 onBuild={() => void buildExtension(extension)}
                 onReload={() => void reloadExtension(extension)}
@@ -884,7 +910,11 @@ export function ExtensionManagerPage() {
             }
           />
 
-          {notice ? <div className="text-[13px] text-secondary">{notice}</div> : null}
+          {notice ? (
+            <div className="sticky top-0 z-20 border-b border-border-subtle/60 bg-base/95 py-2 text-[13px] text-secondary backdrop-blur">
+              {notice}
+            </div>
+          ) : null}
 
           {extensions.length === 0 ? (
             <EmptyState title="No extensions installed" body="Ask an agent to create one under the runtime extensions directory." />
