@@ -1,10 +1,15 @@
-import { spawn } from 'node:child_process';
-
 type RunAgentExtensionFactory = (api: RegisterToolApi) => void;
 
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
   ui: { invalidate(topics: string | string[]): void };
+  shell: {
+    exec(input: { command: string; cwd?: string; timeoutMs?: number }): Promise<{
+      stdout?: string;
+      stderr?: string;
+      executionWrappers?: Array<{ id: string; label?: string }>;
+    }>;
+  };
 }
 
 interface RegisteredTool {
@@ -33,41 +38,22 @@ function readTimeoutSeconds(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-function runForegroundBash(command: string, cwd: string | undefined, timeoutSeconds: number | undefined): Promise<ToolExecutionResult> {
-  return new Promise((resolve) => {
-    const child = spawn(command, {
-      cwd,
-      shell: true,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const chunks: Buffer[] = [];
-    let timedOut = false;
-    const timeout = timeoutSeconds
-      ? setTimeout(() => {
-          timedOut = true;
-          child.kill('SIGTERM');
-        }, timeoutSeconds * 1000)
-      : undefined;
-
-    child.stdout?.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-    child.stderr?.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-    child.on('error', (error) => {
-      if (timeout) clearTimeout(timeout);
-      resolve({ content: [{ type: 'text', text: error.message }], isError: true });
-    });
-    child.on('close', (code) => {
-      if (timeout) clearTimeout(timeout);
-      const output = Buffer.concat(chunks).toString('utf8');
-      const status = timedOut
-        ? `Command timed out after ${timeoutSeconds} seconds`
-        : code && code !== 0
-          ? `Command exited with code ${code}`
-          : '';
-      const text = [output.trimEnd(), status].filter(Boolean).join('\n\n') || '(no output)';
-      resolve({ content: [{ type: 'text', text }], ...(status ? { isError: true } : {}) });
-    });
-  });
+async function runForegroundBash(
+  command: string,
+  cwd: string | undefined,
+  timeoutSeconds: number | undefined,
+  ctx: NativeBackendContext,
+): Promise<ToolExecutionResult> {
+  try {
+    const result = await ctx.shell.exec({ command, cwd, timeoutMs: timeoutSeconds ? timeoutSeconds * 1000 : undefined });
+    const output = [result.stdout?.trimEnd(), result.stderr?.trimEnd()].filter(Boolean).join('\n');
+    return {
+      content: [{ type: 'text', text: output || '(no output)' }],
+      details: { executionWrappers: result.executionWrappers ?? [] },
+    };
+  } catch (error) {
+    return { content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }], isError: true };
+  }
 }
 
 async function loadRunAgentExtensionFactory(): Promise<RunAgentExtensionFactory> {
@@ -143,7 +129,7 @@ export async function bash(input: unknown, ctx: NativeBackendContext) {
     );
   }
 
-  const result = await runForegroundBash(command, readString(params.cwd) ?? ctx.toolContext?.cwd, readTimeoutSeconds(params.timeout));
+  const result = await runForegroundBash(command, readString(params.cwd) ?? ctx.toolContext?.cwd, readTimeoutSeconds(params.timeout), ctx);
   const text = Array.isArray(result.content) ? result.content.map((item) => item.text ?? '').join('\n') : '';
   return { text, ...(result.details ? { details: result.details } : {}), ...(result.isError ? { isError: true } : {}) };
 }

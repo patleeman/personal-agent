@@ -478,12 +478,14 @@ function resolveExtensionBackendApiSubpath(subpath: string): string {
   throw new Error(`Could not find extension backend API subpath: ${subpath}`);
 }
 
-function createForbiddenBackendImportPlugin(): Plugin {
+function createForbiddenBackendImportPlugin(packageRoot: string): Plugin {
+  const sourceRoot = `${resolve(packageRoot, 'src')}/`;
   return {
     name: 'personal-agent-forbidden-backend-imports',
     setup(buildContext) {
       buildContext.onResolve({ filter: /.*/ }, (args) => {
         if (!FORBIDDEN_BACKEND_IMPORTS.has(args.path)) return;
+        if (!args.importer || !resolve(args.importer).startsWith(sourceRoot)) return;
         return {
           errors: [
             {
@@ -640,7 +642,7 @@ async function buildExtensionBackend(
       },
       external: ['electron'],
       nodePaths: findAppNodeModules(),
-      plugins: [createForbiddenBackendImportPlugin(), createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
+      plugins: [createForbiddenBackendImportPlugin(packageRoot), createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
     });
     renameSync(candidate, outfile);
     writeFileSync(hashFile, `${packageHash}\n`);

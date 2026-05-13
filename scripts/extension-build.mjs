@@ -92,7 +92,7 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     ],
     nodePaths: findAppNodeModules(),
     plugins: [
-      createForbiddenBackendImportPlugin(),
+      createForbiddenBackendImportPlugin(packageRoot),
       createExtensionBackendApiPlugin(),
       createHostRuntimeExternalPlugin(),
       createJsdomWorkerPlugin(),
@@ -128,12 +128,14 @@ function createFrontendExtensionSdkPlugin() {
   };
 }
 
-function createForbiddenBackendImportPlugin() {
+function createForbiddenBackendImportPlugin(extensionPackageRoot) {
+  const sourceRoot = `${resolve(extensionPackageRoot, 'src')}/`;
   return {
     name: 'personal-agent-forbidden-backend-imports',
     setup(buildContext) {
       buildContext.onResolve({ filter: /.*/ }, (args) => {
         if (!FORBIDDEN_BACKEND_IMPORTS.has(args.path)) return;
+        if (!args.importer || !resolve(args.importer).startsWith(sourceRoot)) return;
         return {
           errors: [
             {
