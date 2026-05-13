@@ -13,6 +13,7 @@ import {
   shouldResetWorkbenchRunsOnConversationChange,
   shouldShowConversationRunsTab,
 } from './Layout';
+import { shouldRenderExtensionToolPanelInWorkbenchNav } from './workbenchNav';
 
 function createSession(overrides: Partial<SessionMeta>): SessionMeta {
   return {
@@ -98,6 +99,11 @@ describe('Layout workbench rail state', () => {
     expect(resolveWorkbenchRailMode('runs', { extensionId: 'system-runs', id: 'runs-tool' } as never)).toBe(
       'extension:system-runs:runs-tool',
     );
+  });
+
+  it('keeps system artifact panels in the workbench nav', () => {
+    expect(shouldRenderExtensionToolPanelInWorkbenchNav('system-files')).toBe(false);
+    expect(shouldRenderExtensionToolPanelInWorkbenchNav('system-artifacts')).toBe(true);
   });
 
   it('resolves built-in file rail detail views without extension mode state', () => {

@@ -44,7 +44,7 @@ Parameters:
 
 ## Viewing Artifacts
 
-Artifacts appear in the Artifacts tab of the workbench rail. Each artifact is rendered inline:
+Artifacts appear in the Artifacts tab of the workbench rail. The right sidebar entry for that tab is provided by this extension. Each artifact is rendered inline:
 
 - **HTML** — rendered as a web page in a sandboxed iframe
 - **Mermaid** — rendered as an SVG diagram

@@ -43,6 +43,7 @@ import { NotificationToaster } from './notifications/NotificationToaster';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
+import { iconGlyphForExtensionSurface, labelForExtensionToolPanel, shouldRenderExtensionToolPanelInWorkbenchNav } from './workbenchNav';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
@@ -147,39 +148,6 @@ export function resolveActiveExtensionWorkbenchSurface({
 export function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
   const parsed = parseExtensionToolPanelMode(mode);
   return mode === 'diffs' || parsed?.extensionId === 'system-diffs';
-}
-
-function labelForExtensionToolPanel(surface: { title?: string; label?: string }): string {
-  return surface.title ?? surface.label ?? 'Extension';
-}
-
-function iconGlyphForExtensionSurface(icon: string | undefined): string {
-  switch (icon) {
-    case 'automation':
-      return '◷';
-    case 'browser':
-      return '◎';
-    case 'database':
-      return '▤';
-    case 'diff':
-      return '⇄';
-    case 'file':
-      return '□';
-    case 'gear':
-      return '⚙';
-    case 'graph':
-      return '⌁';
-    case 'kanban':
-      return '▦';
-    case 'play':
-      return '▶';
-    case 'terminal':
-      return '⌘';
-    case 'sparkle':
-    case 'app':
-    default:
-      return '✦';
-  }
 }
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
@@ -996,7 +964,7 @@ function WorkbenchKnowledgeRail({
           </button>
         ) : null}
         {availableExtensionToolPanels
-          .filter((surface) => surface.extensionId !== 'system-artifacts' && surface.extensionId !== 'system-files')
+          .filter((surface) => shouldRenderExtensionToolPanelInWorkbenchNav(surface.extensionId))
           .map((surface) => (
             <button
               key={`${surface.extensionId}:${surface.id}`}
@@ -1010,7 +978,13 @@ function WorkbenchKnowledgeRail({
                   'ui-sidebar-nav-item-active',
               )}
               title={labelForExtensionToolPanel(surface)}
-              onClick={() => (surface.extensionId === 'system-diffs' ? handleDiffsModeSelect() : handleExtensionToolPanelSelect(surface))}
+              onClick={() =>
+                surface.extensionId === 'system-diffs'
+                  ? handleDiffsModeSelect()
+                  : surface.extensionId === 'system-artifacts'
+                    ? handleArtifactsModeSelect()
+                    : handleExtensionToolPanelSelect(surface)
+              }
             >
               <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
                 {iconGlyphForExtensionSurface(surface.icon)}
