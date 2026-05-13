@@ -62,6 +62,15 @@ async function registerModelProvider(modelId: string) {
   });
 }
 
+async function tryRegisterModelProvider(modelId: string) {
+  try {
+    await registerModelProvider(modelId);
+  } catch {
+    // The local API may be unavailable in extension preview/testing contexts.
+    // Saving the selected model should still succeed; setup/start will use extension storage.
+  }
+}
+
 function Toggle({ checked, disabled, onClick }: { checked: boolean; disabled: boolean; onClick: () => void }) {
   return (
     <button
@@ -119,7 +128,7 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
       await action();
       await this.refresh();
       const modelId = this.state.status?.selectedModelId || this.state.modelInput.trim();
-      if (modelId) await registerModelProvider(modelId);
+      if (modelId) await tryRegisterModelProvider(modelId);
     } catch (err) {
       this.setState({ error: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -271,16 +280,20 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
               {searchResults.length > 0 ? (
                 <div className="divide-y divide-border-subtle border-y border-border-subtle text-sm">
                   {searchResults.map((model) => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      disabled={running || starting}
-                      onClick={() => this.setState({ modelInput: model.id })}
-                      className="flex w-full items-center justify-between gap-4 py-3 text-left hover:text-primary disabled:opacity-60"
-                    >
-                      <span className="truncate font-medium text-primary">{model.id}</span>
+                    <div key={model.id} className="flex items-center justify-between gap-4 py-3">
+                      <button
+                        type="button"
+                        disabled={running || starting}
+                        onClick={() => this.setState({ modelInput: model.id })}
+                        className="min-w-0 flex-1 truncate text-left font-medium text-primary hover:text-accent disabled:opacity-60"
+                      >
+                        {model.id}
+                      </button>
                       <span className="shrink-0 text-xs text-secondary">{model.downloads.toLocaleString()} downloads</span>
-                    </button>
+                      <ToolbarButton disabled={Boolean(busy || running || starting)} onClick={() => void this.saveModel(model.id)}>
+                        Use model
+                      </ToolbarButton>
+                    </div>
                   ))}
                 </div>
               ) : (
