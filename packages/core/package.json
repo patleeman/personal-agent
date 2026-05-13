@@ -22,6 +22,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "better-sqlite3": "^11.10.0",
     "nunjucks": "^3.2.4",

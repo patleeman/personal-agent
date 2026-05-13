@@ -101,6 +101,6 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1"
+    "@excalidraw/excalidraw": "0.18.1"
   }
 }

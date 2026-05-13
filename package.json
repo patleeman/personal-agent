@@ -82,7 +82,8 @@
     "jsdom": "^24.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.3"
+    "react-router-dom": "^6.22.3",
+    "@excalidraw/excalidraw": "^0.18.1"
   },
   "overrides": {
     "form-data": "^2.5.5",
