@@ -1,7 +1,9 @@
-# Qwen MLX
+# MLX Local Models
 
-Set up, run, stop, and register a local MLX Qwen model as a Personal Agent model provider.
+Run local Hugging Face MLX models from Personal Agent.
 
-Model: `unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit`
+The extension manages a private `mlx-lm` virtualenv, downloads models with the Hugging Face CLI, starts `mlx_lm.server` on `http://127.0.0.1:8011/v1`, and registers the selected model as an OpenAI-compatible provider in the model picker.
 
-The extension runs `python3 -m mlx_lm.server` on `http://127.0.0.1:8011/v1` and adds an OpenAI-compatible provider/model entry to PA's model picker.
+Default model: `unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit`.
+
+The page includes the loaded-model indicator, enable/disable toggle, setup/download controls, logs, and Hugging Face MLX model search.

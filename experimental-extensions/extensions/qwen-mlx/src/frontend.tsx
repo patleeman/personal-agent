@@ -2,11 +2,12 @@ import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import { AppPageIntro, AppPageLayout, ToolbarButton } from '@personal-agent/extensions/ui';
 import React from 'react';
 
-const PROVIDER_ID = 'qwen-mlx';
-const MODEL_ID = 'unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit';
+const PROVIDER_ID = 'mlx-local';
 const BASE_URL = 'http://127.0.0.1:8011/v1';
 
 type Status = {
+  selectedModelId: string;
+  loadedModelId: string | null;
   installed: boolean;
   downloaded?: string;
   server: { reachable: boolean; models: string[]; error?: string };
@@ -15,11 +16,16 @@ type Status = {
   log: string;
 };
 
+type SearchResult = { id: string; downloads: number; likes: number; tags: string[] };
+
 type PageState = {
   status: Status | null;
   busy: string | null;
   error: string | null;
-  showLog: boolean;
+  modelInput: string;
+  searchQuery: string;
+  searchResults: SearchResult[];
+  searchBusy: boolean;
 };
 
 function asStatus(value: unknown): Status | null {
@@ -36,7 +42,7 @@ async function postJson(path: string, body: unknown) {
   return response.json();
 }
 
-async function registerModelProvider() {
+async function registerModelProvider(modelId: string) {
   await postJson('/api/model-providers/providers', {
     provider: PROVIDER_ID,
     api: 'openai-completions',
@@ -46,8 +52,8 @@ async function registerModelProvider() {
     compat: { stream: true },
   });
   await postJson(`/api/model-providers/providers/${encodeURIComponent(PROVIDER_ID)}/models`, {
-    modelId: MODEL_ID,
-    name: 'Qwen3.6 35B A3B MLX 4-bit',
+    modelId,
+    name: modelId.split('/').pop() || modelId,
     api: 'openai-completions',
     baseUrl: BASE_URL,
     reasoning: true,
@@ -56,15 +62,29 @@ async function registerModelProvider() {
   });
 }
 
+function Toggle({ checked, disabled, onClick }: { checked: boolean; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onClick}
+      className={`relative h-6 w-11 rounded-full border transition disabled:cursor-not-allowed disabled:opacity-60 ${checked ? 'border-accent bg-accent' : 'border-border bg-surface-muted'}`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-[1.25rem]' : 'translate-x-0.5'}`}
+      />
+    </button>
+  );
+}
+
 export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageState> {
-  state: PageState = { status: null, busy: null, error: null, showLog: false };
+  state: PageState = { status: null, busy: null, error: null, modelInput: '', searchQuery: '', searchResults: [], searchBusy: false };
   private timer: number | null = null;
 
   componentDidMount() {
-    void this.run('Registering…', async () => {
-      await registerModelProvider();
-      await this.refresh();
-    });
+    void this.refresh(true);
     this.timer = window.setInterval(() => void this.refresh(), 5000);
   }
 
@@ -72,9 +92,12 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
     if (this.timer !== null) window.clearInterval(this.timer);
   }
 
-  private refresh = async () => {
+  private refresh = async (syncInput = false) => {
     const status = asStatus(await this.props.pa.extension.invoke('status', {}));
-    this.setState({ status });
+    this.setState((prev) => ({
+      status,
+      modelInput: syncInput && status ? status.selectedModelId : prev.modelInput || status?.selectedModelId || '',
+    }));
   };
 
   private run = async (label: string, action: () => Promise<void>) => {
@@ -82,6 +105,8 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
     try {
       await action();
       await this.refresh();
+      const modelId = this.state.status?.selectedModelId || this.state.modelInput.trim();
+      if (modelId) await registerModelProvider(modelId);
     } catch (err) {
       this.setState({ error: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -97,39 +122,57 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
     });
   };
 
+  private saveModel = async (modelId = this.state.modelInput) => {
+    await this.run('Saving…', async () => {
+      await this.props.pa.extension.invoke('setModel', { modelId: modelId.trim() });
+    });
+  };
+
+  private searchModels = async () => {
+    const query = this.state.searchQuery.trim();
+    if (!query) return;
+    this.setState({ searchBusy: true, error: null });
+    try {
+      const response = (await this.props.pa.extension.invoke('searchModels', { query })) as { models?: SearchResult[] };
+      this.setState({ searchResults: response.models ?? [] });
+    } catch (err) {
+      this.setState({ error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      this.setState({ searchBusy: false });
+    }
+  };
+
   render() {
-    const { status, busy, error, showLog } = this.state;
+    const { status, busy, error, modelInput, searchQuery, searchResults, searchBusy } = this.state;
     const running = Boolean(status?.server.reachable);
     const starting = Boolean(status?.process.managedRunning && !running);
     const setupRunning = status?.setup?.status === 'running';
     const ready = Boolean(status?.installed);
     const progress = Math.max(0, Math.min(100, Math.round(status?.setup?.progress ?? (ready ? 100 : 0))));
-    const title = running ? 'Running' : starting ? 'Starting' : setupRunning ? 'Downloading' : ready ? 'Ready' : 'Not installed';
+    const loadedModel = status?.loadedModelId || 'None';
+    const title = running ? 'Enabled' : starting ? 'Starting' : setupRunning ? 'Downloading' : ready ? 'Ready' : 'Not installed';
     const subtitle = running
-      ? BASE_URL
+      ? `Loaded: ${loadedModel}`
       : setupRunning
         ? status?.setup?.message
         : ready
           ? `${status?.downloaded || 'Model'} downloaded`
-          : 'Download once, then start the local model when you need it.';
+          : 'Choose any MLX-compatible Hugging Face model, download it, then enable it locally.';
 
     return (
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[56rem]" contentClassName="space-y-8">
+        <AppPageLayout shellClassName="max-w-[60rem]" contentClassName="space-y-8">
           <AppPageIntro
-            title="Qwen MLX"
-            summary="Local Qwen3.6 35B MLX for PA. It registers itself in the model picker."
+            title="MLX Local Models"
+            summary="Run Hugging Face MLX models locally and expose the loaded model through the PA model picker."
             actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <ToolbarButton
-                  disabled={Boolean(busy || setupRunning)}
-                  onClick={() => void this.run('Downloading…', async () => void (await this.props.pa.extension.invoke('setup', {})))}
-                >
-                  Setup / download
-                </ToolbarButton>
-                <ToolbarButton disabled={Boolean(busy || setupRunning || !ready)} onClick={() => void this.toggleServer()}>
-                  {running || starting ? 'Stop model' : 'Start model'}
-                </ToolbarButton>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-secondary">Enable</span>
+                <Toggle
+                  checked={running || starting}
+                  disabled={Boolean(busy || setupRunning || !ready)}
+                  onClick={() => void this.toggleServer()}
+                />
                 <button
                   disabled={Boolean(busy)}
                   onClick={() => void this.refresh()}
@@ -145,6 +188,9 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
           <section className="space-y-2">
             <div className="text-xl font-semibold text-primary">{title}</div>
             <div className="text-sm text-secondary">{busy || error || status?.setup?.error || status?.server.error || subtitle}</div>
+            <div className="text-sm text-secondary">
+              Current loaded model: <span className="font-medium text-primary">{loadedModel}</span>
+            </div>
             {(setupRunning || progress > 0) && (
               <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-border-subtle">
                 <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progress}%` }} />
@@ -152,18 +198,73 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
             )}
           </section>
 
-          {status?.log && (
-            <section className="space-y-3">
-              <button
-                onClick={() => this.setState({ showLog: !showLog })}
-                className="text-sm text-secondary hover:text-primary"
-                type="button"
+          <section className="space-y-3">
+            <div className="text-sm font-medium text-primary">Selected model</div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                value={modelInput}
+                disabled={running || starting || Boolean(busy)}
+                onChange={(event) => this.setState({ modelInput: event.target.value })}
+                className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary outline-none focus:border-accent disabled:opacity-60"
+                placeholder="org/model-name-MLX"
+              />
+              <ToolbarButton disabled={Boolean(busy || running || starting || !modelInput.trim())} onClick={() => void this.saveModel()}>
+                Save
+              </ToolbarButton>
+              <ToolbarButton
+                disabled={Boolean(busy || setupRunning || !modelInput.trim())}
+                onClick={() =>
+                  void this.run(
+                    'Downloading…',
+                    async () => void (await this.props.pa.extension.invoke('setup', { modelId: modelInput.trim() })),
+                  )
+                }
               >
-                {showLog ? 'Hide log' : 'Show log'}
-              </button>
-              {showLog && <pre className="whitespace-pre-wrap text-xs leading-relaxed text-secondary">{status.log}</pre>}
-            </section>
-          )}
+                Setup / download
+              </ToolbarButton>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="text-sm font-medium text-primary">Search Hugging Face</div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                value={searchQuery}
+                onChange={(event) => this.setState({ searchQuery: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void this.searchModels();
+                }}
+                className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary outline-none focus:border-accent"
+                placeholder="Search MLX models"
+              />
+              <ToolbarButton disabled={searchBusy || !searchQuery.trim()} onClick={() => void this.searchModels()}>
+                {searchBusy ? 'Searching…' : 'Search'}
+              </ToolbarButton>
+            </div>
+            {searchResults.length > 0 && (
+              <div className="divide-y divide-border-subtle text-sm">
+                {searchResults.map((model) => (
+                  <button
+                    key={model.id}
+                    type="button"
+                    disabled={running || starting}
+                    onClick={() => this.setState({ modelInput: model.id })}
+                    className="flex w-full items-center justify-between gap-4 py-2 text-left hover:text-primary disabled:opacity-60"
+                  >
+                    <span className="truncate text-primary">{model.id}</span>
+                    <span className="shrink-0 text-xs text-secondary">{model.downloads.toLocaleString()} downloads</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="text-sm font-medium text-primary">Logs</div>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-xs leading-relaxed text-secondary">
+              {status?.log?.trim() || 'No logs yet.'}
+            </pre>
+          </section>
         </AppPageLayout>
       </div>
     );

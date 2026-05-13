@@ -1,113 +1,66 @@
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
 
-const MODEL_ID = 'unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit';
-const PROVIDER_ID = 'qwen-mlx';
+const DEFAULT_MODEL_ID = 'unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit';
+const PROVIDER_ID = 'mlx-local';
 const MODEL_PORT = 8011;
 const BASE_URL = `http://127.0.0.1:${MODEL_PORT}/v1`;
-const CACHE_DIR = join(homedir(), '.cache', 'personal-agent', 'qwen-mlx');
+const CACHE_DIR = join(homedir(), '.cache', 'personal-agent', 'mlx-local-models');
 const VENV_DIR = join(CACHE_DIR, 'venv');
 const VENV_PYTHON = join(VENV_DIR, 'bin', 'python');
 const VENV_HF = join(VENV_DIR, 'bin', 'hf');
 const VENV_MLX_SERVER = join(VENV_DIR, 'bin', 'mlx_lm.server');
-const MODEL_CACHE_DIR = join(CACHE_DIR, 'hub', 'models--unsloth--Qwen3.6-35B-A3B-UD-MLX-4bit');
-const LOG_KEY = 'logs/latest';
+const LOG_FILE = join(CACHE_DIR, 'latest.log');
+const MODEL_KEY = 'settings/modelId';
+const SERVER_PID_KEY = 'process/serverPid';
+const SETUP_PID_KEY = 'process/setupPid';
+const SETUP_MODEL_KEY = 'process/setupModel';
 const ESTIMATED_MODEL_BYTES = 22 * 1024 * 1024 * 1024;
 
-type JobState = {
-  id: string;
-  kind: 'setup';
-  status: 'running' | 'succeeded' | 'failed';
-  step: 'install' | 'download' | 'done';
-  startedAt: string;
-  finishedAt: string | null;
-  message: string;
-  progress: number;
-  error: string | null;
-};
-
-let serverProcess: ChildProcessWithoutNullStreams | null = null;
-let setupProcess: ChildProcessWithoutNullStreams | null = null;
-let setupJob: JobState | null = null;
-let lastLog = '';
-let lastExit: { code: number | null; signal: NodeJS.Signals | null } | null = null;
-
-function appendLog(line: string) {
-  lastLog = `${lastLog}${line}`.slice(-20000);
+function shellQuote(value: string) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function updateSetupJob(update: Partial<JobState>) {
-  if (!setupJob) return;
-  setupJob = { ...setupJob, ...update };
+function modelCacheDir(modelId: string) {
+  return join(CACHE_DIR, 'hub', `models--${modelId.replaceAll('/', '--')}`);
 }
 
 function pickPythonCommand() {
   return existsSync('/opt/homebrew/bin/python3.10') ? '/opt/homebrew/bin/python3.10' : 'python3';
 }
 
-function spawnLogged(command: string, args: string[], ctx: ExtensionBackendContext, onClose: (code: number) => void) {
-  const child = spawn(command, args, { env: { ...process.env, HF_HOME: CACHE_DIR }, stdio: ['ignore', 'pipe', 'pipe'] });
-  const collect = (chunk: Buffer) => appendLog(chunk.toString('utf8'));
-  child.stdout.on('data', collect);
-  child.stderr.on('data', collect);
-  child.on('error', (error) => {
-    appendLog(`${error.message}\n`);
-    ctx.log.error('qwen mlx command failed', { command, message: error.message });
-    onClose(1);
-  });
-  child.on('close', (code) => onClose(code ?? 1));
-  return child;
+async function getSelectedModelId(ctx: ExtensionBackendContext) {
+  const stored = await ctx.storage.get(MODEL_KEY).catch(() => null);
+  return typeof stored === 'string' && stored.trim() ? stored.trim() : DEFAULT_MODEL_ID;
 }
 
-function startInstall(ctx: ExtensionBackendContext) {
-  updateSetupJob({ step: 'install', message: 'Installing mlx-lm and huggingface_hub into the extension venv…', progress: 15 });
-  setupProcess = spawnLogged(VENV_PYTHON, ['-m', 'pip', 'install', '-U', 'pip', 'mlx-lm', 'huggingface_hub'], ctx, (code) => {
-    setupProcess = null;
-    if (code !== 0) {
-      updateSetupJob({
-        status: 'failed',
-        message: 'Dependency install failed.',
-        progress: 15,
-        error: `install exited with code ${code}`,
-        finishedAt: new Date().toISOString(),
-      });
-      void ctx.storage.put(LOG_KEY, lastLog).catch(() => undefined);
-      return;
-    }
-    startDownload(ctx);
-  });
+async function setSelectedModelId(ctx: ExtensionBackendContext, modelId: string) {
+  const normalized = modelId.trim();
+  if (!normalized) throw new Error('Model id is required.');
+  await ctx.storage.put(MODEL_KEY, normalized);
+  return normalized;
 }
 
-function startDownload(ctx: ExtensionBackendContext) {
-  updateSetupJob({ step: 'download', message: 'Downloading model from Hugging Face…', progress: 35 });
-  setupProcess = spawnLogged(VENV_HF, ['download', MODEL_ID], ctx, (code) => {
-    setupProcess = null;
-    if (code === 0) {
-      updateSetupJob({
-        status: 'succeeded',
-        step: 'done',
-        message: 'Model downloaded.',
-        progress: 100,
-        finishedAt: new Date().toISOString(),
-      });
-    } else {
-      updateSetupJob({
-        status: 'failed',
-        message: 'Model download failed.',
-        progress: 35,
-        error: `download exited with code ${code}`,
-        finishedAt: new Date().toISOString(),
-      });
-    }
-    void ctx.storage.put(LOG_KEY, lastLog).catch(() => undefined);
-  });
+function readLog() {
+  if (!existsSync(LOG_FILE)) return '';
+  return readFileSync(LOG_FILE, 'utf8').slice(-30000);
 }
 
-function getDownloadedBytes(dir = MODEL_CACHE_DIR): number {
+async function appendLog(ctx: ExtensionBackendContext, line: string) {
+  mkdirSync(CACHE_DIR, { recursive: true });
+  await ctx.shell.exec({ command: 'sh', args: ['-c', `printf %s ${shellQuote(line)} >> ${shellQuote(LOG_FILE)}`] });
+}
+
+async function isPidRunning(ctx: ExtensionBackendContext, pid: number | null) {
+  if (!pid) return false;
+  const result = await ctx.shell.exec({ command: 'sh', args: ['-c', `kill -0 ${pid} >/dev/null 2>&1 && echo yes || true`] });
+  return result.stdout.trim() === 'yes';
+}
+
+function getDownloadedBytes(dir: string): number {
   if (!existsSync(dir)) return 0;
   let total = 0;
   for (const entry of readdirSync(dir)) {
@@ -123,12 +76,12 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-function hasDownloadedModel() {
-  const mainRef = join(MODEL_CACHE_DIR, 'refs', 'main');
+function hasDownloadedModel(modelId: string) {
+  const mainRef = join(modelCacheDir(modelId), 'refs', 'main');
   if (!existsSync(mainRef)) return false;
   try {
     const snapshot = readFileSync(mainRef, 'utf8').trim();
-    return Boolean(snapshot) && existsSync(join(MODEL_CACHE_DIR, 'snapshots', snapshot));
+    return Boolean(snapshot) && existsSync(join(modelCacheDir(modelId), 'snapshots', snapshot));
   } catch {
     return false;
   }
@@ -145,134 +98,129 @@ async function readServerHealth() {
   }
 }
 
-function getProcessState() {
-  return {
-    managedPid: serverProcess?.pid ?? null,
-    managedRunning: Boolean(serverProcess && !serverProcess.killed && serverProcess.exitCode === null),
-    setupPid: setupProcess?.pid ?? null,
-    setupRunning: Boolean(setupProcess && !setupProcess.killed && setupProcess.exitCode === null),
-    lastExit,
-  };
+async function readPid(ctx: ExtensionBackendContext, key: string) {
+  const stored = await ctx.storage.get(key).catch(() => null);
+  const pid = typeof stored === 'number' ? stored : Number(stored);
+  return Number.isFinite(pid) && pid > 0 ? pid : null;
 }
 
-export async function status(_input: unknown, _ctx: ExtensionBackendContext) {
-  const health = await readServerHealth();
-  const downloadedBytes = getDownloadedBytes();
-  if (setupJob?.status === 'running' && setupJob.step === 'download') {
-    const downloadProgress = Math.min(95, Math.max(35, Math.round((downloadedBytes / ESTIMATED_MODEL_BYTES) * 90)));
-    setupJob = {
-      ...setupJob,
-      progress: downloadProgress,
-      message: `Downloading model from Hugging Face… ${formatBytes(downloadedBytes)} downloaded`,
-    };
-  }
+export async function status(_input: unknown, ctx: ExtensionBackendContext) {
+  const selectedModelId = await getSelectedModelId(ctx);
+  const setupModel = (await ctx.storage.get<string>(SETUP_MODEL_KEY).catch(() => null)) || selectedModelId;
+  const serverPid = await readPid(ctx, SERVER_PID_KEY);
+  const setupPid = await readPid(ctx, SETUP_PID_KEY);
+  const [serverRunning, setupRunning, health] = await Promise.all([
+    isPidRunning(ctx, serverPid),
+    isPidRunning(ctx, setupPid),
+    readServerHealth(),
+  ]);
+  const downloadedBytes = getDownloadedBytes(modelCacheDir(setupRunning ? setupModel : selectedModelId));
+  const installed = existsSync(VENV_PYTHON) && hasDownloadedModel(selectedModelId);
+  const setupProgress = setupRunning
+    ? Math.min(95, Math.max(15, Math.round((downloadedBytes / ESTIMATED_MODEL_BYTES) * 90)))
+    : installed
+      ? 100
+      : 0;
   return {
     ok: true,
     providerId: PROVIDER_ID,
-    modelId: MODEL_ID,
+    selectedModelId,
+    loadedModelId: health.models[0] ?? (serverRunning ? selectedModelId : null),
     baseUrl: BASE_URL,
     cacheDir: CACHE_DIR,
     downloadedBytes,
     downloaded: formatBytes(downloadedBytes),
-    installed: existsSync(VENV_PYTHON) && hasDownloadedModel(),
-    setup: setupJob,
+    installed,
+    setup: setupRunning
+      ? {
+          status: 'running',
+          message: `Downloading ${setupModel}… ${formatBytes(downloadedBytes)} downloaded`,
+          progress: setupProgress,
+          error: null,
+        }
+      : null,
     server: health,
-    process: getProcessState(),
-    log: lastLog,
+    process: { managedPid: serverPid, managedRunning: serverRunning, setupPid, setupRunning, lastExit: null },
+    log: readLog(),
   };
 }
 
-export async function setup(_input: unknown, ctx: ExtensionBackendContext) {
-  if (setupJob?.status === 'running') {
-    return { ok: true, alreadyRunning: true, job: setupJob };
-  }
+export async function setModel(input: unknown, ctx: ExtensionBackendContext) {
+  const modelId = typeof input === 'object' && input && 'modelId' in input ? String((input as { modelId: unknown }).modelId) : '';
+  const serverRunning = await isPidRunning(ctx, await readPid(ctx, SERVER_PID_KEY));
+  if (serverRunning) throw new Error('Stop the current model before changing models.');
+  const selectedModelId = await setSelectedModelId(ctx, modelId);
+  await appendLog(ctx, `selected model ${selectedModelId}\n`);
+  return { ok: true, status: await status({}, ctx) };
+}
 
+export async function setup(input: unknown, ctx: ExtensionBackendContext) {
+  const setupRunning = await isPidRunning(ctx, await readPid(ctx, SETUP_PID_KEY));
+  if (setupRunning) return { ok: true, alreadyRunning: true, status: await status({}, ctx) };
+  const requestedModelId =
+    typeof input === 'object' && input && 'modelId' in input ? String((input as { modelId?: unknown }).modelId ?? '') : '';
+  const modelId = requestedModelId.trim() ? await setSelectedModelId(ctx, requestedModelId) : await getSelectedModelId(ctx);
   mkdirSync(CACHE_DIR, { recursive: true });
-  lastLog = '';
-  setupJob = {
-    id: `setup-${Date.now()}`,
-    kind: 'setup',
-    status: 'running',
-    step: 'install',
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-    message: 'Installing mlx-lm and huggingface_hub…',
-    progress: 5,
-    error: null,
-  };
-  appendLog(`\n--- setup ${setupJob.startedAt} ---\n`);
-
-  if (!existsSync(VENV_PYTHON)) {
-    updateSetupJob({ message: 'Creating Python virtual environment…', progress: 5 });
-    setupProcess = spawnLogged(pickPythonCommand(), ['-m', 'venv', VENV_DIR], ctx, (code) => {
-      setupProcess = null;
-      if (code !== 0) {
-        updateSetupJob({
-          status: 'failed',
-          message: 'Virtualenv creation failed.',
-          progress: 5,
-          error: `venv exited with code ${code}`,
-          finishedAt: new Date().toISOString(),
-        });
-        void ctx.storage.put(LOG_KEY, lastLog).catch(() => undefined);
-        return;
-      }
-      startInstall(ctx);
-    });
-  } else {
-    startInstall(ctx);
-  }
-
-  return { ok: true, started: true, job: setupJob };
+  await ctx.storage.put(SETUP_MODEL_KEY, modelId);
+  const script = [
+    `: > ${shellQuote(LOG_FILE)}`,
+    `echo ${shellQuote(`--- setup ${new Date().toISOString()} ${modelId} ---`)} >> ${shellQuote(LOG_FILE)}`,
+    `[ -x ${shellQuote(VENV_PYTHON)} ] || ${shellQuote(pickPythonCommand())} -m venv ${shellQuote(VENV_DIR)} >> ${shellQuote(LOG_FILE)} 2>&1`,
+    `${shellQuote(VENV_PYTHON)} -m pip install -U pip mlx-lm huggingface_hub >> ${shellQuote(LOG_FILE)} 2>&1`,
+    `HF_HOME=${shellQuote(CACHE_DIR)} ${shellQuote(VENV_HF)} download ${shellQuote(modelId)} >> ${shellQuote(LOG_FILE)} 2>&1`,
+    `echo ${shellQuote('--- setup complete ---')} >> ${shellQuote(LOG_FILE)}`,
+  ].join(' && ');
+  const result = await ctx.shell.exec({ command: 'sh', args: ['-c', `nohup sh -c ${shellQuote(script)} >/dev/null 2>&1 & echo $!`] });
+  await ctx.storage.put(SETUP_PID_KEY, Number(result.stdout.trim()));
+  return { ok: true, started: true, status: await status({}, ctx) };
 }
 
 export async function start(_input: unknown, ctx: ExtensionBackendContext) {
+  const modelId = await getSelectedModelId(ctx);
   const health = await readServerHealth();
-  if (health.reachable) {
-    return { ok: true, alreadyRunning: true, status: await status({}, ctx) };
-  }
-  if (serverProcess && serverProcess.exitCode === null) {
-    return { ok: true, starting: true, status: await status({}, ctx) };
-  }
-
-  mkdirSync(CACHE_DIR, { recursive: true });
-  lastExit = null;
-  appendLog(`\n--- start ${new Date().toISOString()} ---\n`);
+  if (health.reachable) return { ok: true, alreadyRunning: true, status: await status({}, ctx) };
+  const serverRunning = await isPidRunning(ctx, await readPid(ctx, SERVER_PID_KEY));
+  if (serverRunning) return { ok: true, starting: true, status: await status({}, ctx) };
   if (!existsSync(VENV_MLX_SERVER)) {
-    appendLog('mlx_lm.server is not installed. Run setup/download first.\n');
+    await appendLog(ctx, 'mlx_lm.server is not installed. Run setup/download first.\n');
     return { ok: false, error: 'mlx_lm.server is not installed. Run setup/download first.', status: await status({}, ctx) };
   }
-
-  serverProcess = spawn(VENV_MLX_SERVER, ['--model', MODEL_ID, '--host', '127.0.0.1', '--port', String(MODEL_PORT)], {
-    env: { ...process.env, HF_HOME: CACHE_DIR },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  serverProcess.stdout.on('data', (chunk) => appendLog(chunk.toString('utf8')));
-  serverProcess.stderr.on('data', (chunk) => appendLog(chunk.toString('utf8')));
-  serverProcess.on('error', (error) => {
-    appendLog(`server error: ${error.message}\n`);
-    ctx.log.error('qwen mlx server failed', { message: error.message });
-  });
-  serverProcess.on('close', (code, signal) => {
-    lastExit = { code, signal };
-    appendLog(`server exited code=${String(code)} signal=${String(signal)}\n`);
-    serverProcess = null;
-  });
-
-  return { ok: true, started: true, pid: serverProcess.pid, status: await status({}, ctx) };
+  await appendLog(ctx, `\n--- start ${new Date().toISOString()} ${modelId} ---\n`);
+  const command = `HF_HOME=${shellQuote(CACHE_DIR)} ${shellQuote(VENV_MLX_SERVER)} --model ${shellQuote(modelId)} --host 127.0.0.1 --port ${MODEL_PORT} >> ${shellQuote(LOG_FILE)} 2>&1`;
+  const result = await ctx.shell.exec({ command: 'sh', args: ['-c', `nohup sh -c ${shellQuote(command)} >/dev/null 2>&1 & echo $!`] });
+  await ctx.storage.put(SERVER_PID_KEY, Number(result.stdout.trim()));
+  return { ok: true, started: true, pid: Number(result.stdout.trim()), status: await status({}, ctx) };
 }
 
 export async function stop(_input: unknown, ctx: ExtensionBackendContext) {
-  if (setupProcess && setupProcess.exitCode === null) {
-    setupProcess.kill('SIGTERM');
-    updateSetupJob({ status: 'failed', message: 'Setup cancelled.', error: 'cancelled', finishedAt: new Date().toISOString() });
-    appendLog('cancelled setup\n');
+  const setupPid = await readPid(ctx, SETUP_PID_KEY);
+  const serverPid = await readPid(ctx, SERVER_PID_KEY);
+  if (await isPidRunning(ctx, setupPid)) {
+    await ctx.shell.exec({ command: 'sh', args: ['-c', `kill ${setupPid} >/dev/null 2>&1 || true`] });
+    await appendLog(ctx, 'cancelled setup\n');
   }
-  if (!serverProcess || serverProcess.exitCode !== null) {
-    return { ok: true, stopped: false, status: await status({}, ctx) };
-  }
-  const pid = serverProcess.pid;
-  serverProcess.kill('SIGTERM');
-  appendLog(`sent SIGTERM to pid=${String(pid)}\n`);
-  return { ok: true, stopped: true, pid, status: await status({}, ctx) };
+  if (!(await isPidRunning(ctx, serverPid))) return { ok: true, stopped: false, status: await status({}, ctx) };
+  await ctx.shell.exec({ command: 'sh', args: ['-c', `kill ${serverPid} >/dev/null 2>&1 || true`] });
+  await appendLog(ctx, `sent SIGTERM to pid=${String(serverPid)}\n`);
+  return { ok: true, stopped: true, pid: serverPid, status: await status({}, ctx) };
+}
+
+export async function searchModels(input: unknown, _ctx: ExtensionBackendContext) {
+  const query = typeof input === 'object' && input && 'query' in input ? String((input as { query: unknown }).query).trim() : '';
+  if (!query) return { ok: true, models: [] };
+  const params = new URLSearchParams({ search: `${query} mlx`, filter: 'mlx', limit: '10', sort: 'downloads', direction: '-1' });
+  const response = await fetch(`https://huggingface.co/api/models?${params.toString()}`, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`Hugging Face search failed: ${response.status}`);
+  const body = (await response.json()) as Array<{ id?: string; modelId?: string; downloads?: number; likes?: number; tags?: string[] }>;
+  return {
+    ok: true,
+    models: body
+      .map((model) => ({
+        id: model.id ?? model.modelId ?? '',
+        downloads: model.downloads ?? 0,
+        likes: model.likes ?? 0,
+        tags: model.tags ?? [],
+      }))
+      .filter((model) => model.id),
+  };
 }

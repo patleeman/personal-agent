@@ -11,7 +11,7 @@ npm run install -- --extension qwen-mlx --target testing
 
 Current experiments:
 
-- `qwen-mlx` — local Qwen MLX setup and model server controls.
+- `qwen-mlx` — general-purpose local Hugging Face MLX model setup, search, and server controls.
 - `doom` — Doom inside PA. Because obviously.
 - `slack-mcp-gateway` — Slack channel to PA conversation gateway via Slack MCP.
 
