@@ -18,19 +18,19 @@
       { "id": "buildExtension", "handler": "buildExtension", "title": "Build extension" },
       { "id": "reloadExtension", "handler": "reloadExtension", "title": "Reload extension" },
       { "id": "validateExtension", "handler": "validateExtension", "title": "Validate extension" },
+      { "id": "readSearchPaths", "handler": "readSearchPaths", "title": "Read extension search paths" },
+      { "id": "updateSearchPaths", "handler": "updateSearchPaths", "title": "Update extension search paths" },
       { "id": "manageExtension", "handler": "manageExtension", "title": "Manage extension" }
     ]
   },
   "contributes": {
-    "settings": {
-      "extensions.additionalPaths": {
-        "type": "string",
-        "default": "",
-        "description": "Additional extension package roots or parent directories to scan. The default user install location is <state-root>/extensions; separate extra paths with commas or new lines.",
-        "group": "Extensions",
-        "placeholder": "/Users/patrick/path/to/extensions",
-        "order": 10
-      }
+    "settingsComponent": {
+      "id": "extension-search-paths",
+      "component": "ExtensionManagerSettingsPanel",
+      "sectionId": "settings-extensions",
+      "label": "Extensions",
+      "description": "Choose additional folders to scan for extension packages.",
+      "order": 35
     },
     "nav": [
       {

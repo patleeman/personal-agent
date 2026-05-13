@@ -580,6 +580,10 @@ export interface ExtensionBackendContext {
     >;
     getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
+  secrets: {
+    /** Resolve a secret registered in this extension's manifest. */
+    get<T = string>(secretId: string): T | undefined;
+  };
   ui: { invalidate(topics: string | string[]): void };
   telemetry: {
     record(event: {

@@ -12,6 +12,7 @@ import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/c
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { logError, logInfo, logWarn } from '../shared/logging.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
+import { resolveSecret } from '../secrets/secretStore.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import {
   isPrebuiltOnlyExtensionRuntime,
@@ -127,6 +128,10 @@ export interface ExtensionBackendContext {
       actions: Array<{ id: string; title?: string; description?: string }>;
     }>;
     getStatus(extensionId: string): { enabled: boolean; healthy: boolean; errors?: string[] };
+  };
+  secrets: {
+    /** Resolve a secret registered in this extension's manifest. */
+    get: <T = string>(secretId: string) => T | undefined;
   };
   ui: {
     invalidate(topics: string | string[]): void;
@@ -321,6 +326,9 @@ function createBackendContext(
           ...(summary.errors?.length ? { errors: summary.errors } : {}),
         };
       },
+    },
+    secrets: {
+      get: (secretId) => resolveSecret(extensionId, secretId),
     },
     ui: {
       invalidate: (topics) => {

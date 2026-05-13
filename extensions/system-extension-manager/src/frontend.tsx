@@ -1,4 +1,4 @@
-import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
+import type { ExtensionSurfaceProps, NativeExtensionClient } from '@personal-agent/extensions';
 import type { ExtensionInstallSummary } from '@personal-agent/extensions/data';
 import { api, EXTENSION_REGISTRY_CHANGED_EVENT, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
 import { SettingsField, type UnifiedSettingsEntry, useApi } from '@personal-agent/extensions/settings';
@@ -1686,6 +1686,191 @@ function ImportWarningModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface ExtensionSearchPathsState {
+  defaultLocation: string;
+  configuredPaths: string[];
+  environmentPaths: string[];
+}
+
+function normalizePathRows(paths: string[]): string[] {
+  const seen = new Set<string>();
+  return paths
+    .map((path) => path.trim())
+    .filter(Boolean)
+    .filter((path) => {
+      if (seen.has(path)) return false;
+      seen.add(path);
+      return true;
+    });
+}
+
+async function pickExtensionFolder(cwd?: string): Promise<string | null> {
+  const response = await fetch('/api/folder-picker', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cwd, prompt: 'Choose a folder containing extension packages' }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const result = (await response.json()) as { cancelled?: boolean; path?: string };
+  return result.cancelled ? null : result.path ?? null;
+}
+
+function ReadOnlyPathRow({ label, path, detail }: { label: string; path: string; detail?: string }) {
+  return (
+    <div className="rounded-xl border border-border-subtle bg-base/45 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold text-secondary">{label}</div>
+          <div className="mt-1 break-all font-mono text-[12px] text-primary">{path}</div>
+          {detail ? <div className="mt-1 text-[12px] text-dim">{detail}</div> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ExtensionManagerSettingsPanel({ pa }: { pa: NativeExtensionClient }) {
+  const [state, setState] = useState<ExtensionSearchPathsState | null>(null);
+  const [paths, setPaths] = useState<string[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const next = (await pa.extension.invoke('readSearchPaths')) as ExtensionSearchPathsState;
+    setState(next);
+    setPaths(next.configuredPaths.length > 0 ? next.configuredPaths : ['']);
+  }, [pa]);
+
+  useEffect(() => {
+    void load().catch((error) => setMessage(error instanceof Error ? error.message : String(error)));
+  }, [load]);
+
+  const cleanPaths = useMemo(() => normalizePathRows(paths), [paths]);
+  const hasChanges = useMemo(() => {
+    const current = normalizePathRows(state?.configuredPaths ?? []);
+    if (current.length !== cleanPaths.length) return true;
+    return current.some((path, index) => path !== cleanPaths[index]);
+  }, [cleanPaths, state]);
+
+  function updatePath(index: number, value: string) {
+    setPaths((current) => current.map((path, pathIndex) => (pathIndex === index ? value : path)));
+  }
+
+  async function choosePath(index: number) {
+    setBusy('Choosing folder…');
+    setMessage(null);
+    try {
+      const selected = await pickExtensionFolder(paths[index] || state?.defaultLocation);
+      if (selected) updatePath(index, selected);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function addFolder() {
+    setBusy('Choosing folder…');
+    setMessage(null);
+    try {
+      const selected = await pickExtensionFolder(state?.defaultLocation);
+      setPaths((current) => [...current, selected ?? '']);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function save() {
+    setBusy('Saving…');
+    setMessage(null);
+    try {
+      const next = (await pa.extension.invoke('updateSearchPaths', { paths: cleanPaths })) as ExtensionSearchPathsState;
+      setState(next);
+      setPaths(next.configuredPaths.length > 0 ? next.configuredPaths : ['']);
+      setMessage('Saved. Reload extensions to rescan these folders.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function reloadExtensions() {
+    setBusy('Reloading extensions…');
+    setMessage(null);
+    try {
+      const response = await fetch('/api/extensions/reload', { method: 'POST' });
+      if (!response.ok) throw new Error(await response.text());
+      notifyExtensionRegistryChanged();
+      setMessage('Extensions reloaded.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!state) return <LoadingState title="Loading extension paths…" />;
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <ReadOnlyPathRow label="Default install location" path={state.defaultLocation} detail="Personal Agent always scans this folder." />
+        {state.environmentPaths.map((path) => (
+          <ReadOnlyPathRow key={path} label="Environment search path" path={path} detail="Set by PERSONAL_AGENT_EXTENSION_PATHS." />
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-[13px] font-semibold text-primary">Additional search folders</h3>
+          <p className="mt-1 text-[12px] text-secondary">
+            Add parent folders that contain extension packages, or point directly at one extension folder with an extension.json file.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {paths.map((path, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <input
+                value={path}
+                onChange={(event) => updatePath(index, event.target.value)}
+                placeholder="/Users/patrick/path/to/extensions"
+                className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-base px-3 py-2 font-mono text-[12px] text-primary outline-none transition-colors placeholder:text-dim focus:border-accent/60"
+              />
+              <button type="button" className="ui-toolbar-button rounded-lg px-3 py-2 text-[12px]" disabled={Boolean(busy)} onClick={() => choosePath(index)}>
+                Choose…
+              </button>
+              <button
+                type="button"
+                className="rounded-lg px-3 py-2 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-50"
+                disabled={Boolean(busy)}
+                onClick={() => setPaths((current) => (current.length === 1 ? [''] : current.filter((_, pathIndex) => pathIndex !== index)))}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="ui-toolbar-button rounded-lg px-3 py-2 text-[12px]" disabled={Boolean(busy)} onClick={addFolder}>
+          Add folder…
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-border-subtle pt-4">
+        <button type="button" className="ui-toolbar-button rounded-lg px-4 py-2 text-[12px]" disabled={Boolean(busy) || !hasChanges} onClick={save}>
+          {busy === 'Saving…' ? 'Saving…' : 'Save paths'}
+        </button>
+        <button type="button" className="rounded-lg px-4 py-2 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-50" disabled={Boolean(busy)} onClick={reloadExtensions}>
+          Reload extensions
+        </button>
+        {message ? <span className="text-[12px] text-secondary">{message}</span> : busy ? <span className="text-[12px] text-secondary">{busy}</span> : null}
       </div>
     </div>
   );

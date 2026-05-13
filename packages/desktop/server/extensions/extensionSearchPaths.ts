@@ -12,9 +12,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function splitExtensionPathList(value: string | undefined): string[] {
   if (!value) return [];
   return value
-    .split(/[,:\n]/)
+    .split(/[,\n]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function splitConfiguredExtensionPaths(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string').flatMap(splitExtensionPathList);
+  return typeof value === 'string' ? splitExtensionPathList(value) : [];
 }
 
 export function readConfiguredExtensionPaths(stateRoot: string = getStateRoot()): string[] {
@@ -24,13 +29,17 @@ export function readConfiguredExtensionPaths(stateRoot: string = getStateRoot())
   try {
     const parsed = JSON.parse(readFileSync(settingsFile, 'utf-8')) as unknown;
     if (!isRecord(parsed)) return [];
-    const value = parsed[ADDITIONAL_EXTENSION_PATHS_SETTING];
-    return typeof value === 'string' ? splitExtensionPathList(value) : [];
+    return splitConfiguredExtensionPaths(parsed[ADDITIONAL_EXTENSION_PATHS_SETTING]);
   } catch {
     return [];
   }
 }
 
 export function readEnvironmentExtensionPaths(): string[] {
-  return splitExtensionPathList(process.env.PERSONAL_AGENT_EXTENSION_PATHS);
+  const value = process.env.PERSONAL_AGENT_EXTENSION_PATHS;
+  if (!value) return [];
+  return value
+    .split(/[,\n:]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
