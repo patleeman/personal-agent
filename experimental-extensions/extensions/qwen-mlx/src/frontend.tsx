@@ -70,10 +70,10 @@ function Toggle({ checked, disabled, onClick }: { checked: boolean; disabled: bo
       aria-checked={checked}
       disabled={disabled}
       onClick={onClick}
-      className={`relative h-6 w-11 rounded-full border transition disabled:cursor-not-allowed disabled:opacity-60 ${checked ? 'border-accent bg-accent' : 'border-border bg-surface-muted'}`}
+      className={`relative block h-6 w-11 shrink-0 rounded-full border transition disabled:cursor-not-allowed disabled:opacity-60 ${checked ? 'border-accent bg-accent' : 'border-border bg-surface-muted'}`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-[1.25rem]' : 'translate-x-0.5'}`}
+        className={`absolute left-0 top-0.5 block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-[1.25rem]' : 'translate-x-0.5'}`}
       />
     </button>
   );
