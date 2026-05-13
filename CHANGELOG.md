@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0-rc.5 — 2026-05-13
+
+- fix: route clipboard writes through desktop ipc
+
 ## 0.8.0-rc.4 — 2026-05-13
 
 - fix: resolve packaged conversation inspect worker
