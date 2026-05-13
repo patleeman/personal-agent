@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0-rc.3 — 2026-05-13
+
+- fix: package bundled extension runtime metadata
+
 ## 0.8.0-rc.2 — 2026-05-13
 
 - fix: bundle desktop renderer API dependencies
