@@ -28,32 +28,36 @@ else
   yellow "⚠ gitleaks not installed — skipping secret scan"
 fi
 
-# ── 2. Resolve Node/npm binaries ─────────────────────────
+# ── 2. Resolve pnpm ──────────────────────────────────────
 # Git hooks run in a non-interactive shell that often lacks the user's
-# PATH. Source common profile paths so `npx` and other Node tools are
-# findable.
-if ! command -v npx &>/dev/null; then
+# PATH. Source common profile paths so `pnpm` is findable.
+if ! command -v pnpm &>/dev/null; then
   for _profile in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
     if [ -f "$_profile" ]; then
       # shellcheck source=/dev/null
       source "$_profile" 2>/dev/null || true
-      command -v npx &>/dev/null && break
+      command -v pnpm &>/dev/null && break
     fi
   done
 fi
 
-# If npx is still unavailable, try the Homebrew and local install paths
-if ! command -v npx &>/dev/null; then
+if ! command -v pnpm &>/dev/null; then
   export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+fi
+
+PNPM=$(command -v pnpm || true)
+if [ -z "$PNPM" ]; then
+  red "✗ pnpm not found — install it with: npm install -g pnpm"
+  exit 1
 fi
 
 # ── 3. Typecheck (fast — whole project) ──────────────────
 
-if npx --no-install tsc --noEmit &>/dev/null; then
+if "$PNPM" run check:types &>/dev/null; then
   green "✓ typecheck passed"
 else
   echo ""
-  npx tsc --noEmit 2>&1
+  "$PNPM" run check:types 2>&1
   red "✗ typecheck failed — fix errors above"
   exit 1
 fi
@@ -62,12 +66,12 @@ fi
 
 STAGED_FILES_STR=$(staged_files | grep -E '\.(ts|tsx|js|jsx|cjs|mjs|json|md|yml|yaml)$' | tr '\n' ' ' || true)
 if [ -n "$STAGED_FILES_STR" ]; then
-  if npx --no-install prettier --check $STAGED_FILES_STR &>/dev/null; then
+  if "$PNPM" exec prettier --check $STAGED_FILES_STR &>/dev/null; then
     green "✓ formatting passed"
   else
     echo ""
-    npx prettier --check $STAGED_FILES_STR 2>&1
-    red "✗ formatting failed — run 'npm run fmt:fix'"
+    "$PNPM" exec prettier --check $STAGED_FILES_STR 2>&1
+    red "✗ formatting failed — run 'pnpm run fmt:fix'"
     exit 1
   fi
 else
@@ -80,12 +84,12 @@ LINT_FILES=$(staged_files | grep -cE '\.(ts|tsx)$' || true)
 if [ "$LINT_FILES" -gt 0 ]; then
   FILES=$(staged_files | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
   if [ -n "$FILES" ]; then
-    if npx --no-install eslint $FILES &>/dev/null; then
+    if "$PNPM" exec eslint $FILES &>/dev/null; then
       green "✓ lint passed"
     else
       echo ""
-      npx eslint $FILES 2>&1
-      red "✗ lint failed — run 'npm run lint:fix'"
+      "$PNPM" exec eslint $FILES 2>&1
+      red "✗ lint failed — run 'pnpm run lint:fix'"
       exit 1
     fi
   fi
