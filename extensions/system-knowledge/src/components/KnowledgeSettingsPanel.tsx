@@ -18,6 +18,8 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
   const [repoUrlDraft, setRepoUrlDraft] = useState('');
   const [branchDraft, setBranchDraft] = useState('main');
   const [action, setAction] = useState<'save' | 'sync' | null>(null);
+  const [actionStartedAt, setActionStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const dirty = knowledgeBaseState
@@ -31,12 +33,43 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
 
   useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
 
+  const actionProgressText = useMemo(() => {
+    if (action === null) {
+      return null;
+    }
+
+    const verb = action === 'save' ? 'Connecting repository' : 'Syncing knowledge base';
+    if (elapsedSeconds < 3) {
+      return `${verb}…`;
+    }
+    if (elapsedSeconds < 10) {
+      return `${verb}… cloning and reading git state (${elapsedSeconds}s)`;
+    }
+    return `${verb}… still waiting on git (${elapsedSeconds}s). If this is a private repo, check whether git is prompting for credentials.`;
+  }, [action, elapsedSeconds]);
+
   useEffect(() => {
     if (knowledgeBaseState) {
       setRepoUrlDraft(knowledgeBaseState.repoUrl);
       setBranchDraft(knowledgeBaseState.branch);
     }
   }, [knowledgeBaseState?.repoUrl, knowledgeBaseState?.branch]);
+
+  useEffect(() => {
+    if (action === null || actionStartedAt === null) {
+      setElapsedSeconds(0);
+      return undefined;
+    }
+
+    const updateElapsed = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - actionStartedAt) / 1000)));
+    };
+    updateElapsed();
+    const interval = window.setInterval(updateElapsed, 500);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [action, actionStartedAt]);
 
   async function save(nextInput?: { repoUrl?: string | null; branch?: string | null }) {
     if (!knowledgeBaseState || action !== null) {
@@ -50,6 +83,7 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
     }
 
     setSaveError(null);
+    setActionStartedAt(Date.now());
     setAction('save');
 
     try {
@@ -61,6 +95,7 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setAction(null);
+      setActionStartedAt(null);
     }
   }
 
@@ -70,6 +105,7 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
     }
 
     setSaveError(null);
+    setActionStartedAt(Date.now());
     setAction('sync');
 
     try {
@@ -81,6 +117,7 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setAction(null);
+      setActionStartedAt(null);
     }
   }
 
@@ -175,7 +212,7 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
               Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
             </p>
             <p className={cx('ui-card-meta break-all', action === null && syncPresentation.toneClass)}>
-              {action === 'save' ? 'Saving knowledge base…' : action === 'sync' ? 'Syncing knowledge base…' : syncPresentation.text}
+              {actionProgressText ?? syncPresentation.text}
             </p>
             <p className="ui-card-meta break-all">
               Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
@@ -194,7 +231,19 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
             </button>
             <span className="text-[12px] text-dim">You can change this later in Settings.</span>
           </div>
-        ) : (
+        ) : null}
+        {isOnboarding && actionProgressText ? (
+          <div
+            className="rounded-lg border border-border-subtle bg-surface/60 px-3 py-2 text-[12px] leading-5 text-secondary"
+            role="status"
+          >
+            <div className="mb-1 h-1.5 overflow-hidden rounded-full bg-border-subtle">
+              <div className="h-full w-1/2 animate-pulse rounded-full bg-accent/80" />
+            </div>
+            {actionProgressText}
+          </div>
+        ) : null}
+        {isOnboarding ? null : (
           <div className="flex flex-wrap items-center gap-2">
             <span className="ui-card-meta">{action === 'save' ? 'Saving…' : dirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
             <button
