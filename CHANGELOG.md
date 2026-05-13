@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0-rc.4 — 2026-05-13
+
+- fix: resolve packaged conversation inspect worker
+
 ## 0.8.0-rc.3 — 2026-05-13
 
 - fix: package bundled extension runtime metadata
