@@ -208,7 +208,7 @@ export function WorkbenchBrowserTab({
         if (!cancelled) {
           setSurfaceKeybindings(
             keybindings.filter(
-              (keybinding) => keybinding.enabled && keybinding.extensionId === 'system-browser' && keybinding.scope === 'surface',
+              (keybinding) => keybinding.enabled && keybinding.scope === 'surface',
             ),
           );
         }

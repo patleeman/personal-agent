@@ -1340,23 +1340,20 @@ function OpenConversationRow({
           return false;
         }
 
-        if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
-          return session.id !== DRAFT_CONVERSATION_ID;
-        }
-
-        if (menu.extensionId === 'system-conversation-tools') {
-          switch (menu.action) {
-            case 'duplicateConversation':
-              return Boolean(onDuplicate);
-            case 'copyWorkingDirectory':
-              return Boolean(onCopyWorkingDirectory);
-            case 'copyConversationId':
-              return Boolean(onCopyId);
-            case 'copyDeeplink':
-              return Boolean(onCopyDeeplink);
-            default:
-              return true;
-          }
+        // Evaluate action-specific visibility conditions by action id.
+        switch (menu.action) {
+          case 'attachConversation':
+            return session.id !== DRAFT_CONVERSATION_ID;
+          case 'duplicateConversation':
+            return Boolean(onDuplicate);
+          case 'copyWorkingDirectory':
+            return Boolean(onCopyWorkingDirectory);
+          case 'copyConversationId':
+            return Boolean(onCopyId);
+          case 'copyDeeplink':
+            return Boolean(onCopyDeeplink);
+          default:
+            return true;
         }
 
         return true;
@@ -1514,15 +1511,13 @@ function OpenConversationRow({
   }
 
   function getExtensionContextMenuTitle(menu: (typeof conversationExtensionMenuItems)[number]): string {
-    if (menu.extensionId === 'system-conversation-tools') {
-      const copyAction = getConversationToolsCopyAction(menu.action);
-      if (copyAction) {
-        return getCopyMenuLabel(copyAction);
-      }
+    const copyAction = getConversationToolsCopyAction(menu.action);
+    if (copyAction) {
+      return getCopyMenuLabel(copyAction);
+    }
 
-      if (menu.action === 'duplicateConversation' && busyExtensionMenuId === menu.id) {
-        return 'Duplicating…';
-      }
+    if (menu.action === 'duplicateConversation' && busyExtensionMenuId === menu.id) {
+      return 'Duplicating…';
     }
 
     return busyExtensionMenuId === menu.id ? `${menu.title}…` : menu.title;
@@ -1551,37 +1546,39 @@ function OpenConversationRow({
     let closeAfterAction = true;
     setBusyExtensionMenuId(menu.id);
     try {
-      if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
-        navigate(`/conversations/${encodeURIComponent(session.id)}?gateway=1`);
-        return;
-      }
-
-      if (menu.extensionId === 'system-conversation-tools') {
-        if (menu.action === 'duplicateConversation') {
+      switch (menu.action) {
+        case 'attachConversation': {
+          navigate(`/conversations/${encodeURIComponent(session.id)}?gateway=1`);
+          return;
+        }
+        case 'duplicateConversation': {
           await onDuplicate?.();
           return;
         }
-
-        const copyAction = getConversationToolsCopyAction(menu.action);
-        if (copyAction) {
-          closeAfterAction = false;
-          await handleCopyClick(copyAction, getConversationToolsCopyHandler(copyAction));
+        case 'exportSession': {
+          const input = {
+            conversationId: session.id,
+            sessionTitle: session.title,
+            cwd: session.cwd,
+          };
+          await api.invokeExtensionAction(menu.extensionId, menu.action, input);
           return;
         }
+        default: {
+          const copyAction = getConversationToolsCopyAction(menu.action);
+          if (copyAction) {
+            closeAfterAction = false;
+            await handleCopyClick(copyAction, getConversationToolsCopyHandler(copyAction));
+            return;
+          }
+          const input = {
+            conversationId: session.id,
+            sessionTitle: session.title,
+            cwd: session.cwd,
+          };
+          await getPaClient(menu.extensionId).extension.invoke(menu.action, input);
+        }
       }
-
-      const input = {
-        conversationId: session.id,
-        sessionTitle: session.title,
-        cwd: session.cwd,
-      };
-
-      if (menu.extensionId === 'system-session-exchange' && menu.action === 'exportSession') {
-        await api.invokeExtensionAction(menu.extensionId, menu.action, input);
-        return;
-      }
-
-      await getPaClient(menu.extensionId).extension.invoke(menu.action, input);
     } catch (error) {
       addNotification({
         type: 'error',
@@ -2423,10 +2420,7 @@ export function Sidebar() {
       extensionRegistry.contextMenus.filter(
         (menu) =>
           menu.surface === 'conversationList' &&
-          !(
-            menu.extensionId === 'system-conversation-tools' &&
-            ['duplicateConversation', 'copyWorkingDirectory', 'copyConversationId', 'copyDeeplink'].includes(menu.action)
-          ),
+          !['duplicateConversation', 'copyWorkingDirectory', 'copyConversationId', 'copyDeeplink'].includes(menu.action),
       ),
     [extensionRegistry.contextMenus],
   );
@@ -2445,12 +2439,12 @@ export function Sidebar() {
       input: { conversationId: string; sessionTitle: string; cwd: string | undefined },
     ) => {
       try {
-        if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
+        if (menu.action === 'attachConversation') {
           navigate(`/conversations/${encodeURIComponent(input.conversationId)}?gateway=1`);
           return;
         }
 
-        if (menu.extensionId === 'system-session-exchange' && menu.action === 'exportSession') {
+        if (menu.action === 'exportSession') {
           await api.invokeExtensionAction(menu.extensionId, menu.action, input);
           return;
         }

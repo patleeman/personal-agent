@@ -77,6 +77,12 @@ export interface ExtensionViewContribution {
   detailView?: string;
   /** Optional host layout behaviors enabled when this main view's route is active. */
   routeCapabilities?: Array<'contextRail' | 'workbench' | 'workbenchFilePane' | 'knowledgeFiles' | 'settingsSection'>;
+  /**
+   * Identifies the logical slot this view occupies in the workbench tool panel.
+   * When set, the host uses the slot name (e.g. "files", "diffs", "runs") to position
+   * the tool bar button instead of matching by extension id.
+   */
+  toolSlot?: string;
 }
 
 export interface ExtensionNavContribution {

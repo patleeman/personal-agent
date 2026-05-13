@@ -43,7 +43,7 @@ import { NotificationToaster } from './notifications/NotificationToaster';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
-import { iconGlyphForExtensionSurface, labelForExtensionToolPanel, shouldRenderExtensionToolPanelInWorkbenchNav } from './workbenchNav';
+import { iconGlyphForExtensionSurface, labelForExtensionToolPanel, shouldRenderWorkbenchToolInNav } from './workbenchNav';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
@@ -91,10 +91,17 @@ type BuiltInWorkbenchRailMode = 'files' | 'diffs' | 'artifacts' | 'browser' | 'r
 type ExtensionWorkbenchRailMode = `extension:${string}:${string}`;
 type WorkbenchRailMode = BuiltInWorkbenchRailMode | ExtensionWorkbenchRailMode;
 
+function getSurfaceToolSlot(
+  surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
+): string | undefined {
+  return 'toolSlot' in surface ? (surface as Record<string, unknown>).toolSlot as string | undefined : undefined;
+}
+
 function extensionToolPanelMode(
   surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
-): ExtensionWorkbenchRailMode {
-  return `extension:${surface.extensionId}:${surface.id}`;
+): WorkbenchRailMode {
+  const slot = getSurfaceToolSlot(surface);
+  return slot ?? `extension:${surface.extensionId}:${surface.id}`;
 }
 
 export function resolveWorkbenchRailMode(
@@ -122,6 +129,13 @@ function parseExtensionToolPanelMode(mode: WorkbenchRailMode): { extensionId: st
   return extensionId && surfaceId ? { extensionId, surfaceId } : null;
 }
 
+function findExtensionToolPanelBySlot(
+  panels: Array<(ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary>,
+  slot: string,
+): (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary | null {
+  return panels.find((p) => getSurfaceToolSlot(p) === slot) ?? null;
+}
+
 export function resolveActiveExtensionWorkbenchSurface({
   activeWorkbenchTool,
   extensionRightToolPanels,
@@ -135,7 +149,7 @@ export function resolveActiveExtensionWorkbenchSurface({
   const activeRailSurface = parsed
     ? extensionRightToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId)
     : activeWorkbenchTool === 'files'
-      ? (extensionRightToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null)
+      ? findExtensionToolPanelBySlot(extensionRightToolPanels, 'files')
       : null;
   if (!activeRailSurface || !('detailView' in activeRailSurface) || typeof activeRailSurface.detailView !== 'string') return null;
   return (
@@ -146,8 +160,8 @@ export function resolveActiveExtensionWorkbenchSurface({
 }
 
 export function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
-  const parsed = parseExtensionToolPanelMode(mode);
-  return mode === 'diffs' || parsed?.extensionId === 'system-diffs';
+  // Built-in diffs mode or any tool with toolSlot matching "diffs" resolves to "diffs"
+  return mode === 'diffs';
 }
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
@@ -627,11 +641,10 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
-  const systemArtifactsExtensionSurface =
-    availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-artifacts') ?? null;
-  const systemFilesExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null;
-  const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
-  const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
+  const systemArtifactsExtensionSurface = findExtensionToolPanelBySlot(availableExtensionToolPanels, 'artifacts');
+  const systemFilesExtensionSurface = findExtensionToolPanelBySlot(availableExtensionToolPanels, 'files');
+  const systemDiffsExtensionSurface = findExtensionToolPanelBySlot(availableExtensionToolPanels, 'diffs');
+  const systemRunsExtensionSurface = findExtensionToolPanelBySlot(availableExtensionToolPanels, 'runs');
   const handleFileExplorerModeSelect = useCallback(() => {
     onActiveToolChange(systemFilesExtensionSurface ? extensionToolPanelMode(systemFilesExtensionSurface) : 'files');
     onWorkspaceFileClear();
@@ -964,7 +977,7 @@ function WorkbenchKnowledgeRail({
           </button>
         ) : null}
         {availableExtensionToolPanels
-          .filter((surface) => shouldRenderExtensionToolPanelInWorkbenchNav(surface.extensionId))
+          .filter((surface) => shouldRenderWorkbenchToolInNav(surface))
           .map((surface) => (
             <button
               key={`${surface.extensionId}:${surface.id}`}
@@ -972,16 +985,16 @@ function WorkbenchKnowledgeRail({
               className={cx(
                 'ui-sidebar-nav-item w-full text-left',
                 (activeTool === extensionToolPanelMode(surface) ||
-                  (surface.extensionId === 'system-runs' && activeTool === 'runs') ||
-                  (surface.extensionId === 'system-diffs' && activeTool === 'diffs') ||
-                  (surface.extensionId === 'system-artifacts' && activeTool === 'artifacts')) &&
+                  (getSurfaceToolSlot(surface) === 'runs' && activeTool === 'runs') ||
+                  (getSurfaceToolSlot(surface) === 'diffs' && activeTool === 'diffs') ||
+                  (getSurfaceToolSlot(surface) === 'artifacts' && activeTool === 'artifacts')) &&
                   'ui-sidebar-nav-item-active',
               )}
               title={labelForExtensionToolPanel(surface)}
               onClick={() =>
-                surface.extensionId === 'system-diffs'
+                getSurfaceToolSlot(surface) === 'diffs'
                   ? handleDiffsModeSelect()
-                  : surface.extensionId === 'system-artifacts'
+                  : getSurfaceToolSlot(surface) === 'artifacts'
                     ? handleArtifactsModeSelect()
                     : handleExtensionToolPanelSelect(surface)
               }
@@ -1214,15 +1227,11 @@ export function Layout() {
     [extensionRegistry.surfaces],
   );
   const systemBrowserExtensionSurface = useMemo(
-    () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-browser') ?? null,
-    [extensionRightToolPanels],
-  );
-  const systemKnowledgeExtensionSurface = useMemo(
-    () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null,
+    () => findExtensionToolPanelBySlot(extensionRightToolPanels, 'browser'),
     [extensionRightToolPanels],
   );
   const systemDiffsExtensionSurface = useMemo(
-    () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null,
+    () => findExtensionToolPanelBySlot(extensionRightToolPanels, 'diffs'),
     [extensionRightToolPanels],
   );
   const routePrimaryRailSurface = useMemo(() => {
@@ -1472,10 +1481,8 @@ export function Layout() {
       return;
     }
 
-    // Don't override the current tool when the system-knowledge extension is
-    // active — it sets the ?file= param through its own file selection flow.
-    const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
-    if (parsed && parsed.extensionId === 'system-knowledge') {
+    // Don't override to files when a route-based knowledge file selection is active.
+    if (routeIsKnowledge(location.pathname, extensionRegistry.surfaces)) {
       return;
     }
 

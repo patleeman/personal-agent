@@ -797,6 +797,7 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
         validateEnum(view.activation, EXTENSION_VIEW_ACTIVATIONS, `contributes.views[${index}].activation`);
       if (view.icon !== undefined) validateEnum(view.icon, EXTENSION_ICON_NAMES, `contributes.views[${index}].icon`);
       validateOptionalString(view.detailView, `contributes.views[${index}].detailView`);
+      validateOptionalString(view.toolSlot, `contributes.views[${index}].toolSlot`);
       if (view.routeCapabilities !== undefined) {
         for (const [capabilityIndex, capability] of requireStringArray(
           view.routeCapabilities,

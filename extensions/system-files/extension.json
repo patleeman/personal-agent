@@ -21,7 +21,8 @@
         "detailView": "workspace-file-detail",
         "placement": "workbench-tool",
         "activation": "on-open",
-        "persistOpen": true
+        "persistOpen": true,
+        "toolSlot": "files"
       },
       {
         "id": "workspace-file-detail",

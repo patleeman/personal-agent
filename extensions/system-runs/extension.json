@@ -246,7 +246,8 @@
         "icon": "terminal",
         "detailView": "conversation-run-detail",
         "placement": "workbench-tool",
-        "activation": "on-open"
+        "activation": "on-open",
+        "toolSlot": "runs"
       },
       {
         "id": "conversation-run-detail",

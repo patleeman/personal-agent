@@ -78,7 +78,8 @@
         "icon": "file",
         "detailView": "artifact-detail",
         "placement": "workbench-tool",
-        "activation": "on-open"
+        "activation": "on-open",
+        "toolSlot": "artifacts"
       },
       {
         "id": "artifact-detail",

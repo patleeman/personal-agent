@@ -305,7 +305,6 @@ const ConversationArtifactModal = lazy(() =>
 const ConversationDrawingsPickerModal = lazy(() =>
   import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })),
 );
-const EXCALIDRAW_INPUT_EXTENSION_ID = 'system-excalidraw-input';
 
 interface ExcalidrawEditorSavePayload {
   title: string;
@@ -2227,15 +2226,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    api
-      .invokeExtensionAction('system-suggested-context', 'warmPointers', {
-        prompt: debouncedRelatedThreadsQuery,
-        currentConversationId: id,
-        currentCwd: draftCwdValue || null,
-      })
-      .catch(() => {
-        // Suggested context is an enhancement. Never interrupt drafting or submit for cache misses.
-      });
+    // Find the extension that provides the warmPointers action (system-suggested-context)
+    // instead of hardcoding its id.
+    const suggestedCtxExtension = extensionRegistry.extensions.find((e) =>
+      e.backendActions?.some((a) => a.id === 'warmPointers'),
+    );
+    if (suggestedCtxExtension) {
+      api
+        .invokeExtensionAction(suggestedCtxExtension.id, 'warmPointers', {
+          prompt: debouncedRelatedThreadsQuery,
+          currentConversationId: id,
+          currentCwd: draftCwdValue || null,
+        })
+        .catch(() => {
+          // Suggested context is an enhancement. Never interrupt drafting or submit for cache misses.
+        });
+    }
   }, [debouncedRelatedThreadsQuery, draft, draftCwdValue, id]);
 
   useEffect(() => {
@@ -3800,7 +3806,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const drawing = drawingAttachments.find((attachment) => attachment.localId === localId);
     if (!drawing) return;
 
-    const result = await createNativeExtensionClient(EXCALIDRAW_INPUT_EXTENSION_ID).ui.openModal({
+    const excalidrawExtension = extensionRegistry.extensions.find((e) =>
+      e.backendActions?.some((a) => a.id === 'image'),
+    );
+    const excalidrawInputClient = createNativeExtensionClient(excalidrawExtension?.id ?? 'system-excalidraw-input');
+    const result = await excalidrawInputClient.ui.openModal({
       component: 'ExcalidrawEditorModal',
       props: { initialTitle: drawing.title, initialScene: drawing.scene, saveLabel: 'Update drawing' },
       size: 'fullscreen',

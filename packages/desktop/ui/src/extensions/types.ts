@@ -58,6 +58,7 @@ interface ExtensionViewContribution {
   persistOpen?: boolean;
   detailView?: string;
   routeCapabilities?: ExtensionRouteCapability[];
+  toolSlot?: string;
 }
 
 interface ExtensionNavContribution {
@@ -317,6 +318,7 @@ export interface ExtensionRightToolPanelSurface extends LegacyExtensionSurfaceBa
   scope: ExtensionRightSurfaceScope;
   icon?: ExtensionIconName;
   defaultOpen?: boolean;
+  toolSlot?: string;
 }
 
 type ExtensionSurface =

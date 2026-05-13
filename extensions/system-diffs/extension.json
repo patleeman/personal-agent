@@ -89,7 +89,8 @@
         "icon": "diff",
         "detailView": "conversation-diff-detail",
         "placement": "workbench-tool",
-        "activation": "on-open"
+        "activation": "on-open",
+        "toolSlot": "diffs"
       },
       {
         "id": "conversation-diff-detail",

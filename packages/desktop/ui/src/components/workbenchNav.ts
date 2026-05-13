@@ -2,6 +2,11 @@ export function shouldRenderExtensionToolPanelInWorkbenchNav(extensionId: string
   return extensionId !== 'system-files';
 }
 
+/** Exclude workbench tools whose toolSlot is "files" (rendered via its own dedicated nav element). */
+export function shouldRenderWorkbenchToolInNav(surface: { toolSlot?: string; extensionId?: string }): boolean {
+  return surface.toolSlot !== 'files';
+}
+
 export function labelForExtensionToolPanel(surface: { title?: string; label?: string }): string {
   return surface.title ?? surface.label ?? 'Extension';
 }
