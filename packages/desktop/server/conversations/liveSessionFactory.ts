@@ -19,6 +19,7 @@ import {
   resolveConversationPreferenceStateForSession,
 } from './liveSessionModels.js';
 import { ensureSessionFileExists, patchSessionManagerPersistence, resolveLiveSessionFile } from './liveSessionPersistence.js';
+import { applyBashProcessWrappers } from './processWrappers.js';
 
 interface ToolPatchableSessionInternals {
   _baseToolRegistry?: Map<string, unknown>;
@@ -43,16 +44,17 @@ function patchConversationBashTool(session: AgentSession, cwd: string, conversat
     'bash',
     createBashTool(cwd, {
       commandPrefix: session.settingsManager.getShellCommandPrefix(),
-      spawnHook: (context) => ({
-        ...context,
-        env: resolveChildProcessEnv(
-          {
-            PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
-            ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
-          },
-          context.env,
-        ),
-      }),
+      spawnHook: (context) =>
+        applyBashProcessWrappers({
+          ...context,
+          env: resolveChildProcessEnv(
+            {
+              PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
+              ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
+            },
+            context.env,
+          ),
+        }),
     }),
   );
 

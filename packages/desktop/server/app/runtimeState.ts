@@ -6,6 +6,7 @@ import { AuthStorage, type ExtensionAPI, type ExtensionFactory } from '@earendil
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 
+import { type BashProcessWrapper, clearBashProcessWrappers, registerBashProcessWrapper } from '../conversations/processWrappers.js';
 import { createManifestAgentExtensions } from '../extensions/extensionAgentExtensions.js';
 import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
 import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
@@ -106,7 +107,12 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
    */
   function guardSystemPromptOverride(factory: ExtensionFactory): ExtensionFactory {
     return (pi: ExtensionAPI) => {
-      const guardedPi = new Proxy(pi, {
+      const apiWithProcessWrappers = pi as ExtensionAPI & {
+        registerBashProcessWrapper?: (id: string, wrap: BashProcessWrapper) => void;
+      };
+      apiWithProcessWrappers.registerBashProcessWrapper = registerBashProcessWrapper;
+
+      const guardedPi = new Proxy(apiWithProcessWrappers, {
         get(target, prop, receiver) {
           if (prop === 'on') {
             return (event: string, handler: (...args: unknown[]) => unknown) => {
@@ -132,6 +138,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   }
 
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
+    clearBashProcessWrappers();
     const agentExtensions = createManifestAgentExtensions({ onError: logger.warn });
 
     // Surface agent extension loading errors as session-level diagnostics
