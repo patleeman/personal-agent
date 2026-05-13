@@ -45,4 +45,16 @@ describe('system-conversation-tools manifest', () => {
       ]),
     );
   });
+
+  it('keeps question prompts standalone and groups normal bash tool calls into internal work', () => {
+    expect(manifest.contributes.transcriptRenderers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'ask-user-question-tool-block', tool: 'ask_user_question', standalone: true }),
+        expect.objectContaining({ id: 'terminal-bash-tool-block', tool: 'bash', component: 'TerminalBashTranscriptRenderer' }),
+      ]),
+    );
+
+    const bashRenderer = manifest.contributes.transcriptRenderers.find((renderer: { id: string }) => renderer.id === 'terminal-bash-tool-block');
+    expect(bashRenderer).not.toHaveProperty('standalone');
+  });
 });
