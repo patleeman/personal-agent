@@ -68,4 +68,13 @@ await Promise.all([
       js: createRequireBanner,
     },
   }),
+  // Durable background agent runner spawned by the daemon for subagents and scheduled agent runs.
+  build({
+    ...sharedEsbuildOptions,
+    entryPoints: [resolve(packageRoot, 'server/daemon/background-agent-runner.ts')],
+    outfile: resolve(outdir, 'daemon/background-agent-runner.js'),
+    banner: {
+      js: createRequireBanner,
+    },
+  }),
 ]);

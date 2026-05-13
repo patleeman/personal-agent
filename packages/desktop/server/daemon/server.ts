@@ -34,7 +34,7 @@ import {
   startPeriodicWalCheckpoint,
   stopPeriodicWalCheckpoint,
 } from '../shared/sqliteDbLifecycle.js';
-import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
+import { looksLikeBackgroundAgentRunnerEntryPath } from './background-run-agent.js';
 import { DaemonCompanionServer } from './companion/server.js';
 import type { CompanionRuntimeProvider } from './companion/types.js';
 import { EventBus } from './event-bus.js';
@@ -88,22 +88,6 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-function looksLikePaCommand(binary: string | undefined): boolean {
-  const normalized = binary?.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  return (
-    normalized === 'pa' ||
-    normalized.endsWith('/pa') ||
-    normalized.endsWith('\\pa') ||
-    normalized === 'pa.cmd' ||
-    normalized.endsWith('/pa.cmd') ||
-    normalized.endsWith('\\pa.cmd')
-  );
-}
-
 function hasExplicitSessionOverride(argv: string[] | undefined): boolean {
   if (!argv) {
     return false;
@@ -121,10 +105,6 @@ function hasExplicitSessionOverride(argv: string[] | undefined): boolean {
   );
 }
 
-function quoteShellArg(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 function appendBackgroundRunSessionDir(
   input: {
     argv?: string[];
@@ -140,11 +120,10 @@ function appendBackgroundRunSessionDir(
 
   if (input.argv && input.argv.length > 0) {
     const argv = input.argv;
-    const directPa = looksLikePaCommand(argv[0]);
-    const nodeCliEntry = looksLikePersonalAgentCliEntryPath(argv[1]);
-    const firstPiArgIndex = nodeCliEntry ? 2 : 1;
+    const backgroundAgentRunner = looksLikeBackgroundAgentRunnerEntryPath(argv[1]);
+    const firstRunnerArgIndex = backgroundAgentRunner ? 2 : 1;
 
-    if ((!directPa && !nodeCliEntry) || hasExplicitSessionOverride(argv.slice(firstPiArgIndex))) {
+    if (!backgroundAgentRunner || hasExplicitSessionOverride(argv.slice(firstRunnerArgIndex))) {
       return { argv };
     }
 
@@ -158,18 +137,7 @@ function appendBackgroundRunSessionDir(
     return {};
   }
 
-  const trimmedCommand = shellCommand.trim();
-  if (!/^pa(?:\s|$)/.test(trimmedCommand)) {
-    return { shellCommand };
-  }
-
-  if (/--no-session\b|--resume\b|--continue\b|--session(?:=|\s)|--session-dir(?:=|\s)/.test(trimmedCommand)) {
-    return { shellCommand };
-  }
-
-  return {
-    shellCommand: `${shellCommand} --session-dir ${quoteShellArg(sessionDir)}${input.continueSession ? ' --continue' : ''}`,
-  };
+  return { shellCommand };
 }
 
 export type DaemonStopRequestBehavior = 'exit-process' | 'reject' | 'stop-only';

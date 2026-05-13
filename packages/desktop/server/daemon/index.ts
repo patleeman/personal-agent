@@ -122,7 +122,7 @@ export {
 export {
   type BackgroundRunAgentSpec,
   buildBackgroundAgentArgv,
-  looksLikePersonalAgentCliEntryPath,
+  looksLikeBackgroundAgentRunnerEntryPath,
 } from '../daemon/background-run-agent.js';
 export {
   cancelDurableRun,

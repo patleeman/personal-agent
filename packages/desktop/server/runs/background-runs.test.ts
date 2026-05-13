@@ -43,13 +43,14 @@ describe('background runs', () => {
     expect(fallback).toMatch(/^run-background-2026-03-19T20-00-00-123Z-[a-f0-9]{8}$/);
   });
 
-  it('builds background agent argv from the bundled pi coding agent CLI instead of requiring pa on PATH', () => {
+  it('builds background agent argv from the internal daemon runner instead of a pi/pa binary', () => {
     const argv = buildBackgroundAgentArgv({ prompt: 'Review the latest diff' });
 
     expect(argv[0]).toBe(process.execPath);
-    expect(argv[1]).toMatch(/@earendil-works\/pi-coding-agent\/dist\/cli\.js$|packages\/cli\/dist\/index\.js$/);
-    expect(argv).toEqual(expect.arrayContaining(['--plain', 'tui', '--', '-p', 'Review the latest diff']));
-    expect(argv[0]).not.toBe('pa');
+    expect(argv[1]).toMatch(/daemon\/background-agent-runner\.js$/);
+    expect(argv).toEqual(expect.arrayContaining(['--prompt', 'Review the latest diff']));
+    expect(argv).not.toContain('pi');
+    expect(argv).not.toContain('pa');
   });
 
   it('materializes agent runs into durable argv and stores the structured agent spec', async () => {
@@ -67,12 +68,13 @@ describe('background runs', () => {
 
     expect(record.argv).toBeDefined();
     expect(record.shellCommand).toBeUndefined();
-    expect(record.argv).toContain('tui');
-    expect(record.argv).toContain('--plain');
+    expect(record.argv?.[1]).toMatch(/daemon\/background-agent-runner\.js$/);
+    expect(record.argv).not.toContain('tui');
+    expect(record.argv).not.toContain('--plain');
     expect(record.argv).not.toContain('--profile');
     expect(record.argv).toContain('--model');
     expect(record.argv).toContain('openai-codex/gpt-5.4');
-    expect(record.argv).toContain('-p');
+    expect(record.argv).toContain('--prompt');
     expect(record.argv).toContain('Review the latest diff');
 
     const manifest = loadDurableRunManifest(record.paths.manifestPath);

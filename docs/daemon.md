@@ -27,6 +27,10 @@ Desktop app ←──→ Daemon (child process)
 
 If the daemon crashes or is killed, the desktop app restarts it automatically.
 
+## Durable Agent Runs
+
+Subagents and scheduled agent tasks run through the daemon's internal background agent runner. The daemon still spawns a child process for isolation, logs, cancellation, and replay, but that child imports the same server-side agent session stack used by live conversations instead of shelling out to the `pi` or `pa` CLI binaries.
+
 ## Daemon State API
 
 | Endpoint      | Method | What it returns                          |
