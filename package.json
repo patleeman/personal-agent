@@ -83,7 +83,20 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
-    "@excalidraw/excalidraw": "^0.18.1"
+    "@excalidraw/excalidraw": "^0.18.1",
+    "@pierre/trees": "^1.0.0-beta.3",
+    "@tiptap/core": "^3.21.0",
+    "@tiptap/extension-image": "^3.21.0",
+    "@tiptap/extension-link": "^3.21.0",
+    "@tiptap/extension-placeholder": "^3.21.0",
+    "@tiptap/extension-task-item": "^3.21.0",
+    "@tiptap/extension-task-list": "^3.21.0",
+    "@tiptap/markdown": "^3.21.0",
+    "@tiptap/react": "^3.21.0",
+    "@tiptap/starter-kit": "^3.21.0",
+    "@tiptap/suggestion": "^3.21.0",
+    "qrcode": "^1.5.4",
+    "yaml": "^2.8.3"
   },
   "overrides": {
     "form-data": "^2.5.5",

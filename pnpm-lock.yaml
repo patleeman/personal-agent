@@ -16,12 +16,48 @@ importers:
       '@excalidraw/excalidraw':
         specifier: ^0.18.1
         version: 0.18.1(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@pierre/trees':
+        specifier: ^1.0.0-beta.3
+        version: 1.0.0-beta.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@sinclair/typebox':
         specifier: ^0.34.49
         version: 0.34.49
+      '@tiptap/core':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/pm@3.21.0)
+      '@tiptap/extension-image':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))
+      '@tiptap/extension-link':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0)
+      '@tiptap/extension-placeholder':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/extensions@3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0))
+      '@tiptap/extension-task-item':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/extension-list@3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0))
+      '@tiptap/extension-task-list':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/extension-list@3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0))
+      '@tiptap/markdown':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0)
+      '@tiptap/react':
+        specifier: ^3.21.0
+        version: 3.21.0(@floating-ui/dom@1.7.6)(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0)(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tiptap/starter-kit':
+        specifier: ^3.21.0
+        version: 3.21.0
+      '@tiptap/suggestion':
+        specifier: ^3.21.0
+        version: 3.21.0(@tiptap/core@3.21.0(@tiptap/pm@3.21.0))(@tiptap/pm@3.21.0)
       jsdom:
         specifier: ^24.0.0
         version: 24.1.3
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -31,6 +67,9 @@ importers:
       react-router-dom:
         specifier: ^6.22.3
         version: 6.30.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      yaml:
+        specifier: ^2.8.3
+        version: 2.8.3
     devDependencies:
       '@personal-agent/core':
         specifier: workspace:*
