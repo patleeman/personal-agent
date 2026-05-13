@@ -38,6 +38,70 @@ Starter create payload:
 }
 ```
 
+## Agent tool contract
+
+Use the `extension_manager` tool when it is available. It is the built-app authoring loop and does not require a repo checkout.
+
+```json
+{ "action": "list" }
+{ "action": "create", "id": "my-extension", "name": "My Extension", "description": "...", "template": "main-page" }
+{ "action": "snapshot", "id": "my-extension" }
+{ "action": "build", "id": "my-extension" }
+{ "action": "validate", "id": "my-extension" }
+{ "action": "reload", "id": "my-extension" }
+{ "action": "validate", "packageRoot": "/absolute/path/to/uninstalled-extension" }
+```
+
+A validation result has this shape:
+
+```json
+{
+  "ok": false,
+  "extensionId": "my-extension",
+  "packageRoot": "/.../extensions/my-extension",
+  "summary": { "errors": 1, "warnings": 0, "info": 0 },
+  "findings": [
+    {
+      "severity": "error",
+      "code": "missing-frontend-dist",
+      "message": "Frontend entry is missing: dist/frontend.js",
+      "path": "/.../dist/frontend.js",
+      "fix": "Build the extension."
+    }
+  ]
+}
+```
+
+Treat `ok: false` as actionable, not fatal. Fix every `error`, usually fix every `warning`, rebuild, validate again, then reload.
+
+## HTTP API contract
+
+If tools are unavailable but the app API is reachable, use the same operations over HTTP:
+
+```text
+GET  /api/extensions/installed
+POST /api/extensions
+POST /api/extensions/{id}/snapshot
+POST /api/extensions/{id}/build
+POST /api/extensions/{id}/validate
+POST /api/extensions/validate          # body: { id | extensionId | packageRoot }
+POST /api/extensions/{id}/reload
+POST /api/extensions/{id}/self-test
+POST /api/extensions/{id}/export
+```
+
+Successful build response:
+
+```json
+{ "ok": true, "extensionId": "my-extension", "outputs": ["dist/frontend.js", "dist/backend.mjs"] }
+```
+
+Successful reload response:
+
+```json
+{ "ok": true, "id": "my-extension", "reloaded": true, "message": "Extension backend reloaded." }
+```
+
 Templates:
 
 - `main-page` — global app page with `/ext/{id}` route and sidebar nav.
@@ -280,12 +344,26 @@ Before reporting done:
 - `extension.json` parses and all contribution references match real exports.
 - `dist/frontend.js` exists when `frontend.entry` is declared.
 - `dist/backend.mjs` exists when `backend.entry` is declared.
+- `extension_manager { "action": "validate", "id": "..." }` returns `ok: true`, or every finding is understood and explicitly reported.
 - Build/reload succeeded without Extension Manager diagnostics.
 - Backend imports at module scope without throwing.
 - No absolute, `file:`, release-temp, or machine-local imports remain in `dist/`.
 - No direct process APIs are imported by backend source.
 - UI surfaces open and look native.
 - README explains what the extension does and how to use it.
+
+## Quality bar for full-fledged extensions
+
+A full-fledged extension should have more than a passing build. Check these before calling it done:
+
+- **Clear product boundary**: README says what the extension owns, where its data lives, and how a user starts using it.
+- **Native UI**: uses shared UI primitives and app theme tokens; no iframe/webview fallback, no isolated website styling.
+- **Recoverable failures**: backend actions return useful errors, log with `ctx.log`, and avoid throwing from module scope.
+- **Agent-safe tools**: tool names are stable, descriptions are action-oriented, schemas are precise, and destructive actions require explicit inputs.
+- **State model**: user-visible config is in manifest settings; private runtime data is in extension storage; no secrets are written to source or README.
+- **Portability**: dist bundles contain no machine-local paths and do not depend on repo-only packages.
+- **Operations**: build, validate, reload, self-test, and export all behave predictably from Extension Manager.
+- **Visual proof**: every contributed page, rail, workbench detail, modal, renderer, or settings component was opened and inspected.
 
 ## Debugging guide
 
