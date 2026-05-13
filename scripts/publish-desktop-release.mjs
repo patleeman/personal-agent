@@ -404,10 +404,12 @@ function resolveInstalledPackageDir(buildRoot, startDir, packageName) {
     return rootCandidate;
   }
 
-  // Last resort: use Node's own resolution which understands pnpm's symlink store.
-  // This handles the case where packages are in .pnpm/ but not hoisted to root.
+  // Last resort: use a build-root-based require to resolve through pnpm's store.
+  // The normal walk-based resolution can fail because pnpm's symlinks resolve
+  // into .pnpm/ directly, bypassing the root node_modules/ directory.
   try {
-    const resolved = require.resolve(packageName, { paths: [normalizedBuildRoot] });
+    const buildRequire = createRequire(resolve(normalizedBuildRoot, 'package.json'));
+    const resolved = buildRequire.resolve(packageName);
     if (existsSync(resolved)) {
       // Walk up from the resolved file until we find package.json
       let dir = dirname(resolved);
