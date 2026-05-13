@@ -8,7 +8,7 @@ This extension owns the product behavior documented below. Keep extension-specif
 
 # Artifacts
 
-Artifacts are rendered outputs visible inside a conversation. They support HTML, Mermaid diagrams, and LaTeX. Artifacts appear in the workbench rail and can be created, updated, and viewed alongside the transcript.
+Artifacts are rendered outputs visible inside a conversation. They support HTML, Mermaid diagrams, and LaTeX. Saving one inserts a transcript card you can open, and artifacts also appear in the workbench rail beside the conversation.
 
 ## Supported Types
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../client/api';
 import { EXTENSION_REGISTRY_CHANGED_EVENT } from './extensionRegistryEvents';
-import type { ExtensionManifest, ExtensionRouteSummary, ExtensionSurfaceSummary } from './types';
+import type { ExtensionInstallSummary, ExtensionManifest, ExtensionRouteSummary, ExtensionSurfaceSummary } from './types';
 
 export interface ExtensionTopBarElementRegistration {
   extensionId: string;
@@ -144,8 +144,17 @@ export interface ExtensionMessageActionRegistration {
   priority?: number;
 }
 
+export type ExtensionRegistryEntry = ExtensionInstallSummary & ExtensionManifest;
+
+function normalizeRegistryExtensions(extensions: ExtensionInstallSummary[]): ExtensionRegistryEntry[] {
+  return extensions.map((extension) => ({
+    ...extension.manifest,
+    ...extension,
+  }));
+}
+
 export interface ExtensionRegistryState {
-  extensions: ExtensionManifest[];
+  extensions: ExtensionRegistryEntry[];
   routes: ExtensionRouteSummary[];
   surfaces: ExtensionSurfaceSummary[];
   topBarElements: ExtensionTopBarElementRegistration[];
@@ -499,7 +508,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
       setState((previous) => ({ ...previous, loading: true, error: null }));
 
       if (
-        typeof api.extensions !== 'function' ||
+        typeof api.extensionInstallations !== 'function' ||
         typeof api.extensionRoutes !== 'function' ||
         typeof api.extensionSurfaces !== 'function'
       ) {
@@ -530,30 +539,31 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         return;
       }
 
-      Promise.all([api.extensions(), api.extensionRoutes(), api.extensionSurfaces()])
+      Promise.all([api.extensionInstallations(), api.extensionRoutes(), api.extensionSurfaces()])
         .then(([extensions, routes, surfaces]) => {
           if (cancelled) return;
-          const settingsComponents = normalizeSettingsComponents(extensions);
+          const registryExtensions = normalizeRegistryExtensions(extensions);
+          const settingsComponents = normalizeSettingsComponents(registryExtensions);
           setState({
-            extensions,
+            extensions: registryExtensions,
             routes,
             surfaces,
-            topBarElements: normalizeTopBarElements(extensions),
-            messageActions: normalizeMessageActions(extensions),
-            composerShelves: normalizeComposerShelves(extensions),
-            newConversationPanels: normalizeNewConversationPanels(extensions),
+            topBarElements: normalizeTopBarElements(registryExtensions),
+            messageActions: normalizeMessageActions(registryExtensions),
+            composerShelves: normalizeComposerShelves(registryExtensions),
+            newConversationPanels: normalizeNewConversationPanels(registryExtensions),
             settingsComponents,
             settingsComponent: settingsComponents[0] ?? null,
-            composerButtons: normalizeComposerButtons(extensions),
-            composerInputTools: normalizeComposerInputTools(extensions),
-            toolbarActions: normalizeToolbarActions(extensions),
-            contextMenus: normalizeContextMenus(extensions),
-            threadHeaderActions: normalizeThreadHeaderActions(extensions),
-            statusBarItems: normalizeStatusBarItems(extensions),
-            conversationHeaderElements: normalizeConversationHeaderElements(extensions),
-            conversationDecorators: normalizeConversationDecorators(extensions),
-            activityTreeItemElements: normalizeActivityTreeItemElements(extensions),
-            activityTreeItemStyles: normalizeActivityTreeItemStyles(extensions),
+            composerButtons: normalizeComposerButtons(registryExtensions),
+            composerInputTools: normalizeComposerInputTools(registryExtensions),
+            toolbarActions: normalizeToolbarActions(registryExtensions),
+            contextMenus: normalizeContextMenus(registryExtensions),
+            threadHeaderActions: normalizeThreadHeaderActions(registryExtensions),
+            statusBarItems: normalizeStatusBarItems(registryExtensions),
+            conversationHeaderElements: normalizeConversationHeaderElements(registryExtensions),
+            conversationDecorators: normalizeConversationDecorators(registryExtensions),
+            activityTreeItemElements: normalizeActivityTreeItemElements(registryExtensions),
+            activityTreeItemStyles: normalizeActivityTreeItemStyles(registryExtensions),
             loading: false,
             error: null,
           });

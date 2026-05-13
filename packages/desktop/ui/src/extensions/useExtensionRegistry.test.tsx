@@ -7,7 +7,7 @@ import { useExtensionRegistry } from './useExtensionRegistry';
 
 vi.mock('../client/api', () => ({
   api: {
-    extensions: vi.fn(),
+    extensionInstallations: vi.fn(),
     extensionRoutes: vi.fn(),
     extensionSurfaces: vi.fn(),
   },
@@ -19,62 +19,68 @@ describe('useExtensionRegistry', () => {
   });
 
   it('normalizes component-backed extension chrome from manifests', async () => {
-    vi.mocked(api.extensions).mockResolvedValue([
+    vi.mocked(api.extensionInstallations).mockResolvedValue([
       {
-        schemaVersion: 2,
         id: 'test-extension',
         name: 'Test Extension',
-        frontend: { entry: 'dist/frontend.js', styles: [] },
-        contributes: {
-          conversationHeaderElements: [
-            {
-              id: 'header-indicator',
-              component: 'HeaderIndicator',
-              label: 'Header indicator',
-            },
-          ],
-          statusBarItems: [
-            {
-              id: 'git-status',
-              label: 'Git status',
-              component: 'GitStatusIndicator',
-              alignment: 'right',
-              priority: 100,
-            },
-          ],
-          composerButtons: [
-            {
-              id: 'goal-mode',
-              component: 'GoalModeComposerButton',
-              title: 'Goal mode',
-              placement: 'afterModelPicker',
-              priority: 100,
-            },
-          ],
-          composerInputTools: [
-            {
-              id: 'draw',
-              component: 'DrawButton',
-              title: 'Draw',
-              when: '!streamIsStreaming',
-              priority: 25,
-            },
-          ],
-          activityTreeItemElements: [
-            {
-              id: 'thread-color-dot',
-              component: 'ThreadColorDot',
-              slot: 'leading',
-              priority: 10,
-            },
-          ],
-          activityTreeItemStyles: [
-            {
-              id: 'thread-color-style',
-              provider: 'getThreadColorStyle',
-              priority: 20,
-            },
-          ],
+        enabled: true,
+        status: 'enabled',
+        manifest: {
+          schemaVersion: 2,
+          id: 'test-extension',
+          name: 'Test Extension',
+          frontend: { entry: 'dist/frontend.js', styles: [] },
+          contributes: {
+            conversationHeaderElements: [
+              {
+                id: 'header-indicator',
+                component: 'HeaderIndicator',
+                label: 'Header indicator',
+              },
+            ],
+            statusBarItems: [
+              {
+                id: 'git-status',
+                label: 'Git status',
+                component: 'GitStatusIndicator',
+                alignment: 'right',
+                priority: 100,
+              },
+            ],
+            composerButtons: [
+              {
+                id: 'goal-mode',
+                component: 'GoalModeComposerButton',
+                title: 'Goal mode',
+                placement: 'afterModelPicker',
+                priority: 100,
+              },
+            ],
+            composerInputTools: [
+              {
+                id: 'draw',
+                component: 'DrawButton',
+                title: 'Draw',
+                when: '!streamIsStreaming',
+                priority: 25,
+              },
+            ],
+            activityTreeItemElements: [
+              {
+                id: 'thread-color-dot',
+                component: 'ThreadColorDot',
+                slot: 'leading',
+                priority: 10,
+              },
+            ],
+            activityTreeItemStyles: [
+              {
+                id: 'thread-color-style',
+                provider: 'getThreadColorStyle',
+                priority: 20,
+              },
+            ],
+          },
         },
       },
     ] as never);
@@ -84,6 +90,13 @@ describe('useExtensionRegistry', () => {
     const { result } = renderHook(() => useExtensionRegistry());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.extensions).toEqual([
+      expect.objectContaining({
+        id: 'test-extension',
+        enabled: true,
+        manifest: expect.objectContaining({ id: 'test-extension' }),
+      }),
+    ]);
     expect(result.current.conversationHeaderElements).toEqual([
       {
         extensionId: 'test-extension',
@@ -147,8 +160,8 @@ describe('useExtensionRegistry', () => {
   });
 
   it('keeps registry arrays defined when the extension API is unavailable', async () => {
-    const originalExtensions = api.extensions;
-    (api as unknown as { extensions?: unknown }).extensions = undefined;
+    const originalExtensionInstallations = api.extensionInstallations;
+    (api as unknown as { extensionInstallations?: unknown }).extensionInstallations = undefined;
 
     try {
       const { result } = renderHook(() => useExtensionRegistry());
@@ -162,7 +175,8 @@ describe('useExtensionRegistry', () => {
       expect(result.current.composerButtons).toEqual([]);
       expect(result.current.composerInputTools).toEqual([]);
     } finally {
-      (api as unknown as { extensions: typeof originalExtensions }).extensions = originalExtensions;
+      (api as unknown as { extensionInstallations: typeof originalExtensionInstallations }).extensionInstallations =
+        originalExtensionInstallations;
     }
   });
 });
