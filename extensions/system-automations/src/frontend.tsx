@@ -56,20 +56,47 @@ function sortTasks(tasks: ScheduledTaskSummary[]) {
   );
 }
 
-function statusText(task: ScheduledTaskSummary) {
+function sortPastDueTasks(tasks: ScheduledTaskSummary[]) {
+  return [...tasks].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')) || taskName(a).localeCompare(taskName(b)));
+}
+
+function oneTimeTaskAtMs(task: Pick<ScheduledTaskSummary, 'at'>) {
+  const scheduledAt = task.at?.trim();
+  if (!scheduledAt) return null;
+  const atMs = Date.parse(scheduledAt);
+  return Number.isFinite(atMs) ? atMs : null;
+}
+
+function isPastDueOneTimeTask(task: ScheduledTaskSummary, nowMs = Date.now()) {
+  if (task.enabled === false || task.running || task.lastRunAt) return false;
+  const atMs = oneTimeTaskAtMs(task);
+  return atMs !== null && atMs <= nowMs;
+}
+
+function statusText(task: ScheduledTaskSummary, nowMs = Date.now()) {
   if (task.running) return 'Running';
+  if (isPastDueOneTimeTask(task, nowMs)) return 'Past due';
   if (!task.enabled) return 'Disabled';
   if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'Needs attention';
   if (task.lastStatus === 'success') return 'Active';
   return task.cron || task.at ? 'Active' : 'Manual';
 }
 
-function statusClass(task: ScheduledTaskSummary) {
+function statusClass(task: ScheduledTaskSummary, nowMs = Date.now()) {
   if (task.running) return 'bg-accent border-accent';
+  if (isPastDueOneTimeTask(task, nowMs)) return 'bg-warning border-warning';
   if (!task.enabled) return 'opacity-40';
   if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'bg-danger border-danger';
   if (task.lastStatus === 'success') return 'bg-success border-success';
   return 'border-secondary';
+}
+
+function statusTextClass(task: ScheduledTaskSummary, nowMs = Date.now()) {
+  if (task.running) return 'text-accent';
+  if (isPastDueOneTimeTask(task, nowMs)) return 'text-warning';
+  if (!task.enabled) return 'text-dim';
+  if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'text-danger';
+  return 'text-success';
 }
 
 function scheduleText(task: ScheduledTaskSummary) {
@@ -92,7 +119,8 @@ function taskScheduleSummary(task: ScheduledTaskSummary) {
   return scheduleText(task);
 }
 
-function taskLastRunText(task: ScheduledTaskSummary) {
+function taskLastRunText(task: ScheduledTaskSummary, nowMs = Date.now()) {
+  if (isPastDueOneTimeTask(task, nowMs)) return 'Scheduled time passed';
   return task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Not run yet';
 }
 
@@ -170,6 +198,78 @@ function FormSection({ title, children }: { title: string; children: React.React
 
 function fieldClass() {
   return 'w-full rounded-lg border border-border-subtle bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent';
+}
+
+function AutomationRows({
+  tasks,
+  logById,
+  busy,
+  nowMs,
+  onRunTask,
+  onOpenEditor,
+  onToggleLog,
+}: {
+  tasks: ScheduledTaskSummary[];
+  logById: Record<string, string>;
+  busy: string | null;
+  nowMs: number;
+  onRunTask: (taskId: string) => void;
+  onOpenEditor: (task: ScheduledTaskSummary) => void;
+  onToggleLog: (taskId: string) => void;
+}) {
+  return (
+    <div>
+      {tasks.map((task) => {
+        const scope = taskScopeText(task);
+        return (
+          <article key={task.id} className="group border-b border-border-subtle py-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_auto] lg:items-start">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={cx('h-2.5 w-2.5 rounded-full border', statusClass(task, nowMs))} />
+                  <h3 className="truncate text-[15px] font-semibold text-primary">{taskName(task)}</h3>
+                  {scope ? <span className="truncate text-[13px] text-dim">{scope}</span> : null}
+                </div>
+                <p className="mt-1 text-[12px] text-secondary">
+                  <span className={statusTextClass(task, nowMs)}>{statusText(task, nowMs)}</span>
+                  <span className="opacity-40 mx-1.5">·</span>
+                  {task.targetType === 'conversation' && task.threadConversationId ? (
+                    <a className="text-accent hover:underline" href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}>
+                      Thread
+                    </a>
+                  ) : task.targetType === 'conversation' ? (
+                    'Thread'
+                  ) : (
+                    'Job'
+                  )}
+                  <span className="opacity-40 mx-1.5">·</span>
+                  {taskLastRunText(task, nowMs)}
+                </p>
+                {logById[task.id] ? (
+                  <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[12px] leading-5 text-secondary">
+                    {logById[task.id]}
+                  </pre>
+                ) : null}
+              </div>
+              <p className="text-[13px] text-secondary lg:text-right">{taskScheduleSummary(task)}</p>
+              <div className="flex flex-wrap gap-2 opacity-100 lg:justify-end lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-within:opacity-100">
+                {task.threadConversationId ? (
+                  <a className={cx('ui-toolbar-button')} href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}>
+                    Open thread
+                  </a>
+                ) : null}
+                <ToolbarButton disabled={busy === task.id} onClick={() => onRunTask(task.id)}>
+                  Run
+                </ToolbarButton>
+                <ToolbarButton onClick={() => onOpenEditor(task)}>Edit</ToolbarButton>
+                <ToolbarButton onClick={() => onToggleLog(task.id)}>{logById[task.id] ? 'Hide log' : 'Log'}</ToolbarButton>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
 }
 
 export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
@@ -298,6 +398,10 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
   const enabledCount = useMemo(() => tasks.filter((task) => task.enabled !== false).length, [tasks]);
   const enabledLabel = useMemo(() => (enabledCount === 1 ? '1 enabled' : `${enabledCount} enabled`), [enabledCount]);
   const countLabel = useMemo(() => (tasks.length === 1 ? '1 automation' : `${tasks.length} automations`), [tasks.length]);
+  const nowMs = Date.now();
+  const pastDueTasks = sortPastDueTasks(tasks.filter((task) => isPastDueOneTimeTask(task, nowMs)));
+  const currentTasks = tasks.filter((task) => !isPastDueOneTimeTask(task, nowMs));
+  const pastDueLabel = pastDueTasks.length === 1 ? '1 past due' : `${pastDueTasks.length} past due`;
 
   if (loading) {
     return (
@@ -516,6 +620,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
               <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
               <span className="text-[12px] text-dim">
                 {enabledLabel} · {countLabel}
+                {pastDueTasks.length > 0 ? ` · ${pastDueLabel}` : ''}
               </span>
             </div>
             {tasks.length === 0 ? (
@@ -526,58 +631,37 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
               />
             ) : (
               <div>
-                {tasks.map((task) => {
-                  const scope = taskScopeText(task);
-                  return (
-                    <article key={task.id} className="group border-b border-border-subtle py-5">
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_auto] lg:items-start">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={cx('h-2.5 w-2.5 rounded-full border', statusClass(task))} />
-                            <h3 className="truncate text-[15px] font-semibold text-primary">{taskName(task)}</h3>
-                            {scope ? <span className="truncate text-[13px] text-dim">{scope}</span> : null}
-                          </div>
-                          <p className="mt-1 text-[12px] text-secondary">
-                            <span className={task.enabled ? 'text-success' : 'text-dim'}>{statusText(task)}</span>
-                            <span className="opacity-40 mx-1.5">·</span>
-                            {task.targetType === 'conversation' && task.threadConversationId ? (
-                              <a
-                                className="text-accent hover:underline"
-                                href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}
-                              >
-                                Thread
-                              </a>
-                            ) : task.targetType === 'conversation' ? (
-                              'Thread'
-                            ) : (
-                              'Job'
-                            )}
-                            <span className="opacity-40 mx-1.5">·</span>
-                            {taskLastRunText(task)}
-                          </p>
-                          {logById[task.id] ? (
-                            <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[12px] leading-5 text-secondary">
-                              {logById[task.id]}
-                            </pre>
-                          ) : null}
-                        </div>
-                        <p className="text-[13px] text-secondary lg:text-right">{taskScheduleSummary(task)}</p>
-                        <div className="flex flex-wrap gap-2 opacity-100 lg:justify-end lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-within:opacity-100">
-                          {task.threadConversationId ? (
-                            <a className={cx('ui-toolbar-button')} href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}>
-                              Open thread
-                            </a>
-                          ) : null}
-                          <ToolbarButton disabled={busy === task.id} onClick={() => void runTask(task.id)}>
-                            Run
-                          </ToolbarButton>
-                          <ToolbarButton onClick={() => openEditor(task)}>Edit</ToolbarButton>
-                          <ToolbarButton onClick={() => void toggleLog(task.id)}>{logById[task.id] ? 'Hide log' : 'Log'}</ToolbarButton>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
+                {currentTasks.length > 0 ? (
+                  <AutomationRows
+                    tasks={currentTasks}
+                    logById={logById}
+                    busy={busy}
+                    nowMs={nowMs}
+                    onRunTask={(taskId) => void runTask(taskId)}
+                    onOpenEditor={openEditor}
+                    onToggleLog={(taskId) => void toggleLog(taskId)}
+                  />
+                ) : (
+                  <div className="py-6 text-[13px] text-secondary">No current automations.</div>
+                )}
+
+                {pastDueTasks.length > 0 ? (
+                  <section className="pt-8">
+                    <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle pb-4">
+                      <h3 className="text-[16px] font-semibold tracking-tight text-primary">Past due</h3>
+                      <span className="text-[12px] text-warning">{pastDueLabel}</span>
+                    </div>
+                    <AutomationRows
+                      tasks={pastDueTasks}
+                      logById={logById}
+                      busy={busy}
+                      nowMs={nowMs}
+                      onRunTask={(taskId) => void runTask(taskId)}
+                      onOpenEditor={openEditor}
+                      onToggleLog={(taskId) => void toggleLog(taskId)}
+                    />
+                  </section>
+                ) : null}
               </div>
             )}
           </section>

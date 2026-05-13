@@ -11,6 +11,7 @@ Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 const mountedRoots: Root[] = [];
 
 afterEach(() => {
+  vi.useRealTimers();
   for (const root of mountedRoots) {
     act(() => root.unmount());
   }
@@ -90,6 +91,44 @@ describe('AutomationsPage', () => {
     });
 
     expect(pa.automations.run).toHaveBeenCalledWith('daily-check');
+  });
+
+  it('moves overdue one-time automations into a past-due section', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-13T12:00:00.000Z'));
+
+    const { container } = await renderPage(
+      createPa({
+        list: vi.fn(async () => [
+          {
+            id: 'missed-check',
+            title: 'Missed check',
+            scheduleType: 'at',
+            targetType: 'conversation',
+            running: false,
+            enabled: true,
+            at: '2026-05-12T07:13:01.347Z',
+            prompt: 'Missed the scheduled slot',
+          },
+          {
+            id: 'later-check',
+            title: 'Later check',
+            scheduleType: 'at',
+            targetType: 'conversation',
+            running: false,
+            enabled: true,
+            at: '2026-05-14T13:10:00.000Z',
+            prompt: 'Still upcoming',
+          },
+        ]),
+      }),
+    );
+
+    expect(container.textContent).toContain('1 past due');
+    expect(container.textContent).toContain('Past due');
+    expect(container.textContent).toContain('Missed check');
+    expect(container.textContent).toContain('Scheduled time passed');
+    expect(container.textContent).toContain('Later check');
   });
 
   it('links conversation automations to their thread', async () => {

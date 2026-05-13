@@ -12,17 +12,15 @@ Automations is the desktop UI for managing scheduled background tasks. Navigate 
 
 ## List View
 
-The automations list shows all configured automations in a table:
+The automations list groups active schedules under **Current**. Enabled one-time automations whose scheduled time has already passed without a recorded run move into a **Past due** section so they stay visible without looking like upcoming work.
 
-| Column   | Description                             |
-| -------- | --------------------------------------- |
-| Title    | Automation name                         |
-| Schedule | Cron expression or one-time time        |
-| Target   | Background agent or conversation        |
-| Status   | Enabled/disabled indicator              |
-| Last run | Timestamp and outcome of last execution |
+Each row shows:
 
-Sort and filter the list by any column.
+- automation name and scope
+- schedule
+- delivery target
+- current status and last-run state
+- row actions for run, edit, and log access
 
 ## Detail View
 
