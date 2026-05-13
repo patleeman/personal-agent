@@ -196,6 +196,7 @@ const FORBIDDEN_BACKEND_IMPORTS = new Set([
   'node:worker_threads',
   '@personal-agent/core',
   '@personal-agent/daemon',
+  'better-sqlite3',
 ]);
 
 export class ExtensionLoadError extends Error {

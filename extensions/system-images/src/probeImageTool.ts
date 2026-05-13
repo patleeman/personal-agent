@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 
 import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } from '@earendil-works/pi-coding-agent';
-import { getImageProbeAttachments, getImageProbeAttachmentsById, getPiAgentRuntimeDir } from '@personal-agent/extensions/backend/images';
+import { getImageProbeAttachments, getImageProbeAttachmentsById } from '@personal-agent/extensions/backend/images';
+import { getRuntimeDir } from '@personal-agent/extensions/backend/runtime';
 import { Type } from '@sinclair/typebox';
 
 const ImageProbeParams = Type.Object({
@@ -134,7 +135,7 @@ export function createImageProbeAgentExtension(options: { getPreferredVisionMode
             await createAgentSession({
               cwd: ctx.cwd,
               model: model as never,
-              authStorage: AuthStorage.create(join(getPiAgentRuntimeDir(), 'auth.json')),
+              authStorage: AuthStorage.create(join(getRuntimeDir(), 'auth.json')),
               modelRegistry: ctx.modelRegistry,
               sessionManager: SessionManager.inMemory(ctx.cwd),
               noTools: 'all',
