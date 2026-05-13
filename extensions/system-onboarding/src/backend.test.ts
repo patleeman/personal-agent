@@ -61,8 +61,8 @@ describe('system-onboarding backend', () => {
     };
     const ctx = createCtx({ conversations, storage });
 
-    const first = ensure(undefined, ctx);
-    const second = ensure(undefined, ctx);
+    const first = ensure({ source: 'frontend' }, ctx);
+    const second = ensure({ source: 'frontend' }, ctx);
 
     await Promise.resolve();
     await Promise.resolve();
@@ -71,8 +71,8 @@ describe('system-onboarding backend', () => {
     resolveCreate?.({ id: 'conv-1' });
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
-    expect(firstResult).toEqual({ created: true, conversationId: 'conv-1' });
-    expect(secondResult).toEqual({ created: true, conversationId: 'conv-1' });
+    expect(firstResult).toEqual({ created: true, conversationId: 'conv-1', shouldOpen: true });
+    expect(secondResult).toEqual({ created: true, conversationId: 'conv-1', shouldOpen: true });
     expect(storage.put).toHaveBeenCalledTimes(1);
     expect(conversations.setTitle).toHaveBeenCalledTimes(1);
     expect(conversations.appendVisibleCustomMessage).toHaveBeenCalledTimes(1);
@@ -90,6 +90,7 @@ describe('system-onboarding backend', () => {
         completed: true,
         conversationId: 'conv-1',
         completedAt: '2026-05-12T00:00:00.000Z',
+        openedInUi: false,
       }),
       put: vi.fn().mockResolvedValue({ ok: true }),
       delete: vi.fn().mockResolvedValue({ ok: true, deleted: false }),
@@ -97,16 +98,40 @@ describe('system-onboarding backend', () => {
     const ui = { invalidate: vi.fn() };
     const ctx = createCtx({ conversations, storage, ui });
 
-    await expect(ensure(undefined, ctx)).resolves.toEqual({
+    await expect(ensure({ source: 'frontend' }, ctx)).resolves.toEqual({
       created: false,
       conversationId: 'conv-1',
       skipped: 'completed',
+      shouldOpen: true,
     });
 
     expect(conversations.create).not.toHaveBeenCalled();
-    expect(storage.put).not.toHaveBeenCalled();
+    expect(storage.put).toHaveBeenCalledTimes(1);
     expect(storage.delete).not.toHaveBeenCalled();
     expect(mockSetExtensionEnabled).toHaveBeenCalledWith('system-onboarding', false);
     expect(ui.invalidate).toHaveBeenCalledWith(['extensions']);
+  });
+
+  it('does not re-open onboarding once the UI already consumed it', async () => {
+    const storage = {
+      get: vi.fn().mockResolvedValue({
+        completed: true,
+        conversationId: 'conv-1',
+        completedAt: '2026-05-12T00:00:00.000Z',
+        openedInUi: true,
+      }),
+      put: vi.fn().mockResolvedValue({ ok: true }),
+      delete: vi.fn().mockResolvedValue({ ok: true, deleted: false }),
+    };
+    const ctx = createCtx({ storage });
+
+    await expect(ensure({ source: 'frontend' }, ctx)).resolves.toEqual({
+      created: false,
+      conversationId: 'conv-1',
+      skipped: 'completed',
+      shouldOpen: false,
+    });
+
+    expect(storage.put).not.toHaveBeenCalled();
   });
 });

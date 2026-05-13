@@ -8,12 +8,18 @@ interface OnboardingState {
   completed: boolean;
   conversationId?: string;
   completedAt: string;
+  openedInUi?: boolean;
+}
+
+interface EnsureInput {
+  source?: string;
 }
 
 interface EnsureResult {
   created: boolean;
   conversationId?: string;
   skipped?: string;
+  shouldOpen?: boolean;
 }
 
 const ensureInFlightByProfile = new Map<string, Promise<EnsureResult>>();
@@ -34,11 +40,31 @@ function disableOnboarding(ctx: ExtensionBackendContext): void {
   ctx.ui.invalidate(['extensions']);
 }
 
-async function ensureOnce(ctx: ExtensionBackendContext): Promise<EnsureResult> {
+async function ensureOnce(input: EnsureInput | undefined, ctx: ExtensionBackendContext): Promise<EnsureResult> {
+  const frontendRequest = input?.source === 'frontend';
   const existingState = await ctx.storage.get<OnboardingState>(ONBOARDING_STATE_KEY);
   if (existingState?.completed) {
+    if (frontendRequest && existingState.conversationId && !existingState.openedInUi) {
+      await ctx.storage.put(ONBOARDING_STATE_KEY, {
+        ...existingState,
+        openedInUi: true,
+      } satisfies OnboardingState);
+      disableOnboarding(ctx);
+      return {
+        created: false,
+        conversationId: existingState.conversationId,
+        skipped: 'completed',
+        shouldOpen: true,
+      };
+    }
+
     disableOnboarding(ctx);
-    return { created: false, conversationId: existingState.conversationId, skipped: 'completed' };
+    return {
+      created: false,
+      conversationId: existingState.conversationId,
+      skipped: 'completed',
+      shouldOpen: false,
+    };
   }
 
   const created = (await ctx.conversations.create({ cwd: ctx.runtime.getRepoRoot() })) as { id: string };
@@ -49,19 +75,21 @@ async function ensureOnce(ctx: ExtensionBackendContext): Promise<EnsureResult> {
     completed: true,
     conversationId: created.id,
     completedAt: new Date().toISOString(),
+    openedInUi: frontendRequest,
   } satisfies OnboardingState);
   disableOnboarding(ctx);
 
-  return { created: true, conversationId: created.id };
+  return { created: true, conversationId: created.id, shouldOpen: frontendRequest };
 }
 
-export async function ensure(_input: unknown, ctx: ExtensionBackendContext): Promise<EnsureResult> {
+export async function ensure(input: unknown, ctx: ExtensionBackendContext): Promise<EnsureResult> {
   const existingTask = ensureInFlightByProfile.get(ctx.profile);
   if (existingTask) {
     return existingTask;
   }
 
-  const task = ensureOnce(ctx).finally(() => {
+  const normalizedInput = input && typeof input === 'object' ? (input as EnsureInput) : undefined;
+  const task = ensureOnce(normalizedInput, ctx).finally(() => {
     if (ensureInFlightByProfile.get(ctx.profile) === task) {
       ensureInFlightByProfile.delete(ctx.profile);
     }

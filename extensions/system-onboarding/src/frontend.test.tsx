@@ -13,7 +13,7 @@ function LocationProbe() {
 
 describe('OnboardingBootstrap', () => {
   it('navigates to the onboarding conversation with client-side routing', async () => {
-    const invoke = vi.fn().mockResolvedValue({ conversationId: 'conv-1' });
+    const invoke = vi.fn().mockResolvedValue({ conversationId: 'conv-1', shouldOpen: true });
     const pa = {
       extension: {
         invoke,
@@ -30,11 +30,11 @@ describe('OnboardingBootstrap', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location').textContent).toBe('/conversations/conv-1');
     });
-    expect(invoke).toHaveBeenCalledWith('ensure');
+    expect(invoke).toHaveBeenCalledWith('ensure', { source: 'frontend' });
   });
 
   it('does not yank navigation away from non-landing pages', async () => {
-    const invoke = vi.fn().mockResolvedValue({ conversationId: 'conv-1' });
+    const invoke = vi.fn().mockResolvedValue({ conversationId: 'conv-1', shouldOpen: true });
     const pa = {
       extension: {
         invoke,
@@ -49,7 +49,7 @@ describe('OnboardingBootstrap', () => {
     );
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith('ensure');
+      expect(invoke).toHaveBeenCalledWith('ensure', { source: 'frontend' });
     });
     expect(screen.getByTestId('location').textContent).toBe('/knowledge');
   });
@@ -70,8 +70,34 @@ describe('OnboardingBootstrap', () => {
     );
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith('ensure');
+      expect(invoke).toHaveBeenCalledWith('ensure', { source: 'frontend' });
     });
     expect(screen.getByTestId('location').textContent).toBe('/settings');
+  });
+
+  it('does not reopen onboarding from the draft route after it was already consumed', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      created: false,
+      conversationId: 'conv-1',
+      skipped: 'completed',
+      shouldOpen: false,
+    });
+    const pa = {
+      extension: {
+        invoke,
+      },
+    } as never;
+
+    render(
+      <MemoryRouter initialEntries={['/conversations/new']}>
+        <OnboardingBootstrap pa={pa} />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('ensure', { source: 'frontend' });
+    });
+    expect(screen.getByTestId('location').textContent).toBe('/conversations/new');
   });
 });
