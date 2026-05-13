@@ -481,17 +481,42 @@ function collectExpectedRuntimePackages(buildRoot) {
   ];
 }
 
-function hasPackagedNodeModule(packageName, packageEntries, resourcesDir) {
+function hasPackagedNodeModule(packageName, packageEntries, resourcesDir, buildRoot) {
   const packageEntryPrefix = `/node_modules/${packageName}`;
   if (packageEntries.some((entry) => entry === packageEntryPrefix || entry.startsWith(`${packageEntryPrefix}/`))) {
     return true;
   }
 
   const packagePathSegments = packageName.split('/');
-  return (
+  if (
     existsSync(resolve(resourcesDir, 'node_modules', ...packagePathSegments, 'package.json')) ||
     existsSync(resolve(resourcesDir, 'app.asar.unpacked', 'node_modules', ...packagePathSegments, 'package.json'))
-  );
+  ) {
+    return true;
+  }
+
+  // pnpm may store transitive deps only in .pnpm/ — check there as well.
+  if (buildRoot) {
+    const pnpmStoreDir = resolve(buildRoot, 'node_modules', '.pnpm');
+    if (existsSync(pnpmStoreDir)) {
+      const pnpmDirName = packagePathSegments.join('+');
+      try {
+        const storeEntries = readdirSync(pnpmStoreDir);
+        for (const entry of storeEntries) {
+          if (entry.startsWith(`${pnpmDirName}@`)) {
+            const candidate = resolve(pnpmStoreDir, entry, 'node_modules', ...packagePathSegments, 'package.json');
+            if (existsSync(candidate)) {
+              return true;
+            }
+          }
+        }
+      } catch {
+        // Cannot read .pnpm store
+      }
+    }
+  }
+
+  return false;
 }
 
 function validatePackagedRuntimeDependencies(buildRoot, releaseDir) {
@@ -510,7 +535,9 @@ function validatePackagedRuntimeDependencies(buildRoot, releaseDir) {
   const { listPackage } = releaseRequire('@electron/asar');
   const packageEntries = listPackage(appAsarPath);
   const expectedPackages = collectExpectedRuntimePackages(buildRoot);
-  const missingPackages = expectedPackages.filter((packageName) => !hasPackagedNodeModule(packageName, packageEntries, resourcesDir));
+  const missingPackages = expectedPackages.filter(
+    (packageName) => !hasPackagedNodeModule(packageName, packageEntries, resourcesDir, buildRoot),
+  );
 
   if (missingPackages.length > 0) {
     fail(
