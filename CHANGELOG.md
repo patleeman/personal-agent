@@ -1,5 +1,174 @@
 # Changelog
 
+## 0.8.0-rc.0 — 2026-05-13
+
+- Guard trace-db token counters against fractional/NaN values
+- Preserve composer text when changing model
+- Migrate repo installs and scripts from npm to pnpm
+- Redesign automations page and add row delete
+- Add MLX search clear control
+- Improve MLX model search selection
+- Remove root postinstall and document explicit hook setup
+- Fix overdue one-time automations display
+- Fix extension manager action feedback
+- Force MLX toggle dimensions
+- Fix expanded internal-work bash shelf rendering
+- Fix MLX enable toggle layout
+- Polish MLX local models page layout
+- Group normal bash tool calls inside internal work
+- Hide disabled extension UI contributions
+- Make Codex companion protocol experimental
+- Load repo experimental extensions
+- Make session exchange experimental
+- Group experimental extensions in manager
+- Generalize qwen mlx experimental extension
+- Run durable subagents through internal agent runner
+- Rename Codex protocol companion app copy
+- Add smoke coverage for repaired agent tools
+- Fix bash transcript event rendering for agent tool calls
+- Fix extension-backed agent tool regressions
+- Restore the Artifacts workbench nav entry
+- Make onboarding auto-open one-shot
+- Fix background invalidation refetches for conversation wakeups
+- Fix onboarding refresh loop and sidebar bounce
+- Fix direct loading of prebuilt extension backends
+- Fix conversation_inspect live session visibility
+- Fix artifact transcript renderer registry loading
+- Handle background command lifecycle directly
+- Preserve shell semantics for foreground bash
+- Fix background bash extension action
+- fix: avoid false positive backend bundle process scan
+- fix: handle nullable process stdio streams
+- fix: route diff checkpoints through shell capability
+- fix: route codex extension commands through shell capability
+- fix: scope extension process import guard
+- feat: centralize process launching
+- docs: clarify full seam implementation guidance
+- feat: add process wrapper registration seam
+- Fix system-runs bash action import path
+- fix: make extension backend require available
+- refactor: clean up background work guidance
+- chore: add experimental extensions repo
+- feat: support background bash commands
+- feat: split runs into background work surfaces
+- fix: place composer extension buttons by slot
+- fix: provide require shim for extension backend bundles
+- fix: toggle workspace row on click
+- fix: keep dictation button in action slot
+- fix: stop showing archived threads as activity fallback
+- fix: align activity tree row controls
+- fix: restore activity tree thread status indicators
+- fix: make dictation insertion visible
+- feat: finish activity tree workspace controls
+- fix: move fast mode next to model picker
+- fix: surface extension action failures
+- refactor: remove legacy extension telemetry exports
+- fix: allow activity tree workspace collapse
+- feat: group activity tree threads by workspace
+- feat: expose extension telemetry API
+- fix: avoid duplicate extension backend require banner
+- fix: use standard activity tree context menu shell
+- feat: add inline activity tree archive action
+- fix: collapse activity tree runs by default
+- fix: only show linked runs in activity tree
+- fix: hide live conversation runs from activity tree
+- fix: tighten activity tree thread list
+- fix: parse local dictation transcripts
+- test: stabilize iOS duplicate prompt guard
+- fix: serve extension frontend bundles as javascript
+- fix: retry rebuilt extension frontend imports
+- fix: render activity tree before styles load
+- fix: preserve open file order
+- fix: cap iOS composer send icon
+- fix: bundle frontend extension SDK modules
+- fix: stop diff rail from falling back to files
+- fix: repair desktop dictation controls
+- fix: show archived sessions in activity tree
+- fix: clear workspace file pane on tab close
+- fix: declare iOS companion orientation support
+- fix: keep extension diffs rail active
+- fix: show active thread in activity tree
+- fix: emit activity tree parents as directories
+- test: cover thread color backend
+- fix: keep iOS archived empty state visible at max text
+- fix: sort command palette imports
+- docs: note activity tree extension menus
+- feat: surface extension menus in activity tree
+- docs: document activity tree thread colors
+- feat: expose thread colors in activity tree
+- feat: add thread color style provider
+- fix: stack iOS settings host rows for accessibility text
+- fix: clean up stale quick open scopes
+- fix: handle file rail extension workbench detail
+- feat: apply activity tree style providers
+- feat: support activity tree row colors
+- feat: add more activity tree thread actions
+- docs: note activity tree conversation actions
+- feat: port activity tree conversation actions
+- docs: document quick open surface sdk
+- fix: sync goal mode tools on turn start
+- feat: make quick open extension surfaces
+- fix: show workspace file detail pane
+- docs: update activity tree capabilities
+- feat: add activity tree context menu
+- fix: link activity runs from manifest source
+- feat: decorate activity tree statuses
+- feat: make quick open an extension surface
+- docs: document activity tree sidebar mode
+- feat: add activity tree sidebar mode
+- fix: move quick open files to knowledge
+- feat: add Pierre activity tree renderer
+- feat: add activity tree extension points
+- fix: guard desktop media permission details
+- feat: add activity tree model
+- fix: replace unsupported prompt dialogs
+- feat: move goal mode into composer extension controls
+- fix: enable desktop dictation microphone
+- fix: skip simulator app group lookup without opt-in
+- fix: keep iOS host pairing empty state accessible
+- feat: add extension self-test telemetry
+- fix: resolve tool-updated conversation titles
+- fix: avoid duplicate thinking control
+- fix: route diffs rail clicks through diff handler
+- fix: stack iOS trace summaries for accessibility text
+- fix: remove stale tsc output from server/ and add .gitignore
+- feat: surface extension health failures
+- fix: add missing required fields to writeTraceStats test call
+- fix: harden SQLite resilience — periodic WAL checkpoint, synchronous=FULL, exit safety net, close all DBs, prune stale files
+- fix: restore settings panel dividers
+- refactor: use focused backend extension subpaths
+- fix: render knowledge base settings panel
+- test: add packaged extension smoke check
+- fix: checkpoint and close SQLite DBs on daemon shutdown to prevent index corruption
+- fix: defer iOS composer height updates
+- fix: narrow artifact backend bundle
+- fix: repair index-only SQLite corruption with REINDEX before full recovery
+- test: remove duplicate suggested context pruning case
+- fix: prune stale suggested context telemetry
+- fix: tighten extension manager rows
+- Add timeout for knowledge extension API calls
+- feat: surface knowledge repo settings
+- fix: prevent overlapping daemon starts
+- fix: reliably auto-open iOS demo conversations
+- fix: bundle pi runtime into extension backends
+- fix: rename gateways nav to telegram gateway
+- fix: remove duplicate settings shortcut
+- fix: cap iOS conversation list action icons
+- fix: cap iOS knowledge row icons
+- fix: wrap archived empty state on iOS
+- fix: defer iOS knowledge navigation consumption
+- fix: avoid TextKit compatibility switch in composer
+- fix: cap iOS conversation header icons
+- fix: use valid iOS branch icon
+- chore: clean up iOS companion warnings
+- test: correct iOS conversation row fixture
+- fix: align iOS mock knowledge root
+- fix: render transcript markdown blocks on iOS
+- fix: harden companion prompt streaming
+- fix: avoid iOS layout mutation on conversation create
+- fix: keep new iOS conversations open
+- fix: subscribe before iOS prompt submission
+
 ## 0.7.10-rc.0 — 2026-05-12
 
 - fix: harden session export menu action
