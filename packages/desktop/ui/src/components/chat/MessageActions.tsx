@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { writeClipboardText } from '../../desktop/clipboard';
 import { createNativeExtensionClient } from '../../extensions/nativePaClient';
 import type { ExtensionMessageActionRegistration } from '../../extensions/useExtensionRegistry';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
@@ -125,13 +126,8 @@ export function MessageActions({
       return;
     }
 
-    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
-      setTransientCopyState('failed');
-      return;
-    }
-
     try {
-      await navigator.clipboard.writeText(copyText);
+      await writeClipboardText(copyText);
       setTransientCopyState('copied');
     } catch {
       setTransientCopyState('failed');

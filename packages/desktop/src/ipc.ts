@@ -1,4 +1,4 @@
-import { ipcMain, shell, type WebContents } from 'electron';
+import { clipboard, ipcMain, shell, type WebContents } from 'electron';
 
 import type { HostManager } from './hosts/host-manager.js';
 import { captureDesktopScreenshot } from './screenshot.js';
@@ -152,6 +152,19 @@ export function registerDesktopIpc(options: {
       return { url: normalizedUrl, opened: true };
     } catch (error) {
       return { url: normalizedUrl, opened: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:write-clipboard-text`, async (_event, text: unknown) => {
+    if (typeof text !== 'string') {
+      return { ok: false, error: 'Clipboard text must be a string.' };
+    }
+
+    try {
+      clipboard.writeText(text, 'clipboard');
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 

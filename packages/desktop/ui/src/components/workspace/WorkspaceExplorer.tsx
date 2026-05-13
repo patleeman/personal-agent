@@ -19,6 +19,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../client/api';
+import { writeClipboardText } from '../../desktop/clipboard';
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 import { createDesktopAwareEventSource } from '../../desktop/desktopEventSource';
 import type {
@@ -1555,11 +1556,15 @@ export function WorkspaceFileDocument({
   const copySelectedText = useCallback(
     async (text: string) => {
       closeSelectionContextMenu();
-      if (!text || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      if (!text) {
         return;
       }
 
-      await navigator.clipboard.writeText(text);
+      try {
+        await writeClipboardText(text);
+      } catch {
+        // Selection-copy failures should not leave a rejected React event promise.
+      }
     },
     [closeSelectionContextMenu],
   );

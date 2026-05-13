@@ -109,6 +109,7 @@ export interface PersonalAgentDesktopBridge {
   openConversationPopout(input: { conversationId: string }): Promise<void>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   openExternalUrl(targetUrl: string): Promise<{ url: string; opened: boolean; error?: string }>;
+  writeClipboardText(text: string): Promise<{ ok: true } | { ok: false; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
   updateDesktopAppPreferences(input: {
     autoInstallUpdates?: boolean;

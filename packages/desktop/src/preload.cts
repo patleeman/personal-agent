@@ -75,6 +75,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-selection-context-menu`, input),
   openPath: (targetPath: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-path`, targetPath),
   openExternalUrl: (targetUrl: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-external-url`, targetUrl),
+  writeClipboardText: (text: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:write-clipboard-text`, text),
   readDesktopAppPreferences: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-desktop-app-preferences`),
   updateDesktopAppPreferences: (input: {
     autoInstallUpdates?: boolean;

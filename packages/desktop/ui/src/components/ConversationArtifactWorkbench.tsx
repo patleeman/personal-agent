@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
+import { writeClipboardText } from '../desktop/clipboard';
 import type { ConversationArtifactRecord, ConversationArtifactSummary } from '../shared/types';
 import { formatDate } from '../shared/utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';
@@ -158,7 +159,17 @@ export function ConversationArtifactWorkbenchPane({ conversationId, artifactId }
       return;
     }
 
-    await navigator.clipboard.writeText(artifact.content);
+    try {
+      await writeClipboardText(artifact.content);
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Copy failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
   }, [artifact]);

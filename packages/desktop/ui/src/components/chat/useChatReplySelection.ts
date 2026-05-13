@@ -1,5 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
+import { writeClipboardText } from '../../desktop/clipboard';
+
 import { findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement } from './replySelection.js';
 
 interface ReplySelectionState {
@@ -398,14 +400,16 @@ export function useChatReplySelection({
       const nextText = typeof text === 'string' ? text.trim() : '';
 
       closeSelectionContextMenu();
-      if (!nextText || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      if (!nextText) {
         clearReplySelection();
         clearWindowSelection();
         return;
       }
 
       try {
-        await navigator.clipboard.writeText(nextText);
+        await writeClipboardText(nextText);
+      } catch {
+        // Selection-copy failures should not leave a rejected React event promise.
       } finally {
         clearWindowSelection();
         clearReplySelection();

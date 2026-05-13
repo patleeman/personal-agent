@@ -16,6 +16,7 @@ import { ActivityTreeView } from '../activity/ActivityTreeView';
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
+import { writeClipboardText } from '../desktop/clipboard';
 import {
   buildConversationGroupLabels,
   getConversationGroupLabel,
@@ -2869,13 +2870,8 @@ export function Sidebar() {
 
   const copyTextToClipboard = useCallback(
     async (value: string) => {
-      if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
-        showSidebarNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
-        return false;
-      }
-
       try {
-        await navigator.clipboard.writeText(value);
+        await writeClipboardText(value);
         return true;
       } catch {
         showSidebarNotice('danger', 'Copy to clipboard failed.', 4000);

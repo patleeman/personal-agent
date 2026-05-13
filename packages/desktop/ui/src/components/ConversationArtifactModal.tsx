@@ -4,9 +4,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
+import { writeClipboardText } from '../desktop/clipboard';
 import { useApi } from '../hooks/useApi';
 import { formatDate } from '../shared/utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';
+import { addNotification } from './notifications/notificationStore';
 import { cx, ErrorState, LoadingState } from './ui';
 
 export function ConversationArtifactModal({ conversationId, artifactId }: { conversationId: string; artifactId: string }) {
@@ -75,7 +77,17 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
       return;
     }
 
-    await navigator.clipboard.writeText(artifact.content);
+    try {
+      await writeClipboardText(artifact.content);
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Copy failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
   }
