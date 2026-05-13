@@ -62,6 +62,10 @@ export interface ResolveResourceOptions {
   vaultRoot?: string;
   localProfileDir?: string;
   runtimeConfigRoot?: string;
+  /** Optional pre-resolved extension directory paths. When provided, core will use these instead of auto-discovering extensions. */
+  extensionDirs?: string[];
+  /** Optional pre-resolved extension entry paths. When provided, core will use these instead of auto-discovering entries. */
+  extensionEntries?: string[];
 }
 
 export type PackageInstallTarget = 'local';
@@ -625,12 +629,19 @@ export function resolveRuntimeResources(name: string, options: ResolveResourceOp
     .map((layer) => existingFile(join(layer.agentDir, 'SYSTEM.md')))
     .find((file): file is string => file !== undefined);
 
-  const extensionDirs = dedupe([...collectLayerDirs(localLayers, 'extensions')]);
+  // Extensions: use host-provided entries if supplied, otherwise auto-discover from layers
+  const extensionDirs =
+    options.extensionDirs !== undefined
+      ? options.extensionDirs
+      : dedupe([...collectLayerDirs(localLayers, 'extensions')]);
+  const extensionEntries =
+    options.extensionEntries !== undefined
+      ? options.extensionEntries
+      : dedupe(extensionDirs.flatMap((dir) => discoverExtensionEntries(dir)));
   const skillDirs = dedupe([...durableSkillDirs, ...configuredSkillDirs, ...collectLayerDirs(localLayers, 'skills')]);
   const promptDirs = collectLayerDirs(localLayers, 'prompts');
   const themeDirs = dedupe([...collectLayerDirs(localLayers, 'themes')]);
 
-  const extensionEntries = dedupe(extensionDirs.flatMap((dir) => discoverExtensionEntries(dir)));
   const promptEntries = dedupe(promptDirs.flatMap((dir) => discoverFilesWithExtensions(dir, ['.md'])));
   const themeEntries = dedupe(themeDirs.flatMap((dir) => discoverFilesWithExtensions(dir, ['.json'])));
 

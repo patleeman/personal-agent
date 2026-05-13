@@ -8,7 +8,7 @@ import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '
 
 import { type BashProcessWrapper, clearBashProcessWrappers, registerBashProcessWrapper } from '../conversations/processWrappers.js';
 import { createManifestAgentExtensions } from '../extensions/extensionAgentExtensions.js';
-import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
+import { isExtensionEnabled, listExtensionEntries, listExtensionInstallSummaries, listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
 import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
 import { setRuntimeAgentHookBuilders } from '../extensions/runtimeAgentHooks.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
@@ -52,9 +52,23 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
     delete process.env.MCP_CONFIG_PATH;
   }
 
+  function resolveRuntimeExtensionEntries(): string[] {
+    return listExtensionEntries()
+      .filter((entry) => {
+        if (entry.source !== 'system') return true;
+        return isExtensionEnabled(entry.manifest.id);
+      })
+      .flatMap((entry) => {
+        const backend = entry.manifest.backend?.entry;
+        if (!backend) return [];
+        return entry.packageRoot ? [join(entry.packageRoot, backend)] : [];
+      });
+  }
+
   function materializeRuntimeResources(): void {
     const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
+      extensionEntries: resolveRuntimeExtensionEntries(),
     });
     materializeRuntimeResourcesToAgentDir(resolved, agentDir);
     const materializedMcpConfigPath = join(agentDir, 'mcp_servers.json');
@@ -196,6 +210,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function buildLiveSessionResourceOptions(): LiveSessionResourceOptions {
     const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
+      extensionEntries: resolveRuntimeExtensionEntries(),
     });
 
     return {
@@ -209,6 +224,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function withTemporaryRuntimeAgentDir<T>(run: (runtimeAgentDir: string) => Promise<T>): Promise<T> {
     const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
+      extensionEntries: resolveRuntimeExtensionEntries(),
     });
     const runtimeAgentDir = mkdtempSync(join(tmpdir(), 'pa-web-runtime-inspect-'));
     materializeRuntimeResourcesToAgentDir(resolved, runtimeAgentDir);
