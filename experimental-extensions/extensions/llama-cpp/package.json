@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "scripts": {
+    "fetch:runtime": "node scripts/fetch-runtime.mjs"
+  },
+  "dependencies": {
+    "@personal-agent/extensions": "*"
+  }
+}

@@ -12,6 +12,7 @@ pnpm run install -- --extension qwen-mlx --target testing
 Current experiments:
 
 - `qwen-mlx` — general-purpose local Hugging Face MLX model setup, search, and server controls.
+- `llama-cpp` — local GGUF model runner backed by bundled llama.cpp Metal binaries.
 - `doom` — Doom inside PA. Because obviously.
 - `slack-mcp-gateway` — Slack channel to PA conversation gateway via Slack MCP.
 

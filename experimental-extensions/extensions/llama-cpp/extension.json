@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "id": "llama-cpp",
+  "name": "llama.cpp",
+  "description": "Run local GGUF models through a bundled llama.cpp Metal runtime.",
+  "version": "0.1.0",
+  "packageType": "user",
+  "defaultEnabled": false,
+  "frontend": { "entry": "dist/frontend.js" },
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "actions": [
+      { "id": "runtimeStatus", "handler": "runtimeStatus", "title": "Runtime status" },
+      { "id": "downloadModel", "handler": "downloadModel", "title": "Download GGUF model" },
+      { "id": "runPrompt", "handler": "runPrompt", "title": "Run prompt" }
+    ]
+  },
+  "contributes": {
+    "views": [
+      {
+        "id": "main",
+        "title": "llama.cpp",
+        "location": "main",
+        "route": "/ext/llama-cpp",
+        "component": "LlamaCppPage"
+      }
+    ],
+    "nav": [{ "id": "llama-cpp", "label": "llama.cpp", "icon": "terminal", "route": "/ext/llama-cpp" }]
+  },
+  "permissions": ["network"]
+}
