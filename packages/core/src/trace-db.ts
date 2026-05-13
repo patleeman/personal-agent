@@ -489,6 +489,12 @@ function mapRows<T extends object>(rows: Record<string, unknown>[]): T[] {
   return rows.map((r) => mapRow<T>(r));
 }
 
+function tokenCount(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.trunc(parsed);
+}
+
 // ── Writers (fire-and-forget) ─────────────────────────────────────────────────
 
 export function writeTraceStats(params: {
@@ -518,10 +524,10 @@ export function writeTraceStats(params: {
       params.modelId ?? null,
       params.profile ?? '',
       timestamp(),
-      params.tokensInput,
-      params.tokensOutput,
-      params.tokensCachedInput ?? 0,
-      params.tokensCachedWrite ?? 0,
+      tokenCount(params.tokensInput),
+      tokenCount(params.tokensOutput),
+      tokenCount(params.tokensCachedInput),
+      tokenCount(params.tokensCachedWrite),
       params.cost,
       params.turnCount ?? 0,
       params.stepCount ?? 0,
@@ -749,11 +755,11 @@ export function querySummary(since: string): TraceSummary {
     activeSessions: stats.sessionsActive,
     runsToday: count.cnt,
     totalCost: Math.round(stats.totalCost * 100) / 100,
-    tokensTotal: stats.tokensTotal,
-    tokensInput: stats.tokensInput,
-    tokensOutput: stats.tokensOutput,
-    tokensCached: stats.tokensCached,
-    tokensCachedWrite: Number(stats.tokensCachedWrite),
+    tokensTotal: tokenCount(stats.tokensTotal),
+    tokensInput: tokenCount(stats.tokensInput),
+    tokensOutput: tokenCount(stats.tokensOutput),
+    tokensCached: tokenCount(stats.tokensCached),
+    tokensCachedWrite: tokenCount(stats.tokensCachedWrite),
     cacheHitRate: hitRate,
     toolErrors: errors.errors,
     toolCalls: errors.total,
@@ -785,7 +791,7 @@ export function queryModelUsage(since: string): ModelUsageRow[] {
     .all(since) as Record<string, unknown>[];
   return mapRows<ModelUsageRow>(raw).map((r) => ({
     ...r,
-    tokens: Number(r.tokens),
+    tokens: tokenCount(r.tokens),
     cost: Math.round(Number(r.cost) * 100) / 100,
     calls: Number(r.calls),
   }));

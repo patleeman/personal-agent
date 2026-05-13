@@ -203,9 +203,28 @@ describe('trace-db', () => {
     expect(result.activeSessions).toBeGreaterThanOrEqual(2);
     expect(result.totalCost).toBeGreaterThan(0);
     expect(result.tokensTotal).toBeGreaterThan(0);
-    expect(result.tokensTotal).toBe(result.tokensInput + result.tokensCached + result.tokensOutput);
+    expect(result.tokensTotal).toBe(result.tokensInput + result.tokensCached + result.tokensCachedWrite + result.tokensOutput);
     expect(result.toolCalls).toBe(5);
     expect(result.toolErrors).toBe(1);
+  });
+
+  it('truncates fractional token counters before storing trace stats', () => {
+    writeTraceStats({
+      sessionId: 'fractional-tokens',
+      modelId: 'gpt-4o',
+      tokensInput: 10.9,
+      tokensOutput: 20.8,
+      tokensCachedInput: 30.7,
+      tokensCachedWrite: 40.6,
+      cost: 1.23,
+    });
+
+    const result = querySummary(fiveHoursAgo);
+    expect(result.tokensInput).toBe(1810);
+    expect(result.tokensOutput).toBe(4220);
+    expect(result.tokensCached).toBe(280);
+    expect(result.tokensCachedWrite).toBe(40);
+    expect(result.tokensTotal).toBe(6350);
   });
 
   it('queryModelUsage returns models grouped correctly', () => {
