@@ -13,7 +13,11 @@ import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { logError, logInfo, logWarn } from '../shared/logging.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
-import { isPrebuiltOnlyExtensionRuntime, resolvePackagedExtensionBackendLoadTarget } from './extensionBackendLoadTarget.js';
+import {
+  isPrebuiltOnlyExtensionRuntime,
+  isSourceExtensionBackendEntry,
+  resolveExtensionBackendLoadTarget,
+} from './extensionBackendLoadTarget.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
 import { createExtensionModelsCapability } from './extensionModels.js';
@@ -565,11 +569,7 @@ function renderPackagedExtensionBackendExpectation(
   entry: { source: 'system' | 'runtime'; packageRoot: string },
   backendEntry: string,
 ): string {
-  if (entry.source === 'system' && backendEntry.startsWith('src/')) {
-    return resolve(entry.packageRoot, 'dist', 'backend.mjs');
-  }
-
-  if (backendEntry.startsWith('src/') || backendEntry.endsWith('.ts')) {
+  if (isSourceExtensionBackendEntry(backendEntry)) {
     return resolve(entry.packageRoot, 'dist', 'backend.mjs');
   }
 
@@ -665,9 +665,9 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
     });
   }
 
-  const packagedPrebuilt = resolvePackagedExtensionBackendLoadTarget(entry, backendEntry);
-  if (packagedPrebuilt) {
-    return loadCompiledExtensionBackendModule(extensionId, packagedPrebuilt);
+  const directLoadTarget = resolveExtensionBackendLoadTarget(entry, backendEntry);
+  if (directLoadTarget) {
+    return loadCompiledExtensionBackendModule(extensionId, directLoadTarget);
   }
   if (isPrebuiltOnlyExtensionRuntime()) {
     throw createPackagedPrebuiltBackendError(extensionId, { source: entry.source, packageRoot: entry.packageRoot }, backendEntry);
@@ -883,9 +883,9 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
     throw new Error('Extension has no backend entry.');
   }
 
-  const packagedPrebuilt = resolvePackagedExtensionBackendLoadTarget(entry, backendEntry);
-  if (packagedPrebuilt) {
-    await loadCompiledExtensionBackendModule(extensionId, packagedPrebuilt);
+  const directLoadTarget = resolveExtensionBackendLoadTarget(entry, backendEntry);
+  if (directLoadTarget) {
+    await loadCompiledExtensionBackendModule(extensionId, directLoadTarget);
     clearExtensionHealthError(extensionId);
     return { ok: true, extensionId, rebuilt: false };
   }

@@ -23,6 +23,21 @@ function buildPrebuiltExtensionBackendLoadTarget(path: string): PrebuiltExtensio
   };
 }
 
+function normalizeBackendEntry(backendEntry: string): string {
+  return backendEntry.trim();
+}
+
+export function isSourceExtensionBackendEntry(backendEntry: string): boolean {
+  const normalizedBackendEntry = normalizeBackendEntry(backendEntry);
+  return (
+    normalizedBackendEntry.startsWith('src/') ||
+    normalizedBackendEntry.endsWith('.ts') ||
+    normalizedBackendEntry.endsWith('.tsx') ||
+    normalizedBackendEntry.endsWith('.mts') ||
+    normalizedBackendEntry.endsWith('.cts')
+  );
+}
+
 export function isPrebuiltOnlyExtensionRuntime(
   options: {
     resourcesPath?: string;
@@ -43,7 +58,7 @@ export function shouldPreferPrebuiltSystemExtensionBackend(
   return isPrebuiltOnlyExtensionRuntime(options);
 }
 
-export function resolvePackagedExtensionBackendLoadTarget(
+export function resolveExtensionBackendLoadTarget(
   entry: ExtensionBackendLoadTargetEntry,
   backendEntry: string,
   options: {
@@ -51,20 +66,20 @@ export function resolvePackagedExtensionBackendLoadTarget(
     env?: NodeJS.ProcessEnv;
   } = {},
 ): PrebuiltExtensionBackendLoadTarget | null {
-  if (!isPrebuiltOnlyExtensionRuntime(options) || !entry.packageRoot) {
+  if (!entry.packageRoot) {
     return null;
   }
 
-  const normalizedBackendEntry = backendEntry.trim();
+  const normalizedBackendEntry = normalizeBackendEntry(backendEntry);
   if (normalizedBackendEntry.length === 0) {
     return null;
   }
 
-  if (entry.source === 'system' && normalizedBackendEntry.startsWith('src/')) {
+  if (entry.source === 'system' && isSourceExtensionBackendEntry(normalizedBackendEntry) && isPrebuiltOnlyExtensionRuntime(options)) {
     return buildPrebuiltExtensionBackendLoadTarget(resolve(entry.packageRoot, 'dist', 'backend.mjs'));
   }
 
-  if (normalizedBackendEntry.startsWith('src/') || normalizedBackendEntry.endsWith('.ts')) {
+  if (isSourceExtensionBackendEntry(normalizedBackendEntry)) {
     return null;
   }
 

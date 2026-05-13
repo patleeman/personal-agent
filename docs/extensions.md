@@ -1074,4 +1074,4 @@ See the system extensions in `extensions/` for practical examples:
 Each system extension has a complete `extension.json` manifest and
 `src/backend.ts` + optionally `src/frontend.tsx`.
 
-Bundled system extensions keep source next to their built output for development, but the packaged desktop app prefers a sibling `dist/backend.mjs` when it exists so release builds do not recompile extension backends at runtime.
+Bundled system extensions keep source next to their built output for development. If `backend.entry` points at source (`src/backend.ts`), the dev app recompiles it on load and packaged builds switch to sibling `dist/backend.mjs`. If `backend.entry` already points at built output such as `dist/backend.mjs`, both dev and packaged builds load that file directly.

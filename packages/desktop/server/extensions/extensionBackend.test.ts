@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isPrebuiltOnlyExtensionRuntime,
-  resolvePackagedExtensionBackendLoadTarget,
+  resolveExtensionBackendLoadTarget,
   resolvePrebuiltSystemExtensionBackend,
   shouldPreferPrebuiltSystemExtensionBackend,
 } from './extensionBackendLoadTarget.js';
 
 const TEST_EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../extensions/system-auto-mode');
 
-describe('extension backend packaged load targeting', () => {
+describe('extension backend load targeting', () => {
   it('only prefers prebuilt bundled backends when running a packaged desktop app', () => {
     expect(shouldPreferPrebuiltSystemExtensionBackend({ resourcesPath: undefined, env: {} })).toBe(false);
     expect(isPrebuiltOnlyExtensionRuntime({ resourcesPath: undefined, env: {} })).toBe(false);
@@ -51,20 +51,24 @@ describe('extension backend packaged load targeting', () => {
     expect(target?.hash).toMatch(/^prebuilt:/);
   });
 
-  it('resolves packaged prebuilt backends for runtime extensions that already point at built output', () => {
-    const target = resolvePackagedExtensionBackendLoadTarget({ source: 'runtime', packageRoot: TEST_EXTENSION_ROOT }, 'dist/backend.mjs', {
-      resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
-      env: {},
+  it('loads built-output backend entries directly in dev and packaged runtimes', () => {
+    expect(resolveExtensionBackendLoadTarget({ source: 'runtime', packageRoot: TEST_EXTENSION_ROOT }, 'dist/backend.mjs')).toMatchObject({
+      path: resolve(TEST_EXTENSION_ROOT, 'dist/backend.mjs'),
     });
 
-    expect(target).toMatchObject({
+    expect(
+      resolveExtensionBackendLoadTarget({ source: 'runtime', packageRoot: TEST_EXTENSION_ROOT }, 'dist/backend.mjs', {
+        resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
+        env: {},
+      }),
+    ).toMatchObject({
       path: resolve(TEST_EXTENSION_ROOT, 'dist/backend.mjs'),
     });
   });
 
   it('does not bypass source rebuilds for source-backed runtime extensions or dev desktop bundles', () => {
     expect(
-      resolvePackagedExtensionBackendLoadTarget({ source: 'runtime', packageRoot: TEST_EXTENSION_ROOT }, 'src/backend.ts', {
+      resolveExtensionBackendLoadTarget({ source: 'runtime', packageRoot: TEST_EXTENSION_ROOT }, 'src/backend.ts', {
         resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
         env: {},
       }),
@@ -90,4 +94,5 @@ describe('extension backend packaged load targeting', () => {
       ),
     ).toBeNull();
   });
+
 });
