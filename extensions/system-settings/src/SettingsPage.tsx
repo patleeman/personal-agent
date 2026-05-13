@@ -733,12 +733,11 @@ export function DesktopKeyboardShortcutsSettingsSection() {
   }
 
   return (
-    <div className="space-y-0">
-      <SettingsPanel title="Keyboard shortcuts" description="Every desktop menu shortcut is configurable and auto-saves immediately.">
-        {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
-        {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
-        {preferencesState ? (
-          <div className="space-y-4">
+    <SettingsPanel title="Keyboard shortcuts" description="Every desktop menu shortcut is configurable and auto-saves immediately.">
+      {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
+      {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
+      {preferencesState ? (
+        <div className="space-y-4">
             <div className="divide-y divide-border-subtle/70">
               {shortcutItems.map((item) => {
                 const editableId = item.extensionId ? null : item.editable ? (item.id as DesktopKeyboardShortcutId) : null;
@@ -824,10 +823,9 @@ export function DesktopKeyboardShortcutsSettingsSection() {
                 Reset to defaults
               </button>
             </div>
-          </div>
-        ) : null}
-      </SettingsPanel>
-    </div>
+        </div>
+      ) : null}
+    </SettingsPanel>
   );
 }
 
