@@ -77,7 +77,7 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     sourcemap: true,
     logLevel: 'info',
     banner: {
-      js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
+      js: 'import { createRequire as __paExtensionCreateRequire } from "node:module"; const require = __paExtensionCreateRequire(import.meta.url);',
     },
     external: [
       '@personal-agent/extensions/host',
@@ -101,6 +101,7 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
   });
   recordBuildOutputs(buildOutputs, result.metafile);
   copyJsdomSyncWorkerIfNeeded(outfile, buildOutputs);
+  writeBundledRuntimePackageJson(outfile, buildOutputs);
 }
 
 writeBuildManifest(buildOutputs);
@@ -160,7 +161,9 @@ function createExtensionBackendApiPlugin() {
       }));
       buildContext.onResolve({ filter: /^@personal-agent\/daemon$/ }, (args) => {
         const desktopDaemonBundle = join(repoRoot, 'packages/desktop/server/dist/daemon/index.js');
-        return existsSync(desktopDaemonBundle) ? { path: desktopDaemonBundle, external: true } : { path: args.path, external: true };
+        // Bundle the daemon runtime inline so extensions work in packaged
+        // apps where the absolute build-time path no longer exists.
+        return existsSync(desktopDaemonBundle) ? { path: desktopDaemonBundle, external: false } : { path: args.path, external: true };
       });
     },
   };
@@ -226,6 +229,26 @@ function copyJsdomSyncWorkerIfNeeded(outfile, buildOutputs) {
   const workerOutput = join(dirname(outfile), 'xhr-sync-worker.js');
   copyFileSync(workerSource, workerOutput);
   buildOutputs.push({ path: relativeToPackage(workerOutput), bytes: readFileSync(workerOutput).byteLength, imports: [] });
+}
+
+function writeBundledRuntimePackageJson(outfile, buildOutputs) {
+  // Bundled pi runtime modules read their own package metadata at module
+  // initialization. In a bundle, import.meta.url points at the extension dist
+  // directory instead of node_modules/@earendil-works/pi-coding-agent, so ship
+  // a minimal compatible package.json next to backend.mjs for packaged Electron.
+  const sourcePath = join(repoRoot, 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json');
+  const source = existsSync(sourcePath)
+    ? JSON.parse(readFileSync(sourcePath, 'utf-8'))
+    : { name: '@earendil-works/pi-coding-agent', version: '0.0.0', piConfig: { configDir: '.pi' } };
+  const outputPath = join(dirname(outfile), 'package.json');
+  const metadata = {
+    name: source.name ?? '@earendil-works/pi-coding-agent',
+    version: source.version ?? '0.0.0',
+    piConfig: source.piConfig ?? { configDir: '.pi' },
+    type: 'module',
+  };
+  writeJson(outputPath, metadata);
+  buildOutputs.push({ path: relativeToPackage(outputPath), bytes: readFileSync(outputPath).byteLength, imports: [] });
 }
 
 function findAppNodeModules() {

@@ -11,7 +11,15 @@ process.setMaxListeners(0);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const inputRoot = process.argv[2] ? resolve(process.argv[2]) : repoRoot;
-const extensionsRoot = inputRoot.endsWith('.app') ? join(inputRoot, 'Contents', 'Resources', 'extensions') : join(inputRoot, 'extensions');
+const packagedAppResourcesRoot = inputRoot.endsWith('.app') ? join(inputRoot, 'Contents', 'Resources') : null;
+const extensionsRoot = packagedAppResourcesRoot ? join(packagedAppResourcesRoot, 'extensions') : join(inputRoot, 'extensions');
+
+if (packagedAppResourcesRoot) {
+  Object.defineProperty(process, 'resourcesPath', {
+    value: packagedAppResourcesRoot,
+    configurable: true,
+  });
+}
 
 const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 const allowedBackendBareImports = new Set([

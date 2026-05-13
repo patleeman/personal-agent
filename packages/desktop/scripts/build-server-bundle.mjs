@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { build } from 'esbuild';
-import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,7 +12,7 @@ const outdir = resolve(packageRoot, 'server', 'dist');
 rmSync(outdir, { recursive: true, force: true });
 
 const createRequireBanner =
-  'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);';
+  'import { createRequire as __paServerCreateRequire } from "node:module"; const require = __paServerCreateRequire(import.meta.url);';
 
 const sharedEsbuildOptions = {
   bundle: true,
@@ -80,8 +80,21 @@ await Promise.all([
 ]);
 
 const jsdomXhrSyncWorker = resolve(packageRoot, 'node_modules/jsdom/lib/jsdom/living/xhr/xhr-sync-worker.js');
+const piCodingAgentPackageJson = resolve(packageRoot, 'node_modules/@earendil-works/pi-coding-agent/package.json');
+const piCodingAgentPackageMetadata = existsSync(piCodingAgentPackageJson)
+  ? JSON.parse(readFileSync(piCodingAgentPackageJson, 'utf-8'))
+  : { name: '@earendil-works/pi-coding-agent', version: '0.0.0', piConfig: { configDir: '.pi' } };
+const bundledRuntimePackageJson = {
+  name: piCodingAgentPackageMetadata.name ?? '@earendil-works/pi-coding-agent',
+  version: piCodingAgentPackageMetadata.version ?? '0.0.0',
+  piConfig: piCodingAgentPackageMetadata.piConfig ?? { configDir: '.pi' },
+  type: 'module',
+};
+
 for (const bundleOutput of bundleOutputs) {
-  const workerOutput = resolve(dirname(bundleOutput), 'xhr-sync-worker.js');
-  mkdirSync(dirname(workerOutput), { recursive: true });
+  const outputDir = dirname(bundleOutput);
+  const workerOutput = resolve(outputDir, 'xhr-sync-worker.js');
+  mkdirSync(outputDir, { recursive: true });
   copyFileSync(jsdomXhrSyncWorker, workerOutput);
+  writeFileSync(resolve(outputDir, 'package.json'), `${JSON.stringify(bundledRuntimePackageJson, null, 2)}\n`);
 }

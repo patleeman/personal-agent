@@ -205,6 +205,66 @@ async function assertDesktopApiEndpoints(cdp, child, logs) {
   }
 }
 
+async function assertLiveSessionBash(cdp, child, logs, cwd) {
+  if (child.exitCode !== null) {
+    throw new Error(`App exited before live session bash smoke check.\n${logs()}`);
+  }
+
+  const expression = `
+    (async () => {
+      const get = async (path) => {
+        const response = await fetch(path);
+        return { status: response.status, ok: response.ok, body: await response.text() };
+      };
+      const post = async (path, body) => {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return { status: response.status, ok: response.ok, body: await response.text() };
+      };
+      const del = async (path) => {
+        const response = await fetch(path, {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ surfaceId: 'release-smoke' }),
+        });
+        return { status: response.status, ok: response.ok, body: await response.text() };
+      };
+
+      const models = await get('/api/models');
+      let model = 'gpt-5.4';
+      try {
+        model = JSON.parse(models.body).currentModel || model;
+      } catch {}
+
+      const created = await post('/api/live-sessions', { cwd: ${JSON.stringify(cwd)}, model, thinkingLevel: 'medium' });
+      let sessionId = '';
+      try {
+        sessionId = JSON.parse(created.body).id || '';
+      } catch {}
+
+      const bash = sessionId
+        ? await post('/api/live-sessions/' + encodeURIComponent(sessionId) + '/bash', { command: 'printf pa-bash-ok' })
+        : { status: 0, ok: false, body: 'no live session id returned' };
+      const closed = sessionId ? await del('/api/live-sessions/' + encodeURIComponent(sessionId)) : null;
+      return { models, model, created, bash, closed };
+    })()
+  `;
+
+  const result = await cdp.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const value = result?.result?.value;
+  const bashBody = typeof value?.bash?.body === 'string' ? value.bash.body : '';
+  if (!value?.created?.ok || !value?.bash?.ok || !bashBody.includes('pa-bash-ok')) {
+    throw new Error(`Packaged live session bash smoke check failed: ${JSON.stringify(value, null, 2)}\n${logs()}`);
+  }
+}
+
 function tail(value, max = 8_000) {
   return value.length > max ? value.slice(value.length - max) : value;
 }
@@ -288,6 +348,7 @@ async function main() {
     await assertDesktopApiEndpoints(cdp, child, renderLogs);
     await navigateAndAssert(cdp, child, renderLogs, 'personal-agent://app/', 'conversation route');
     await assertDesktopApiEndpoints(cdp, child, renderLogs);
+    await assertLiveSessionBash(cdp, child, renderLogs, process.cwd());
 
     console.log(`Release desktop smoke test passed with isolated state root: ${stateRoot}`);
   } finally {
