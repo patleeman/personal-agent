@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
+
 type RunAgentExtensionFactory = (api: RegisterToolApi) => void;
 
 interface NativeBackendContext {
@@ -120,6 +122,41 @@ async function executeRunInput(input: unknown, ctx: NativeBackendContext, toolNa
   return { text, ...(result?.details ? { details: result.details } : {}) };
 }
 
+function normalizeRunLogTail(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(1000, value) : 120;
+}
+
+function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 64 * 1024): string {
+  if (!filePath || !existsSync(filePath)) {
+    return '';
+  }
+
+  try {
+    const size = statSync(filePath).size;
+    const start = Math.max(0, size - maxBytes);
+    return readFileSync(filePath, 'utf-8').slice(start).split(/\r?\n/).slice(-maxLines).join('\n').trim();
+  } catch {
+    return '';
+  }
+}
+
+function formatBackgroundRunList(result: { runs?: Array<Record<string, unknown>>; summary?: { total?: number } }): string {
+  const runs = Array.isArray(result.runs) ? result.runs : [];
+  if (runs.length === 0) {
+    return 'No durable runs found.';
+  }
+
+  return [
+    `Durable runs (${result.summary?.total ?? runs.length}):`,
+    ...runs.map((run) => {
+      const status = isRecord(run.status) ? (readString(run.status.status) ?? 'unknown') : 'unknown';
+      const manifest = isRecord(run.manifest) ? run.manifest : {};
+      const source = isRecord(manifest.source) ? (readString(manifest.source.type) ?? 'unknown') : 'unknown';
+      return `- ${String(run.runId ?? 'unknown')} [${status}] ${String(manifest.kind ?? 'unknown')} · source ${source}`;
+    }),
+  ].join('\n');
+}
+
 async function startBackgroundCommand(input: unknown, ctx: NativeBackendContext) {
   const params = isRecord(input) ? input : {};
   const command = readRequiredString(params.command, 'command');
@@ -218,11 +255,54 @@ export async function bash(input: unknown, ctx: NativeBackendContext) {
 
 export async function background_command(input: unknown, ctx: NativeBackendContext) {
   const params = isRecord(input) ? input : {};
-  if (params.action === 'start') {
+  const action = readRequiredString(params.action, 'action');
+  if (action === 'start') {
     return startBackgroundCommand(params, ctx);
   }
 
-  return executeRunInput(input, ctx, 'background_command');
+  const daemon = await loadDaemon();
+  if (action === 'list') {
+    const result = await daemon.listDurableRuns();
+    return { text: formatBackgroundRunList(result), details: { action: 'list', runCount: result.runs.length } };
+  }
+
+  const runId = readRequiredString(params.runId, 'runId');
+  if (action === 'get') {
+    const result = await daemon.getDurableRun(runId);
+    if (!result) throw new Error(`Run not found: ${runId}`);
+    const run = result.run;
+    return {
+      text: [`Run ${run.runId}`, `status: ${run.status?.status ?? 'unknown'}`, `kind: ${run.manifest?.kind ?? 'unknown'}`].join('\n'),
+      details: { action: 'get', runId, status: run.status?.status },
+    };
+  }
+
+  if (action === 'logs') {
+    const result = await daemon.getDurableRun(runId);
+    if (!result) throw new Error(`Run not found: ${runId}`);
+    const path = result.run.paths.outputLogPath;
+    const tail = normalizeRunLogTail(params.tail);
+    return {
+      text: [`Run logs: ${runId}`, `path: ${path}`, '', readTailText(path, tail) || '(empty log)'].join('\n'),
+      details: { action: 'logs', runId, tail, path },
+    };
+  }
+
+  if (action === 'cancel') {
+    const result = await daemon.cancelDurableRun(runId);
+    ctx.ui.invalidate(['runs', 'tasks']);
+    if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel run ${runId}.`);
+    return { text: `Cancelled background work ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
+  }
+
+  if (action === 'rerun') {
+    const result = await daemon.rerunDurableRun(runId);
+    ctx.ui.invalidate(['runs', 'tasks']);
+    if (!result.accepted) throw new Error(result.reason ?? `Could not rerun ${runId}.`);
+    return { text: `Rerun started ${result.runId} from ${runId}.`, details: { action: 'rerun', runId: result.runId, sourceRunId: runId } };
+  }
+
+  throw new Error(`Unsupported background command action: ${action}`);
 }
 
 export async function subagent(input: unknown, ctx: NativeBackendContext) {
