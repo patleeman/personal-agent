@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { build } from 'esbuild';
-import { rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,23 +23,23 @@ const sharedEsbuildOptions = {
   minify: true,
   legalComments: 'none',
   logLevel: 'info',
-  external: [
-    '@personal-agent/core',
-    '@earendil-works/pi-coding-agent',
-    '@xenova/transformers',
-    'better-sqlite3',
-    'electron',
-    'esbuild',
-    'jsdom',
-  ],
+  external: ['@xenova/transformers', 'better-sqlite3', 'electron', 'esbuild', 'fsevents'],
 };
+
+const bundleOutputs = [
+  resolve(outdir, 'app/localApi.js'),
+  resolve(outdir, 'conversations/conversationInspectWorker.js'),
+  resolve(outdir, 'traces/traceWorker.js'),
+  resolve(outdir, 'daemon/index.js'),
+  resolve(outdir, 'daemon/background-agent-runner.js'),
+];
 
 await Promise.all([
   // Main server bundle
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/app/localApi.ts')],
-    outfile: resolve(outdir, 'app/localApi.js'),
+    outfile: bundleOutputs[0],
     banner: {
       js: createRequireBanner,
     },
@@ -48,7 +48,7 @@ await Promise.all([
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/conversations/conversationInspectWorker.ts')],
-    outfile: resolve(outdir, 'conversations/conversationInspectWorker.js'),
+    outfile: bundleOutputs[1],
     banner: {
       js: createRequireBanner,
     },
@@ -57,13 +57,13 @@ await Promise.all([
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/traces/traceWorker.ts')],
-    outfile: resolve(outdir, 'traces/traceWorker.js'),
+    outfile: bundleOutputs[2],
   }),
   // Daemon barrel used by @personal-agent/daemon and iOS companion dev host.
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/daemon/index.ts')],
-    outfile: resolve(outdir, 'daemon/index.js'),
+    outfile: bundleOutputs[3],
     banner: {
       js: createRequireBanner,
     },
@@ -72,9 +72,16 @@ await Promise.all([
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/daemon/background-agent-runner.ts')],
-    outfile: resolve(outdir, 'daemon/background-agent-runner.js'),
+    outfile: bundleOutputs[4],
     banner: {
       js: createRequireBanner,
     },
   }),
 ]);
+
+const jsdomXhrSyncWorker = resolve(packageRoot, 'node_modules/jsdom/lib/jsdom/living/xhr/xhr-sync-worker.js');
+for (const bundleOutput of bundleOutputs) {
+  const workerOutput = resolve(dirname(bundleOutput), 'xhr-sync-worker.js');
+  mkdirSync(dirname(workerOutput), { recursive: true });
+  copyFileSync(jsdomXhrSyncWorker, workerOutput);
+}

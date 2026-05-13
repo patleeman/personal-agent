@@ -49,8 +49,9 @@ The check verifies:
 2. The Electron renderer exposes a page over CDP
 3. The initial route renders non-empty UI without startup errors
 4. Agent-readable packaged resources exist (`docs/index.md`, system extension READMEs, extension skills, and manifest-declared extension bundles)
-5. The Knowledge route renders
-6. A conversation route renders
+5. Packaged renderer API endpoints return successful responses for extensions, gateways, and models
+6. The Knowledge route renders
+7. A conversation route renders
 
 `pnpm run build` also verifies the current daemon output under `packages/desktop/dist/server/daemon/` and rebuilds system extension backends with the same backend API alias used by the runtime loader. If a tool extension fails with missing `@personal-agent/extensions/backend` exports, rerun the full build before cutting the release.
 

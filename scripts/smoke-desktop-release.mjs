@@ -154,6 +154,57 @@ async function navigateAndAssert(cdp, child, logs, url, label) {
   await waitForLoadedBody(cdp, child, logs, label);
 }
 
+async function assertDesktopApiEndpoints(cdp, child, logs) {
+  if (child.exitCode !== null) {
+    throw new Error(`App exited before desktop API smoke checks.\n${logs()}`);
+  }
+
+  const endpoints = [
+    '/api/extensions/installed',
+    '/api/extensions/routes',
+    '/api/extensions/surfaces',
+    '/api/gateways',
+    '/api/extensions/keybindings',
+    '/api/extensions',
+    '/api/extensions/slash-commands',
+    '/api/extensions/mentions',
+    '/api/models',
+  ];
+  const expression = `
+    (async () => {
+      const endpoints = ${JSON.stringify(endpoints)};
+      return Promise.all(endpoints.map(async (path) => {
+        try {
+          const response = await fetch(path);
+          const body = await response.text();
+          return { path, status: response.status, ok: response.ok, body: body.slice(0, 500) };
+        } catch (error) {
+          return { path, status: 0, ok: false, body: error instanceof Error ? error.message : String(error) };
+        }
+      }));
+    })()
+  `;
+
+  const result = await cdp.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const checks = result?.result?.value;
+  if (!Array.isArray(checks)) {
+    throw new Error(`Desktop API smoke checks returned an unexpected result: ${JSON.stringify(result)}\n${logs()}`);
+  }
+
+  const failures = checks.filter((check) => !check?.ok);
+  if (failures.length > 0) {
+    throw new Error(
+      [`Packaged desktop API smoke checks failed:`, ...failures.map((check) => `${check.path} -> ${check.status}: ${check.body}`), logs()]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
+}
+
 function tail(value, max = 8_000) {
   return value.length > max ? value.slice(value.length - max) : value;
 }
@@ -232,8 +283,11 @@ async function main() {
     await cdp.send('Runtime.enable');
 
     await waitForLoadedBody(cdp, child, renderLogs, 'initial desktop route');
+    await assertDesktopApiEndpoints(cdp, child, renderLogs);
     await navigateAndAssert(cdp, child, renderLogs, 'personal-agent://app/knowledge', 'Knowledge route');
+    await assertDesktopApiEndpoints(cdp, child, renderLogs);
     await navigateAndAssert(cdp, child, renderLogs, 'personal-agent://app/', 'conversation route');
+    await assertDesktopApiEndpoints(cdp, child, renderLogs);
 
     console.log(`Release desktop smoke test passed with isolated state root: ${stateRoot}`);
   } finally {
