@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 
-import { createRunAgentExtension } from './runTool.js';
+type RunAgentExtensionFactory = (api: RegisterToolApi) => void;
 
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
@@ -70,7 +70,16 @@ function runForegroundBash(command: string, cwd: string | undefined, timeoutSeco
   });
 }
 
-async function executeRegisteredTool(factory: ReturnType<typeof createRunAgentExtension>, input: unknown, ctx: NativeBackendContext) {
+async function loadRunAgentExtensionFactory(): Promise<RunAgentExtensionFactory> {
+  const module = await import('./runTool.js');
+  return module.createRunAgentExtension({
+    getCurrentProfile: () => 'shared',
+    repoRoot: process.cwd(),
+    profilesRoot: process.cwd(),
+  }) as RunAgentExtensionFactory;
+}
+
+async function executeRegisteredTool(factory: RunAgentExtensionFactory, input: unknown, ctx: NativeBackendContext) {
   let registeredTool: RegisteredTool | undefined;
   factory({
     registerTool(tool: RegisteredTool) {
@@ -93,15 +102,7 @@ async function executeRegisteredTool(factory: ReturnType<typeof createRunAgentEx
 }
 
 async function executeRunInput(input: unknown, ctx: NativeBackendContext) {
-  const result = (await executeRegisteredTool(
-    createRunAgentExtension({
-      getCurrentProfile: () => 'shared',
-      repoRoot: process.cwd(),
-      profilesRoot: process.cwd(),
-    }),
-    input,
-    ctx,
-  )) as ToolExecutionResult;
+  const result = (await executeRegisteredTool(await loadRunAgentExtensionFactory(), input, ctx)) as ToolExecutionResult;
   ctx.ui.invalidate(['runs', 'tasks']);
   const text = Array.isArray(result?.content)
     ? result.content.map((item) => (item.type === 'text' ? (item.text ?? '') : JSON.stringify(item))).join('\n')
