@@ -4,7 +4,7 @@ interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
   ui: { invalidate(topics: string | string[]): void };
   shell: {
-    exec(input: { command: string; cwd?: string; timeoutMs?: number }): Promise<{
+    exec(input: { command: string; args?: string[]; cwd?: string; timeoutMs?: number }): Promise<{
       stdout?: string;
       stderr?: string;
       executionWrappers?: Array<{ id: string; label?: string }>;
@@ -59,7 +59,12 @@ async function runForegroundBash(
   ctx: NativeBackendContext,
 ): Promise<ToolExecutionResult> {
   try {
-    const result = await ctx.shell.exec({ command, cwd, timeoutMs: timeoutSeconds ? timeoutSeconds * 1000 : undefined });
+    const result = await ctx.shell.exec({
+      command: 'sh',
+      args: ['-lc', command],
+      cwd,
+      timeoutMs: timeoutSeconds ? timeoutSeconds * 1000 : undefined,
+    });
     const output = [result.stdout?.trimEnd(), result.stderr?.trimEnd()].filter(Boolean).join('\n');
     return {
       content: [{ type: 'text', text: output || '(no output)' }],
