@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0-rc.6 — 2026-05-13
+
+- docs: document extension authoring tool contracts
+- feat: surface extension doctor in manager ui
+- feat: add extension validation routes
+- feat: add extension manager authoring doctor
+- docs: expand local extension development skill
+- feat: add local extension development skill
+- fix: surface hidden extension bundle errors
+- feat: expose compaction end events
+- Deprecate dynamic active tool mutation
+- Keep browser tool surface stable
+- Fix goal mode completion loop guards
+- Fix remaining tool smoke failures
+- Fix extension tool smoke failures
+- Show knowledge setup progress
+- Fix knowledge base setup input handling
+
 ## 0.8.0-rc.5 — 2026-05-13
 
 - fix: route clipboard writes through desktop ipc
