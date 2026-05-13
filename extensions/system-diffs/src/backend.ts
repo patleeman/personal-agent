@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import {
@@ -58,13 +57,13 @@ function readPathInputs(cwd: string, values: string[] | undefined): string[] {
   return normalizedPaths;
 }
 
-function runGit(cwd: string, args: string[], options: { allowEmptyStdout?: boolean } = {}): string {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf-8' });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const details = `${result.stderr ?? ''}`.trim() || `${result.stdout ?? ''}`.trim();
-    throw new Error(details ? `git ${args.join(' ')}:\n${details}` : `git ${args.join(' ')} failed with status ${result.status}`);
-  }
+async function runGit(
+  ctx: CheckpointBackendContext,
+  cwd: string,
+  args: string[],
+  options: { allowEmptyStdout?: boolean } = {},
+): Promise<string> {
+  const result = await ctx.shell.exec({ command: 'git', args, cwd, maxBuffer: 32 * 1024 * 1024 });
   const stdout = `${result.stdout ?? ''}`;
   if (!options.allowEmptyStdout && stdout.trim().length === 0) throw new Error(`git ${args.join(' ')} returned no output.`);
   return stdout;
@@ -147,19 +146,20 @@ function parseDiffSections(rawPatch: string): ConversationCommitCheckpointFile[]
   });
 }
 
-function createCheckpointCommit(options: { cwd: string; message: string; paths: string[] }) {
-  runGit(options.cwd, ['rev-parse', '--show-toplevel']);
-  runGit(options.cwd, ['add', '--all', '--', ...options.paths], { allowEmptyStdout: true });
-  const stagedDiff = spawnSync('git', ['diff', '--cached', '--quiet', '--', ...options.paths], { cwd: options.cwd, encoding: 'utf-8' });
-  if (stagedDiff.error) throw stagedDiff.error;
-  if (stagedDiff.status === 0) throw new Error('No staged changes were found for the requested checkpoint paths.');
-  if (stagedDiff.status !== 1) throw new Error(`${stagedDiff.stderr ?? stagedDiff.stdout ?? 'Could not inspect staged changes.'}`.trim());
-  runGit(options.cwd, ['commit', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
-  const commitSha = runGit(options.cwd, ['rev-parse', 'HEAD']).trim();
+async function createCheckpointCommit(ctx: CheckpointBackendContext, options: { cwd: string; message: string; paths: string[] }) {
+  await runGit(ctx, options.cwd, ['rev-parse', '--show-toplevel']);
+  await runGit(ctx, options.cwd, ['add', '--all', '--', ...options.paths], { allowEmptyStdout: true });
+  const stagedFiles = await runGit(ctx, options.cwd, ['diff', '--cached', '--name-only', '--', ...options.paths], {
+    allowEmptyStdout: true,
+  });
+  if (stagedFiles.trim().length === 0) throw new Error('No staged changes were found for the requested checkpoint paths.');
+  await runGit(ctx, options.cwd, ['commit', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
+  const commitSha = (await runGit(ctx, options.cwd, ['rev-parse', 'HEAD'])).trim();
   const metadata = parseCommitMetadata(
-    runGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]),
+    await runGit(ctx, options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]),
   );
-  const rawPatch = runGit(
+  const rawPatch = await runGit(
+    ctx,
     options.cwd,
     ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha],
     { allowEmptyStdout: true },
@@ -224,7 +224,7 @@ export async function checkpoint(input: CheckpointInput, ctx: CheckpointBackendC
       const cwd = readRequiredString(ctx.toolContext?.cwd, 'cwd');
       const message = readRequiredString(input.message, 'message');
       const paths = readPathInputs(cwd, input.paths);
-      const created = createCheckpointCommit({ cwd, message, paths });
+      const created = await createCheckpointCommit(ctx, { cwd, message, paths });
       const linesAdded = created.files.reduce((sum, file) => sum + file.additions, 0);
       const linesDeleted = created.files.reduce((sum, file) => sum + file.deletions, 0);
       const record = saveConversationCommitCheckpoint({
