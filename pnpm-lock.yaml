@@ -153,6 +153,9 @@ importers:
 
   packages/desktop:
     dependencies:
+      '@earendil-works/pi-agent-core':
+        specifier: ^0.74.0
+        version: 0.74.0(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(ws@8.20.0)(zod@4.3.6)
       '@earendil-works/pi-coding-agent':
         specifier: '*'
         version: 0.74.0(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(ws@8.20.0)(zod@4.3.6)
@@ -262,6 +265,9 @@ importers:
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
+      '@types/mime-types':
+        specifier: ^3.0.1
+        version: 3.0.1
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.35
@@ -2709,6 +2715,9 @@ packages:
 
   '@types/mime-types@2.1.4':
     resolution: { integrity: sha512-lfU4b34HOri+kAY5UheuFMWPDOI+OPceBSHZKp69gEyTL/mmJ4cnU6Y/rlme3UL3GyOn6Y42hyIEw0/q8sWx5w== }
+
+  '@types/mime-types@3.0.1':
+    resolution: { integrity: sha512-xRMsfuQbnRq1Ef+C+RKaENOxXX87Ygl38W1vDfPHRku02TgQr+Qd8iivLtAMcR0KF5/29xlnFihkTlbqFrGOVQ== }
 
   '@types/mime@1.3.5':
     resolution: { integrity: sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w== }
@@ -9509,6 +9518,8 @@ snapshots:
   '@types/mdurl@2.0.0': {}
 
   '@types/mime-types@2.1.4': {}
+
+  '@types/mime-types@3.0.1': {}
 
   '@types/mime@1.3.5': {}
 
