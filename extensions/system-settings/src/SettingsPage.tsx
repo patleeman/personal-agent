@@ -2938,7 +2938,7 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                       </p>
 
                       <label className="ui-card-meta pt-1" htmlFor="settings-vision-model">
-                        Vision model for text-only chats
+                        Vision model
                       </label>
                       <select
                         id="settings-vision-model"
@@ -2964,8 +2964,8 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                         {savingPreference === 'visionModel'
                           ? 'Saving vision model…'
                           : modelState.currentVisionModel
-                            ? `Text-only image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
-                            : 'Required before text-only models can inspect uploaded images.'}
+                            ? `Image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
+                            : 'Required before inspecting uploaded images with the current model.'}
                       </p>
 
                       <label className="ui-card-meta pt-1" htmlFor="settings-thinking">

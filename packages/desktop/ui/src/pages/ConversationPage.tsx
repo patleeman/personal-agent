@@ -5781,9 +5781,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
 
             {showTextOnlyImageHint ? (
-              <p className="mb-2 text-[12px] text-secondary">
-                This model is text-only. Set a vision model in Settings to let it inspect attached images with probe_image.
-              </p>
+              <p className="mb-2 text-[12px] text-secondary">Set a vision model in Settings to inspect attached images.</p>
             ) : null}
 
             <div

@@ -569,10 +569,10 @@ describe('SettingsPage provider model editor', () => {
     expect(visionSelect).toBeTruthy();
     expect(visionSelect!.disabled).toBe(false);
     expect(visionSelect!.value).toBe('');
-    expect(container.textContent).toContain('Vision model for text-only chats');
+    expect(container.textContent).toContain('Vision model');
     expect(container.textContent).toContain('Not configured');
     expect(container.textContent).toContain('GPT-5.4');
-    expect(container.textContent).toContain('Required before text-only models can inspect uploaded images.');
+    expect(container.textContent).toContain('Required before inspecting uploaded images with the current model.');
   });
 
   it('shows the configured vision model label when a vision model is selected', async () => {
@@ -609,7 +609,7 @@ describe('SettingsPage provider model editor', () => {
     const visionSelect = container.querySelector<HTMLSelectElement>('#settings-vision-model');
     expect(visionSelect).toBeTruthy();
     expect(visionSelect!.value).toBe('openai-codex/gpt-5.4');
-    expect(container.textContent).toContain('Text-only image probing uses');
+    expect(container.textContent).toContain('Image probing uses');
 
     vi.mocked(useApi).mockImplementation(fallbackImpl);
   });
