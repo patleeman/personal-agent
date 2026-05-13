@@ -22,6 +22,7 @@ The Extension Manager should make that loop boring:
 - export/import extension packages
 - snapshot a user extension before agent edits
 - open an extension folder in Finder/editor
+- expose an agent-facing `extension_manager` tool for list/create/snapshot/build/validate/reload
 - show build/runtime errors in a way an agent can fix
 
 ## Operational model
@@ -38,7 +39,7 @@ The loader also includes repo-local experimental extensions from `experimental-e
 
 The loader also accepts package roots through `PERSONAL_AGENT_EXTENSION_PATHS`. Each path can point directly at a folder with `extension.json`, or at a parent folder containing many extension packages.
 
-Extension Manager can build runtime extensions in-app when running from an unpackaged/dev desktop bundle. Use the per-extension **Build** action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** to refresh backend modules and registry surfaces. Packaged desktop releases are prebuilt-only: they load existing `dist/` bundles and reject runtime compilation. Starter creation supports three templates: `main-page`, `right-rail`, and `workbench-detail`.
+Extension Manager can build runtime extensions in-app when running from an unpackaged/dev desktop bundle. Use the per-extension **Build** action or the `extension_manager` tool's `build` action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** / `reload` to refresh backend modules and registry surfaces. Use `validate` after each build; the extension doctor checks manifest references, dist files, stale output, frontend/backend exports, tool schemas, skill files, forbidden process imports, non-portable bundled imports, and backend import crashes. Packaged desktop releases are prebuilt-only: they load existing `dist/` bundles and reject runtime compilation. Starter creation supports three templates: `main-page`, `right-rail`, and `workbench-detail`.
 
 ## Agent workflow for this extension
 

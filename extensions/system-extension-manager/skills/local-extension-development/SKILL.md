@@ -18,12 +18,14 @@ Build native extensions: a folder with `extension.json`, optional `src/frontend.
 
 ## First moves
 
-1. Inspect installed extensions through Extension Manager or `GET /api/extensions/installed`.
-2. If editing an existing user extension, snapshot it first from Extension Manager.
-3. If creating a new extension, call `POST /api/extensions` with a starter template.
-4. Edit `src/` files and `extension.json`, then build and reload.
-5. Open the declared route/surface and visually inspect UI changes.
-6. Check Extension Manager diagnostics before reporting done.
+1. Inspect installed extensions through Extension Manager, `GET /api/extensions/installed`, or the `extension_manager` tool with `{ "action": "list" }`.
+2. If editing an existing user extension, snapshot it first with `{ "action": "snapshot", "id": "..." }`.
+3. If creating a new extension, use `{ "action": "create", "id": "...", "name": "...", "template": "main-page" }` or `POST /api/extensions`.
+4. Edit `src/` files and `extension.json`, then build with `{ "action": "build", "id": "..." }`.
+5. Validate with `{ "action": "validate", "id": "..." }` and fix every error.
+6. Reload with `{ "action": "reload", "id": "..." }`.
+7. Open the declared route/surface and visually inspect UI changes.
+8. Check Extension Manager diagnostics before reporting done.
 
 Starter create payload:
 
@@ -245,13 +247,14 @@ Normal third-party dependencies are bundled into `dist/` by the builder. Host pa
 
 Never import app internals like `packages/desktop/server/*`, `packages/desktop/ui/*`, `@personal-agent/core`, or `@personal-agent/daemon` from an extension. If a host capability is missing, the right platform change is a reusable SDK/backend subpath, not a private import.
 
-## Build and reload
+## Build, validate, and reload
 
 Built app path:
 
-1. Build with Extension Manager **Build** or `POST /api/extensions/{id}/build`.
-2. Reload with Extension Manager **Reload** or `POST /api/extensions/{id}/reload`.
-3. Inspect diagnostics in Extension Manager.
+1. Build with the `extension_manager` tool `{ "action": "build", "id": "my-extension" }`, Extension Manager **Build**, or `POST /api/extensions/{id}/build`.
+2. Validate with `{ "action": "validate", "id": "my-extension" }`. The doctor checks manifest references, dist files, stale output, frontend component exports, backend action exports, tool schemas, skill files, forbidden process imports, non-portable absolute imports, and backend module import crashes.
+3. Reload with `{ "action": "reload", "id": "my-extension" }`, Extension Manager **Reload**, or `POST /api/extensions/{id}/reload`.
+4. Inspect diagnostics in Extension Manager.
 
 Repo checkout fallback:
 

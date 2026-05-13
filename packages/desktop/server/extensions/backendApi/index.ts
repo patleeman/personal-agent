@@ -6,6 +6,7 @@ export * from './browser.js';
 export * from './checkpoints.js';
 export * from './conversations.js';
 export * from './events.js';
+export * from './extensions.js';
 export * from './images.js';
 export * from './knowledge.js';
 export * from './knowledgeVault.js';

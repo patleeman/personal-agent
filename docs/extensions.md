@@ -1019,8 +1019,13 @@ The desktop server also runs an enabled-extension backend health check on startu
 Failures are logged, surfaced as extension diagnostics, and shown by Extension
 Manager instead of silently making tools or actions disappear. Extension builds
 write `dist/build-manifest.json` with output files, byte sizes, and remaining
-external imports. The release publisher reruns the packaged-extension check
-against the built `.app` before notarization/upload.
+external imports. Extension Manager also exposes the `extension_manager` agent
+tool for local extension authoring: `list`, `create`, `snapshot`, `build`,
+`validate`, and `reload`. Run `validate` after each build to check manifest
+references, dist files, stale output, frontend/backend exports, tool schemas,
+skill files, forbidden process imports, non-portable bundled imports, and backend
+import crashes for one extension. The release publisher reruns the
+packaged-extension check against the built `.app` before notarization/upload.
 
 The integration suite covers 79 tests across 12 categories:
 

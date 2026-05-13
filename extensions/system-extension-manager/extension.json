@@ -9,6 +9,18 @@
     "entry": "dist/frontend.js",
     "styles": []
   },
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "actions": [
+      { "id": "listExtensions", "handler": "listExtensions", "title": "List extensions" },
+      { "id": "createExtension", "handler": "createExtension", "title": "Create extension" },
+      { "id": "snapshotExtension", "handler": "snapshotExtension", "title": "Snapshot extension" },
+      { "id": "buildExtension", "handler": "buildExtension", "title": "Build extension" },
+      { "id": "reloadExtension", "handler": "reloadExtension", "title": "Reload extension" },
+      { "id": "validateExtension", "handler": "validateExtension", "title": "Validate extension" },
+      { "id": "manageExtension", "handler": "manageExtension", "title": "Manage extension" }
+    ]
+  },
   "contributes": {
     "nav": [
       {
@@ -17,6 +29,28 @@
         "route": "/extensions",
         "icon": "sparkle",
         "section": "settings"
+      }
+    ],
+    "tools": [
+      {
+        "id": "extension-manager",
+        "name": "extension_manager",
+        "title": "Extension manager",
+        "description": "Create, list, snapshot, build, reload, or validate local Personal Agent extensions.",
+        "action": "manageExtension",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["list", "create", "snapshot", "build", "reload", "validate"] },
+            "id": { "type": "string", "description": "Extension id." },
+            "extensionId": { "type": "string", "description": "Extension id; alias for id." },
+            "name": { "type": "string", "description": "Display name when creating an extension." },
+            "description": { "type": "string", "description": "Description when creating an extension." },
+            "template": { "type": "string", "enum": ["main-page", "right-rail", "workbench-detail"] },
+            "packageRoot": { "type": "string", "description": "Package root to validate when the extension is not installed." }
+          },
+          "required": ["action"]
+        }
       }
     ],
     "views": [
