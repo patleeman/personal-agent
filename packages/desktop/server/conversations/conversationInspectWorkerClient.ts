@@ -79,9 +79,11 @@ export function resolveConversationInspectWorkerUrlFrom(importMetaUrl: string): 
   // extension cache.
   const currentDir = dirname(fileURLToPath(importMetaUrl));
   const isExtensionCacheClient = currentDir.includes(`${sep}extension-cache${sep}`);
+  const isPackagedExtensionClient =
+    typeof process.resourcesPath === 'string' && currentDir.includes(`${sep}extensions${sep}`) && currentDir.endsWith(`${sep}dist`);
   const relativeUrl = new URL('../conversations/conversationInspectWorker.js', importMetaUrl);
 
-  if (!isExtensionCacheClient) {
+  if (!isExtensionCacheClient && !isPackagedExtensionClient) {
     try {
       if (existsSync(fileURLToPath(relativeUrl))) {
         return relativeUrl;
@@ -91,7 +93,17 @@ export function resolveConversationInspectWorkerUrlFrom(importMetaUrl: string): 
     }
   }
 
+  const packagedCandidates =
+    typeof process.resourcesPath === 'string'
+      ? [
+          resolve(process.resourcesPath, 'app.asar/server/dist/conversations/conversationInspectWorker.js'),
+          resolve(process.resourcesPath, 'app/server/dist/conversations/conversationInspectWorker.js'),
+          resolve(process.resourcesPath, 'server/dist/conversations/conversationInspectWorker.js'),
+        ]
+      : [];
+
   const candidates = [
+    ...packagedCandidates,
     ...(process.env.PERSONAL_AGENT_REPO_ROOT
       ? [resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist/conversations/conversationInspectWorker.js')]
       : []),
@@ -108,8 +120,8 @@ export function resolveConversationInspectWorkerUrlFrom(importMetaUrl: string): 
     }
   }
 
-  if (isExtensionCacheClient) {
-    throw new Error('Unable to locate bundled conversation inspect worker outside extension cache.');
+  if (isExtensionCacheClient || isPackagedExtensionClient) {
+    throw new Error('Unable to locate bundled conversation inspect worker outside extension backend bundle.');
   }
 
   return relativeUrl;
