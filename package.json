@@ -16,7 +16,7 @@
     "desktop:dev": "pnpm --dir packages/desktop run dev --",
     "desktop:start": "pnpm --dir packages/desktop run start --",
     "desktop:demo": "node packages/desktop/scripts/launch-demo-app.mjs",
-    "desktop:dist": "pnpm run desktop:build && electron-builder --config electron-builder.config.mjs --publish never",
+    "desktop:dist": "pnpm --dir packages/desktop run clean && pnpm --dir packages/desktop run build:deps && pnpm --dir packages/desktop run build:main && electron-builder --config electron-builder.config.mjs --publish never",
     "desktop:dist:dir": "pnpm run desktop:build && electron-builder --config electron-builder.config.mjs --dir",
     "ios:dev": "node apps/ios/scripts/ios-dev.mjs dev",
     "ios:demo": "node apps/ios/scripts/ios-dev.mjs demo",
