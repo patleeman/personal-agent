@@ -276,6 +276,16 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
                 <ToolbarButton disabled={searchBusy || !searchQuery.trim()} onClick={() => void this.searchModels()}>
                   {searchBusy ? 'Searching…' : 'Search'}
                 </ToolbarButton>
+                {(searchQuery || searchResults.length > 0) && (
+                  <button
+                    type="button"
+                    disabled={searchBusy}
+                    onClick={() => this.setState({ searchQuery: '', searchResults: [] })}
+                    className="px-2 text-sm text-secondary hover:text-primary disabled:opacity-60"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
               {searchResults.length > 0 ? (
                 <div className="divide-y divide-border-subtle border-y border-border-subtle text-sm">
