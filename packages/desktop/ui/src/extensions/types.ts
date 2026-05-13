@@ -378,6 +378,27 @@ interface ExtensionToolRegistration {
   promptGuidelines?: string[];
 }
 
+export interface ExtensionDoctorFinding {
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+  message: string;
+  path?: string;
+  fix?: string;
+}
+
+export interface ExtensionDoctorReport {
+  ok: boolean;
+  extensionId: string;
+  packageRoot: string;
+  manifest?: ExtensionManifest;
+  findings: ExtensionDoctorFinding[];
+  summary: {
+    errors: number;
+    warnings: number;
+    info: number;
+  };
+}
+
 export interface ExtensionInstallSummary {
   id: string;
   name: string;

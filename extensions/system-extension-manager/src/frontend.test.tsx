@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   notifyExtensionRegistryChanged: vi.fn(),
   openPath: vi.fn(),
   reloadExtension: vi.fn(),
+  validateExtension: vi.fn(),
 }));
 
 vi.mock('@personal-agent/extensions/data', () => ({
@@ -19,6 +20,7 @@ vi.mock('@personal-agent/extensions/data', () => ({
     exportExtension: mocks.exportExtension,
     extensionInstallations: mocks.extensionInstallations,
     reloadExtension: mocks.reloadExtension,
+    validateExtension: mocks.validateExtension,
   },
   EXTENSION_REGISTRY_CHANGED_EVENT: 'pa-extension-registry-changed',
   notifyExtensionRegistryChanged: mocks.notifyExtensionRegistryChanged,
@@ -82,6 +84,13 @@ describe('ExtensionManagerPage', () => {
     vi.clearAllMocks();
     mocks.extensionInstallations.mockResolvedValue([createExtension()]);
     mocks.reloadExtension.mockResolvedValue({ ok: true, id: 'menu-test', reloaded: true, message: 'Extension backend reloaded.' });
+    mocks.validateExtension.mockResolvedValue({
+      ok: true,
+      extensionId: 'menu-test',
+      packageRoot: '/tmp/menu-test',
+      findings: [],
+      summary: { errors: 0, warnings: 0, info: 0 },
+    });
   });
 
   it('shows row-level progress and a sticky success notice for build actions', async () => {
@@ -104,6 +113,33 @@ describe('ExtensionManagerPage', () => {
       expect(screen.queryByText('Working…')).toBeNull();
     });
     expect(mocks.reloadExtension).toHaveBeenCalledWith('menu-test');
+  });
+
+  it('shows extension doctor validation findings from the actions menu', async () => {
+    mocks.validateExtension.mockResolvedValue({
+      ok: false,
+      extensionId: 'menu-test',
+      packageRoot: '/tmp/menu-test',
+      findings: [
+        {
+          severity: 'error',
+          code: 'missing-frontend-dist',
+          message: 'Frontend entry is missing: dist/frontend.js',
+          fix: 'Build the extension.',
+        },
+      ],
+      summary: { errors: 1, warnings: 0, info: 0 },
+    });
+    renderPage();
+
+    await screen.findByText('Menu Test');
+    fireEvent.click(screen.getByLabelText('More actions'));
+    fireEvent.click(screen.getByText('Validate'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Menu Test validation found 1 error and 0 warnings.')).toBeTruthy();
+    });
+    expect(screen.getByText(/ERROR missing-frontend-dist/)).toBeTruthy();
   });
 
   it('reports export failures without replacing the page', async () => {

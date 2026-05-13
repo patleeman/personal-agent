@@ -125,6 +125,7 @@ function ExtensionActionsMenu({
   onOpenFolder,
   onBuild,
   onReload,
+  onValidate,
   onSnapshot,
   onExport,
   onCopyDiagnostics,
@@ -135,6 +136,7 @@ function ExtensionActionsMenu({
   onOpenFolder: () => void;
   onBuild: () => void;
   onReload: () => void;
+  onValidate: () => void;
   onSnapshot: () => void;
   onExport: () => void;
   onCopyDiagnostics: () => void;
@@ -195,6 +197,9 @@ function ExtensionActionsMenu({
           ) : null}
           <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onReload)}>
             Reload
+          </button>
+          <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onValidate)}>
+            Validate
           </button>
           <button className={menuButtonClass} disabled={busy} onClick={(event) => run(event, onSelfTest)}>
             Run self-test
@@ -674,6 +679,38 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
     [load, showActionError, showActionNotice],
   );
 
+  const validateExtension = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      setBusyId(extension.id);
+      setNotice(null);
+      try {
+        const report = await api.validateExtension(extension.id);
+        const errorFindings = report.findings.filter((finding) => finding.severity === 'error');
+        const warningFindings = report.findings.filter((finding) => finding.severity === 'warning');
+        const details = report.findings
+          .map(
+            (finding) =>
+              `${finding.severity.toUpperCase()} ${finding.code}: ${finding.message}${finding.fix ? ` Fix: ${finding.fix}` : ''}`,
+          )
+          .join('\n');
+        showActionNotice(
+          report.ok
+            ? `${extension.name} passed validation.`
+            : `${extension.name} validation found ${errorFindings.length} error${errorFindings.length === 1 ? '' : 's'} and ${warningFindings.length} warning${warningFindings.length === 1 ? '' : 's'}.`,
+          report.ok ? 'info' : 'warning',
+        );
+        if (!report.ok && details) setNotice(details);
+        await load();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showActionError(`Validation failed for ${extension.name}: ${message}`, err instanceof Error ? err.stack : undefined);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [load, showActionError, showActionNotice],
+  );
+
   const snapshotExtension = useCallback(
     async (extension: ExtensionInstallSummary) => {
       setBusyId(extension.id);
@@ -857,6 +894,7 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
                 onOpenFolder={() => openFolder(extension)}
                 onBuild={() => void buildExtension(extension)}
                 onReload={() => void reloadExtension(extension)}
+                onValidate={() => void validateExtension(extension)}
                 onSnapshot={() => void snapshotExtension(extension)}
                 onExport={() => void exportExtension(extension)}
                 onCopyDiagnostics={() => void copyExtensionDiagnostics(extension)}

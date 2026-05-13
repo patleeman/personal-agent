@@ -1,6 +1,7 @@
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import type {
   ExtensionCommandRegistration,
+  ExtensionDoctorReport,
   ExtensionInstallSummary,
   ExtensionKeybindingRegistration,
   ExtensionManifest,
@@ -348,6 +349,7 @@ export const api = {
     ),
   buildExtension: async (extensionId: string) =>
     post<{ ok: true; extensionId: string; outputs: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/build`),
+  validateExtension: async (extensionId: string) => post<ExtensionDoctorReport>(`/extensions/${encodeURIComponent(extensionId)}/validate`),
   reloadExtension: async (extensionId: string) =>
     post<{ ok: true; id: string; reloaded: boolean; message: string }>(`/extensions/${encodeURIComponent(extensionId)}/reload`),
   snapshotExtension: async (extensionId: string) =>
