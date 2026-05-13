@@ -98,6 +98,8 @@ Queued steer and follow-up prompts appear in the queue shelf above the composer.
 
 Parallel prompts appear in the Parallel shelf. A running parallel prompt can be cancelled. A completed or failed parallel prompt can be imported into the main thread, skipped, or opened as its own conversation.
 
+Deferred resumes (`/resume`, `/defer`) also appear in the activity shelf above the composer. They are tied to the saved conversation and can be fired now, cancelled, or auto-resumed when the thread is reopened.
+
 ## Goal Mode
 
 Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. The continuation prompt tells the agent to call `update_goal` when the objective is achieved. If two continuation turns make no tool-driven progress, goal mode pauses the objective with a `no progress` stop reason instead of spinning forever. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.

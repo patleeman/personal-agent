@@ -7,7 +7,7 @@ import type { RefetchOptions } from './useApi';
 export function useInvalidateOnTopics(topics: AppEventTopic[], refetch: (options?: RefetchOptions) => Promise<unknown>): void {
   const { versions } = useAppEvents();
   const refetchRef = useRef(refetch);
-  const mountedRef = useRef(false);
+  const previousSignatureRef = useRef<string | null>(null);
 
   refetchRef.current = refetch;
 
@@ -15,14 +15,20 @@ export function useInvalidateOnTopics(topics: AppEventTopic[], refetch: (options
 
   useEffect(() => {
     if (topics.length === 0) {
+      previousSignatureRef.current = null;
       return;
     }
 
-    if (!mountedRef.current) {
-      mountedRef.current = true;
+    if (previousSignatureRef.current === null) {
+      previousSignatureRef.current = signature;
       return;
     }
 
-    void refetchRef.current({ resetLoading: false });
+    if (previousSignatureRef.current === signature) {
+      return;
+    }
+
+    previousSignatureRef.current = signature;
+    void refetchRef.current({ resetLoading: false }).catch(() => {});
   }, [signature, topics.length]);
 }
