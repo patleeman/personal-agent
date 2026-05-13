@@ -17,6 +17,7 @@ interface GoalState {
   tasks: [];
   stopReason: string | null;
   updatedAt: string | null;
+  noProgressTurns: number;
 }
 
 const DEFAULT_GOAL_STATE: GoalState = {
@@ -25,6 +26,7 @@ const DEFAULT_GOAL_STATE: GoalState = {
   tasks: [],
   stopReason: null,
   updatedAt: null,
+  noProgressTurns: 0,
 };
 
 // ── State helpers ────────────────────────────────────────────────────────────
@@ -54,6 +56,7 @@ function readGoalState(sessionManager: { getEntries: () => unknown[] }): GoalSta
       tasks: [],
       stopReason: typeof data.stopReason === 'string' ? data.stopReason : null,
       updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+      noProgressTurns: typeof data.noProgressTurns === 'number' && Number.isSafeInteger(data.noProgressTurns) ? data.noProgressTurns : 0,
     };
   }
   return DEFAULT_GOAL_STATE;
@@ -63,9 +66,9 @@ function writeGoalState(pi: ExtensionAPI, state: GoalState): void {
   pi.appendEntry(GOAL_STATE_CUSTOM_TYPE, state);
 }
 
-const GOAL_ACTIVE_TOOLS = [GOAL_UPDATE_TOOL];
-const GOAL_INACTIVE_TOOLS = [GOAL_SET_TOOL];
-const GOAL_TOOLS = [...GOAL_ACTIVE_TOOLS, ...GOAL_INACTIVE_TOOLS];
+const GOAL_ACTIVE_TOOLS = [GOAL_SET_TOOL, GOAL_UPDATE_TOOL];
+const GOAL_INACTIVE_TOOLS = [GOAL_SET_TOOL, GOAL_UPDATE_TOOL];
+const GOAL_TOOLS = [...new Set([...GOAL_ACTIVE_TOOLS, ...GOAL_INACTIVE_TOOLS])];
 
 function syncGoalTools(pi: ExtensionAPI, hasActiveGoal: boolean): void {
   const current = pi.getActiveTools().filter((tool) => !GOAL_TOOLS.includes(tool));
@@ -149,6 +152,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           tasks: [],
           stopReason: null,
           updatedAt: new Date().toISOString(),
+          noProgressTurns: 0,
         };
         writeGoalState(pi, newState);
         syncGoalTools(pi, true);
@@ -214,6 +218,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
                 tasks: [],
                 stopReason: 'goal achieved',
                 updatedAt: new Date().toISOString(),
+                noProgressTurns: 0,
               }
             : {
                 ...state,
@@ -221,6 +226,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
                 status: 'active',
                 stopReason: null,
                 updatedAt: new Date().toISOString(),
+                noProgressTurns: 0,
               };
         writeGoalState(pi, newState);
         syncGoalTools(pi, newState.status === 'active');
@@ -259,6 +265,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             tasks: [],
             stopReason: 'cleared',
             updatedAt: new Date().toISOString(),
+            noProgressTurns: 0,
           };
           writeGoalState(pi, cleared);
           syncGoalTools(pi, false);
@@ -286,6 +293,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           tasks: [],
           stopReason: null,
           updatedAt: new Date().toISOString(),
+          noProgressTurns: 0,
         };
         writeGoalState(pi, newState);
         syncGoalTools(pi, true);
@@ -314,7 +322,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
 
       // Pause goal on interrupt (user hit stop mid-stream)
       if (ctx.signal?.aborted) {
-        const paused: GoalState = { ...state, status: 'paused', updatedAt: new Date().toISOString() };
+        const paused: GoalState = { ...state, status: 'paused', updatedAt: new Date().toISOString(), noProgressTurns: 0 };
         writeGoalState(pi, paused);
         syncGoalTools(pi, false);
         clearPendingContinuation();
@@ -324,19 +332,19 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
-      if (isNoProgressGoalTurn(toolResults)) {
-        consecutiveNoToolTurns += 1;
-      } else {
-        consecutiveNoToolTurns = 0;
+      const noProgressTurns = isNoProgressGoalTurn(toolResults) ? state.noProgressTurns + 1 : 0;
+      consecutiveNoToolTurns = noProgressTurns;
+      if (!isNoProgressGoalTurn(toolResults)) {
         continuationSuppressed = false;
       }
 
-      if (consecutiveNoToolTurns >= 2) {
+      if (noProgressTurns >= 2) {
         const paused: GoalState = {
           ...state,
           status: 'paused',
           stopReason: 'no progress',
           updatedAt: new Date().toISOString(),
+          noProgressTurns: 0,
         };
         writeGoalState(pi, paused);
         syncGoalTools(pi, false);
@@ -344,6 +352,14 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         continuationSuppressed = true;
         consecutiveNoToolTurns = 0;
         return;
+      }
+
+      const continuationState: GoalState =
+        noProgressTurns === state.noProgressTurns
+          ? state
+          : { ...state, noProgressTurns, updatedAt: new Date().toISOString() };
+      if (continuationState !== state) {
+        writeGoalState(pi, continuationState);
       }
 
       // No-tool suppression: if recent continuation turns did nothing, skip next
@@ -360,10 +376,10 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
-      const prompt = buildContinuationPrompt(state);
+      const prompt = buildContinuationPrompt(continuationState);
       const continuationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const scheduledObjective = state.objective;
-      const scheduledUpdatedAt = state.updatedAt;
+      const scheduledObjective = continuationState.objective;
+      const scheduledUpdatedAt = continuationState.updatedAt;
 
       pendingContinuationTimer = setTimeout(() => {
         pendingContinuationTimer = null;
@@ -409,6 +425,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         ...state,
         status: 'active',
         updatedAt: new Date().toISOString(),
+        noProgressTurns: 0,
       };
       writeGoalState(pi, newState);
       syncGoalTools(pi, true);

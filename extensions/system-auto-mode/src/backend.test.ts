@@ -179,22 +179,24 @@ describe('system-goal-mode extension', () => {
 
     factory(pi);
 
+    const entries: unknown[] = [
+      {
+        type: 'custom',
+        customType: 'conversation-goal',
+        data: {
+          objective: 'ship goal mode',
+          status: 'active',
+          tasks: [],
+          stopReason: null,
+          updatedAt: '2026-05-09T00:00:00.000Z',
+        },
+      },
+    ];
+    appendEntry.mockImplementation((customType: string, data: unknown) => entries.push({ type: 'custom', customType, data }));
     const turnEnd = handlers.get('turn_end')?.[0];
     const ctx = {
       sessionManager: {
-        getEntries: () => [
-          {
-            type: 'custom',
-            customType: 'conversation-goal',
-            data: {
-              objective: 'ship goal mode',
-              status: 'active',
-              tasks: [],
-              stopReason: null,
-              updatedAt: '2026-05-09T00:00:00.000Z',
-            },
-          },
-        ],
+        getEntries: () => entries,
       },
       hasPendingMessages: () => false,
       signal: { aborted: false },
@@ -203,6 +205,7 @@ describe('system-goal-mode extension', () => {
     await turnEnd?.({ toolResults: [] }, ctx);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ noProgressTurns: 1 }));
 
     await turnEnd?.({ toolResults: [] }, ctx);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -213,6 +216,7 @@ describe('system-goal-mode extension', () => {
   it('treats tool turns as progress', async () => {
     const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
     const sendMessage = vi.fn();
+    const appendEntry = vi.fn();
     const factory = createConversationAutoModeAgentExtension();
     const pi = {
       registerTool: vi.fn(),
@@ -220,7 +224,7 @@ describe('system-goal-mode extension', () => {
       getActiveTools: vi.fn(() => []),
       setActiveTools: vi.fn(),
       sendMessage,
-      appendEntry: vi.fn(),
+      appendEntry,
       on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
         handlers.set(name, [...(handlers.get(name) ?? []), handler]);
       }),
@@ -228,22 +232,24 @@ describe('system-goal-mode extension', () => {
 
     factory(pi);
 
+    const entries: unknown[] = [
+      {
+        type: 'custom',
+        customType: 'conversation-goal',
+        data: {
+          objective: 'ship goal mode',
+          status: 'active',
+          tasks: [],
+          stopReason: null,
+          updatedAt: '2026-05-09T00:00:00.000Z',
+        },
+      },
+    ];
+    appendEntry.mockImplementation((customType: string, data: unknown) => entries.push({ type: 'custom', customType, data }));
     const turnEnd = handlers.get('turn_end')?.[0];
     const ctx = {
       sessionManager: {
-        getEntries: () => [
-          {
-            type: 'custom',
-            customType: 'conversation-goal',
-            data: {
-              objective: 'ship goal mode',
-              status: 'active',
-              tasks: [],
-              stopReason: null,
-              updatedAt: '2026-05-09T00:00:00.000Z',
-            },
-          },
-        ],
+        getEntries: () => entries,
       },
       hasPendingMessages: () => false,
       signal: { aborted: false },
@@ -388,7 +394,7 @@ describe('system-goal-mode extension', () => {
       },
     );
 
-    expect(setActiveTools).toHaveBeenLastCalledWith(['bash', 'update_goal']);
+    expect(setActiveTools).toHaveBeenLastCalledWith(['bash', 'set_goal', 'update_goal']);
   });
 
   it('registers only goal set and update tools', () => {
