@@ -1,10 +1,14 @@
 import { dirname } from 'node:path';
 
-import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
-import { resolveRuntimeResources } from '@personal-agent/core';
+import { AuthStorage, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
+import { getPiAgentRuntimeDir, getProfilesRoot, getStateRoot, resolveRuntimeResources } from '@personal-agent/core';
 
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
+import { createManifestAgentExtensions } from './extensionAgentExtensions.js';
 import { listExtensionSkillRegistrations } from './extensionRegistry.js';
+import { createManifestToolAgentExtensions } from './manifestToolAgentExtension.js';
 
 let buildResourceOptions: (() => LiveSessionResourceOptions) | null = null;
 let buildExtensionFactories: (() => ExtensionFactory[]) | null = null;
@@ -34,7 +38,32 @@ export function buildLiveSessionResourceOptionsForRuntime(): LiveSessionResource
   return buildResourceOptions ? buildResourceOptions() : buildFallbackLiveSessionResourceOptions();
 }
 
+function buildFallbackLiveSessionExtensionFactories(): ExtensionFactory[] {
+  const agentDir = getPiAgentRuntimeDir();
+  const agentExtensions = createManifestAgentExtensions({
+    onError: (message, fields) => console.warn(`[runtime-agent] ${message}`, fields ?? ''),
+  });
+
+  return [
+    ...createManifestToolAgentExtensions({
+      getCurrentProfile: () => process.env.PERSONAL_AGENT_ACTIVE_PROFILE || process.env.PERSONAL_AGENT_PROFILE || 'shared',
+      getPreferredVisionModel: () => readSavedModelPreferences(DEFAULT_RUNTIME_SETTINGS_FILE).currentVisionModel,
+      hasOpenAiImageProvider: () => {
+        try {
+          const auth = AuthStorage.create(`${agentDir}/auth.json`);
+          return auth.hasAuth('openai') || auth.hasAuth('openai-codex');
+        } catch {
+          return false;
+        }
+      },
+      repoRoot: process.env.PERSONAL_AGENT_REPO_ROOT || process.cwd(),
+      profilesRoot: getProfilesRoot(),
+      stateRoot: getStateRoot(),
+    }),
+    ...agentExtensions.factories,
+  ];
+}
+
 export function buildLiveSessionExtensionFactoriesForRuntime(): ExtensionFactory[] {
-  if (!buildExtensionFactories) throw new Error('Live session extension factory builder is not registered.');
-  return buildExtensionFactories();
+  return buildExtensionFactories ? buildExtensionFactories() : buildFallbackLiveSessionExtensionFactories();
 }
