@@ -26,6 +26,16 @@ function candidateBundledExtensionRoots(): string[] {
   ].filter((value): value is string => Boolean(value));
 }
 
+function candidateExperimentalExtensionRoots(): string[] {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  return [
+    process.env.PERSONAL_AGENT_REPO_ROOT ? resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'experimental-extensions/extensions') : null,
+    resolve(process.cwd(), 'experimental-extensions/extensions'),
+    resolve(currentDir, '../../../../experimental-extensions/extensions'),
+    resolve(currentDir, '../../../../../experimental-extensions/extensions'),
+  ].filter((value): value is string => Boolean(value));
+}
+
 function expandExtensionPath(rootOrPackage: string, source: ExtensionPackagePath['source']): ExtensionPackagePath[] {
   const root = resolve(rootOrPackage);
   if (!existsSync(root) || !statSync(root).isDirectory()) {
@@ -51,6 +61,7 @@ export function listExtensionPackagePaths(options: { runtimeRoot?: string } = {}
   const seen = new Set<string>();
   const inputs: Array<{ path: string; source: ExtensionPackagePath['source'] }> = [
     ...candidateBundledExtensionRoots().map((path) => ({ path, source: 'bundled' as const })),
+    ...candidateExperimentalExtensionRoots().map((path) => ({ path, source: 'external' as const })),
     ...(options.runtimeRoot ? [{ path: options.runtimeRoot, source: 'external' as const }] : []),
     ...splitPathList(process.env.PERSONAL_AGENT_EXTENSION_PATHS).map((path) => ({ path, source: 'external' as const })),
   ];
