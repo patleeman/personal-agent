@@ -3,6 +3,7 @@
   "id": "system-codex",
   "name": "Codex Protocol for Companion App",
   "packageType": "system",
+  "defaultEnabled": false,
   "description": "Codex App Server JSON-RPC 2.0 protocol over WebSocket for companion apps to connect and interact with conversations.",
   "version": "0.1.0",
   "frontend": {
