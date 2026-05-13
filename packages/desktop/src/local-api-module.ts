@@ -395,6 +395,10 @@ export function resolveLocalApiModuleUrl(
     return pathToFileURL(devPath).href;
   }
 
+  if (input.appPath ?? envAppPath) {
+    return pathToFileURL(packagedPath).href;
+  }
+
   const existingPath = [packagedPath, devPath, repoPath]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .find((filePath) => existsSync(filePath));
@@ -434,6 +438,9 @@ export function loadRawLocalApiModule(): Promise<LocalApiModule> {
       primaryUrl: resolveLocalApiModuleUrl(),
       fallbackUrl: resolveFallbackLocalApiModuleUrl(),
       loadModule: (moduleUrl) => import(moduleUrl) as Promise<LocalApiModule>,
+    }).catch((error) => {
+      localApiModulePromise = null;
+      throw error;
     });
   }
 

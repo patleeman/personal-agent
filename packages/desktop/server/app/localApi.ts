@@ -596,7 +596,13 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
 
 async function getLocalRoutes(): Promise<RegisteredRoute[]> {
   if (!localRoutesPromise) {
-    localRoutesPromise = buildLocalRoutes();
+    localRoutesPromise = buildLocalRoutes().catch((error) => {
+      localRoutesPromise = null;
+      localServerRouteContext = null;
+      localLiveSessionCapabilityContext = null;
+      localProviderDesktopCapabilityContext = null;
+      throw error;
+    });
   }
 
   return localRoutesPromise;
