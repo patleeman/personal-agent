@@ -19,6 +19,15 @@ export {
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
 } from '../../automation/scheduledTaskThreads.js';
+export {
+  createStoredAutomation,
+  deleteStoredAutomation,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
+  normalizeAutomationTargetTypeForSelection,
+  type StoredAutomation,
+  updateStoredAutomation,
+} from '../../automation/store.js';
 export { cancelQueuedPrompt, listQueuedPromptPreviews, promptSession, type QueuedPromptPreview } from '../../conversations/liveSessions.js';
 export { invalidateAppTopics } from '../../shared/appEvents.js';
 export {
@@ -30,14 +39,17 @@ export {
   readSessionConversationId,
   setTaskCallbackBinding,
 } from '@personal-agent/core';
-export {
-  createStoredAutomation,
-  deleteStoredAutomation,
-  listStoredAutomations,
-  loadAutomationRuntimeStateMap,
-  normalizeAutomationTargetTypeForSelection,
-  pingDaemon,
-  startScheduledTaskRun,
-  type StoredAutomation,
-  updateStoredAutomation,
-} from '@personal-agent/daemon';
+
+async function loadDaemon() {
+  return import('@personal-agent/daemon');
+}
+
+export async function pingDaemon(...args: Parameters<(typeof import('@personal-agent/daemon'))['pingDaemon']>) {
+  const daemon = await loadDaemon();
+  return daemon.pingDaemon(...args);
+}
+
+export async function startScheduledTaskRun(...args: Parameters<(typeof import('@personal-agent/daemon'))['startScheduledTaskRun']>) {
+  const daemon = await loadDaemon();
+  return daemon.startScheduledTaskRun(...args);
+}

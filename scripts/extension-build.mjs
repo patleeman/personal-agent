@@ -160,7 +160,7 @@ function createExtensionBackendApiPlugin() {
       }));
       buildContext.onResolve({ filter: /^@personal-agent\/daemon$/ }, (args) => {
         const desktopDaemonBundle = join(repoRoot, 'packages/desktop/server/dist/daemon/index.js');
-        return existsSync(desktopDaemonBundle) ? { path: desktopDaemonBundle } : { path: args.path, external: true };
+        return existsSync(desktopDaemonBundle) ? { path: desktopDaemonBundle, external: true } : { path: args.path, external: true };
       });
     },
   };

@@ -64,5 +64,8 @@ await Promise.all([
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/daemon/index.ts')],
     outfile: resolve(outdir, 'daemon/index.js'),
+    banner: {
+      js: createRequireBanner,
+    },
   }),
 ]);
