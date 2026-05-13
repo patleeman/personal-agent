@@ -1,5 +1,3 @@
-import { type ChildProcess, spawn } from 'node:child_process';
-
 import type { MethodHandler } from '../server.js';
 
 function parseCommand(command: unknown): { executable: string; args: string[] } | null {
@@ -14,14 +12,10 @@ function numberParam(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-// Track active command sessions for interactive terminal support
-const activeSessions = new Map<
-  string,
-  {
-    process: ChildProcess;
-    processId: string;
-  }
->();
+// Track active command sessions for protocol compatibility. Commands run through
+// ctx.shell so PA can apply execution wrappers; interactive stdin is not supported
+// by the host shell capability yet.
+const activeSessions = new Set<string>();
 
 export const command = {
   /**
@@ -34,47 +28,29 @@ export const command = {
     const timeout = p?.disableTimeout === true ? 0 : numberParam(p?.timeoutMs ?? p?.timeout, 30000);
     if (!command) throw new Error('command is required');
 
-    const child = spawn(command.executable, command.args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env } });
     const processId = (p?.processId as string | undefined) ?? `exec-${Date.now()}`;
-    activeSessions.set(processId, { process: child, processId });
+    activeSessions.add(processId);
 
-    return new Promise((resolve, reject) => {
-      const stdout: string[] = [];
-      const stderr: string[] = [];
-      const timer = timeout > 0 ? setTimeout(() => child.kill('SIGTERM'), timeout) : null;
-
-      child.stdout?.on('data', (chunk: Buffer) => {
-        stdout.push(chunk.toString());
+    try {
+      const result = await _ctx.shell.exec({ command: command.executable, args: command.args, cwd, timeoutMs: timeout || undefined });
+      if (result.stdout) {
         notify('command/exec/outputDelta', {
           processId,
           stream: 'stdout',
-          dataBase64: Buffer.from(chunk.toString()).toString('base64'),
+          dataBase64: Buffer.from(result.stdout).toString('base64'),
         });
-      });
-      child.stderr?.on('data', (chunk: Buffer) => {
-        stderr.push(chunk.toString());
+      }
+      if (result.stderr) {
         notify('command/exec/outputDelta', {
           processId,
           stream: 'stderr',
-          dataBase64: Buffer.from(chunk.toString()).toString('base64'),
+          dataBase64: Buffer.from(result.stderr).toString('base64'),
         });
-      });
-      child.on('close', (code, signal) => {
-        if (timer) clearTimeout(timer);
-        activeSessions.delete(processId);
-        resolve({
-          processId,
-          exitCode: code ?? 0,
-          signal: signal?.toString() ?? null,
-          stdout: stdout.join(''),
-          stderr: stderr.join(''),
-        });
-      });
-      child.on('error', (err) => {
-        if (timer) clearTimeout(timer);
-        reject(err);
-      });
-    });
+      }
+      return { processId, exitCode: 0, signal: null, stdout: result.stdout, stderr: result.stderr };
+    } finally {
+      activeSessions.delete(processId);
+    }
   }) as MethodHandler,
 
   /**
@@ -86,16 +62,8 @@ export const command = {
     const dataBase64 = p?.dataBase64 as string | undefined;
     if (!processId) throw new Error('processId is required');
 
-    const session = activeSessions.get(processId);
-    if (!session) throw new Error('Command session not found or already finished.');
-
-    if (dataBase64) {
-      session.process.stdin?.write(Buffer.from(dataBase64, 'base64'));
-    } else {
-      // Close stdin
-      session.process.stdin?.end();
-    }
-
+    if (!activeSessions.has(processId)) throw new Error('Command session not found or already finished.');
+    if (dataBase64) throw new Error('Interactive command stdin is not supported by PA shell execution policy.');
     return {};
   }) as MethodHandler,
 
@@ -119,12 +87,7 @@ export const command = {
     const processId = p?.processId as string | undefined;
     if (!processId) throw new Error('processId is required');
 
-    const session = activeSessions.get(processId);
-    if (session) {
-      session.process.kill('SIGTERM');
-      activeSessions.delete(processId);
-    }
-
+    activeSessions.delete(processId);
     return {};
   }) as MethodHandler,
 };

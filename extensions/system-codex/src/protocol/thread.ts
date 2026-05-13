@@ -382,30 +382,20 @@ export const thread = {
     if (!threadId) throw new Error('threadId is required');
     if (!command) throw new Error('command is required');
 
-    const { spawn } = await import('node:child_process');
-
-    return new Promise((resolve, reject) => {
-      const child = spawn('sh', ['-c', command], { cwd: (p?.cwd as string) ?? process.cwd() });
-      const stdout: string[] = [];
-
-      child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk.toString()));
-      child.on('close', async (code) => {
-        const output = stdout.join('').trim();
-        try {
-          await ctx.conversations.sendMessage(
-            threadId,
-            `[shell command]\n$ ${command}\n${output ? `\`\`\`\n${output}\n\`\`\`` : ''}\n[exited with code ${code}]`,
-          );
-        } catch {
-          /* ok */
-        }
-        notify('turn/completed', {
-          threadId,
-          turn: { id: `shell-${Date.now()}`, status: 'completed', error: null },
-        });
-        resolve({ exitCode: code, output });
-      });
-      child.on('error', (err) => reject(err));
+    const result = await ctx.shell.exec({ command: 'sh', args: ['-c', command], cwd: (p?.cwd as string) ?? process.cwd() });
+    const output = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n');
+    try {
+      await ctx.conversations.sendMessage(
+        threadId,
+        `[shell command]\n$ ${command}\n${output ? `\`\`\`\n${output}\n\`\`\`` : ''}\n[exited with code 0]`,
+      );
+    } catch {
+      /* ok */
+    }
+    notify('turn/completed', {
+      threadId,
+      turn: { id: `shell-${Date.now()}`, status: 'completed', error: null },
     });
+    return { exitCode: 0, output, executionWrappers: result.executionWrappers };
   }) as MethodHandler,
 };
