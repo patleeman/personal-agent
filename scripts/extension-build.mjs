@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const HOST_RUNTIME_EXTERNAL_IMPORT_RE = /^(process|@xenova\/transformers|better-sqlite3|esbuild)(\/.*)?$/;
+const FORBIDDEN_BACKEND_IMPORTS = new Set([
+  'child_process',
+  'node:child_process',
+  'cluster',
+  'node:cluster',
+  'worker_threads',
+  'node:worker_threads',
+]);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = resolve(process.argv[2] || process.cwd());
@@ -83,7 +91,12 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
       'process',
     ],
     nodePaths: findAppNodeModules(),
-    plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin(), createJsdomWorkerPlugin()],
+    plugins: [
+      createForbiddenBackendImportPlugin(),
+      createExtensionBackendApiPlugin(),
+      createHostRuntimeExternalPlugin(),
+      createJsdomWorkerPlugin(),
+    ],
     metafile: true,
   });
   recordBuildOutputs(buildOutputs, result.metafile);
@@ -110,6 +123,24 @@ function createFrontendExtensionSdkPlugin() {
           return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
         }
         return { path: resolved };
+      });
+    },
+  };
+}
+
+function createForbiddenBackendImportPlugin() {
+  return {
+    name: 'personal-agent-forbidden-backend-imports',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /.*/ }, (args) => {
+        if (!FORBIDDEN_BACKEND_IMPORTS.has(args.path)) return;
+        return {
+          errors: [
+            {
+              text: `Extension backend cannot import ${args.path}. Use ctx.shell so PA can apply execution wrappers and sandbox policy.`,
+            },
+          ],
+        };
       });
     },
   };

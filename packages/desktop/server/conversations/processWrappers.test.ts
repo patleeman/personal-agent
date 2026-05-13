@@ -1,33 +1,39 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { applyBashProcessWrappers, clearBashProcessWrappers, registerBashProcessWrapper } from './processWrappers.js';
+import { clearProcessWrappers, registerProcessWrapper, resolveProcessLaunch } from '../shared/processLauncher.js';
 
-describe('bash process wrappers', () => {
+describe('process wrappers', () => {
   beforeEach(() => {
-    clearBashProcessWrappers();
+    clearProcessWrappers();
   });
 
   it('applies registered wrappers in registration order', () => {
-    registerBashProcessWrapper('test-prefix', (context) => ({
+    registerProcessWrapper('test-prefix', (context) => ({
       ...context,
-      command: `prefix ${context.command}`,
+      args: ['--prefix', ...context.args],
     }));
-    registerBashProcessWrapper('test-env', (context) => ({
+    registerProcessWrapper('test-env', (context) => ({
       ...context,
       env: { ...context.env, WRAPPED: '1' },
     }));
 
-    expect(applyBashProcessWrappers({ command: 'echo hi', cwd: '/tmp', env: {} })).toEqual({
-      command: 'prefix echo hi',
+    expect(resolveProcessLaunch({ command: 'echo', args: ['hi'], cwd: '/tmp', env: {} })).toEqual({
+      command: 'echo',
+      args: ['--prefix', 'hi'],
       cwd: '/tmp',
       env: { WRAPPED: '1' },
+      shell: undefined,
+      wrappers: [
+        { id: 'test-prefix', label: undefined },
+        { id: 'test-env', label: undefined },
+      ],
     });
   });
 
   it('replaces wrappers with the same id', () => {
-    registerBashProcessWrapper('test-replace', (context) => ({ ...context, command: 'old' }));
-    registerBashProcessWrapper('test-replace', (context) => ({ ...context, command: 'new' }));
+    registerProcessWrapper('test-replace', (context) => ({ ...context, command: 'old' }));
+    registerProcessWrapper('test-replace', (context) => ({ ...context, command: 'new' }));
 
-    expect(applyBashProcessWrappers({ command: 'echo hi', cwd: '/tmp', env: {} }).command).toBe('new');
+    expect(resolveProcessLaunch({ command: 'echo', args: ['hi'], cwd: '/tmp', env: {} }).command).toBe('new');
   });
 });

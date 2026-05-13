@@ -108,7 +108,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function guardSystemPromptOverride(factory: ExtensionFactory): ExtensionFactory {
     return (pi: ExtensionAPI) => {
       const apiWithProcessWrappers = pi as ExtensionAPI & {
-        registerBashProcessWrapper?: (id: string, wrap: BashProcessWrapper) => void;
+        registerBashProcessWrapper?: (id: string, wrap: BashProcessWrapper, options?: { label?: string }) => void;
       };
       apiWithProcessWrappers.registerBashProcessWrapper = registerBashProcessWrapper;
 

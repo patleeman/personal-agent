@@ -166,10 +166,23 @@ export function listExtensionActionTelemetry(extensionId?: string): ExtensionAct
   return actionTelemetry.filter((entry) => !extensionId || entry.extensionId === extensionId);
 }
 
-const EXTENSION_BACKEND_BUILD_CACHE_VERSION = 'bundle-host-runtime-externals-v3';
+const EXTENSION_BACKEND_BUILD_CACHE_VERSION = 'bundle-host-runtime-externals-v4-process-policy';
 const backendModuleCache = new Map<string, { cacheKey: string; module: Promise<ExtensionBackendModule> }>();
 const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
   /^(@personal-agent\/(core|daemon)|@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
+const FORBIDDEN_BACKEND_IMPORTS = new Set([
+  'child_process',
+  'node:child_process',
+  'cluster',
+  'node:cluster',
+  'worker_threads',
+  'node:worker_threads',
+]);
+const FORBIDDEN_BACKEND_BUNDLE_PATTERNS = [
+  /(?:^|[^\w$])(?:node:)?child_process(?:[^\w$]|$)/,
+  /(?:^|[^\w$])(?:node:)?cluster(?:[^\w$]|$)/,
+  /(?:^|[^\w$])(?:node:)?worker_threads(?:[^\w$]|$)/,
+];
 
 export class ExtensionLoadError extends Error {
   readonly extensionId: string;
@@ -465,6 +478,35 @@ function resolveExtensionBackendApiSubpath(subpath: string): string {
   throw new Error(`Could not find extension backend API subpath: ${subpath}`);
 }
 
+function createForbiddenBackendImportPlugin(): Plugin {
+  return {
+    name: 'personal-agent-forbidden-backend-imports',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /.*/ }, (args) => {
+        if (!FORBIDDEN_BACKEND_IMPORTS.has(args.path)) return;
+        return {
+          errors: [
+            {
+              text: `Extension backend cannot import ${args.path}. Use ctx.shell so PA can apply execution wrappers and sandbox policy.`,
+            },
+          ],
+        };
+      });
+    },
+  };
+}
+
+function assertBackendBundleAllowed(extensionId: string, bundlePath: string): void {
+  const source = readFileSync(bundlePath, 'utf-8');
+  const matched = FORBIDDEN_BACKEND_BUNDLE_PATTERNS.find((pattern) => pattern.test(source));
+  if (!matched) return;
+  throw new ExtensionLoadError({
+    extensionId,
+    code: 'load_failure',
+    message: `Extension "${extensionId}" backend bundle contains forbidden process API usage. Use ctx.shell so PA can apply execution wrappers and sandbox policy.`,
+  });
+}
+
 function createExtensionBackendApiPlugin(): Plugin {
   const backendApiPath = resolveExtensionBackendApiPath();
   return {
@@ -528,6 +570,7 @@ function loadCompiledExtensionBackendModule(
     return cached.module;
   }
 
+  assertBackendBundleAllowed(extensionId, compiled.path);
   const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
   backendModuleCache.set(extensionId, { cacheKey, module });
   return module;
@@ -597,7 +640,7 @@ async function buildExtensionBackend(
       },
       external: ['electron'],
       nodePaths: findAppNodeModules(),
-      plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
+      plugins: [createForbiddenBackendImportPlugin(), createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
     });
     renameSync(candidate, outfile);
     writeFileSync(hashFile, `${packageHash}\n`);

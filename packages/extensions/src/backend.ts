@@ -1,5 +1,5 @@
-export type { ExtensionBackendContext } from './index';
 export { recordTelemetryEvent } from './backend/telemetry';
+export type { ExtensionBackendContext } from './index';
 
 /**
  * Backend imports are resolved by the Personal Agent host when building trusted

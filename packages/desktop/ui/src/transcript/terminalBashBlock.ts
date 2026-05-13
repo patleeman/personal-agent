@@ -9,6 +9,7 @@ interface TerminalBashToolPresentation {
   truncated: boolean;
   fullOutputPath?: string;
   excludeFromContext: boolean;
+  executionWrappers: Array<{ id: string; label?: string }>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,6 +32,21 @@ function readInteger(value: Record<string, unknown> | null, key: string): number
 
 function readBoolean(value: Record<string, unknown> | null, key: string): boolean {
   return value?.[key] === true;
+}
+
+function readExecutionWrappers(value: Record<string, unknown> | null): Array<{ id: string; label?: string }> {
+  const candidate = value?.executionWrappers;
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = readTrimmedString(item, 'id');
+    if (!id) return [];
+    const label = readTrimmedString(item, 'label');
+    return [{ id, ...(label ? { label } : {}) }];
+  });
 }
 
 export function readTerminalBashToolPresentation(block: MessageBlock | null | undefined): TerminalBashToolPresentation | null {
@@ -56,6 +72,9 @@ export function readTerminalBashToolPresentation(block: MessageBlock | null | un
     truncated: readBoolean(details, 'truncated'),
     fullOutputPath: readTrimmedString(details, 'fullOutputPath'),
     excludeFromContext: readBoolean(details, 'excludeFromContext') || readBoolean(input, 'excludeFromContext'),
+    executionWrappers: readExecutionWrappers(details).concat(
+      readExecutionWrappers(input).filter((wrapper) => !readExecutionWrappers(details).some((item) => item.id === wrapper.id)),
+    ),
   };
 }
 

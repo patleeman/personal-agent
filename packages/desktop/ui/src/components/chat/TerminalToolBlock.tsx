@@ -55,6 +55,11 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
             <span className={cx('w-3 shrink-0 text-center', isError ? 'text-danger' : 'text-accent')}>$</span>
           )}
           <span className="min-w-0 flex-1 break-all text-primary">{presentation.command}</span>
+          {presentation.executionWrappers.map((wrapper) => (
+            <Pill key={wrapper.id} tone="accent" mono>
+              {wrapper.label ?? wrapper.id}
+            </Pill>
+          ))}
           {presentation.excludeFromContext && (
             <Pill tone="warning" mono>
               no context

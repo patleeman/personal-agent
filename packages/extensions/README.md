@@ -1,6 +1,6 @@
 # Personal Agent Extension SDK
 
-This package is the public import surface for native Personal Agent extensions. Extension code should import from `@personal-agent/extensions` and its subpath modules instead of reaching into `packages/desktop` internals.
+This package is the public import surface for native Personal Agent extensions. Extension code should import from `@personal-agent/extensions` and its subpath modules instead of reaching into `packages/desktop` internals. Backend extensions must use host capabilities such as `ctx.shell` for process execution; direct Node process APIs are blocked so the host can apply sandbox and execution-wrapper policy.
 
 This doc is written for agents building extensions. Read it before creating or editing an extension, then inspect the current schema/types and nearby system extensions for exact examples.
 

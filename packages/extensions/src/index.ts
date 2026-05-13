@@ -534,7 +534,23 @@ export interface ExtensionBackendContext {
   conversations: Record<string, (...args: never[]) => Promise<unknown>>;
   workspace: Record<string, (...args: never[]) => Promise<unknown>>;
   git: Record<string, (...args: never[]) => Promise<unknown>>;
-  shell: Record<string, (...args: never[]) => Promise<unknown>>;
+  shell: {
+    exec(input: {
+      command: string;
+      args?: string[];
+      cwd?: string;
+      timeoutMs?: number;
+      maxBuffer?: number;
+      env?: Record<string, string>;
+    }): Promise<{
+      command: string;
+      args: string[];
+      cwd?: string;
+      stdout: string;
+      stderr: string;
+      executionWrappers: Array<{ id: string; label?: string }>;
+    }>;
+  };
   notify: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;
     system(input: { message: string; title?: string; subtitle?: string; persistent?: boolean }): boolean;

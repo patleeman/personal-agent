@@ -11,6 +11,7 @@ import { resolveChildProcessEnv } from '@personal-agent/core';
 
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
+import { formatProcessLaunchShellCommand, resolveProcessLaunch } from '../shared/processLauncher.js';
 import { applyConversationModelPreferencesToLiveSession } from './conversationModelPreferences.js';
 import { type LiveSessionLoaderOptions, makeLoader } from './liveSessionLoader.js';
 import {
@@ -19,7 +20,6 @@ import {
   resolveConversationPreferenceStateForSession,
 } from './liveSessionModels.js';
 import { ensureSessionFileExists, patchSessionManagerPersistence, resolveLiveSessionFile } from './liveSessionPersistence.js';
-import { applyBashProcessWrappers } from './processWrappers.js';
 
 interface ToolPatchableSessionInternals {
   _baseToolRegistry?: Map<string, unknown>;
@@ -44,17 +44,21 @@ function patchConversationBashTool(session: AgentSession, cwd: string, conversat
     'bash',
     createBashTool(cwd, {
       commandPrefix: session.settingsManager.getShellCommandPrefix(),
-      spawnHook: (context) =>
-        applyBashProcessWrappers({
+      spawnHook: (context) => {
+        const env = resolveChildProcessEnv(
+          {
+            PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
+            ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
+          },
+          context.env,
+        );
+        const launch = resolveProcessLaunch({ command: 'sh', args: ['-lc', context.command], cwd: context.cwd, env });
+        return {
           ...context,
-          env: resolveChildProcessEnv(
-            {
-              PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
-              ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
-            },
-            context.env,
-          ),
-        }),
+          command: formatProcessLaunchShellCommand(launch),
+          env: launch.env,
+        };
+      },
     }),
   );
 

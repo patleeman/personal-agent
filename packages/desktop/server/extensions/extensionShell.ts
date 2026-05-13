@@ -1,7 +1,4 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import { execFileProcess } from '../shared/processLauncher.js';
 
 export function createExtensionShellCapability() {
   return {
@@ -12,11 +9,20 @@ export function createExtensionShellCapability() {
       timeoutMs?: number;
       maxBuffer?: number;
       env?: Record<string, string>;
-    }): Promise<{ command: string; args: string[]; cwd?: string; stdout: string; stderr: string }> {
+    }): Promise<{
+      command: string;
+      args: string[];
+      cwd?: string;
+      stdout: string;
+      stderr: string;
+      executionWrappers: Array<{ id: string; label?: string }>;
+    }> {
       const args = input.args ?? [];
-      const result = await execFileAsync(input.command, args, {
+      const result = await execFileProcess({
+        command: input.command,
+        args,
         cwd: input.cwd,
-        timeout: input.timeoutMs ?? 30_000,
+        timeoutMs: input.timeoutMs ?? 30_000,
         maxBuffer: input.maxBuffer ?? 1024 * 1024,
         env: input.env ? { ...process.env, ...input.env } : process.env,
       });
@@ -26,6 +32,7 @@ export function createExtensionShellCapability() {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         stdout: result.stdout,
         stderr: result.stderr,
+        executionWrappers: result.launch.wrappers,
       };
     },
   };

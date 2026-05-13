@@ -1,5 +1,6 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
+import { listProcessWrappers } from '../shared/processLauncher.js';
 import type { SseEvent } from './liveSessionEvents.js';
 
 let syntheticBashExecutionCounter = 0;
@@ -59,6 +60,7 @@ export async function executeLiveSessionBash(
     };
     const details = {
       displayMode: 'terminal',
+      executionWrappers: listProcessWrappers(),
       ...(typeof bashResult.exitCode === 'number' ? { exitCode: bashResult.exitCode } : {}),
       ...(bashResult.cancelled === true ? { cancelled: true } : {}),
       ...(bashResult.truncated === true ? { truncated: true } : {}),
@@ -83,6 +85,7 @@ export async function executeLiveSessionBash(
   } catch (error) {
     const details = {
       displayMode: 'terminal',
+      executionWrappers: listProcessWrappers(),
       ...(options.excludeFromContext ? { excludeFromContext: true } : {}),
     };
     options.broadcast({

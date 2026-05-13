@@ -1,18 +1,11 @@
 import { hydrateProcessEnvFromShell, resolveChildProcessEnv } from '@personal-agent/core';
-import { type ChildProcess, spawn } from 'child_process';
+import { type ChildProcess } from 'child_process';
 import { closeSync, cpSync, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
 
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from '../automation/tasks/index.js';
 import { type DaemonConfig, loadDaemonConfig, type LogLevel } from '../config.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from '../paths.js';
-import {
-  closeAllDbs,
-  pruneStaleRecoveryFiles,
-  registerProcessExitSafetyNet,
-  startPeriodicWalCheckpoint,
-  stopPeriodicWalCheckpoint,
-} from '../shared/sqliteDbLifecycle.js';
 import { deliverBackgroundRunCallbackWakeup } from '../runs/background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from '../runs/background-run-deferred-resumes.js';
 import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from '../runs/background-run-replays.js';
@@ -33,6 +26,14 @@ import {
   summarizeScannedDurableRuns,
 } from '../runs/store.js';
 import { listRecoverableWebLiveConversationRuns, saveWebLiveConversationRunState } from '../runs/web-live-conversations.js';
+import { spawnProcess } from '../shared/processLauncher.js';
+import {
+  closeAllDbs,
+  pruneStaleRecoveryFiles,
+  registerProcessExitSafetyNet,
+  startPeriodicWalCheckpoint,
+  stopPeriodicWalCheckpoint,
+} from '../shared/sqliteDbLifecycle.js';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { DaemonCompanionServer } from './companion/server.js';
 import type { CompanionRuntimeProvider } from './companion/types.js';
@@ -1003,16 +1004,20 @@ export class PersonalAgentDaemon {
       PERSONAL_AGENT_RUN_RESULT_PATH: record.paths.resultPath,
     });
 
-    const child = spawnInput.argv
-      ? spawn(spawnInput.argv[0] as string, spawnInput.argv.slice(1), {
+    const { child } = spawnInput.argv
+      ? spawnProcess({
+          command: spawnInput.argv[0] as string,
+          args: spawnInput.argv.slice(1),
           cwd: input.cwd,
           env: childEnv,
-          stdio: ['ignore', 'pipe', 'pipe'],
+          options: { stdio: ['ignore', 'pipe', 'pipe'] },
         })
-      : spawn('sh', ['-lc', spawnInput.shellCommand as string], {
+      : spawnProcess({
+          command: 'sh',
+          args: ['-lc', spawnInput.shellCommand as string],
           cwd: input.cwd,
           env: childEnv,
-          stdio: ['ignore', 'pipe', 'pipe'],
+          options: { stdio: ['ignore', 'pipe', 'pipe'] },
         });
 
     child.stdout.on('data', (chunk: Buffer | string) => {
