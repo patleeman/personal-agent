@@ -396,6 +396,14 @@ function resolveInstalledPackageDir(buildRoot, startDir, packageName) {
     currentDir = parentDir;
   }
 
+  // pnpm stores all packages at buildRoot/node_modules/ with symlinks to .pnpm/.
+  // The upward walk from a symlink-resolved path may never reach this directory,
+  // so check it explicitly as a fallback.
+  const rootCandidate = resolve(normalizedBuildRoot, 'node_modules', ...segments);
+  if (existsSync(resolve(rootCandidate, 'package.json'))) {
+    return rootCandidate;
+  }
+
   return null;
 }
 
