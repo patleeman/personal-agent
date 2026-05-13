@@ -8,8 +8,11 @@ Install Personal Agent from source and verify the setup.
 git clone <repo-url>
 cd personal-agent
 npm install
+npm run setup:hooks   # optional: enable the tracked pre-commit hook
 npm run build
 ```
+
+The repo intentionally has no first-party `postinstall`. If you install with `--ignore-scripts`, Electron, esbuild, and native dependency setup will be skipped.
 
 ## Start the desktop app
 

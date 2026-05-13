@@ -6,9 +6,12 @@ Personal Agent is a durable AI agent runtime with a desktop app, background auto
 
 ```bash
 npm install
+npm run setup:hooks   # optional: enable the tracked pre-commit hook
 npm run build
 npm run desktop:start
 ```
+
+The repo intentionally avoids a root `postinstall`; install-time scripts come from third-party dependencies only.
 
 See [Getting Started](getting-started.md) for the full setup.
 

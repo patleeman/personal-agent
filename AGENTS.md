@@ -145,6 +145,6 @@ This repo has a gitleaks pre-commit hook that scans staged changes for secrets b
 
 - The hook lives at `.githooks/pre-commit` (tracked in the repo).
 - Config is at `.gitleaks.toml`.
-- The hook activates automatically via `npm postinstall` which runs `git config core.hooksPath .githooks`.
+- Enable the hook explicitly with `npm run setup:hooks` (or `git config core.hooksPath .githooks`) after cloning; the repo intentionally does not use a root `postinstall`.
 - If gitleaks finds something, the commit aborts. Review the finding and either fix it or bypass with `git commit --no-verify` if it's a false positive.
 - Install gitleaks locally with `brew install gitleaks` if it's not already present (the hook skips gracefully if missing).

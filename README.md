@@ -88,10 +88,13 @@ For contributors building from source:
 
 ```bash
 npm install
+npm run setup:hooks   # optional: enable the tracked pre-commit hook
 npm run build
 npm test
 npm run lint
 ```
+
+This repo intentionally has no first-party `postinstall`. Third-party packages still use install scripts for Electron, esbuild, and native modules, so `--ignore-scripts` is for auditing or isolated installs, not a working dev setup.
 
 Useful dev commands:
 
