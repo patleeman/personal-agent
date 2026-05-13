@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
-import { getStateRoot } from '@personal-agent/core';
+import { getPiAgentRuntimeDir, getStateRoot, resolveLocalProfileSettingsFilePath } from '@personal-agent/core';
 import type { Plugin } from 'esbuild';
 
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
@@ -58,6 +58,10 @@ export interface ExtensionBackendEventPublishInput {
 export interface ExtensionBackendContext {
   extensionId: string;
   profile: string;
+  /** Absolute path to the pi-agent-runtime directory. */
+  runtimeDir: string;
+  /** Absolute path to the current profile's settings file. */
+  profileSettingsFilePath: string;
   toolContext?: {
     conversationId?: string;
     cwd?: string;
@@ -240,9 +244,12 @@ function createBackendContext(
   toolContext?: ExtensionBackendContext['toolContext'],
   agentToolContext?: unknown,
 ): ExtensionBackendContext {
+  const resolvedPiAgentRuntimeDir = getPiAgentRuntimeDir();
   return {
     extensionId,
     profile: serverContext?.getCurrentProfile() ?? 'shared',
+    runtimeDir: resolvedPiAgentRuntimeDir,
+    profileSettingsFilePath: resolveLocalProfileSettingsFilePath(),
     ...(toolContext ? { toolContext } : {}),
     ...(agentToolContext ? { agentToolContext } : {}),
     runtime: {

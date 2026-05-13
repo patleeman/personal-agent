@@ -522,6 +522,10 @@ export interface PersonalAgentClient {
 export interface ExtensionBackendContext {
   extensionId: string;
   profile: string;
+  /** Absolute path to the pi-agent-runtime directory. */
+  runtimeDir: string;
+  /** Absolute path to the current profile's settings file. */
+  profileSettingsFilePath: string;
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
     put(key: string, value: unknown, opts?: { expectedVersion?: number }): Promise<{ ok: true }>;
