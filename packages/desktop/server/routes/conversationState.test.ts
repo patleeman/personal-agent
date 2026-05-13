@@ -591,9 +591,12 @@ describe('registerConversationStateRoutes', () => {
         objective: '',
         status: 'complete',
         stopReason: 'cleared',
+        noProgressTurns: 0,
       }),
     );
-    expect(clearedRes.json).toHaveBeenCalledWith({ cleared: true });
+    expect(clearedRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'cleared', noProgressTurns: 0 }),
+    );
     expect(publishAppEventMock).toHaveBeenCalledWith({ type: 'session_file_changed', sessionId: 'conversation-1' });
 
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-2.json');
@@ -608,6 +611,7 @@ describe('registerConversationStateRoutes', () => {
         objective: 'ship it',
         status: 'active',
         stopReason: null,
+        noProgressTurns: 0,
       }),
     );
     expect(activeRes.json).toHaveBeenCalledWith(
@@ -615,6 +619,7 @@ describe('registerConversationStateRoutes', () => {
         objective: 'ship it',
         status: 'active',
         stopReason: null,
+        noProgressTurns: 0,
       }),
     );
   });

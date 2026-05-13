@@ -66,6 +66,28 @@ function writeGoalState(pi: ExtensionAPI, state: GoalState): void {
   pi.appendEntry(GOAL_STATE_CUSTOM_TYPE, state);
 }
 
+function createActiveGoalState(objective: string): GoalState {
+  return {
+    objective,
+    status: 'active',
+    tasks: [],
+    stopReason: null,
+    updatedAt: new Date().toISOString(),
+    noProgressTurns: 0,
+  };
+}
+
+function createCompleteGoalState(stopReason: string): GoalState {
+  return {
+    objective: '',
+    status: 'complete',
+    tasks: [],
+    stopReason,
+    updatedAt: new Date().toISOString(),
+    noProgressTurns: 0,
+  };
+}
+
 function buildContinuationPrompt(state: GoalState): string {
   return [
     'Goal continuation.',
@@ -81,27 +103,6 @@ function buildContinuationPrompt(state: GoalState): string {
 
 function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
   return toolResults.length === 0;
-}
-
-function isGoalContinuationTurn(sessionManager: { getEntries: () => unknown[] }): boolean {
-  const entries = sessionManager.getEntries();
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    if (!isRecord(entry)) continue;
-
-    if (entry.type === 'custom' && entry.customType === GOAL_STATE_CUSTOM_TYPE) {
-      continue;
-    }
-
-    if (entry.type === 'custom' && entry.customType === CONTINUATION_CUSTOM_TYPE) {
-      return true;
-    }
-
-    if (entry.type === 'user' || entry.role === 'user') {
-      return false;
-    }
-  }
-  return false;
 }
 
 // ── Tool parameter schemas ───────────────────────────────────────────────────
@@ -123,9 +124,6 @@ const UpdateGoalParams = Type.Object({
 
 export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
-    // Track consecutive turns that did not use tools so goal mode cannot spin forever on chat-only continuations.
-    let continuationSuppressed = false;
-    let consecutiveNoToolTurns = 0;
     let pendingContinuationTimer: ReturnType<typeof setTimeout> | null = null;
 
     const clearPendingContinuation = () => {
@@ -139,41 +137,23 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     pi.registerTool({
       name: GOAL_SET_TOOL,
       label: 'Set goal',
-      description: 'Set a goal for this conversation when goal mode is not already active.',
+      description: 'Enable goal mode with a concrete objective, or replace the active objective.',
       promptSnippet: 'Set a concrete objective to work toward.',
       promptGuidelines: [
-        'Use this tool only when the user explicitly asks you to start goal mode from a normal conversation.',
-        'If a goal is already active, use update_goal to change the objective or mark it complete.',
+        'Use this tool only when the user explicitly asks you to start goal mode or when sustained autonomous work is required.',
+        'If goal mode is already active, this tool replaces the objective and keeps the loop running.',
         'Do not create a goal for every ordinary request — only for sustained multi-turn tasks.',
       ],
       parameters: SetGoalParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        if (isGoalContinuationTurn(ctx.sessionManager)) {
-          throw new Error('Goal continuations cannot start a new goal. Finish the current turn instead.');
-        }
-
-        const state = readGoalState(ctx.sessionManager);
-        if (state.status === 'active') {
-          throw new Error('A goal is already active. Mark it complete first with update_goal.');
-        }
-
+      async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
         const objective = params.objective.trim();
         if (!objective) {
           throw new Error('Goal objective cannot be empty.');
         }
 
-        const newState: GoalState = {
-          objective,
-          status: 'active',
-          tasks: [],
-          stopReason: null,
-          updatedAt: new Date().toISOString(),
-          noProgressTurns: 0,
-        };
+        const newState = createActiveGoalState(objective);
         writeGoalState(pi, newState);
         clearPendingContinuation();
-        continuationSuppressed = false;
-        consecutiveNoToolTurns = 0;
 
         return {
           content: [
@@ -192,7 +172,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       name: GOAL_UPDATE_TOOL,
       label: 'Update goal',
       description: 'Update the current goal objective or mark it complete.',
-      promptSnippet: 'Update the goal when the objective changes, or mark it achieved when done.',
+      promptSnippet: 'Enable or update the goal when the objective changes, or mark it achieved when done.',
       promptGuidelines: [
         'Use objective to replace the active goal text when the target changes.',
         'Use status: "complete" only when the objective is actually achieved.',
@@ -201,54 +181,27 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       parameters: UpdateGoalParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const state = readGoalState(ctx.sessionManager);
-        if (state.status !== 'active') {
-          if (params.status === 'complete') {
-            clearPendingContinuation();
-            continuationSuppressed = false;
-            consecutiveNoToolTurns = 0;
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: 'Goal already complete.',
-                },
-              ],
-              details: { state },
-            };
-          }
-          throw new Error('No active goal to update.');
-        }
-
         const objective = typeof params.objective === 'string' ? params.objective.trim() : undefined;
         if (params.status !== 'complete' && !objective) {
           throw new Error('Provide objective to update the goal, or status: "complete" to finish it.');
         }
 
-        const newState: GoalState =
-          params.status === 'complete'
-            ? {
-                objective: '',
-                status: 'complete',
-                tasks: [],
-                stopReason: 'goal achieved',
-                updatedAt: new Date().toISOString(),
-                noProgressTurns: 0,
-              }
-            : {
-                ...state,
-                objective: objective || state.objective,
-                status: 'active',
-                stopReason: null,
-                updatedAt: new Date().toISOString(),
-                noProgressTurns: 0,
-              };
+        if (params.status === 'complete' && state.status !== 'active') {
+          clearPendingContinuation();
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Goal already complete.',
+              },
+            ],
+            details: { state },
+          };
+        }
+
+        const newState = params.status === 'complete' ? createCompleteGoalState('goal achieved') : createActiveGoalState(objective!);
         writeGoalState(pi, newState);
         clearPendingContinuation();
-        continuationSuppressed = false;
-        consecutiveNoToolTurns = 0;
-        if (newState.status === 'complete') {
-          ctx.abort?.();
-        }
 
         const text = newState.status === 'complete' ? 'Goal complete!' : `Goal updated: "${newState.objective}"`;
         return {
@@ -275,18 +228,9 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             pi.sendUserMessage('No goal to clear.');
             return;
           }
-          const cleared: GoalState = {
-            objective: '',
-            status: 'complete',
-            tasks: [],
-            stopReason: 'cleared',
-            updatedAt: new Date().toISOString(),
-            noProgressTurns: 0,
-          };
+          const cleared = createCompleteGoalState('cleared');
           writeGoalState(pi, cleared);
           clearPendingContinuation();
-          continuationSuppressed = false;
-          consecutiveNoToolTurns = 0;
           pi.sendUserMessage(`Goal cleared. Previous objective: ${state.objective}`);
           return;
         }
@@ -302,18 +246,9 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         }
 
         // Set a new goal
-        const newState: GoalState = {
-          objective: trimmed,
-          status: 'active',
-          tasks: [],
-          stopReason: null,
-          updatedAt: new Date().toISOString(),
-          noProgressTurns: 0,
-        };
+        const newState = createActiveGoalState(trimmed);
         writeGoalState(pi, newState);
         clearPendingContinuation();
-        continuationSuppressed = false;
-        consecutiveNoToolTurns = 0;
         pi.sendUserMessage(`Goal set: ${trimmed}`);
       },
     });
@@ -323,40 +258,23 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       const state = readGoalState(ctx.sessionManager);
       if (state.status !== 'active') {
         clearPendingContinuation();
-        continuationSuppressed = false;
-        consecutiveNoToolTurns = 0;
         return;
       }
 
       // Pause goal on interrupt (user hit stop mid-stream)
       if (ctx.signal?.aborted) {
-        const paused: GoalState = { ...state, status: 'paused', updatedAt: new Date().toISOString(), noProgressTurns: 0 };
-        writeGoalState(pi, paused);
+        const stopped = createCompleteGoalState('interrupted');
+        writeGoalState(pi, stopped);
         clearPendingContinuation();
-        continuationSuppressed = false;
-        consecutiveNoToolTurns = 0;
         return;
       }
 
       const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
       const noProgressTurns = isNoProgressGoalTurn(toolResults) ? state.noProgressTurns + 1 : 0;
-      consecutiveNoToolTurns = noProgressTurns;
-      if (!isNoProgressGoalTurn(toolResults)) {
-        continuationSuppressed = false;
-      }
-
       if (noProgressTurns >= 2) {
-        const paused: GoalState = {
-          ...state,
-          status: 'paused',
-          stopReason: 'no progress',
-          updatedAt: new Date().toISOString(),
-          noProgressTurns: 0,
-        };
-        writeGoalState(pi, paused);
+        const stopped = createCompleteGoalState('no progress');
+        writeGoalState(pi, stopped);
         clearPendingContinuation();
-        continuationSuppressed = true;
-        consecutiveNoToolTurns = 0;
         return;
       }
 
@@ -364,11 +282,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         noProgressTurns === state.noProgressTurns ? state : { ...state, noProgressTurns, updatedAt: new Date().toISOString() };
       if (continuationState !== state) {
         writeGoalState(pi, continuationState);
-      }
-
-      // No-tool suppression: if recent continuation turns did nothing, skip next
-      if (continuationSuppressed) {
-        return;
       }
 
       // Check if model has pending messages (user or system input waiting)
@@ -406,36 +319,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }, 0);
     });
 
-    // Keep the event registered for diagnostics/compatibility; turn_end decides whether the full turn made progress.
-    pi.on('tool_execution_end', () => {
-      continuationSuppressed = false;
-    });
-
-    // ── Reactivate paused goal on resume ──────────────────────────────────
-    pi.on('session_start', async (event, ctx) => {
+    pi.on('session_start', async (_event, ctx) => {
       const state = readGoalState(ctx.sessionManager);
-      syncGoalTools(pi, state.status === 'active');
-
-      if (event.reason !== 'resume') {
-        return;
+      if (state.status !== 'active') {
+        clearPendingContinuation();
       }
-
-      if (state.status !== 'paused' || !state.objective || state.stopReason === 'no progress') {
-        return;
-      }
-
-      // Reactivate the paused goal
-      const newState: GoalState = {
-        ...state,
-        status: 'active',
-        updatedAt: new Date().toISOString(),
-        noProgressTurns: 0,
-      };
-      writeGoalState(pi, newState);
-      syncGoalTools(pi, true);
-      clearPendingContinuation();
-      continuationSuppressed = false;
-      consecutiveNoToolTurns = 0;
     });
   };
 }

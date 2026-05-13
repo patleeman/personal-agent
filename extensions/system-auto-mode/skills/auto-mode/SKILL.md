@@ -19,23 +19,21 @@ Goal mode is a single active objective. The system injects the current objective
 
 ## How it works
 
-1. **`set_goal`** — create the objective when goal mode is not already active.
-2. **`update_goal(objective: "...")`** — replace the active objective when the goal changes.
-3. **`update_goal(status: "complete")`** — mark the goal achieved when the objective is met.
+1. **`set_goal`** — enable goal mode with a concrete objective, or replace the active objective.
+2. **`update_goal(objective: "...")`** — enable goal mode or replace the active objective.
+3. **`update_goal(status: "complete")`** — disable goal mode when the objective is met.
 
 The system automatically schedules a continuation turn after each turn while the goal is active.
 
 ## Rules
 
 - Do not create a goal for every ordinary request — only for sustained multi-turn tasks.
-- Do not call `set_goal` when a goal is already active; update the objective instead.
+- Calling `set_goal` while goal mode is active replaces the objective and keeps goal mode running.
 - Mark the goal complete with `update_goal` only when the objective is actually achieved.
 - The system's continuation prompt already includes the current objective.
 
 ## Safety guards
 
-If continuation turns produce no tool calls, the active goal is paused after two no-progress turns so it cannot spin forever. Starting, updating, or completing a goal resets this.
+If goal-mode turns produce no tool calls for two consecutive turns, goal mode is disabled with `stopReason: "no progress"` so it cannot spin forever. Starting, updating, or completing a goal resets this.
 
-Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Completing a goal aborts the current agent turn so the model cannot keep working after the stop signal.
-
-Hidden goal continuations cannot start a new goal. Goal mode should end quietly once the objective is complete.
+Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Completing a goal does not abort the current turn; it prevents the turn-end scheduler from queuing another continuation. Goal mode should end quietly once the objective is complete.

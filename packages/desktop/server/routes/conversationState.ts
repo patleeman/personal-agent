@@ -279,20 +279,23 @@ export function registerConversationStateRoutes(
           tasks: [] as Array<{ id: string; description: string; status: string }>,
           stopReason: null,
           updatedAt: new Date().toISOString(),
+          noProgressTurns: 0,
         };
         sessionManager.appendCustomEntry('conversation-goal', goalState);
         return goalState;
       };
 
       const clearGoal = (sessionManager: SessionManager) => {
-        sessionManager.appendCustomEntry('conversation-goal', {
+        const goalState = {
           objective: '',
-          status: 'complete',
-          tasks: [],
+          status: 'complete' as const,
+          tasks: [] as Array<{ id: string; description: string; status: string }>,
           stopReason: 'cleared',
           updatedAt: new Date().toISOString(),
-        });
-        return { cleared: true };
+          noProgressTurns: 0,
+        };
+        sessionManager.appendCustomEntry('conversation-goal', goalState);
+        return goalState;
       };
 
       if (isLocalLive(req.params.id)) {

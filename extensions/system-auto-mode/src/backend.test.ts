@@ -3,400 +3,228 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createConversationAutoModeAgentExtension } from './backend.js';
 
+type RegisteredTool = { name: string; execute: (...args: any[]) => Promise<{ content?: Array<{ text?: string }>; details?: unknown }> };
+type TurnEndHandler = (event: unknown, ctx: TestContext) => void | Promise<void>;
+
+interface TestContext {
+  sessionManager: { getEntries: () => unknown[] };
+  hasPendingMessages: () => boolean;
+  signal: { aborted: boolean };
+}
+
+function customEntry(customType: string, data: unknown) {
+  return { type: 'custom', customType, data };
+}
+
+function activeGoal(objective = 'ship goal mode', noProgressTurns = 0, updatedAt = '2026-05-09T00:00:00.000Z') {
+  return customEntry('conversation-goal', {
+    objective,
+    status: 'active',
+    tasks: [],
+    stopReason: null,
+    updatedAt,
+    noProgressTurns,
+  });
+}
+
+function completeGoal(stopReason = 'goal achieved', updatedAt = '2026-05-09T00:00:01.000Z') {
+  return customEntry('conversation-goal', {
+    objective: '',
+    status: 'complete',
+    tasks: [],
+    stopReason,
+    updatedAt,
+    noProgressTurns: 0,
+  });
+}
+
+function createHarness(initialEntries: unknown[] = []) {
+  const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
+  const registeredTools: RegisteredTool[] = [];
+  const registeredCommands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+  const entries = [...initialEntries];
+  const appendEntry = vi.fn((customType: string, data: unknown) => entries.push(customEntry(customType, data)));
+  const sendMessage = vi.fn();
+  const sendUserMessage = vi.fn();
+  const pi = {
+    registerTool: vi.fn((tool: RegisteredTool) => registeredTools.push(tool)),
+    registerCommand: vi.fn((name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) => {
+      registeredCommands.set(name, command);
+    }),
+    sendMessage,
+    sendUserMessage,
+    appendEntry,
+    on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
+      handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+    }),
+  } as unknown as ExtensionAPI;
+
+  createConversationAutoModeAgentExtension()(pi);
+
+  const ctx: TestContext = {
+    sessionManager: { getEntries: () => entries },
+    hasPendingMessages: () => false,
+    signal: { aborted: false },
+  };
+
+  return {
+    entries,
+    appendEntry,
+    sendMessage,
+    sendUserMessage,
+    registeredTools,
+    registeredCommands,
+    setGoal: registeredTools.find((tool) => tool.name === 'set_goal')!,
+    updateGoal: registeredTools.find((tool) => tool.name === 'update_goal')!,
+    turnEnd: handlers.get('turn_end')?.[0] as TurnEndHandler,
+    ctx,
+  };
+}
+
+async function flushTimers() {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 describe('system-goal-mode extension', () => {
-  it('creates the extension factory', () => {
-    const factory = createConversationAutoModeAgentExtension();
-    expect(factory).toBeInstanceOf(Function);
+  it('registers only goal set and update tools', () => {
+    const { registeredTools } = createHarness();
+    expect(registeredTools.map((tool) => tool.name)).toEqual(['set_goal', 'update_goal']);
   });
 
-  it('queues active goal continuation with a generated continuation id', async () => {
-    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
-    const sendMessage = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn(),
-      registerCommand: vi.fn(),
-      sendMessage,
-      appendEntry: vi.fn(),
-      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
-        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
-      }),
-    } as unknown as ExtensionAPI;
+  it('set_goal enables goal mode with a concrete objective', async () => {
+    const { setGoal, appendEntry, ctx } = createHarness();
 
-    factory(pi);
+    const result = await setGoal.execute('goal-1', { objective: ' ship it ' }, new AbortController().signal, vi.fn(), ctx);
 
-    const turnEnd = handlers.get('turn_end')?.[0];
-    expect(turnEnd).toBeInstanceOf(Function);
-
-    await turnEnd?.(
-      { toolResults: [{ type: 'tool_result' }] },
-      {
-        sessionManager: {
-          getEntries: () => [
-            {
-              type: 'custom',
-              customType: 'conversation-goal',
-              data: {
-                objective: 'ship goal mode',
-                status: 'active',
-                tasks: [],
-                stopReason: null,
-                updatedAt: '2026-05-09T00:00:00.000Z',
-              },
-            },
-          ],
-        },
-        hasPendingMessages: () => false,
-        signal: { aborted: false },
-      },
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: 'ship it', status: 'active', stopReason: null, noProgressTurns: 0 }),
     );
+    expect(result.content?.[0]?.text).toBe('Goal set: "ship it"');
+  });
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  it('set_goal updates the active goal instead of throwing', async () => {
+    const { setGoal, appendEntry, ctx } = createHarness([activeGoal('old goal')]);
 
+    const result = await setGoal.execute('goal-1', { objective: 'new goal' }, new AbortController().signal, vi.fn(), ctx);
+
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: 'new goal', status: 'active', stopReason: null, noProgressTurns: 0 }),
+    );
+    expect(result.content?.[0]?.text).toBe('Goal set: "new goal"');
+  });
+
+  it('update_goal can enable or update goal mode with a new objective', async () => {
+    const { updateGoal, appendEntry, ctx } = createHarness([completeGoal('cleared')]);
+
+    const result = await updateGoal.execute('goal-2', { objective: 'resume work' }, new AbortController().signal, vi.fn(), ctx);
+
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: 'resume work', status: 'active', stopReason: null, noProgressTurns: 0 }),
+    );
+    expect(result.content?.[0]?.text).toBe('Goal updated: "resume work"');
+  });
+
+  it('update_goal complete disables goal mode without aborting the current turn', async () => {
+    const { updateGoal, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
+    const abort = vi.fn();
+
+    const result = await updateGoal.execute('goal-2', { status: 'complete' }, new AbortController().signal, vi.fn(), { ...ctx, abort });
+
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved', noProgressTurns: 0 }),
+    );
+    expect(abort).not.toHaveBeenCalled();
+    expect(result.content?.[0]?.text).toBe('Goal complete!');
+  });
+
+  it('turn_end is the only scheduler and queues one continuation while goal mode is active', async () => {
+    const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it')]);
+
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await flushTimers();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customType: 'goal-continuation',
-        content: expect.stringContaining('call update_goal with status: "complete"'),
-        display: false,
-        details: expect.objectContaining({ source: 'goal-mode', continuationId: expect.any(String) }),
-      }),
+      expect.objectContaining({ customType: 'goal-continuation', display: false, content: expect.stringContaining('Objective: ship it') }),
       { deliverAs: 'followUp', triggerTurn: true },
     );
   });
 
-  it('does not send a queued continuation after the goal is completed before the timer fires', async () => {
-    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
-    const sendMessage = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn(),
-      registerCommand: vi.fn(),
-      sendMessage,
-      appendEntry: vi.fn(),
-      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
-        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
-      }),
-    } as unknown as ExtensionAPI;
+  it('does not schedule a continuation when goal mode is disabled before turn_end', async () => {
+    const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it'), completeGoal('goal achieved')]);
 
-    factory(pi);
-
-    let goalStatus: 'active' | 'complete' = 'active';
-    const turnEnd = handlers.get('turn_end')?.[0];
-    await turnEnd?.(
-      { toolResults: [{ type: 'tool_result' }] },
-      {
-        sessionManager: {
-          getEntries: () => [
-            {
-              type: 'custom',
-              customType: 'conversation-goal',
-              data: {
-                objective: goalStatus === 'active' ? 'ship goal mode' : '',
-                status: goalStatus,
-                tasks: [],
-                stopReason: goalStatus === 'active' ? null : 'goal achieved',
-                updatedAt: goalStatus === 'active' ? '2026-05-09T00:00:00.000Z' : '2026-05-09T00:00:01.000Z',
-              },
-            },
-          ],
-        },
-        hasPendingMessages: () => false,
-        signal: { aborted: false },
-      },
-    );
-
-    goalStatus = 'complete';
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await flushTimers();
 
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it('does not queue duplicate continuations while one is already pending', async () => {
-    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
-    const sendMessage = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn(),
-      registerCommand: vi.fn(),
-      sendMessage,
-      appendEntry: vi.fn(),
-      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
-        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
-      }),
-    } as unknown as ExtensionAPI;
+  it('does not send a pending continuation if the user disables goal mode before the timer fires', async () => {
+    const { turnEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
 
-    factory(pi);
-
-    const ctx = {
-      sessionManager: {
-        getEntries: () => [
-          {
-            type: 'custom',
-            customType: 'conversation-goal',
-            data: {
-              objective: 'ship goal mode',
-              status: 'active',
-              tasks: [],
-              stopReason: null,
-              updatedAt: '2026-05-09T00:00:00.000Z',
-            },
-          },
-        ],
-      },
-      hasPendingMessages: () => false,
-      signal: { aborted: false },
-    };
-    const turnEnd = handlers.get('turn_end')?.[0];
-    await turnEnd?.({ toolResults: [{ type: 'tool_result' }] }, ctx);
-    await turnEnd?.({ toolResults: [{ type: 'tool_result' }] }, ctx);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-  });
-
-  it('pauses the active goal after two consecutive no-progress active goal turns', async () => {
-    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
-    const sendMessage = vi.fn();
-    const appendEntry = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn(),
-      registerCommand: vi.fn(),
-      sendMessage,
-      appendEntry,
-      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
-        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
-      }),
-    } as unknown as ExtensionAPI;
-
-    factory(pi);
-
-    const entries: unknown[] = [
-      {
-        type: 'custom',
-        customType: 'conversation-goal',
-        data: {
-          objective: 'ship goal mode',
-          status: 'active',
-          tasks: [],
-          stopReason: null,
-          updatedAt: '2026-05-09T00:00:00.000Z',
-        },
-      },
-    ];
-    appendEntry.mockImplementation((customType: string, data: unknown) => entries.push({ type: 'custom', customType, data }));
-    const turnEnd = handlers.get('turn_end')?.[0];
-    const ctx = {
-      sessionManager: {
-        getEntries: () => entries,
-      },
-      hasPendingMessages: () => false,
-      signal: { aborted: false },
-    };
-
-    await turnEnd?.({ toolResults: [] }, ctx);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ noProgressTurns: 1 }));
-
-    await turnEnd?.({ toolResults: [] }, ctx);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'paused', stopReason: 'no progress' }));
-  });
-
-  it('treats tool turns as progress', async () => {
-    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
-    const sendMessage = vi.fn();
-    const appendEntry = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn(),
-      registerCommand: vi.fn(),
-      sendMessage,
-      appendEntry,
-      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
-        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
-      }),
-    } as unknown as ExtensionAPI;
-
-    factory(pi);
-
-    const entries: unknown[] = [
-      {
-        type: 'custom',
-        customType: 'conversation-goal',
-        data: {
-          objective: 'ship goal mode',
-          status: 'active',
-          tasks: [],
-          stopReason: null,
-          updatedAt: '2026-05-09T00:00:00.000Z',
-        },
-      },
-    ];
-    appendEntry.mockImplementation((customType: string, data: unknown) => entries.push({ type: 'custom', customType, data }));
-    const turnEnd = handlers.get('turn_end')?.[0];
-    const ctx = {
-      sessionManager: {
-        getEntries: () => entries,
-      },
-      hasPendingMessages: () => false,
-      signal: { aborted: false },
-    };
-
-    await turnEnd?.({ toolResults: [] }, ctx);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-
-    await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-  });
-
-  it('clears stored goal state when marking the goal complete', async () => {
-    const registeredTools: Array<{ name: string; execute: (...args: any[]) => Promise<{ details?: unknown }> }> = [];
-    const appendEntry = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn((tool: { name: string; execute: (...args: any[]) => Promise<{ details?: unknown }> }) =>
-        registeredTools.push(tool),
-      ),
-      registerCommand: vi.fn(),
-      sendMessage: vi.fn(),
-      appendEntry,
-      on: vi.fn(),
-    } as unknown as ExtensionAPI;
-
-    factory(pi);
-
-    const updateGoal = registeredTools.find((tool) => tool.name === 'update_goal');
-    const abort = vi.fn();
-    const result = await updateGoal?.execute('goal-2', { status: 'complete' }, new AbortController().signal, vi.fn(), {
-      abort,
-      sessionManager: {
-        getEntries: () => [
-          {
-            type: 'custom',
-            customType: 'conversation-goal',
-            data: {
-              objective: 'ship goal mode',
-              status: 'active',
-              tasks: [],
-              stopReason: null,
-              updatedAt: '2026-05-09T00:00:00.000Z',
-            },
-          },
-        ],
-      },
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    appendEntry('conversation-goal', {
+      objective: '',
+      status: 'complete',
+      tasks: [],
+      stopReason: 'cleared',
+      updatedAt: '2026-05-09T00:00:02.000Z',
+      noProgressTurns: 0,
     });
+    await flushTimers();
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not schedule a continuation when user input is pending', async () => {
+    const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it')]);
+
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, { ...ctx, hasPendingMessages: () => true });
+    await flushTimers();
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('disables goal mode after two consecutive active turns with no tool calls', async () => {
+    const { turnEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
+
+    await turnEnd({ toolResults: [] }, ctx);
+    await flushTimers();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'active', noProgressTurns: 1 }));
+
+    await turnEnd({ toolResults: [] }, ctx);
+    await flushTimers();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'no progress', noProgressTurns: 0 }),
+    );
+  });
+
+  it('resets the no-tool counter after a turn with tool calls', async () => {
+    const { turnEnd, appendEntry, ctx } = createHarness([activeGoal('ship it', 1)]);
+
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await flushTimers();
+
+    expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'active', noProgressTurns: 0 }));
+  });
+
+  it('slash command clear disables goal mode through the same canonical state', async () => {
+    const { appendEntry, sendUserMessage, registeredCommands, ctx } = createHarness([activeGoal('ship it')]);
+
+    await registeredCommands.get('goal')?.handler('clear', ctx);
 
     expect(appendEntry).toHaveBeenCalledWith(
       'conversation-goal',
-      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved' }),
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'cleared', noProgressTurns: 0 }),
     );
-    expect(result?.details).toEqual({
-      state: expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved' }),
-    });
-    expect(abort).toHaveBeenCalledTimes(1);
-  });
-
-  it('blocks setting a new goal from a hidden goal continuation', async () => {
-    const registeredTools: Array<{ name: string; execute: (...args: any[]) => Promise<unknown> }> = [];
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn((tool: { name: string; execute: (...args: any[]) => Promise<unknown> }) => registeredTools.push(tool)),
-      registerCommand: vi.fn(),
-      sendMessage: vi.fn(),
-      appendEntry: vi.fn(),
-      on: vi.fn(),
-    } as unknown as ExtensionAPI;
-
-    factory(pi);
-
-    const setGoal = registeredTools.find((tool) => tool.name === 'set_goal');
-    await expect(
-      setGoal?.execute('goal-1', { objective: 'start another loop' }, new AbortController().signal, vi.fn(), {
-        sessionManager: {
-          getEntries: () => [
-            {
-              type: 'custom',
-              customType: 'goal-continuation',
-              content: 'Goal continuation.',
-            },
-            {
-              type: 'custom',
-              customType: 'conversation-goal',
-              data: {
-                objective: '',
-                status: 'complete',
-                tasks: [],
-                stopReason: 'goal achieved',
-                updatedAt: '2026-05-09T00:00:00.000Z',
-              },
-            },
-          ],
-        },
-      }),
-    ).rejects.toThrow('Goal continuations cannot start a new goal');
-  });
-
-  it('treats completion of an inactive goal as an idempotent no-op', async () => {
-    const registeredTools: Array<{
-      name: string;
-      execute: (...args: any[]) => Promise<{ content?: Array<{ text?: string }>; details?: unknown }>;
-    }> = [];
-    const appendEntry = vi.fn();
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn(
-        (tool: { name: string; execute: (...args: any[]) => Promise<{ content?: Array<{ text?: string }>; details?: unknown }> }) =>
-          registeredTools.push(tool),
-      ),
-      registerCommand: vi.fn(),
-      sendMessage: vi.fn(),
-      appendEntry,
-      on: vi.fn(),
-    } as unknown as ExtensionAPI;
-
-    factory(pi);
-
-    const updateGoal = registeredTools.find((tool) => tool.name === 'update_goal');
-    const result = await updateGoal?.execute('goal-2', { status: 'complete' }, new AbortController().signal, vi.fn(), {
-      sessionManager: {
-        getEntries: () => [
-          {
-            type: 'custom',
-            customType: 'conversation-goal',
-            data: {
-              objective: '',
-              status: 'complete',
-              tasks: [],
-              stopReason: 'goal achieved',
-              updatedAt: '2026-05-09T00:00:00.000Z',
-            },
-          },
-        ],
-      },
-    });
-
-    expect(appendEntry).not.toHaveBeenCalled();
-    expect(result?.content?.[0]?.text).toBe('Goal already complete.');
-  });
-
-  it('registers only goal set and update tools', () => {
-    const registeredTools: Array<{ name: string }> = [];
-    const factory = createConversationAutoModeAgentExtension();
-    const pi = {
-      registerTool: vi.fn((tool: { name: string }) => registeredTools.push(tool)),
-      registerCommand: vi.fn(),
-      sendMessage: vi.fn(),
-      appendEntry: vi.fn(),
-      on: vi.fn(),
-    } as unknown as ExtensionAPI;
-
-    factory(pi);
-
-    expect(registeredTools.map((tool) => tool.name)).toEqual(['set_goal', 'update_goal']);
+    expect(sendUserMessage).toHaveBeenCalledWith('Goal cleared. Previous objective: ship it');
   });
 });

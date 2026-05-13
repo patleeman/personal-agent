@@ -1443,6 +1443,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const toggleGoalMode = useCallback(async () => {
     const isEnabled = !goalEnabled;
     if (isEnabled) {
+      const objective = input.trim();
+      if (id && objective) {
+        await api.updateGoal(id, { objective });
+        setComposerGoalPending(false);
+        return;
+      }
       setComposerGoalPending(true);
       return;
     }
@@ -1451,7 +1457,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (id) {
       await api.updateGoal(id, {});
     }
-  }, [id, goalEnabled]);
+  }, [id, goalEnabled, input]);
   const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
   const [extensionMentionRegistrations, setExtensionMentionRegistrations] = useState<ExtensionMentionRegistration[]>([]);
   const [extensionMentionItems, setExtensionMentionItems] = useState<MentionItem[]>([]);
