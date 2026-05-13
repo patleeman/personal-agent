@@ -19,6 +19,7 @@ const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
 const INITIAL_SCROLL_MIN_FRAMES = 24;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
 const SMOOTH_SCROLL_SETTLE_DELAY_MS = 360;
+const STREAMING_AUTO_SCROLL_MIN_INTERVAL_MS = 120;
 
 interface UseConversationScrollOptions {
   conversationId: string | null;
@@ -68,6 +69,7 @@ export function useConversationScroll({
   // would prevent scrollbar/keyboard detach.
   const isTransientSettleRef = useRef(false);
   const isStreamingRef = useRef(isStreaming);
+  const lastAutoScrollTimeRef = useRef(0);
   const hasMessages = (messages?.length ?? 0) > 0;
 
   const clearSmoothBottomScrollSettle = useCallback(() => {
@@ -549,6 +551,18 @@ export function useConversationScroll({
     if (!shouldAutoScrollToStreamingTail(streamingTailAutoScrollKeyRef.current, tailBlock)) {
       return;
     }
+
+    // Throttle auto-scroll during fast streaming so the settle loop has time
+    // to stabilize and the user's scroll-up events have a real window to
+    // detach before the next force-scroll. Without this throttle, every
+    // streaming token (~5-50ms apart during thinking) restarts the settle loop,
+    // keeping the page force-scrolled to bottom every frame and fighting the
+    // user's attempt to scroll up.
+    const now = performance.now();
+    if (now - lastAutoScrollTimeRef.current < STREAMING_AUTO_SCROLL_MIN_INTERVAL_MS) {
+      return;
+    }
+    lastAutoScrollTimeRef.current = now;
 
     streamingTailAutoScrollKeyRef.current = tailKey;
     scrollToBottom();
