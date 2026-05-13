@@ -579,6 +579,8 @@ export interface ExtensionBackendContext {
       }>
     >;
     getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
+    /** Enable or disable an extension by ID. */
+    setEnabled(extensionId: string, enabled: boolean): void;
   };
   secrets: {
     /** Resolve a secret registered in this extension's manifest. */

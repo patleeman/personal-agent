@@ -27,6 +27,7 @@ import {
   clearExtensionHealthError,
   findExtensionEntry,
   listExtensionInstallSummaries,
+  setExtensionEnabled,
   setExtensionHealthError,
 } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
@@ -128,6 +129,8 @@ export interface ExtensionBackendContext {
       actions: Array<{ id: string; title?: string; description?: string }>;
     }>;
     getStatus(extensionId: string): { enabled: boolean; healthy: boolean; errors?: string[] };
+    /** Enable or disable an extension by ID. */
+    setEnabled(extensionId: string, enabled: boolean): void;
   };
   secrets: {
     /** Resolve a secret registered in this extension's manifest. */
@@ -326,6 +329,7 @@ function createBackendContext(
           ...(summary.errors?.length ? { errors: summary.errors } : {}),
         };
       },
+      setEnabled: (targetExtensionId, enabled) => setExtensionEnabled(targetExtensionId, enabled),
     },
     secrets: {
       get: (secretId) => resolveSecret(extensionId, secretId),

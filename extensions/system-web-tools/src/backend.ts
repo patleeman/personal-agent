@@ -1,6 +1,5 @@
+import type { ExtensionBackendContext } from '@personal-agent/extensions';
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '@earendil-works/pi-coding-agent';
-
-import { resolveSecret } from '../../../packages/desktop/server/secrets/secretStore.js';
 
 interface ExaSearchResult {
   title?: string;
@@ -22,8 +21,8 @@ function createRequestSignal(timeoutMs: number): AbortSignal {
   return AbortSignal.timeout(timeoutMs);
 }
 
-function getExaApiKey(): string | undefined {
-  return resolveSecret('system-web-tools', 'exaApiKey');
+function getExaApiKey(ctx?: ExtensionBackendContext): string | undefined {
+  return ctx?.secrets.get('exaApiKey');
 }
 
 function formatTruncatedContent(content: string): { text: string; truncated: boolean } {
@@ -37,7 +36,7 @@ function formatTruncatedContent(content: string): { text: string; truncated: boo
   return { text, truncated: truncation.truncated };
 }
 
-export async function webFetch(input: { url: string; raw?: boolean }) {
+export async function webFetch(input: { url: string; raw?: boolean }, ctx?: ExtensionBackendContext) {
   const { url, raw } = input;
   try {
     const response = await fetch(url, {
@@ -92,11 +91,11 @@ export async function webFetch(input: { url: string; raw?: boolean }) {
   }
 }
 
-export async function webSearch(input: { query: string; count?: number; page?: number }) {
+export async function webSearch(input: { query: string; count?: number; page?: number }, ctx?: ExtensionBackendContext) {
   const { query, count = 5, page = 1 } = input;
   const maxResults = Math.min(count, 20);
   const offset = (Math.max(page, 1) - 1) * 20;
-  const exaApiKey = getExaApiKey();
+  const exaApiKey = getExaApiKey(ctx);
 
   if (exaApiKey) {
     try {

@@ -1,7 +1,5 @@
 import type { ExtensionBackendContext } from '@personal-agent/extensions/backend';
 
-import { setExtensionEnabled } from '../../../packages/desktop/server/extensions/extensionRegistry.js';
-
 const ONBOARDING_STATE_KEY = 'onboarding:v1';
 
 interface OnboardingState {
@@ -36,7 +34,7 @@ Start here:
 Recommended first move: configure your provider, then come back and ask “what can you do in this repo?”`;
 
 function disableOnboarding(ctx: ExtensionBackendContext): void {
-  setExtensionEnabled(ctx.extensionId, false);
+  ctx.extensions.setEnabled(ctx.extensionId, false);
   ctx.ui.invalidate(['extensions']);
 }
 

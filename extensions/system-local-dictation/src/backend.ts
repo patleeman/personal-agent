@@ -1,16 +1,16 @@
 import { dirname, join } from 'node:path';
 
-import { getPiAgentRuntimeDir, resolveLocalProfileSettingsFilePath } from '@personal-agent/core';
+import type { ExtensionBackendContext } from '@personal-agent/extensions';
 
 import { LocalWhisperTranscriptionProvider } from './localWhisperProvider.js';
 import { buildDictationSettingsState, readDictationSettings, writeDictationSettings } from './settings.js';
 
-function settingsFile(): string {
-  return join(getPiAgentRuntimeDir(), 'settings.json');
+function settingsFile(runtimeDir: string): string {
+  return join(runtimeDir, 'settings.json');
 }
 
-function authFile(): string {
-  return join(getPiAgentRuntimeDir(), 'auth.json');
+function authFile(runtimeDir: string): string {
+  return join(runtimeDir, 'auth.json');
 }
 
 function readOptionalString(value: unknown): string | undefined {
@@ -27,15 +27,15 @@ function readRequiredBase64(value: unknown, label: string): Buffer {
   return decoded;
 }
 
-function createProvider(model: string): LocalWhisperTranscriptionProvider {
-  return new LocalWhisperTranscriptionProvider({ model, modelRootPath: join(dirname(authFile()), 'transcription-models') });
+function createProvider(model: string, runtimeDir: string): LocalWhisperTranscriptionProvider {
+  return new LocalWhisperTranscriptionProvider({ model, modelRootPath: join(dirname(authFile(runtimeDir)), 'transcription-models') });
 }
 
-export async function readSettings() {
-  return buildDictationSettingsState(settingsFile());
+export async function readSettings(_input: unknown, ctx: ExtensionBackendContext) {
+  return buildDictationSettingsState(settingsFile(ctx.runtimeDir));
 }
 
-export async function updateSettings(input: { enabled?: unknown; model?: unknown }) {
+export async function updateSettings(input: { enabled?: unknown; model?: unknown }, ctx: ExtensionBackendContext) {
   const update: Parameters<typeof writeDictationSettings>[1] = {};
   if ('enabled' in input) {
     if (typeof input.enabled !== 'boolean') throw new Error('enabled must be a boolean');
@@ -46,27 +46,27 @@ export async function updateSettings(input: { enabled?: unknown; model?: unknown
     if (!model) throw new Error('model must be a non-empty string');
     update.model = model;
   }
-  writeDictationSettings(resolveLocalProfileSettingsFilePath(), update);
-  writeDictationSettings(settingsFile(), update);
-  return buildDictationSettingsState(settingsFile());
+  writeDictationSettings(ctx.profileSettingsFilePath, update);
+  writeDictationSettings(settingsFile(ctx.runtimeDir), update);
+  return buildDictationSettingsState(settingsFile(ctx.runtimeDir));
 }
 
-export async function modelStatus(input: { model?: unknown }) {
-  const settings = readDictationSettings(settingsFile());
+export async function modelStatus(input: { model?: unknown }, ctx: ExtensionBackendContext) {
+  const settings = readDictationSettings(settingsFile(ctx.runtimeDir));
   const model = readOptionalString(input.model) ?? settings.model;
-  return createProvider(model).getModelStatus();
+  return createProvider(model, ctx.runtimeDir).getModelStatus();
 }
 
-export async function installModel(input: { model?: unknown }) {
-  const settings = readDictationSettings(settingsFile());
+export async function installModel(input: { model?: unknown }, ctx: ExtensionBackendContext) {
+  const settings = readDictationSettings(settingsFile(ctx.runtimeDir));
   const model = readOptionalString(input.model) ?? settings.model;
-  return createProvider(model).installModel();
+  return createProvider(model, ctx.runtimeDir).installModel();
 }
 
-export async function transcribeFile(input: { dataBase64?: unknown; mimeType?: unknown; fileName?: unknown; language?: unknown }) {
-  const settings = readDictationSettings(settingsFile());
+export async function transcribeFile(input: { dataBase64?: unknown; mimeType?: unknown; fileName?: unknown; language?: unknown }, ctx: ExtensionBackendContext) {
+  const settings = readDictationSettings(settingsFile(ctx.runtimeDir));
   if (!settings.enabled) throw new Error('Enable dictation in Settings before using it.');
-  const provider = createProvider(settings.model);
+  const provider = createProvider(settings.model, ctx.runtimeDir);
   return provider.transcribeFile(
     {
       data: readRequiredBase64(input.dataBase64, 'dataBase64'),
