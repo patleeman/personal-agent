@@ -4,8 +4,6 @@ import { Type } from '@sinclair/typebox';
 
 const BrowserToolNames = ['browser_snapshot', 'browser_cdp', 'browser_screenshot'] as const;
 
-const BrowserToolNameSet = new Set<string>(BrowserToolNames);
-
 function requireHost(): WorkbenchBrowserToolHost {
   const host = getWorkbenchBrowserToolHost();
   if (!host) {
@@ -32,20 +30,6 @@ async function isWorkbenchBrowserActive(conversationId: string): Promise<boolean
   } catch {
     return false;
   }
-}
-
-function setBrowserToolsActive(pi: ExtensionAPI, active: boolean): void {
-  const current = pi.getActiveTools();
-  const withoutBrowserTools = current.filter((name) => !BrowserToolNameSet.has(name));
-  const next = active ? [...withoutBrowserTools, ...BrowserToolNames] : withoutBrowserTools;
-  if (current.length === next.length && current.every((name, index) => name === next[index])) {
-    return;
-  }
-  pi.setActiveTools(next);
-}
-
-async function syncBrowserToolsForSession(pi: ExtensionAPI, conversationId: string): Promise<void> {
-  setBrowserToolsActive(pi, await isWorkbenchBrowserActive(conversationId));
 }
 
 function tabIdFromSessionKey(sessionKey: string): string {
@@ -160,14 +144,6 @@ const ScreenshotParams = Type.Object({
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
-    pi.on('session_start', async (_event, ctx) => {
-      await syncBrowserToolsForSession(pi, ctx.sessionManager.getSessionId());
-    });
-
-    pi.on('before_agent_start', async (_event, ctx) => {
-      await syncBrowserToolsForSession(pi, ctx.sessionManager.getSessionId());
-    });
-
     pi.registerTool({
       name: 'browser_snapshot',
       label: 'Browser Snapshot',

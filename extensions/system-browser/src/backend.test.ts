@@ -10,15 +10,14 @@ function collectExtension() {
     promptGuidelines?: string[];
     execute: (...args: never[]) => Promise<unknown>;
   }> = [];
-  const handlers = new Map<string, Array<(...args: never[]) => Promise<void>>>();
   const pi = {
     registerTool: (tool: never) => tools.push(tool),
-    on: (event: string, handler: never) => handlers.set(event, [...(handlers.get(event) ?? []), handler]),
+    on: vi.fn(),
     getActiveTools: vi.fn(() => ['read', 'browser_snapshot', 'browser_cdp', 'browser_screenshot', 'bash']),
     setActiveTools: vi.fn(),
   };
   createWorkbenchBrowserAgentExtension()(pi as never);
-  return { tools, handlers, pi };
+  return { tools, pi };
 }
 
 function collectTools() {
@@ -88,39 +87,11 @@ describe('workbench browser agent extension', () => {
     setWorkbenchBrowserToolHost(null);
   });
 
-  it('keeps browser tools inactive until the workbench browser is active', async () => {
-    setWorkbenchBrowserToolHost({
-      isActive: async () => false,
-      listTabs: async () => [],
-      snapshot: async () => ({}),
-      cdp: async () => ({}),
-      screenshot: async () => ({}),
-    });
+  it('does not mutate the active tool set based on browser panel state', () => {
+    const { pi } = collectExtension();
 
-    const { handlers, pi } = collectExtension();
-    await handlers.get('before_agent_start')![0]!({} as never, ctx as never);
-
-    expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash']);
-
-    setWorkbenchBrowserToolHost(null);
-  });
-
-  it('activates browser tools for active workbench browser sessions', async () => {
-    setWorkbenchBrowserToolHost({
-      isActive: async () => true,
-      listTabs: async () => [],
-      snapshot: async () => ({}),
-      cdp: async () => ({}),
-      screenshot: async () => ({}),
-    });
-
-    const { handlers, pi } = collectExtension();
-    pi.getActiveTools.mockReturnValue(['read', 'bash']);
-    await handlers.get('before_agent_start')![0]!({} as never, ctx as never);
-
-    expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash', 'browser_snapshot', 'browser_cdp', 'browser_screenshot']);
-
-    setWorkbenchBrowserToolHost(null);
+    expect(pi.on).not.toHaveBeenCalled();
+    expect(pi.setActiveTools).not.toHaveBeenCalled();
   });
 
   it('returns inactive browser error from stale tool calls', async () => {
