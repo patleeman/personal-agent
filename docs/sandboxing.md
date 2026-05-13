@@ -43,4 +43,3 @@ Extension backend code must use `ctx.shell` for process execution. Direct Node p
 - `worker_threads` / `node:worker_threads`
 
 This is a guardrail against accidental bypasses, not a hostile-code security boundary. Unknown or hostile extension code still requires out-of-process isolation or a VM/workspace sandbox.
-

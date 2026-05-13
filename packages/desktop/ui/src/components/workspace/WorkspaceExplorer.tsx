@@ -742,7 +742,14 @@ function WorkspaceTreeBranch(props: Parameters<typeof WorkspaceTreeRow>[0]) {
   return <WorkspaceTreeRow {...props} />;
 }
 
-export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, onCloseFile, activeFilePath = null, railOnly = false }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({
+  cwd,
+  onDraftPrompt,
+  onOpenFile,
+  onCloseFile,
+  activeFilePath = null,
+  railOnly = false,
+}: WorkspaceExplorerProps) {
   const { theme } = useTheme();
   const [open, setOpen] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_OPEN_KEY, true));
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));

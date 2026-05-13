@@ -54,7 +54,9 @@ describe('system-conversation-tools manifest', () => {
       ]),
     );
 
-    const bashRenderer = manifest.contributes.transcriptRenderers.find((renderer: { id: string }) => renderer.id === 'terminal-bash-tool-block');
+    const bashRenderer = manifest.contributes.transcriptRenderers.find(
+      (renderer: { id: string }) => renderer.id === 'terminal-bash-tool-block',
+    );
     expect(bashRenderer).not.toHaveProperty('standalone');
   });
 });

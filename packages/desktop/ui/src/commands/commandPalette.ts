@@ -200,8 +200,8 @@ export function searchCommandPaletteItems<TAction>(
 ): CommandPaletteSectionResult<TAction>[] {
   const query = options.query.trim();
   const emptyQuery = query.length === 0;
-  const visibleSections = options.scopeSections ??
-    (options.scope === THREADS_COMMAND_PALETTE_SCOPE ? THREAD_COMMAND_PALETTE_SECTIONS : [options.scope]);
+  const visibleSections =
+    options.scopeSections ?? (options.scope === THREADS_COMMAND_PALETTE_SCOPE ? THREAD_COMMAND_PALETTE_SECTIONS : [options.scope]);
 
   return visibleSections.flatMap((section) => {
     const sectionItems = items.filter((item) => item.section === section);

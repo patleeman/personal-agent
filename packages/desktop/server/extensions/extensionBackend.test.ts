@@ -94,5 +94,4 @@ describe('extension backend load targeting', () => {
       ),
     ).toBeNull();
   });
-
 });

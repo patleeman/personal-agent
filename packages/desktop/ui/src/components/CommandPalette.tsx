@@ -235,15 +235,7 @@ export function CommandPalette() {
       searchedConversationItems,
       searchedFileItems,
     });
-  }, [
-    archivedConversationItems,
-    fileItems,
-    openConversationItems,
-    query,
-    scope,
-    searchedConversationItems,
-    searchedFileItems,
-  ]);
+  }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedConversationItems, searchedFileItems]);
 
   const emptyQueryLimits = useMemo(
     () => (scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 ? { archived: archivedVisibleLimit } : undefined),
@@ -352,7 +344,11 @@ export function CommandPalette() {
 
   const archivedGroup = useMemo(() => groups.find((group) => group.section === 'archived') ?? null, [groups]);
   const canLoadMoreArchivedThreads = Boolean(
-    open && scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 && archivedGroup && archivedGroup.total > archivedGroup.items.length,
+    open &&
+    scope === THREADS_COMMAND_PALETTE_SCOPE &&
+    query.trim().length === 0 &&
+    archivedGroup &&
+    archivedGroup.total > archivedGroup.items.length,
   );
 
   useEffect(() => {
@@ -661,15 +657,7 @@ export function CommandPalette() {
     }
 
     return [...sections];
-  }, [
-    conversationContentSearchLoading,
-    fileItems.length,
-    scope,
-    sessions,
-    sessionsLoading,
-    quickOpenLoading,
-    quickOpenSearchLoading,
-  ]);
+  }, [conversationContentSearchLoading, fileItems.length, scope, sessions, sessionsLoading, quickOpenLoading, quickOpenSearchLoading]);
   const showSectionHeaders = groups.length > 1;
   const labelForSection = useCallback(
     (section: CommandPaletteSection) => quickOpenSectionLabels[section] ?? COMMAND_PALETTE_SECTION_LABELS[section] ?? section,
@@ -839,7 +827,10 @@ export function CommandPalette() {
                 );
               })}
 
-              {scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 && group.section === 'archived' && group.total > group.items.length ? (
+              {scope === THREADS_COMMAND_PALETTE_SCOPE &&
+              query.trim().length === 0 &&
+              group.section === 'archived' &&
+              group.total > group.items.length ? (
                 <p className="px-2.5 py-2 text-[11px] text-dim font-mono">Scroll to load older threads…</p>
               ) : null}
             </section>
@@ -864,13 +855,17 @@ export function CommandPalette() {
 
           {quickOpenError && scope !== THREADS_COMMAND_PALETTE_SCOPE && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load {quickOpenScopeLabel.toLowerCase()}: {quickOpenError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">
+                Failed to load {quickOpenScopeLabel.toLowerCase()}: {quickOpenError}
+              </p>
             </section>
           )}
 
           {quickOpenSearchError && scope !== THREADS_COMMAND_PALETTE_SCOPE && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search {quickOpenScopeLabel.toLowerCase()}: {quickOpenSearchError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">
+                Failed to search {quickOpenScopeLabel.toLowerCase()}: {quickOpenSearchError}
+              </p>
             </section>
           )}
 
