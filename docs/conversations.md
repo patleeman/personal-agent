@@ -155,6 +155,8 @@ Examples:
 
 Bash commands create or reuse a live session in the conversation's working directory.
 
+These direct `!` / `!!` commands render as terminal-style transcript output. Regular agent-selected `bash` tool calls stay grouped with the rest of the agent's internal work.
+
 ## Mention Menu
 
 Type `@` in the composer to search and reference items. The menu surfaces:

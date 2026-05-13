@@ -1,6 +1,5 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-import { listProcessWrappers } from '../shared/processLauncher.js';
 import type { ParallelPromptPreview } from './liveSessionParallelJobs.js';
 import type { LiveSessionPresenceState } from './liveSessionPresence.js';
 import type { QueuedPromptPreview } from './liveSessionQueue.js';
@@ -101,15 +100,11 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
 
     case 'tool_execution_start': {
       toolTimings.set(event.toolCallId, Date.now());
-      const executionWrappers = listProcessWrappers();
       return {
         type: 'tool_start',
         toolCallId: event.toolCallId,
         toolName: event.toolName,
-        args:
-          event.toolName === 'bash'
-            ? { ...(event.args as Record<string, unknown>), displayMode: 'terminal', executionWrappers }
-            : event.args,
+        args: event.args,
       };
     }
 
@@ -130,7 +125,6 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
           .map((content) => content.text ?? '')
           .join('\n')
           .slice(0, 8000) ?? '';
-      const executionWrappers = listProcessWrappers();
       return {
         type: 'tool_end',
         toolCallId: event.toolCallId,
@@ -138,14 +132,7 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
         isError: event.isError,
         durationMs: Math.max(0, Date.now() - start),
         output: outputText,
-        ...(result?.details || event.toolName === 'bash'
-          ? {
-              details: {
-                ...(typeof result?.details === 'object' && result.details !== null ? result.details : {}),
-                ...(event.toolName === 'bash' ? { displayMode: 'terminal', executionWrappers } : {}),
-              },
-            }
-          : {}),
+        ...(result?.details !== undefined ? { details: result.details } : {}),
       };
     }
 
