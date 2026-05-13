@@ -45,8 +45,13 @@ export function ToolBlock({
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const [showAllRuns, setShowAllRuns] = useState(false);
   const open = resolveDisclosureOpen(autoOpen, preference);
+  const terminalBashBlock = isTerminalBashToolBlock(block);
   const extensionRegistry = useExtensionRegistry();
   const extensionRenderer = useMemo(() => {
+    if (block.tool === 'bash') {
+      return null;
+    }
+
     for (const extension of extensionRegistry.extensions) {
       const renderer = extension.manifest?.contributes?.transcriptRenderers?.find((candidate) => candidate.tool === block.tool);
       if (renderer && extension.enabled) return { extension, renderer };
@@ -56,7 +61,7 @@ export function ToolBlock({
   const meta = toolMeta(block.tool);
   const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
 
-  if (isTerminalBashToolBlock(block)) {
+  if (terminalBashBlock) {
     return <TerminalToolBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
   }
 

@@ -155,7 +155,7 @@ Examples:
 
 Bash commands create or reuse a live session in the conversation's working directory.
 
-These direct `!` / `!!` commands render as terminal-style transcript output. Regular agent-selected `bash` tool calls stay grouped with the rest of the agent's internal work.
+These direct `!` / `!!` commands render as terminal-style transcript output. Regular agent-selected `bash` tool calls stay grouped with the rest of the agent's internal work, and expanding that cluster shows the normal tool disclosure card for the bash step.
 
 ## Mention Menu
 
