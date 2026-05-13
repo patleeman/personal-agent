@@ -4,7 +4,6 @@ import { get } from 'node:https';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
 
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
 
@@ -34,21 +33,18 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function runProcess(command: string, args: string[]): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', reject);
-    child.on('close', (exitCode) => resolve({ exitCode, stdout, stderr }));
-  });
+async function runProcess(
+  ctx: ExtensionBackendContext,
+  command: string,
+  args: string[],
+  options?: { timeoutMs?: number; maxBuffer?: number },
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  try {
+    const result = await ctx.shell.exec({ command, args, timeoutMs: options?.timeoutMs, maxBuffer: options?.maxBuffer });
+    return { exitCode: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    return { exitCode: 1, stdout: '', stderr: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function download(url: string, destination: string, redirects = 0): Promise<void> {
@@ -83,7 +79,7 @@ function download(url: string, destination: string, redirects = 0): Promise<void
   });
 }
 
-export async function runtimeStatus(_input: unknown, _ctx: ExtensionBackendContext) {
+export async function runtimeStatus(_input: unknown, ctx: ExtensionBackendContext) {
   const available = await exists(bundledCli);
 
   if (!available) {
@@ -96,11 +92,7 @@ export async function runtimeStatus(_input: unknown, _ctx: ExtensionBackendConte
   }
 
   await chmod(bundledCli, 0o755).catch(() => undefined);
-  const version = await runProcess(bundledCli, ['--version']).catch((error) => ({
-    exitCode: 1,
-    stdout: '',
-    stderr: error instanceof Error ? error.message : String(error),
-  }));
+  const version = await runProcess(ctx, bundledCli, ['--version']);
 
   return {
     available: version.exitCode === 0,
@@ -160,7 +152,7 @@ export async function runPrompt(input: RunPromptInput, _ctx: ExtensionBackendCon
     String(input.contextSize ?? 8192),
   ];
 
-  const result = await runProcess(bundledCli, args);
+  const result = await runProcess(ctx, bundledCli, args, { timeoutMs: 120_000, maxBuffer: 8 * 1024 * 1024 });
   if (result.exitCode !== 0) {
     throw new Error(result.stderr || `llama-cli exited with code ${result.exitCode}`);
   }
