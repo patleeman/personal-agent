@@ -1020,10 +1020,10 @@ export class PersonalAgentDaemon {
           options: { stdio: ['ignore', 'pipe', 'pipe'] },
         });
 
-    child.stdout.on('data', (chunk: Buffer | string) => {
+    child.stdout?.on('data', (chunk: Buffer | string) => {
       outputStream.write(chunk.toString());
     });
-    child.stderr.on('data', (chunk: Buffer | string) => {
+    child.stderr?.on('data', (chunk: Buffer | string) => {
       outputStream.write(chunk.toString());
     });
 

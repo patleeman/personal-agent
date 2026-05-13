@@ -49,11 +49,11 @@ export async function runCommand(command: string, args: string[], timeoutMs = DE
       finalize(() => reject(new Error(`${command} timed out after ${normalizedTimeoutMs}ms`)));
     }, normalizedTimeoutMs);
 
-    child.stdout.on('data', (chunk: Buffer | string) => {
+    child.stdout?.on('data', (chunk: Buffer | string) => {
       stdout += chunk.toString();
     });
 
-    child.stderr.on('data', (chunk: Buffer | string) => {
+    child.stderr?.on('data', (chunk: Buffer | string) => {
       stderr += chunk.toString();
     });
 
