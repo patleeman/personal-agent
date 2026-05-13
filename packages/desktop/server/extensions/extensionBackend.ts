@@ -178,11 +178,6 @@ const FORBIDDEN_BACKEND_IMPORTS = new Set([
   'worker_threads',
   'node:worker_threads',
 ]);
-const FORBIDDEN_BACKEND_BUNDLE_PATTERNS = [
-  /(?:^|[^\w$])(?:node:)?child_process(?:[^\w$]|$)/,
-  /(?:^|[^\w$])(?:node:)?cluster(?:[^\w$]|$)/,
-  /(?:^|[^\w$])(?:node:)?worker_threads(?:[^\w$]|$)/,
-];
 
 export class ExtensionLoadError extends Error {
   readonly extensionId: string;
@@ -498,17 +493,6 @@ function createForbiddenBackendImportPlugin(packageRoot: string): Plugin {
   };
 }
 
-function assertBackendBundleAllowed(extensionId: string, bundlePath: string): void {
-  const source = readFileSync(bundlePath, 'utf-8');
-  const matched = FORBIDDEN_BACKEND_BUNDLE_PATTERNS.find((pattern) => pattern.test(source));
-  if (!matched) return;
-  throw new ExtensionLoadError({
-    extensionId,
-    code: 'load_failure',
-    message: `Extension "${extensionId}" backend bundle contains forbidden process API usage. Use ctx.shell so PA can apply execution wrappers and sandbox policy.`,
-  });
-}
-
 function createExtensionBackendApiPlugin(): Plugin {
   const backendApiPath = resolveExtensionBackendApiPath();
   return {
@@ -572,7 +556,6 @@ function loadCompiledExtensionBackendModule(
     return cached.module;
   }
 
-  assertBackendBundleAllowed(extensionId, compiled.path);
   const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
   backendModuleCache.set(extensionId, { cacheKey, module });
   return module;
