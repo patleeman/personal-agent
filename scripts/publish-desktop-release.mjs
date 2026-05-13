@@ -404,25 +404,23 @@ function resolveInstalledPackageDir(buildRoot, startDir, packageName) {
     return rootCandidate;
   }
 
-  // Last resort: use a build-root-based require to resolve through pnpm's store.
-  // The normal walk-based resolution can fail because pnpm's symlinks resolve
-  // into .pnpm/ directly, bypassing the root node_modules/ directory.
-  try {
-    const buildRequire = createRequire(resolve(normalizedBuildRoot, 'package.json'));
-    const resolved = buildRequire.resolve(packageName);
-    if (existsSync(resolved)) {
-      // Walk up from the resolved file until we find package.json
-      let dir = dirname(resolved);
-      while (dir !== normalizedBuildRoot && dir !== dirname(dir)) {
-        const pkgJson = resolve(dir, 'package.json');
-        if (existsSync(pkgJson)) {
-          return dir;
+  // Try pnpm's .pnpm virtual store directly.
+  const pnpmStoreDir = resolve(normalizedBuildRoot, 'node_modules', '.pnpm');
+  if (existsSync(pnpmStoreDir)) {
+    const pnpmDirName = segments.join('+');
+    try {
+      const storeEntries = readdirSync(pnpmStoreDir);
+      for (const entry of storeEntries) {
+        if (entry.startsWith(`${pnpmDirName}@`)) {
+          const candidate = resolve(pnpmStoreDir, entry, 'node_modules', ...segments, 'package.json');
+          if (existsSync(candidate)) {
+            return resolve(pnpmStoreDir, entry, 'node_modules', ...segments);
+          }
         }
-        dir = dirname(dir);
       }
+    } catch {
+      // Cannot read the .pnpm store directory
     }
-  } catch {
-    // Not resolvable via Node's module resolution either
   }
 
   return null;
