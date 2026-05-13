@@ -58,4 +58,48 @@ describe('toSse tool execution events', () => {
       false,
     );
   });
+
+  it('maps compaction lifecycle events', () => {
+    expect(
+      toSse({
+        type: 'compaction_start',
+        reason: 'overflow',
+      } as never),
+    ).toEqual({ type: 'compaction_start', mode: 'auto', reason: 'overflow' });
+
+    expect(
+      toSse({
+        type: 'compaction_end',
+        reason: 'overflow',
+        aborted: false,
+        willRetry: true,
+        result: { summary: 'short', firstKeptEntryId: 'entry-1', tokensBefore: 120000 },
+      } as never),
+    ).toEqual({
+      type: 'compaction_end',
+      mode: 'auto',
+      reason: 'overflow',
+      aborted: false,
+      willRetry: true,
+      tokensBefore: 120000,
+    });
+
+    expect(
+      toSse({
+        type: 'compaction_end',
+        reason: 'manual',
+        aborted: false,
+        willRetry: false,
+        result: undefined,
+        errorMessage: 'Compaction failed: nope',
+      } as never),
+    ).toEqual({
+      type: 'compaction_end',
+      mode: 'manual',
+      reason: 'manual',
+      aborted: false,
+      willRetry: false,
+      errorMessage: 'Compaction failed: nope',
+    });
+  });
 });

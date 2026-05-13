@@ -971,7 +971,16 @@ export type SseEvent =
   | { type: 'title_update'; title: string }
   | { type: 'context_usage'; usage: SessionContextUsage | null }
   | { type: 'stats_update'; tokens: { input: number; output: number; total: number; cacheRead: number; cacheWrite: number }; cost: number }
-  | { type: 'compaction_start'; mode: 'manual' | 'auto' }
+  | { type: 'compaction_start'; mode: 'manual' | 'auto'; reason?: 'manual' | 'threshold' | 'overflow' }
+  | {
+      type: 'compaction_end';
+      mode: 'manual' | 'auto';
+      reason: 'manual' | 'threshold' | 'overflow';
+      aborted: boolean;
+      willRetry: boolean;
+      errorMessage?: string;
+      tokensBefore?: number;
+    }
   | { type: 'error'; message: string };
 
 export type DurableRunSseEvent =

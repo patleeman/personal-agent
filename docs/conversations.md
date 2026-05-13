@@ -29,11 +29,14 @@ The composer is the text input area at the bottom of the conversation view.
 
 Conversations are saved automatically. Every message, tool call, and tool result is persisted. Past conversations appear in the left sidebar. Click any conversation to resume it.
 
-| State  | Behavior                              |
-| ------ | ------------------------------------- |
-| Active | Agent is processing a prompt          |
-| Idle   | Waiting for user input                |
-| Saved  | Persisted to disk, visible in sidebar |
+| State      | Behavior                              |
+| ---------- | ------------------------------------- |
+| Active     | Agent is processing a prompt          |
+| Compacting | Context is being summarized/trimmed   |
+| Idle       | Waiting for user input                |
+| Saved      | Persisted to disk, visible in sidebar |
+
+Live conversations emit explicit `compaction_start` and `compaction_end` stream events. The desktop reducer uses them to show and clear the compaction state, while successful compactions also surface as compaction summary blocks in the transcript.
 
 ## Branching
 

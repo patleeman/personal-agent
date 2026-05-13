@@ -37,7 +37,16 @@ export type SseEvent =
   | { type: 'title_update'; title: string }
   | { type: 'context_usage'; usage: LiveContextUsage | null }
   | { type: 'stats_update'; tokens: { input: number; output: number; total: number; cacheRead: number; cacheWrite: number }; cost: number }
-  | { type: 'compaction_start'; mode: 'manual' | 'auto' }
+  | { type: 'compaction_start'; mode: 'manual' | 'auto'; reason?: 'manual' | 'threshold' | 'overflow' }
+  | {
+      type: 'compaction_end';
+      mode: 'manual' | 'auto';
+      reason: 'manual' | 'threshold' | 'overflow';
+      aborted: boolean;
+      willRetry: boolean;
+      errorMessage?: string;
+      tokensBefore?: number;
+    }
   | { type: 'error'; message: string };
 
 const toolTimings = new Map<string, number>();
@@ -140,6 +149,18 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
       return {
         type: 'compaction_start',
         mode: event.reason === 'manual' ? 'manual' : 'auto',
+        reason: event.reason,
+      };
+
+    case 'compaction_end':
+      return {
+        type: 'compaction_end',
+        mode: event.reason === 'manual' ? 'manual' : 'auto',
+        reason: event.reason,
+        aborted: event.aborted,
+        willRetry: event.willRetry,
+        ...(event.errorMessage ? { errorMessage: event.errorMessage } : {}),
+        ...(event.result?.tokensBefore !== undefined ? { tokensBefore: event.result.tokensBefore } : {}),
       };
 
     default:

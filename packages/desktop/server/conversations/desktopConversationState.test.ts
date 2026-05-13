@@ -58,6 +58,48 @@ describe('desktopConversationState reducer', () => {
     ]);
   });
 
+  it('clears compaction state and surfaces compaction failures from live events', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'compaction_start',
+      mode: 'auto',
+      reason: 'threshold',
+    } as never);
+    expect(state.isCompacting).toBe(true);
+
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'compaction_end',
+      mode: 'auto',
+      reason: 'threshold',
+      aborted: false,
+      willRetry: false,
+      tokensBefore: 90000,
+    } as never);
+    expect(state.isCompacting).toBe(false);
+    expect(state.blocks).toHaveLength(0);
+
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'compaction_start',
+      mode: 'manual',
+      reason: 'manual',
+    } as never);
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'compaction_end',
+      mode: 'manual',
+      reason: 'manual',
+      aborted: false,
+      willRetry: false,
+      errorMessage: 'Compaction failed: nope',
+    } as never);
+
+    expect(state.isCompacting).toBe(false);
+    expect(state.error).toBe('Compaction failed: nope');
+    expect(state.blocks.at(-1)).toMatchObject({ type: 'error', message: 'Compaction failed: nope' });
+  });
+
   it('updates streaming tool blocks and queue state from live events', async () => {
     const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
       await import('./desktopConversationState.js');

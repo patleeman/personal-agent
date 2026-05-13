@@ -4566,7 +4566,7 @@ describe('event translation', () => {
           reason: 'overflow',
         }),
       ),
-    ).toEqual({ type: 'compaction_start', mode: 'auto' });
+    ).toEqual({ type: 'compaction_start', mode: 'auto', reason: 'overflow' });
 
     expect(toSse(asAgentSessionEvent({ type: 'unhandled_event_type' }))).toBeNull();
   });

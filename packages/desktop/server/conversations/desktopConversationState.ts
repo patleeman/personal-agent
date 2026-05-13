@@ -313,6 +313,19 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
     case 'compaction_start':
       return { ...prev, isCompacting: true };
 
+    case 'compaction_end':
+      if (event.errorMessage) {
+        blocks.push({ type: 'error', message: event.errorMessage, ts: new Date().toISOString() });
+        return {
+          ...prev,
+          blocks,
+          totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length),
+          isCompacting: false,
+          error: event.errorMessage,
+        };
+      }
+      return { ...prev, isCompacting: false };
+
     case 'agent_start':
       return { ...prev, isStreaming: true, error: null };
 
