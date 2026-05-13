@@ -1,5 +1,5 @@
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
-import { AppPageIntro, AppPageLayout, ToolbarButton } from '@personal-agent/extensions/ui';
+import { AppPageIntro, AppPageLayout, AppPageSection, ToolbarButton } from '@personal-agent/extensions/ui';
 import React from 'react';
 
 const PROVIDER_ID = 'mlx-local';
@@ -93,11 +93,16 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
   }
 
   private refresh = async (syncInput = false) => {
-    const status = asStatus(await this.props.pa.extension.invoke('status', {}));
-    this.setState((prev) => ({
-      status,
-      modelInput: syncInput && status ? status.selectedModelId : prev.modelInput || status?.selectedModelId || '',
-    }));
+    try {
+      const status = asStatus(await this.props.pa.extension.invoke('status', {}));
+      this.setState((prev) => ({
+        status,
+        error: null,
+        modelInput: syncInput && status ? status.selectedModelId : prev.modelInput || status?.selectedModelId || '',
+      }));
+    } catch (err) {
+      this.setState({ error: err instanceof Error ? err.message : String(err) });
+    }
   };
 
   private run = async (label: string, action: () => Promise<void>) => {
@@ -161,7 +166,7 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
 
     return (
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[60rem]" contentClassName="space-y-8">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
           <AppPageIntro
             title="MLX Local Models"
             summary="Run Hugging Face MLX models locally and expose the loaded model through the PA model picker."
@@ -173,98 +178,114 @@ export class QwenMlxPage extends React.Component<ExtensionSurfaceProps, PageStat
                   disabled={Boolean(busy || setupRunning || !ready)}
                   onClick={() => void this.toggleServer()}
                 />
-                <button
-                  disabled={Boolean(busy)}
-                  onClick={() => void this.refresh()}
-                  className="px-2 text-sm text-secondary hover:text-primary disabled:opacity-60"
-                  type="button"
-                >
-                  Refresh
-                </button>
               </div>
             }
           />
 
-          <section className="space-y-2">
-            <div className="text-xl font-semibold text-primary">{title}</div>
-            <div className="text-sm text-secondary">{busy || error || status?.setup?.error || status?.server.error || subtitle}</div>
-            <div className="text-sm text-secondary">
-              Current loaded model: <span className="font-medium text-primary">{loadedModel}</span>
+          <section className="space-y-5">
+            <div className="flex flex-col gap-5 border-y border-border-subtle py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <div className="text-2xl font-semibold tracking-[-0.03em] text-primary">{title}</div>
+                  <div className="text-sm text-secondary">{busy || error || status?.setup?.error || status?.server.error || subtitle}</div>
+                </div>
+                <div className="truncate text-sm text-secondary">
+                  Current loaded model: <span className="font-medium text-primary">{loadedModel}</span>
+                </div>
+              </div>
+              <button
+                disabled={Boolean(busy)}
+                onClick={() => void this.refresh()}
+                className="self-start text-sm text-secondary hover:text-primary disabled:opacity-60 sm:self-center"
+                type="button"
+              >
+                Refresh
+              </button>
             </div>
             {(setupRunning || progress > 0) && (
-              <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-border-subtle">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-border-subtle">
                 <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progress}%` }} />
               </div>
             )}
           </section>
 
-          <section className="space-y-3">
-            <div className="text-sm font-medium text-primary">Selected model</div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                value={modelInput}
-                disabled={running || starting || Boolean(busy)}
-                onChange={(event) => this.setState({ modelInput: event.target.value })}
-                className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary outline-none focus:border-accent disabled:opacity-60"
-                placeholder="org/model-name-MLX"
-              />
-              <ToolbarButton disabled={Boolean(busy || running || starting || !modelInput.trim())} onClick={() => void this.saveModel()}>
-                Save
-              </ToolbarButton>
-              <ToolbarButton
-                disabled={Boolean(busy || setupRunning || !modelInput.trim())}
-                onClick={() =>
-                  void this.run(
-                    'Downloading…',
-                    async () => void (await this.props.pa.extension.invoke('setup', { modelId: modelInput.trim() })),
-                  )
-                }
-              >
-                Setup / download
-              </ToolbarButton>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <div className="text-sm font-medium text-primary">Search Hugging Face</div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                value={searchQuery}
-                onChange={(event) => this.setState({ searchQuery: event.target.value })}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void this.searchModels();
-                }}
-                className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary outline-none focus:border-accent"
-                placeholder="Search MLX models"
-              />
-              <ToolbarButton disabled={searchBusy || !searchQuery.trim()} onClick={() => void this.searchModels()}>
-                {searchBusy ? 'Searching…' : 'Search'}
-              </ToolbarButton>
-            </div>
-            {searchResults.length > 0 && (
-              <div className="divide-y divide-border-subtle text-sm">
-                {searchResults.map((model) => (
-                  <button
-                    key={model.id}
-                    type="button"
-                    disabled={running || starting}
-                    onClick={() => this.setState({ modelInput: model.id })}
-                    className="flex w-full items-center justify-between gap-4 py-2 text-left hover:text-primary disabled:opacity-60"
-                  >
-                    <span className="truncate text-primary">{model.id}</span>
-                    <span className="shrink-0 text-xs text-secondary">{model.downloads.toLocaleString()} downloads</span>
-                  </button>
-                ))}
+          <AppPageSection
+            title="Model"
+            description="Pick the MLX-compatible Hugging Face model to download and serve. Stop the current model before changing it."
+          >
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={modelInput}
+                  disabled={running || starting || Boolean(busy)}
+                  onChange={(event) => this.setState({ modelInput: event.target.value })}
+                  className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary outline-none focus:border-accent disabled:opacity-60"
+                  placeholder="org/model-name-MLX"
+                />
+                <ToolbarButton disabled={Boolean(busy || running || starting || !modelInput.trim())} onClick={() => void this.saveModel()}>
+                  Save
+                </ToolbarButton>
+                <ToolbarButton
+                  disabled={Boolean(busy || setupRunning || !modelInput.trim())}
+                  onClick={() =>
+                    void this.run(
+                      'Downloading…',
+                      async () => void (await this.props.pa.extension.invoke('setup', { modelId: modelInput.trim() })),
+                    )
+                  }
+                >
+                  Setup / download
+                </ToolbarButton>
               </div>
-            )}
-          </section>
+              <div className="text-xs text-dim">Selected: {status?.selectedModelId || modelInput || 'None'}</div>
+            </div>
+          </AppPageSection>
 
-          <section className="space-y-3">
-            <div className="text-sm font-medium text-primary">Logs</div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-xs leading-relaxed text-secondary">
+          <AppPageSection
+            title="Search Hugging Face"
+            description="Search public MLX models, then click a result to use its model id above."
+          >
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={searchQuery}
+                  onChange={(event) => this.setState({ searchQuery: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void this.searchModels();
+                  }}
+                  className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary outline-none focus:border-accent"
+                  placeholder="Search MLX models"
+                />
+                <ToolbarButton disabled={searchBusy || !searchQuery.trim()} onClick={() => void this.searchModels()}>
+                  {searchBusy ? 'Searching…' : 'Search'}
+                </ToolbarButton>
+              </div>
+              {searchResults.length > 0 ? (
+                <div className="divide-y divide-border-subtle border-y border-border-subtle text-sm">
+                  {searchResults.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      disabled={running || starting}
+                      onClick={() => this.setState({ modelInput: model.id })}
+                      className="flex w-full items-center justify-between gap-4 py-3 text-left hover:text-primary disabled:opacity-60"
+                    >
+                      <span className="truncate font-medium text-primary">{model.id}</span>
+                      <span className="shrink-0 text-xs text-secondary">{model.downloads.toLocaleString()} downloads</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-secondary">Search for a model name like “Qwen MLX” or “Llama 4bit”.</div>
+              )}
+            </div>
+          </AppPageSection>
+
+          <AppPageSection title="Logs" description="Setup and server output from the local MLX process.">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md bg-surface-muted p-4 text-xs leading-relaxed text-secondary">
               {status?.log?.trim() || 'No logs yet.'}
             </pre>
-          </section>
+          </AppPageSection>
         </AppPageLayout>
       </div>
     );
