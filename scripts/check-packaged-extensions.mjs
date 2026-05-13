@@ -2,10 +2,10 @@
 /* eslint-env node */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
-
-import { init, parse } from 'es-module-lexer';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { init, parse } from 'es-module-lexer';
 
 process.setMaxListeners(0);
 
@@ -13,6 +13,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const inputRoot = process.argv[2] ? resolve(process.argv[2]) : repoRoot;
 const packagedAppResourcesRoot = inputRoot.endsWith('.app') ? join(inputRoot, 'Contents', 'Resources') : null;
 const extensionsRoot = packagedAppResourcesRoot ? join(packagedAppResourcesRoot, 'extensions') : join(inputRoot, 'extensions');
+const experimentalExtensionsRoot = packagedAppResourcesRoot ? null : join(inputRoot, 'experimental-extensions', 'extensions');
 
 if (packagedAppResourcesRoot) {
   Object.defineProperty(process, 'resourcesPath', {
@@ -48,13 +49,17 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function listSystemExtensionDirs() {
-  if (!existsSync(extensionsRoot)) return [];
-  return readdirSync(extensionsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('system-'))
-    .map((entry) => join(extensionsRoot, entry.name))
+function listExtensionDirs(root, predicate = () => true) {
+  if (!root || !existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && predicate(entry.name))
+    .map((entry) => join(root, entry.name))
     .filter((dir) => existsSync(join(dir, 'extension.json')))
     .sort((left, right) => left.localeCompare(right));
+}
+
+function listPackagedExtensionDirs() {
+  return [...listExtensionDirs(extensionsRoot, (name) => name.startsWith('system-')), ...listExtensionDirs(experimentalExtensionsRoot)];
 }
 
 function isBareSpecifier(specifier) {
@@ -69,16 +74,26 @@ function packageNameFor(specifier) {
   return specifier.split('/')[0];
 }
 
-function collectBareImports(filePath) {
+function collectImportSpecifiers(filePath) {
   const source = readFileSync(filePath, 'utf8');
   const [imports] = parse(source);
+  return imports
+    .map((importRecord) => importRecord.n)
+    .filter(Boolean)
+    .sort();
+}
+
+function collectBareImports(filePath) {
   const specifiers = new Set();
-  for (const importRecord of imports) {
-    const specifier = importRecord.n;
-    if (!specifier || !isBareSpecifier(specifier) || nodeBuiltins.has(specifier)) continue;
+  for (const specifier of collectImportSpecifiers(filePath)) {
+    if (!isBareSpecifier(specifier) || nodeBuiltins.has(specifier)) continue;
     specifiers.add(specifier);
   }
   return [...specifiers].sort();
+}
+
+function collectNonPortableImports(filePath) {
+  return collectImportSpecifiers(filePath).filter((specifier) => specifier.startsWith('/') || specifier.startsWith('file:'));
 }
 
 function isAllowedBackendImport(specifier) {
@@ -164,7 +179,7 @@ await init;
 const failures = [];
 const rows = [];
 
-for (const extensionDir of listSystemExtensionDirs()) {
+for (const extensionDir of listPackagedExtensionDirs()) {
   const manifestPath = join(extensionDir, 'extension.json');
   const manifest = readJson(manifestPath);
   const id = manifest.id ?? extensionDir;
@@ -182,10 +197,13 @@ for (const extensionDir of listSystemExtensionDirs()) {
       row.backend = 'missing';
     } else {
       const bareImports = collectBareImports(backendPath);
+      const nonPortableImports = collectNonPortableImports(backendPath);
       const forbidden = bareImports.filter(isForbiddenBackendImport);
       const unexpected = bareImports.filter((specifier) => !isAllowedBackendImport(specifier));
       if (forbidden.length > 0) failures.push(`${id}: backend bundle contains forbidden packaged-runtime imports: ${forbidden.join(', ')}`);
       if (unexpected.length > 0) failures.push(`${id}: backend bundle contains unexpected bare imports: ${unexpected.join(', ')}`);
+      if (nonPortableImports.length > 0)
+        failures.push(`${id}: backend bundle contains non-portable absolute imports: ${nonPortableImports.join(', ')}`);
       try {
         const backendModule = await import(pathToFileURL(backendPath).href);
         await smokeBackendActions(id, manifest, backendModule);
@@ -203,8 +221,11 @@ for (const extensionDir of listSystemExtensionDirs()) {
       row.frontend = 'missing';
     } else {
       const bareImports = collectBareImports(frontendPath);
+      const nonPortableImports = collectNonPortableImports(frontendPath);
       const unexpected = bareImports.filter((specifier) => !isAllowedFrontendImport(specifier));
       if (unexpected.length > 0) failures.push(`${id}: frontend bundle contains unexpected bare imports: ${unexpected.join(', ')}`);
+      if (nonPortableImports.length > 0)
+        failures.push(`${id}: frontend bundle contains non-portable absolute imports: ${nonPortableImports.join(', ')}`);
       row.frontend = bareImports.length > 0 ? `ok (${bareImports.length} external)` : 'ok';
     }
   }
@@ -220,4 +241,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Packaged extension check passed for ${rows.length} system extensions.`);
+console.log(`Packaged extension check passed for ${rows.length} extensions.`);

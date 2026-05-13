@@ -1003,14 +1003,17 @@ pnpm test
 ```
 
 `pnpm run check:extensions` and `pnpm run check:extensions:quick` also run
-`scripts/check-packaged-extensions.mjs`. That check imports every system
-extension backend from its built `dist/` output, verifies backend action handler
-exports, smoke-calls known safe `list` tools (`scheduled_task`, `conversation_queue`,
-`run`), and fails on forbidden bare imports that are not available inside the
-packaged desktop app, such as `@earendil-works/pi-coding-agent`,
-`@personal-agent/core`, `@personal-agent/daemon`, `jsdom`, and `@sinclair/typebox`.
-This catches the “works from repo node_modules, breaks in the signed app” class
-of extension bug before release.
+`scripts/check-packaged-extensions.mjs`. That check imports every system and
+experimental extension backend from its built `dist/` output, verifies backend
+action handler exports, smoke-calls known safe `list` tools (`scheduled_task`,
+`conversation_queue`, `run`), and fails on forbidden bare imports that are not
+available inside the packaged desktop app, such as
+`@earendil-works/pi-coding-agent`, `@personal-agent/core`,
+`@personal-agent/daemon`, `jsdom`, and `@sinclair/typebox`. It also rejects
+absolute or `file:` imports in frontend and backend bundles, so release-temp or
+machine-local paths cannot hide in extension output after the build. This catches
+the “works from repo node_modules, breaks in the signed app” class of extension
+bug before release.
 
 The desktop server also runs an enabled-extension backend health check on startup.
 Failures are logged, surfaced as extension diagnostics, and shown by Extension
