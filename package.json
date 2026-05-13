@@ -64,6 +64,7 @@
     "@anthropic-ai/sdk": "^0.32.0",
     "undici-types": "^6.21.0",
     "@electron/asar": "^3.4.1",
+    "es-module-lexer": "^1.7.0",
     "@vitest/coverage-v8": "^4.0.18",
     "electron-builder": "^26.8.1",
     "eslint": "^8.57.0",
