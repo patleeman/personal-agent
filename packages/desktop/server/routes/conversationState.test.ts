@@ -624,6 +624,39 @@ describe('registerConversationStateRoutes', () => {
     );
   });
 
+  it('updates goal state on live conversations immediately', async () => {
+    const { patchHandler } = createHarness();
+    const handler = patchHandler('/api/conversations/:id/goal');
+    const appendCustomEntry = vi.fn();
+    liveRegistry.set('conversation-live', {
+      session: {
+        sessionManager: { appendCustomEntry },
+      },
+    });
+
+    isLocalLiveMock.mockReturnValueOnce(true);
+    const activeRes = createResponse();
+    await handler({ params: { id: 'conversation-live' }, body: { objective: ' keep looping ' } }, activeRes);
+    expect(appendCustomEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: 'keep looping', status: 'active', stopReason: null, noProgressTurns: 0 }),
+    );
+    expect(activeRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ objective: 'keep looping', status: 'active', stopReason: null, noProgressTurns: 0 }),
+    );
+
+    isLocalLiveMock.mockReturnValueOnce(true);
+    const clearRes = createResponse();
+    await handler({ params: { id: 'conversation-live' }, body: {} }, clearRes);
+    expect(appendCustomEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'cleared', noProgressTurns: 0 }),
+    );
+    expect(clearRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'cleared', noProgressTurns: 0 }),
+    );
+  });
+
   it('validates model preference patch input', async () => {
     const { patchHandler } = createHarness();
     const handler = patchHandler('/api/conversations/:id/model-preferences');

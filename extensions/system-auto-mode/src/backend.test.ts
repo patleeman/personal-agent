@@ -154,6 +154,38 @@ describe('system-goal-mode extension', () => {
     );
   });
 
+  it('runs a realistic goal lifecycle: enable, continue, update, complete, then stop', async () => {
+    const { setGoal, updateGoal, turnEnd, sendMessage, appendEntry, ctx } = createHarness();
+
+    await setGoal.execute('goal-1', { objective: 'audit the repo' }, new AbortController().signal, vi.fn(), ctx);
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await flushTimers();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customType: 'goal-continuation', content: expect.stringContaining('Objective: audit the repo') }),
+      { deliverAs: 'followUp', triggerTurn: true },
+    );
+
+    await updateGoal.execute('goal-2', { objective: 'audit the repo deeply' }, new AbortController().signal, vi.fn(), ctx);
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'read' }] }, ctx);
+    await flushTimers();
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customType: 'goal-continuation', content: expect.stringContaining('Objective: audit the repo deeply') }),
+      { deliverAs: 'followUp', triggerTurn: true },
+    );
+
+    await updateGoal.execute('goal-3', { status: 'complete' }, new AbortController().signal, vi.fn(), ctx);
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await flushTimers();
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(appendEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved' }),
+    );
+  });
+
   it('does not schedule a continuation when goal mode is disabled before turn_end', async () => {
     const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it'), completeGoal('goal achieved')]);
 
