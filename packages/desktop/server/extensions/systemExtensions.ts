@@ -9,9 +9,9 @@ export interface SystemExtensionEntry {
   packageRoot: string;
 }
 
-export function readBundledExtensionEntries(): SystemExtensionEntry[] {
+function readExtensionEntries(source: 'bundled' | 'experimental'): SystemExtensionEntry[] {
   return listExtensionPackagePaths()
-    .filter((entry) => entry.source === 'bundled')
+    .filter((entry) => entry.source === source)
     .flatMap((entry): SystemExtensionEntry[] => {
       try {
         const manifest = JSON.parse(readFileSync(join(entry.packageRoot, 'extension.json'), 'utf-8')) as ExtensionManifest;
@@ -23,5 +23,14 @@ export function readBundledExtensionEntries(): SystemExtensionEntry[] {
     });
 }
 
+export function readBundledExtensionEntries(): SystemExtensionEntry[] {
+  return readExtensionEntries('bundled');
+}
+
+export function readExperimentalExtensionEntries(): SystemExtensionEntry[] {
+  return readExtensionEntries('experimental');
+}
+
 export const SYSTEM_EXTENSION_ENTRIES: SystemExtensionEntry[] = readBundledExtensionEntries();
+export const EXPERIMENTAL_EXTENSION_ENTRIES: SystemExtensionEntry[] = readExperimentalExtensionEntries();
 export const SYSTEM_EXTENSIONS: ExtensionManifest[] = SYSTEM_EXTENSION_ENTRIES.map((entry) => entry.manifest);

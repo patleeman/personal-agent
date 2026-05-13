@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 export interface ExtensionPackagePath {
   packageRoot: string;
-  source: 'bundled' | 'external';
+  source: 'bundled' | 'experimental' | 'external';
 }
 
 function splitPathList(value: string | undefined): string[] {
@@ -61,7 +61,7 @@ export function listExtensionPackagePaths(options: { runtimeRoot?: string } = {}
   const seen = new Set<string>();
   const inputs: Array<{ path: string; source: ExtensionPackagePath['source'] }> = [
     ...candidateBundledExtensionRoots().map((path) => ({ path, source: 'bundled' as const })),
-    ...candidateExperimentalExtensionRoots().map((path) => ({ path, source: 'external' as const })),
+    ...candidateExperimentalExtensionRoots().map((path) => ({ path, source: 'experimental' as const })),
     ...(options.runtimeRoot ? [{ path: options.runtimeRoot, source: 'external' as const }] : []),
     ...splitPathList(process.env.PERSONAL_AGENT_EXTENSION_PATHS).map((path) => ({ path, source: 'external' as const })),
   ];

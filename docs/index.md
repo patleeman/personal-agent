@@ -35,7 +35,7 @@ See [Getting Started](getting-started.md) for the full setup.
 
 Personal Agent product features live in extensions. Agents should use this index as the map: read the owning extension's `README.md` before changing feature behavior, and read [Extension authoring](extensions.md) plus [Extension API types](../packages/extensions/README.md) before changing extension APIs.
 
-System extensions are bundled under `extensions/system-*`. User extensions live under `<state-root>/extensions/{extension-id}` by default and follow the same package contract.
+System extensions are bundled under `extensions/system-*`. Experimental extensions are bundled under `experimental-extensions/extensions/*`, are loaded by the registry, and should set `defaultEnabled: false`. User extensions live under `<state-root>/extensions/{extension-id}` by default and follow the same package contract.
 
 Feature-specific documentation lives beside the owning extension package:
 
@@ -43,7 +43,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Auto Mode](../extensions/system-auto-mode/README.md)
 - [Automations](../extensions/system-automations/README.md)
 - [Browser](../extensions/system-browser/README.md)
-- [Codex Protocol for Companion App](../extensions/system-codex/README.md)
+- [Codex Protocol for Companion App](../experimental-extensions/extensions/system-codex/README.md)
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)
 - [Extension Manager](../extensions/system-extension-manager/README.md)
@@ -55,6 +55,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Onboarding](../extensions/system-onboarding/README.md) — first-run onboarding bootstrap and conversation flow
 - [OpenAI Native Compaction](../extensions/system-openai-native-compaction/README.md)
 - [Runs](../extensions/system-runs/README.md)
+- [Session Exchange](../experimental-extensions/extensions/system-session-exchange/README.md)
 - [Settings](../extensions/system-settings/README.md)
 - [Telemetry](../extensions/system-telemetry/README.md)
 - [Web Tools](../extensions/system-web-tools/README.md)
