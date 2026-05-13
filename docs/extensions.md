@@ -461,6 +461,12 @@ Items without an `action` are static labels. Items with an `action` are clickabl
 Extensions can register agent-callable tools. The agent sees them as
 `extension_{extensionId}_{toolId}` unless a custom `name` is given.
 
+Tool availability is intentionally stable for the life of an agent session.
+Do not mutate the active tool list at runtime; register tools once and return a
+clear validation error from the handler when the current app state does not
+support a call. The legacy `setActiveTools` API is deprecated and blocked by the
+desktop runtime.
+
 ```json
 {
   "id": "summarize",

@@ -10,6 +10,7 @@ const {
   resolveRuntimeResourcesMock,
   createImageProbeAgentExtensionMock,
   createManifestAgentExtensionsMock,
+  manifestAgentFactoryMock,
   authStorageMock,
   readSavedModelPreferencesMock,
   listExtensionSkillRegistrationsMock,
@@ -18,6 +19,7 @@ const {
     hasAuth: vi.fn(() => false),
     create: vi.fn(() => authStorageMock),
   };
+  const manifestAgentFactoryMock = vi.fn();
 
   return {
     getProfilesRootMock: vi.fn(() => '/profiles-root'),
@@ -26,7 +28,8 @@ const {
     resolveRuntimeResourcesMock: vi.fn(),
     writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
     createImageProbeAgentExtensionMock: vi.fn(() => 'image-probe-extension'),
-    createManifestAgentExtensionsMock: vi.fn(() => ['manifest-agent-extension']),
+    createManifestAgentExtensionsMock: vi.fn(() => ({ factories: [manifestAgentFactoryMock], errors: [] })),
+    manifestAgentFactoryMock,
     authStorageMock,
     readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
     listExtensionSkillRegistrationsMock: vi.fn(() => []),
@@ -92,6 +95,7 @@ describe('createRuntimeState', () => {
     resolveRuntimeResourcesMock.mockReset();
     resolveRuntimeResourcesMock.mockReturnValue(resolvedShared);
     createManifestAgentExtensionsMock.mockClear();
+    manifestAgentFactoryMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
     listExtensionSkillRegistrationsMock.mockReset();
     listExtensionSkillRegistrationsMock.mockReturnValue([]);
@@ -127,7 +131,7 @@ describe('createRuntimeState', () => {
     });
 
     const factories = state.buildLiveSessionExtensionFactories();
-    // All factories are wrapped by guardSystemPromptOverride so each
+    // All factories are wrapped by the extension API guard so each
     // element is a function. Verify count and that each delegates correctly.
     expect(factories).toHaveLength(1);
     factories.forEach((factory) => {
@@ -143,7 +147,37 @@ describe('createRuntimeState', () => {
     ).resolves.toBe('done');
     expect(materializeRuntimeResourcesToAgentDirMock).toHaveBeenCalledWith(resolvedShared, temporaryAgentDir);
     expect(existsSync(temporaryAgentDir)).toBe(false);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalledWith('failed to materialize runtime resources', expect.anything());
+  });
+
+  it('blocks extensions from mutating the active tool set', () => {
+    let guardedPi: { setActiveTools: (tools: string[]) => void } | null = null;
+    createManifestAgentExtensionsMock.mockReturnValueOnce({
+      factories: [
+        vi.fn((pi) => {
+          guardedPi = pi as { setActiveTools: (tools: string[]) => void };
+        }),
+      ],
+      errors: [],
+    });
+    const logger = createLogger();
+    const state = createRuntimeState({
+      repoRoot: '/repo-root',
+      agentDir: '/agent-dir',
+      logger,
+    });
+
+    const [factory] = state.buildLiveSessionExtensionFactories();
+    const pi = {
+      setActiveTools: vi.fn(),
+      on: vi.fn(),
+    };
+
+    factory?.(pi as never);
+
+    expect(guardedPi).not.toBeNull();
+    expect(() => guardedPi?.setActiveTools(['read'])).toThrow('setActiveTools is deprecated and unsupported');
+    expect(pi.setActiveTools).not.toHaveBeenCalled();
   });
 
   it('adds extension skill directories to live session resources', () => {

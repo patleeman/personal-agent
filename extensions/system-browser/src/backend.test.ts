@@ -13,8 +13,6 @@ function collectExtension() {
   const pi = {
     registerTool: (tool: never) => tools.push(tool),
     on: vi.fn(),
-    getActiveTools: vi.fn(() => ['read', 'browser_snapshot', 'browser_cdp', 'browser_screenshot', 'bash']),
-    setActiveTools: vi.fn(),
   };
   createWorkbenchBrowserAgentExtension()(pi as never);
   return { tools, pi };
@@ -87,11 +85,10 @@ describe('workbench browser agent extension', () => {
     setWorkbenchBrowserToolHost(null);
   });
 
-  it('does not mutate the active tool set based on browser panel state', () => {
+  it('does not watch browser panel state to mutate the active tool set', () => {
     const { pi } = collectExtension();
 
     expect(pi.on).not.toHaveBeenCalled();
-    expect(pi.setActiveTools).not.toHaveBeenCalled();
   });
 
   it('returns inactive browser error from stale tool calls', async () => {

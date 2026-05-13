@@ -99,13 +99,17 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   }
 
   /**
-   * Wraps an extension factory to discard any systemPrompt return from
-   * before_agent_start. The system prompt is assembled exclusively from
-   * file layers (SYSTEM.md, APPEND_SYSTEM.md, AGENTS.md from CWD).
-   * Extensions that need to influence the system prompt should write to
-   * those files during setup, not override at runtime.
+   * Wraps an extension factory to enforce stable runtime boundaries.
+   * The system prompt is assembled exclusively from file layers
+   * (SYSTEM.md, APPEND_SYSTEM.md, AGENTS.md from CWD). Extensions that
+   * need to influence the system prompt should write to those files during
+   * setup, not override at runtime.
+   *
+   * Tool registration is also stable for the life of a session. Extensions
+   * must register their tools and validate runtime state inside handlers
+   * instead of dynamically mutating the active tool set.
    */
-  function guardSystemPromptOverride(factory: ExtensionFactory): ExtensionFactory {
+  function guardExtensionApi(factory: ExtensionFactory): ExtensionFactory {
     return (pi: ExtensionAPI) => {
       const apiWithProcessWrappers = pi as ExtensionAPI & {
         registerBashProcessWrapper?: (id: string, wrap: BashProcessWrapper, options?: { label?: string }) => void;
@@ -114,6 +118,11 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
 
       const guardedPi = new Proxy(apiWithProcessWrappers, {
         get(target, prop, receiver) {
+          if (prop === 'setActiveTools') {
+            return () => {
+              throw new Error('setActiveTools is deprecated and unsupported. Register tools once and validate state in handlers.');
+            };
+          }
           if (prop === 'on') {
             return (event: string, handler: (...args: unknown[]) => unknown) => {
               if (event === 'before_agent_start') {
@@ -181,7 +190,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
       }),
 
       ...agentExtensions.factories,
-    ].map(guardSystemPromptOverride);
+    ].map(guardExtensionApi);
   }
 
   function buildLiveSessionResourceOptions(): LiveSessionResourceOptions {

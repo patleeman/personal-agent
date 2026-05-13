@@ -66,15 +66,6 @@ function writeGoalState(pi: ExtensionAPI, state: GoalState): void {
   pi.appendEntry(GOAL_STATE_CUSTOM_TYPE, state);
 }
 
-const GOAL_ACTIVE_TOOLS = [GOAL_SET_TOOL, GOAL_UPDATE_TOOL];
-const GOAL_INACTIVE_TOOLS = [GOAL_SET_TOOL, GOAL_UPDATE_TOOL];
-const GOAL_TOOLS = [...new Set([...GOAL_ACTIVE_TOOLS, ...GOAL_INACTIVE_TOOLS])];
-
-function syncGoalTools(pi: ExtensionAPI, hasActiveGoal: boolean): void {
-  const current = pi.getActiveTools().filter((tool) => !GOAL_TOOLS.includes(tool));
-  pi.setActiveTools([...current, ...(hasActiveGoal ? GOAL_ACTIVE_TOOLS : GOAL_INACTIVE_TOOLS)]);
-}
-
 function buildContinuationPrompt(state: GoalState): string {
   return [
     'Goal continuation.',
@@ -155,7 +146,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           noProgressTurns: 0,
         };
         writeGoalState(pi, newState);
-        syncGoalTools(pi, true);
         clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
@@ -188,7 +178,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         const state = readGoalState(ctx.sessionManager);
         if (state.status !== 'active') {
           if (params.status === 'complete') {
-            syncGoalTools(pi, false);
             clearPendingContinuation();
             continuationSuppressed = false;
             consecutiveNoToolTurns = 0;
@@ -229,7 +218,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
                 noProgressTurns: 0,
               };
         writeGoalState(pi, newState);
-        syncGoalTools(pi, newState.status === 'active');
         clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
@@ -268,7 +256,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             noProgressTurns: 0,
           };
           writeGoalState(pi, cleared);
-          syncGoalTools(pi, false);
           clearPendingContinuation();
           continuationSuppressed = false;
           consecutiveNoToolTurns = 0;
@@ -296,18 +283,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           noProgressTurns: 0,
         };
         writeGoalState(pi, newState);
-        syncGoalTools(pi, true);
         clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
         pi.sendUserMessage(`Goal set: ${trimmed}`);
       },
-    });
-
-    // Keep tool availability aligned with goal state even when the UI/API writes goal state directly.
-    pi.on('agent_start', (_event, ctx) => {
-      const state = readGoalState(ctx.sessionManager);
-      syncGoalTools(pi, state.status === 'active');
     });
 
     // ── Turn end: schedule continuation if goal is active ──────────────
@@ -324,7 +304,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       if (ctx.signal?.aborted) {
         const paused: GoalState = { ...state, status: 'paused', updatedAt: new Date().toISOString(), noProgressTurns: 0 };
         writeGoalState(pi, paused);
-        syncGoalTools(pi, false);
         clearPendingContinuation();
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
@@ -347,7 +326,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           noProgressTurns: 0,
         };
         writeGoalState(pi, paused);
-        syncGoalTools(pi, false);
         clearPendingContinuation();
         continuationSuppressed = true;
         consecutiveNoToolTurns = 0;
@@ -355,9 +333,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       const continuationState: GoalState =
-        noProgressTurns === state.noProgressTurns
-          ? state
-          : { ...state, noProgressTurns, updatedAt: new Date().toISOString() };
+        noProgressTurns === state.noProgressTurns ? state : { ...state, noProgressTurns, updatedAt: new Date().toISOString() };
       if (continuationState !== state) {
         writeGoalState(pi, continuationState);
       }
