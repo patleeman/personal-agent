@@ -3707,7 +3707,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function selectModel(modelId: string) {
-    setInput('');
+    if (showModelPicker) {
+      setInput('');
+    }
     setModelIdx(0);
     textareaRef.current?.focus();
     void saveModelPreference(modelId);
