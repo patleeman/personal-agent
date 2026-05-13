@@ -1,7 +1,7 @@
 import { Component, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useAppData } from '../app/contexts';
+import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
@@ -1109,6 +1109,7 @@ export function Layout() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { sessions } = useAppData();
+  const { versions } = useAppEvents();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const [activeWorkbenchTool, setActiveWorkbenchTool] = useState<WorkbenchRailMode>('files');
@@ -1347,7 +1348,7 @@ export function Layout() {
       cancelled = true;
       window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
     };
-  }, []);
+  }, [versions.extensions]);
 
   useEffect(() => {
     function handleExtensionKeybinding(event: KeyboardEvent) {

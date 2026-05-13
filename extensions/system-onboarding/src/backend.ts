@@ -10,6 +10,14 @@ interface OnboardingState {
   completedAt: string;
 }
 
+interface EnsureResult {
+  created: boolean;
+  conversationId?: string;
+  skipped?: string;
+}
+
+const ensureInFlightByProfile = new Map<string, Promise<EnsureResult>>();
+
 const onboardingMessage = `Welcome to Personal Agent. This first conversation is here to get you unstuck before the app becomes a very expensive blank text box.
 
 Start here:
@@ -26,13 +34,11 @@ function disableOnboarding(ctx: ExtensionBackendContext): void {
   ctx.ui.invalidate(['extensions']);
 }
 
-export async function ensure(
-  _input: unknown,
-  ctx: ExtensionBackendContext,
-): Promise<{ created: boolean; conversationId?: string; skipped?: string }> {
+async function ensureOnce(ctx: ExtensionBackendContext): Promise<EnsureResult> {
   const existingState = await ctx.storage.get<OnboardingState>(ONBOARDING_STATE_KEY);
   if (existingState?.completed) {
-    await ctx.storage.delete(ONBOARDING_STATE_KEY);
+    disableOnboarding(ctx);
+    return { created: false, conversationId: existingState.conversationId, skipped: 'completed' };
   }
 
   const created = (await ctx.conversations.create({ cwd: ctx.runtime.getRepoRoot() })) as { id: string };
@@ -47,4 +53,19 @@ export async function ensure(
   disableOnboarding(ctx);
 
   return { created: true, conversationId: created.id };
+}
+
+export async function ensure(_input: unknown, ctx: ExtensionBackendContext): Promise<EnsureResult> {
+  const existingTask = ensureInFlightByProfile.get(ctx.profile);
+  if (existingTask) {
+    return existingTask;
+  }
+
+  const task = ensureOnce(ctx).finally(() => {
+    if (ensureInFlightByProfile.get(ctx.profile) === task) {
+      ensureInFlightByProfile.delete(ctx.profile);
+    }
+  });
+  ensureInFlightByProfile.set(ctx.profile, task);
+  return task;
 }

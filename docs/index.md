@@ -48,7 +48,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Images](../extensions/system-images/README.md)
 - [Knowledge](../extensions/system-knowledge/README.md)
 - [MCP](../extensions/system-mcp/README.md)
-- [Onboarding](../extensions/system-onboarding/README.md)
+- [Onboarding](../extensions/system-onboarding/README.md) — first-run onboarding bootstrap and conversation flow
 - [OpenAI Native Compaction](../extensions/system-openai-native-compaction/README.md)
 - [Runs](../extensions/system-runs/README.md)
 - [Settings](../extensions/system-settings/README.md)

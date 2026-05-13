@@ -1,21 +1,46 @@
 import type { PersonalAgentClient } from '@personal-agent/extensions';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface EnsureResult {
   created?: boolean;
   conversationId?: string;
 }
 
+function canAutoOpenOnboarding(pathname: string): boolean {
+  return pathname === '/' || pathname === '/conversations' || pathname === '/conversations/new';
+}
+
 export function OnboardingBootstrap({ pa }: { pa: PersonalAgentClient }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathnameRef = useRef(location.pathname);
+
   useEffect(() => {
+    pathnameRef.current = location.pathname;
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const startedPathname = pathnameRef.current;
     let cancelled = false;
     void pa.extension
       .invoke('ensure')
       .then((result) => {
         if (cancelled) return;
         const ensureResult = result as EnsureResult;
-        if (ensureResult.conversationId) {
-          window.location.assign(`/conversations/${encodeURIComponent(ensureResult.conversationId)}`);
+        if (!ensureResult.conversationId) {
+          return;
+        }
+        const target = `/conversations/${encodeURIComponent(ensureResult.conversationId)}`;
+        const currentPathname = pathnameRef.current;
+        if (!canAutoOpenOnboarding(startedPathname) && startedPathname !== target) {
+          return;
+        }
+        if (currentPathname !== startedPathname && currentPathname !== target) {
+          return;
+        }
+        if (currentPathname !== target) {
+          navigate(target, { replace: true });
         }
       })
       .catch((error) => {
@@ -24,7 +49,7 @@ export function OnboardingBootstrap({ pa }: { pa: PersonalAgentClient }) {
     return () => {
       cancelled = true;
     };
-  }, [pa]);
+  }, [navigate, pa]);
 
   return null;
 }

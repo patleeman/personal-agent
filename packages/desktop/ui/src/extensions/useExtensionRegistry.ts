@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { EXTENSION_REGISTRY_CHANGED_EVENT } from './extensionRegistryEvents';
 import type { ExtensionInstallSummary, ExtensionManifest, ExtensionRouteSummary, ExtensionSurfaceSummary } from './types';
@@ -477,6 +478,7 @@ function normalizeStatusBarItems(extensions: ExtensionManifest[]): ExtensionStat
 }
 
 export function useExtensionRegistry(): ExtensionRegistryState {
+  const { versions } = useAppEvents();
   const [state, setState] = useState<ExtensionRegistryState>({
     extensions: [],
     routes: [],
@@ -603,7 +605,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
       cancelled = true;
       window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
     };
-  }, []);
+  }, [versions.extensions]);
 
   return state;
 }

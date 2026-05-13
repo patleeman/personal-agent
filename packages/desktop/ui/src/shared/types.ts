@@ -665,6 +665,7 @@ export type AppEventTopic =
   | 'artifacts'
   | 'checkpoints'
   | 'attachments'
+  | 'extensions'
   | 'tasks'
   | 'runs'
   | 'daemon'

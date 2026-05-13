@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AppEventsContext, INITIAL_APP_EVENT_VERSIONS } from '../app/contexts';
 import { api } from '../client/api';
+import { INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../conversation/conversationEventVersions';
 import { useExtensionRegistry } from './useExtensionRegistry';
 
 vi.mock('../client/api', () => ({
@@ -157,6 +160,53 @@ describe('useExtensionRegistry', () => {
         priority: 20,
       },
     ]);
+  });
+
+  it('reloads when the extensions app topic is invalidated', async () => {
+    let extensionsVersion = 0;
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AppEventsContext.Provider
+        value={{
+          versions: { ...INITIAL_APP_EVENT_VERSIONS, extensions: extensionsVersion },
+          conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
+        }}
+      >
+        {children}
+      </AppEventsContext.Provider>
+    );
+
+    vi.mocked(api.extensionInstallations)
+      .mockResolvedValueOnce([
+        {
+          id: 'test-extension',
+          name: 'Test Extension',
+          enabled: true,
+          status: 'enabled',
+          manifest: { schemaVersion: 2, id: 'test-extension', name: 'Test Extension' },
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          id: 'next-extension',
+          name: 'Next Extension',
+          enabled: true,
+          status: 'enabled',
+          manifest: { schemaVersion: 2, id: 'next-extension', name: 'Next Extension' },
+        },
+      ] as never);
+    vi.mocked(api.extensionRoutes).mockResolvedValue([]);
+    vi.mocked(api.extensionSurfaces).mockResolvedValue([]);
+
+    const { result, rerender } = renderHook(() => useExtensionRegistry(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.extensions.map((entry) => entry.id)).toEqual(['test-extension']);
+
+    extensionsVersion = 1;
+    rerender();
+
+    await waitFor(() => expect(result.current.extensions.map((entry) => entry.id)).toEqual(['next-extension']));
+    expect(api.extensionInstallations).toHaveBeenCalledTimes(2);
   });
 
   it('keeps registry arrays defined when the extension API is unavailable', async () => {
