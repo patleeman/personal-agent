@@ -27,5 +27,5 @@
     ],
     "nav": [{ "id": "llama-cpp", "label": "llama.cpp", "icon": "terminal", "route": "/ext/llama-cpp" }]
   },
-  "permissions": ["network"]
+  "permissions": ["network:read", "network:write"]
 }
