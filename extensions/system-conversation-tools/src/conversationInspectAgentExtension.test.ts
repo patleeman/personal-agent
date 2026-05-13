@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createConversationInspectAgentExtension } from './conversationInspectAgentExtension.js';
 
-const { executeConversationInspectMock } = vi.hoisted(() => ({
+const { executeConversationInspectMock, readConversationSessionsCapabilityMock } = vi.hoisted(() => ({
   executeConversationInspectMock: vi.fn(),
+  readConversationSessionsCapabilityMock: vi.fn(),
 }));
 
 vi.mock('../../../packages/desktop/server/conversations/conversationInspectWorkerClient.js', () => ({
   executeConversationInspect: executeConversationInspectMock,
+}));
+
+vi.mock('../../../packages/desktop/server/conversations/conversationSessionCapability.js', () => ({
+  readConversationSessionsCapability: readConversationSessionsCapabilityMock,
 }));
 
 type RegisteredTool = Parameters<Parameters<typeof createConversationInspectAgentExtension>[0]>[0] extends never
@@ -44,6 +49,31 @@ function createToolContext(conversationId = 'conv-self') {
 
 beforeEach(() => {
   executeConversationInspectMock.mockReset();
+  readConversationSessionsCapabilityMock.mockReset();
+  readConversationSessionsCapabilityMock.mockReturnValue([
+    {
+      id: 'conv-self',
+      title: 'Current thread',
+      cwd: '/repo/current',
+      file: '/sessions/conv-self.jsonl',
+      timestamp: '2026-05-12T10:00:00.000Z',
+      lastActivityAt: '2026-05-12T10:05:00.000Z',
+      isLive: true,
+      isRunning: true,
+      messageCount: 12,
+    },
+    {
+      id: 'conv-2',
+      title: 'Other thread',
+      cwd: '/repo/other',
+      file: '/sessions/conv-2.jsonl',
+      timestamp: '2026-05-12T09:00:00.000Z',
+      lastActivityAt: '2026-05-12T09:30:00.000Z',
+      isLive: true,
+      isRunning: false,
+      messageCount: 4,
+    },
+  ]);
 });
 
 describe('conversation inspect agent extension', () => {
@@ -137,6 +167,30 @@ describe('conversation inspect agent extension', () => {
       action: 'list',
       scope: 'running',
       currentConversationId: 'conv-self',
+      sessionSnapshot: [
+        {
+          id: 'conv-self',
+          title: 'Current thread',
+          cwd: '/repo/current',
+          file: '/sessions/conv-self.jsonl',
+          timestamp: '2026-05-12T10:00:00.000Z',
+          lastActivityAt: '2026-05-12T10:05:00.000Z',
+          isLive: true,
+          isRunning: true,
+          messageCount: 12,
+        },
+        {
+          id: 'conv-2',
+          title: 'Other thread',
+          cwd: '/repo/other',
+          file: '/sessions/conv-2.jsonl',
+          timestamp: '2026-05-12T09:00:00.000Z',
+          lastActivityAt: '2026-05-12T09:30:00.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 4,
+        },
+      ],
     });
     expect(listResult.content[0]?.text).toBe('list text');
     expect(listResult.details).toMatchObject({ action: 'list', scope: 'running', totalMatching: 1 });
@@ -146,6 +200,30 @@ describe('conversation inspect agent extension', () => {
       action: 'search',
       query: 'chrono',
       currentConversationId: 'conv-self',
+      sessionSnapshot: [
+        {
+          id: 'conv-self',
+          title: 'Current thread',
+          cwd: '/repo/current',
+          file: '/sessions/conv-self.jsonl',
+          timestamp: '2026-05-12T10:00:00.000Z',
+          lastActivityAt: '2026-05-12T10:05:00.000Z',
+          isLive: true,
+          isRunning: true,
+          messageCount: 12,
+        },
+        {
+          id: 'conv-2',
+          title: 'Other thread',
+          cwd: '/repo/other',
+          file: '/sessions/conv-2.jsonl',
+          timestamp: '2026-05-12T09:00:00.000Z',
+          lastActivityAt: '2026-05-12T09:30:00.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 4,
+        },
+      ],
     });
     expect(searchResult.content[0]?.text).toBe('search text');
     expect(searchResult.details).toMatchObject({ action: 'search', query: 'chrono', totalMatching: 1 });
@@ -155,6 +233,19 @@ describe('conversation inspect agent extension', () => {
       action: 'query',
       conversationId: 'conv-2',
       text: 'chrono',
+      sessionSnapshot: [
+        {
+          id: 'conv-2',
+          title: 'Other thread',
+          cwd: '/repo/other',
+          file: '/sessions/conv-2.jsonl',
+          timestamp: '2026-05-12T09:00:00.000Z',
+          lastActivityAt: '2026-05-12T09:30:00.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 4,
+        },
+      ],
     });
     expect(queryResult.content[0]?.text).toBe('query text');
     expect(queryResult.details).toMatchObject({ action: 'query', conversationId: 'conv-2' });
@@ -163,6 +254,19 @@ describe('conversation inspect agent extension', () => {
     expect(executeConversationInspectMock).toHaveBeenCalledWith('outline', {
       action: 'outline',
       conversationId: 'conv-2',
+      sessionSnapshot: [
+        {
+          id: 'conv-2',
+          title: 'Other thread',
+          cwd: '/repo/other',
+          file: '/sessions/conv-2.jsonl',
+          timestamp: '2026-05-12T09:00:00.000Z',
+          lastActivityAt: '2026-05-12T09:30:00.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 4,
+        },
+      ],
     });
     expect(outlineResult.content[0]?.text).toBe('outline text');
     expect(outlineResult.details).toMatchObject({ action: 'outline', conversationId: 'conv-2' });
@@ -172,6 +276,19 @@ describe('conversation inspect agent extension', () => {
       action: 'read_window',
       conversationId: 'conv-2',
       aroundBlockId: 'block-1',
+      sessionSnapshot: [
+        {
+          id: 'conv-2',
+          title: 'Other thread',
+          cwd: '/repo/other',
+          file: '/sessions/conv-2.jsonl',
+          timestamp: '2026-05-12T09:00:00.000Z',
+          lastActivityAt: '2026-05-12T09:30:00.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 4,
+        },
+      ],
     });
     expect(readWindowResult.content[0]?.text).toBe('read_window text');
     expect(readWindowResult.details).toMatchObject({ action: 'read_window', conversationId: 'conv-2' });
@@ -181,9 +298,44 @@ describe('conversation inspect agent extension', () => {
       action: 'diff',
       conversationId: 'conv-2',
       afterBlockId: 'block-1',
+      sessionSnapshot: [
+        {
+          id: 'conv-2',
+          title: 'Other thread',
+          cwd: '/repo/other',
+          file: '/sessions/conv-2.jsonl',
+          timestamp: '2026-05-12T09:00:00.000Z',
+          lastActivityAt: '2026-05-12T09:30:00.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 4,
+        },
+      ],
     });
     expect(diffResult.content[0]?.text).toBe('diff text');
     expect(diffResult.details).toMatchObject({ action: 'diff', conversationId: 'conv-2' });
+  });
+
+  it('falls back to worker-local inspection when the main-thread snapshot is unavailable', async () => {
+    readConversationSessionsCapabilityMock.mockImplementation(() => {
+      throw new Error('conversation service unavailable');
+    });
+    executeConversationInspectMock.mockResolvedValue({
+      action: 'list',
+      result: { scope: 'live', totalMatching: 0, returnedCount: 0, sessions: [] },
+      text: 'list text',
+    });
+
+    const tool = registerConversationInspectTool();
+    const ctx = createToolContext('conv-self');
+
+    await tool.execute('tool-1', { action: 'list', scope: 'live' }, undefined, undefined, ctx);
+
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('list', {
+      action: 'list',
+      scope: 'live',
+      currentConversationId: 'conv-self',
+    });
   });
 
   it('forwards errors from the worker client', async () => {

@@ -104,6 +104,54 @@ describe('conversationInspectCapability', () => {
     expect(formatConversationInspectSessionList(result)).toContain('conv-running [running]');
   });
 
+  it('uses an injected session snapshot for live scope results when the worker-local registry is stale', () => {
+    listConversationSessionsSnapshotMock.mockReturnValue([]);
+
+    const result = listConversationInspectSessions({
+      scope: 'live',
+      currentConversationId: 'conv-self',
+      sessionSnapshot: [
+        {
+          id: 'conv-self',
+          title: 'Current thread',
+          cwd: '/repo',
+          file: '/sessions/conv-self.jsonl',
+          timestamp: '2026-04-20T10:00:00.000Z',
+          lastActivityAt: '2026-04-20T10:00:00.000Z',
+          isLive: true,
+          isRunning: true,
+          messageCount: 10,
+        },
+        {
+          id: 'conv-live',
+          title: 'Other live thread',
+          cwd: '/repo/live',
+          file: '/sessions/conv-live.jsonl',
+          timestamp: '2026-04-20T09:59:00.000Z',
+          lastActivityAt: '2026-04-20T09:59:30.000Z',
+          isLive: true,
+          isRunning: false,
+          messageCount: 3,
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      scope: 'live',
+      totalMatching: 1,
+      returnedCount: 1,
+    });
+    expect(result.sessions).toEqual([
+      expect.objectContaining({
+        id: 'conv-live',
+        title: 'Other live thread',
+        isLive: true,
+        isRunning: false,
+      }),
+    ]);
+    expect(listConversationSessionsSnapshotMock).not.toHaveBeenCalled();
+  });
+
   it('searches visible transcript blocks across conversations and returns match snippets', () => {
     listConversationSessionsSnapshotMock.mockReturnValue([
       {
@@ -388,6 +436,42 @@ describe('conversationInspectCapability', () => {
     ]);
     expect(formatConversationInspectQueryResult(result)).toContain('tool-1 · tool_use:bash');
     expect(formatConversationInspectQueryResult(result)).toContain('Chrono execution is stuck in high lag.');
+  });
+
+  it('resolves live-only conversations from an injected session snapshot', () => {
+    readConversationSessionMetaMock.mockReturnValue(null);
+    resolveConversationSessionFileMock.mockReturnValue(undefined);
+    readConversationSessionSignatureMock.mockReturnValue(null);
+    readSessionBlocksByFileMock.mockReturnValue({
+      signature: 'live-only:1',
+      blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:01.000Z', text: 'live transcript' }],
+    });
+
+    const result = queryConversationInspectBlocks({
+      conversationId: 'conv-live-only',
+      sessionSnapshot: [
+        {
+          id: 'conv-live-only',
+          title: 'Live only thread',
+          cwd: '/repo/live',
+          file: '/sessions/conv-live-only.jsonl',
+          timestamp: '2026-04-20T10:00:00.000Z',
+          lastActivityAt: '2026-04-20T10:00:30.000Z',
+          isLive: true,
+          isRunning: true,
+          messageCount: 1,
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      conversationId: 'conv-live-only',
+      title: 'Live only thread',
+      cwd: '/repo/live',
+      signature: 'live-only:1',
+      returnedBlocks: 1,
+    });
+    expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/sessions/conv-live-only.jsonl');
   });
 
   it('defaults unsafe transcript query limits instead of clamping them', () => {

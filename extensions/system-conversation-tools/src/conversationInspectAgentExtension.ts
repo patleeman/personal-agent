@@ -9,6 +9,7 @@ import {
   executeConversationInspect,
   persistTraceContextPointerInspect,
   querySessionSuggestedPointerIds,
+  readConversationSessionsCapability,
 } from '@personal-agent/extensions/backend/conversations';
 import { Type } from '@sinclair/typebox';
 
@@ -68,6 +69,40 @@ const ConversationInspectToolParams = Type.Object({
   ),
 });
 
+interface WorkerConversationInspectSessionSnapshotEntry {
+  id: string;
+  title: string;
+  cwd: string;
+  file: string;
+  timestamp: string;
+  lastActivityAt?: string;
+  isLive: boolean;
+  isRunning: boolean;
+  messageCount: number;
+}
+
+function buildWorkerConversationInspectSessionSnapshot(
+  conversationId?: string,
+): WorkerConversationInspectSessionSnapshotEntry[] | undefined {
+  try {
+    return readConversationSessionsCapability()
+      .filter((session) => !conversationId || session.id === conversationId)
+      .map((session) => ({
+        id: session.id,
+        title: session.title,
+        cwd: session.cwd,
+        file: session.file,
+        timestamp: session.timestamp,
+        ...(session.lastActivityAt ? { lastActivityAt: session.lastActivityAt } : {}),
+        isLive: Boolean(session.isLive),
+        isRunning: Boolean(session.isRunning),
+        messageCount: session.messageCount,
+      }));
+  } catch {
+    return undefined;
+  }
+}
+
 export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
@@ -90,15 +125,28 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
         // block the Electron main thread.
         const workerParams: Record<string, unknown> = { ...params };
         const currentSessionId = ctx.sessionManager.getSessionId();
+        const targetConversationId = typeof params.conversationId === 'string' ? params.conversationId.trim() : '';
+
         if (params.action === 'list' || params.action === 'search') {
           workerParams.currentConversationId = currentSessionId;
+          // The worker thread cannot read the live in-memory session registry from the
+          // main server process. Inject a minimal main-thread snapshot so scope=live and
+          // scope=running stay accurate for other active conversations.
+          const sessionSnapshot = buildWorkerConversationInspectSessionSnapshot();
+          if (sessionSnapshot !== undefined) {
+            workerParams.sessionSnapshot = sessionSnapshot;
+          }
+        } else if (targetConversationId) {
+          const sessionSnapshot = buildWorkerConversationInspectSessionSnapshot(targetConversationId);
+          if (sessionSnapshot !== undefined) {
+            workerParams.sessionSnapshot = sessionSnapshot;
+          }
         }
 
         const { action, result, text } = await executeConversationInspect(params.action as string, workerParams);
 
         // Track whether this inspect targets a suggested pointer.
         // Looks up the DB instead of an in-memory registry so it survives server restarts.
-        const targetConversationId = typeof params.conversationId === 'string' ? params.conversationId : null;
         if (targetConversationId && currentSessionId) {
           const suggestedIds = querySessionSuggestedPointerIds(currentSessionId);
           persistTraceContextPointerInspect({

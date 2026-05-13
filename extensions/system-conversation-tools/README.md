@@ -197,7 +197,7 @@ The `change_working_directory` tool switches the conversation's working director
 
 # Conversation Inspect
 
-The `conversation_inspect` tool gives the agent read-only access to other conversation transcripts. It can list, search, query, outline, and diff conversations without modifying any state.
+The `conversation_inspect` tool gives the agent read-only access to other conversation transcripts. It can list, search, query, outline, and diff conversations without modifying any state. Live and running scopes include other currently active conversations, not just persisted session files.
 
 ## Actions
 

@@ -170,7 +170,7 @@ Select any portion of text in a conversation message. A **Reply** action appears
 
 ## Conversation Inspect
 
-The agent can read other conversation transcripts using the `conversation_inspect` tool. This provides read-only access to message history, tool calls, and results across threads. See [Conversation Inspect](../extensions/system-conversation-tools/README.md).
+The agent can read other conversation transcripts using the `conversation_inspect` tool. This provides read-only access to message history, tool calls, and results across threads. Live and running scopes include other currently active conversations, not just persisted session files. See [Conversation Inspect](../extensions/system-conversation-tools/README.md).
 
 ## Auto Mode
 

@@ -49,6 +49,18 @@ interface ConversationInspectSessionRecord extends ConversationInspectSessionSum
   file: string;
 }
 
+interface ConversationInspectSessionSnapshotEntry {
+  id: string;
+  title: string;
+  cwd: string;
+  file: string;
+  timestamp?: string;
+  lastActivityAt?: string;
+  isLive?: boolean;
+  isRunning?: boolean;
+  messageCount?: number;
+}
+
 interface InspectableBlockBase {
   id: string;
   index: number;
@@ -162,6 +174,10 @@ function readOptionalString(value: unknown): string | undefined {
 
 function readOptionalBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function readNonNegativeInteger(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : fallback;
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number, max: number): number {
@@ -515,6 +531,70 @@ function statusLabel(session: ConversationInspectSessionSummary): string {
   return 'archived';
 }
 
+function toInspectableSessionRecord(
+  session: ConversationInspectSessionSnapshotEntry,
+  currentConversationId?: string,
+): ConversationInspectSessionRecord | null {
+  const id = readOptionalString(session.id);
+  const title = readOptionalString(session.title);
+  const cwd = readOptionalString(session.cwd);
+  const file = readOptionalString(session.file);
+  const lastActivityAt = readOptionalString(session.lastActivityAt) ?? readOptionalString(session.timestamp);
+
+  if (!id || !title || !cwd || !file || !lastActivityAt) {
+    return null;
+  }
+
+  return {
+    id,
+    title,
+    cwd,
+    lastActivityAt,
+    isLive: Boolean(session.isLive),
+    isRunning: Boolean(session.isRunning),
+    isCurrent: id === currentConversationId,
+    messageCount: readNonNegativeInteger(session.messageCount),
+    file,
+  };
+}
+
+function buildInspectableSessionsFromSnapshot(value: unknown, currentConversationId?: string): ConversationInspectSessionRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((session) => {
+      if (!session || typeof session !== 'object') {
+        return null;
+      }
+      return toInspectableSessionRecord(session as ConversationInspectSessionSnapshotEntry, currentConversationId);
+    })
+    .filter((session): session is ConversationInspectSessionRecord => Boolean(session));
+}
+
+function buildInspectableSessionsFromService(currentConversationId?: string): ConversationInspectSessionRecord[] {
+  return listConversationSessionsSnapshot().map((session) => ({
+    id: session.id,
+    title: session.title,
+    cwd: session.cwd,
+    lastActivityAt: session.lastActivityAt ?? session.timestamp,
+    isLive: Boolean(session.isLive),
+    isRunning: Boolean(session.isRunning),
+    isCurrent: session.id === currentConversationId,
+    messageCount: session.messageCount,
+    file: session.file,
+  }));
+}
+
+function hasSessionSnapshotOverride(input: { sessionSnapshot?: unknown }): boolean {
+  return Object.prototype.hasOwnProperty.call(input, 'sessionSnapshot') && input.sessionSnapshot !== undefined;
+}
+
+function findSessionSnapshotEntry(sessionSnapshot: unknown, conversationId: string): ConversationInspectSessionRecord | null {
+  return buildInspectableSessionsFromSnapshot(sessionSnapshot).find((session) => session.id === conversationId) ?? null;
+}
+
 function matchesCwdFilter(sessionCwd: string, cwdFilter: string | undefined): boolean {
   if (!cwdFilter) {
     return true;
@@ -530,6 +610,7 @@ function collectInspectableSessions(
     query?: unknown;
     includeCurrent?: unknown;
     currentConversationId?: string;
+    sessionSnapshot?: unknown;
   } = {},
 ): { scope: ConversationInspectScope; sessions: ConversationInspectSessionRecord[] } {
   const scope = normalizeScope(input.scope);
@@ -538,18 +619,11 @@ function collectInspectableSessions(
   const includeCurrent = readOptionalBoolean(input.includeCurrent) ?? false;
   const currentConversationId = readOptionalString(input.currentConversationId);
 
-  const sessions = listConversationSessionsSnapshot()
-    .map((session) => ({
-      id: session.id,
-      title: session.title,
-      cwd: session.cwd,
-      lastActivityAt: session.lastActivityAt ?? session.timestamp,
-      isLive: Boolean(session.isLive),
-      isRunning: Boolean(session.isRunning),
-      isCurrent: session.id === currentConversationId,
-      messageCount: session.messageCount,
-      file: session.file,
-    }))
+  const sessions = (
+    hasSessionSnapshotOverride(input)
+      ? buildInspectableSessionsFromSnapshot(input.sessionSnapshot, currentConversationId)
+      : buildInspectableSessionsFromService(currentConversationId)
+  )
     .filter((session) => includeCurrent || !session.isCurrent)
     .filter((session) => {
       switch (scope) {
@@ -628,7 +702,12 @@ function extractQuerySnippet(text: string, query: string, mode: ConversationInsp
   return `${start > 0 ? '…' : ''}${rawSnippet}${end < normalizedText.length ? '…' : ''}`;
 }
 
-function resolveConversationSession(conversationIdInput: unknown): {
+function resolveConversationSession(
+  conversationIdInput: unknown,
+  input: {
+    sessionSnapshot?: unknown;
+  } = {},
+): {
   conversationId: string;
   title: string;
   cwd: string;
@@ -640,12 +719,16 @@ function resolveConversationSession(conversationIdInput: unknown): {
     throw new ConversationInspectCapabilityInputError('conversationId is required.');
   }
 
+  const snapshotEntry = findSessionSnapshotEntry(input.sessionSnapshot, conversationId);
   const meta = readConversationSessionMeta(conversationId);
-  if (!meta) {
+  const title = snapshotEntry?.title ?? meta?.title;
+  const cwd = snapshotEntry?.cwd ?? meta?.cwd;
+
+  if (!title || !cwd) {
     throw new ConversationInspectCapabilityInputError(`Conversation ${conversationId} was not found.`);
   }
 
-  const sessionFile = resolveConversationSessionFile(conversationId) ?? meta.file;
+  const sessionFile = snapshotEntry?.file ?? resolveConversationSessionFile(conversationId) ?? meta?.file;
   if (!sessionFile) {
     throw new ConversationInspectCapabilityInputError(`Conversation ${conversationId} does not have a readable session file.`);
   }
@@ -657,8 +740,8 @@ function resolveConversationSession(conversationIdInput: unknown): {
 
   return {
     conversationId,
-    title: meta.title,
-    cwd: meta.cwd,
+    title,
+    cwd,
     signature: readConversationSessionSignature(conversationId) ?? detail.signature ?? null,
     blocks: detail.blocks,
   };
@@ -773,6 +856,7 @@ export function listConversationInspectSessions(
     limit?: unknown;
     includeCurrent?: unknown;
     currentConversationId?: string;
+    sessionSnapshot?: unknown;
   } = {},
 ): ListConversationInspectResult {
   const limit = normalizePositiveInteger(input.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
@@ -815,6 +899,7 @@ export function searchConversationInspectSessions(
     maxSnippetCharacters?: unknown;
     maxCharactersPerBlock?: unknown;
     stopAfterLimit?: unknown;
+    sessionSnapshot?: unknown;
   } = {},
 ): SearchConversationInspectResult {
   const query = readOptionalString(input.query);
@@ -838,6 +923,7 @@ export function searchConversationInspectSessions(
     cwd: input.cwd,
     includeCurrent: input.includeCurrent,
     currentConversationId: input.currentConversationId,
+    sessionSnapshot: input.sessionSnapshot,
   });
 
   const matches: SearchConversationInspectMatch[] = [];
@@ -936,8 +1022,9 @@ export function queryConversationInspectBlocks(input: {
   order?: unknown;
   limit?: unknown;
   maxCharactersPerBlock?: unknown;
+  sessionSnapshot?: unknown;
 }): QueryConversationInspectResult {
-  const resolved = resolveConversationSession(input.conversationId);
+  const resolved = resolveConversationSession(input.conversationId, { sessionSnapshot: input.sessionSnapshot });
   const window = normalizePositiveInteger(input.window, DEFAULT_WINDOW, MAX_WINDOW);
   const order = normalizeOrder(input.order);
   const limit = normalizePositiveInteger(input.limit, DEFAULT_BLOCK_LIMIT, MAX_BLOCK_LIMIT);
@@ -1025,8 +1112,9 @@ function pushUniqueAnchor(
 export function outlineConversationInspectSession(input: {
   conversationId?: unknown;
   maxSnippetCharacters?: unknown;
+  sessionSnapshot?: unknown;
 }): ConversationInspectOutlineResult {
-  const resolved = resolveConversationSession(input.conversationId);
+  const resolved = resolveConversationSession(input.conversationId, { sessionSnapshot: input.sessionSnapshot });
   const maxSnippetCharacters = normalizePositiveInteger(input.maxSnippetCharacters, 240, 2_000);
   const summary = readConversationSummary(resolved.conversationId);
   const anchors: ConversationInspectOutlineAnchor[] = [];
@@ -1080,6 +1168,7 @@ export function readWindowConversationInspectBlocks(input: {
   aroundBlockId?: unknown;
   window?: unknown;
   maxCharactersPerBlock?: unknown;
+  sessionSnapshot?: unknown;
 }): QueryConversationInspectResult {
   return queryConversationInspectBlocks({
     conversationId: input.conversationId,
@@ -1088,6 +1177,7 @@ export function readWindowConversationInspectBlocks(input: {
     order: 'asc',
     limit: normalizePositiveInteger(input.window, DEFAULT_WINDOW, MAX_WINDOW) * 2 + 1,
     maxCharactersPerBlock: input.maxCharactersPerBlock,
+    sessionSnapshot: input.sessionSnapshot,
   });
 }
 
@@ -1102,8 +1192,9 @@ export function diffConversationInspectBlocks(input: {
   searchMode?: unknown;
   limit?: unknown;
   maxCharactersPerBlock?: unknown;
+  sessionSnapshot?: unknown;
 }): DiffConversationInspectResult {
-  const resolved = resolveConversationSession(input.conversationId);
+  const resolved = resolveConversationSession(input.conversationId, { sessionSnapshot: input.sessionSnapshot });
   const knownSignature = readOptionalString(input.knownSignature);
   if (knownSignature && resolved.signature && knownSignature === resolved.signature) {
     return {
