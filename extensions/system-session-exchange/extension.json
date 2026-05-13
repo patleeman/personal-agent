@@ -3,6 +3,7 @@
   "id": "system-session-exchange",
   "name": "Session Exchange",
   "packageType": "system",
+  "defaultEnabled": false,
   "description": "Import and export conversation session files from the threads sidebar.",
   "version": "0.1.0",
   "frontend": {
