@@ -43,6 +43,8 @@ export type {
   VaultTreeResult,
 } from '../shared/types';
 export { timeAgo, timeAgoCompact } from '../shared/utils';
+export { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
+export type { RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 export type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../transcript/askUserQuestions';
 export {
   isAskUserQuestionComplete,

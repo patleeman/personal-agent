@@ -17,6 +17,7 @@ export {
   SurfacePanel,
   ToolbarButton,
 } from '../components/ui';
+export { Keycap } from '../components/ui';
 export { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';
 export { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
 export { useApi } from '../hooks/useApi';

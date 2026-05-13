@@ -1,7 +1,6 @@
-import { cx, Keycap } from '../../../packages/desktop/ui/src/components/ui';
-import { summarizeConversationCwd } from '../../../packages/desktop/ui/src/conversation/conversationCwdHistory';
-import type { RelatedConversationSearchResult } from '../../../packages/desktop/ui/src/conversation/relatedConversationSearch';
-import { timeAgo } from '../../../packages/desktop/ui/src/shared/utils';
+import { cx, Keycap } from '@personal-agent/extensions/ui';
+import { summarizeConversationCwd, timeAgo } from '@personal-agent/extensions/data';
+import type { RelatedConversationSearchResult } from '@personal-agent/extensions/data';
 
 const DEFAULT_RELATED_THREAD_HOTKEY_LIMIT = 9;
 const WEAK_SELECTED_RELATED_THREAD_SCORE = 6;

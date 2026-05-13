@@ -26,3 +26,10 @@ export { exportConversationSession, importConversationSession } from '../../conv
 export { persistTraceContextPointerInspect } from '../../traces/tracePersistence.js';
 export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from '../runtimeAgentHooks.js';
 export { querySessionSuggestedPointerIds } from '@personal-agent/core';
+export { readConversationSummary } from '../../conversations/conversationSummaries.js';
+export { readSessionBlocks, readSessionMeta } from '../../conversations/sessions.js';
+export {
+  scheduleConversationSearchIndexing,
+  searchIndexedConversationDocuments,
+} from '../../conversations/conversationSearchIndex.js';
+export { persistTraceSuggestedContext } from '../../traces/tracePersistence.js';

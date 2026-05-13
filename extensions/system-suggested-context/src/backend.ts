@@ -2,13 +2,32 @@ import { eng, removeStopwords } from 'stopword';
 
 import type { ExtensionBackendContext } from '@personal-agent/extensions/backend';
 import {
-  searchIndexedConversationDocuments,
+  readConversationSummary,
+  readSessionBlocks,
+  readSessionMeta,
   scheduleConversationSearchIndexing,
-  type IndexedConversationSearchCandidate,
-} from '../../../packages/desktop/server/conversations/conversationSearchIndex.js';
-import { readConversationSummary } from '../../../packages/desktop/server/conversations/conversationSummaries.js';
-import { readSessionBlocks, readSessionMeta, type SessionMeta } from '../../../packages/desktop/server/conversations/sessions.js';
-import { persistTraceSuggestedContext } from '../../../packages/desktop/server/traces/tracePersistence.js';
+  searchIndexedConversationDocuments,
+  persistTraceSuggestedContext,
+} from '@personal-agent/extensions/backend/conversations';
+
+interface IndexedConversationSearchCandidate {
+  sessionId: string;
+  title: string;
+  cwd: string;
+  timestamp: string;
+  lastActivityAt?: string;
+  searchText: string;
+}
+
+interface SessionMeta {
+  id: string;
+  title: string;
+  cwd: string;
+  timestamp: string;
+  lastActivityAt?: string;
+  isRunning: boolean;
+  needsAttention: boolean;
+}
 
 // ── Constants ────────────────────────────────────────────────────────────────
 

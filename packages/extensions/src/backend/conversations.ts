@@ -31,3 +31,9 @@ export const persistTraceContextPointerInspect = (..._args: any[]): any => hostR
 export const buildLiveSessionExtensionFactoriesForRuntime = (..._args: any[]): any => hostResolved();
 export const buildLiveSessionResourceOptionsForRuntime = (..._args: any[]): any => hostResolved();
 export const querySessionSuggestedPointerIds = (..._args: any[]): any => hostResolved();
+export const readSessionMeta = (..._args: any[]): any => hostResolved();
+export const readSessionBlocks = (..._args: any[]): any => hostResolved();
+export const readConversationSummary = (..._args: any[]): any => hostResolved();
+export const searchIndexedConversationDocuments = (..._args: any[]): any => hostResolved();
+export const scheduleConversationSearchIndexing = (..._args: any[]): any => hostResolved();
+export const persistTraceSuggestedContext = (..._args: any[]): any => hostResolved();

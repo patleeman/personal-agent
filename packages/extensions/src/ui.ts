@@ -25,6 +25,7 @@ export declare function createDesktopAwareEventSource(...args: never[]): unknown
 export declare function canDropAllPaths(...args: never[]): unknown;
 export declare function collapseExpandedFolderIds(...args: never[]): unknown;
 export declare function cx(...values: Array<unknown>): string;
+export declare const Keycap: HostComponent;
 export declare function getDesktopBridge(...args: never[]): unknown;
 export declare function getTopLevelDraggedPaths(...args: never[]): unknown;
 export declare function lazyRouteWithRecovery(...args: never[]): unknown;
