@@ -21,6 +21,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Conversations](conversations.md) — live threads, branching, async follow-through
 - [Desktop App](desktop-app.md) — Electron shell, shortcuts, and app chrome
 - [Knowledge](../extensions/system-knowledge/README.md) — vault, docs, skills, instruction files, and managed sync
+- [Knowledge base sync](knowledge-base.md) — git-backed knowledge base setup, local paths, and sync behavior
 - [Configuration](configuration.md) — file-based config, env vars
 - [Daemon](daemon.md) — background process and runtime lifecycle
 - [Sandboxing](sandboxing.md) — shared process execution launcher, wrapper extensions, and direct process API policy

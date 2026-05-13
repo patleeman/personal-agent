@@ -1,6 +1,17 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -92,6 +103,7 @@ const KNOWLEDGE_BASE_LOCAL_CHANGE_QUIET_MS = 2 * 60 * 1_000;
 const KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_SYNC_LOCK_STALE_MS = 5 * 60 * 1_000;
+const KNOWLEDGE_BASE_GIT_TIMEOUT_MS = 30_000;
 const KNOWLEDGE_BASE_MIN_FILE_RATIO = 0.5;
 const SYNC_BACKUP_PREFIX = 'pa-kb-sync-backup-';
 const LOCAL_STATE_FILE_NAME = 'state.json';
@@ -145,6 +157,7 @@ function runGitCommand(
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: options.encoding === 'buffer' ? undefined : (options.encoding ?? 'utf-8'),
+      timeout: KNOWLEDGE_BASE_GIT_TIMEOUT_MS,
     });
   } catch (error) {
     if (options.allowFailure) {
@@ -158,7 +171,10 @@ function runGitCommand(
         : Buffer.isBuffer(childError.stderr)
           ? childError.stderr.toString('utf-8').trim()
           : '';
-    const message = stderr || childError.message || `git ${args.join(' ')} failed`;
+    const timedOut = typeof childError.message === 'string' && childError.message.includes('ETIMEDOUT');
+    const message = timedOut
+      ? `git ${args.join(' ')} timed out after ${KNOWLEDGE_BASE_GIT_TIMEOUT_MS / 1000}s`
+      : stderr || childError.message || `git ${args.join(' ')} failed`;
     throw new Error(message);
   }
 }
@@ -435,6 +451,14 @@ function writeStoredState(filePath: string, state: StoredKnowledgeBaseState): vo
 
 function clearStoredState(filePath: string): void {
   rmSync(filePath, { force: true });
+}
+
+function directoryHasEntries(path: string): boolean {
+  try {
+    return existsSync(path) && readdirSync(path).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function readRecoveryIndex(filePath: string): string[] {
@@ -716,7 +740,11 @@ export class KnowledgeBaseManager {
     }
 
     if (!existsSync(join(root, '.git'))) {
-      rmSync(root, { recursive: true, force: true });
+      if (directoryHasEntries(root)) {
+        this.archiveManagedRoot(`non-git-root-${config.repoUrl}`);
+      } else {
+        rmSync(root, { recursive: true, force: true });
+      }
       mkdirSync(dirname(root), { recursive: true });
       runGitText(dirname(root), ['clone', config.repoUrl, root]);
     }

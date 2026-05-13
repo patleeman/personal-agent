@@ -124,27 +124,26 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
             className={isOnboarding ? 'text-[12px] font-semibold text-secondary' : 'ui-card-meta'}
             htmlFor="settings-knowledge-base-repo"
           >
-            Repository URL
+            Repository
           </label>
           <input
             id="settings-knowledge-base-repo"
             name="knowledge-base-repo-url"
-            type="url"
-            inputMode="url"
+            type="text"
             value={repoUrlDraft}
             onChange={(event) => {
               setRepoUrlDraft(event.target.value);
               if (saveError) setSaveError(null);
             }}
             className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-            placeholder="https://github.com/you/knowledge-base.git…"
+            placeholder="git@github.com:you/knowledge-base.git, https://github.com/you/kb.git, or /path/to/repo"
             autoComplete="off"
             spellCheck={false}
             disabled={action !== null}
           />
           {isOnboarding ? (
             <p className="text-[12px] leading-5 text-dim">
-              Use any empty or existing git repo. Private repos use your local git credentials.
+              Use an SSH/HTTPS remote or a local git repository path. Private repos use your local git credentials.
             </p>
           ) : null}
         </div>
@@ -224,8 +223,8 @@ export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'se
         )}
         {isOnboarding ? null : (
           <p className="ui-card-meta">
-            PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder and file @
-            mentions read from that local mirror.
+            PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Use an SSH/HTTPS
+            remote or a local git repository path. Folder and file @ mentions read from the local mirror.
           </p>
         )}
       </form>
