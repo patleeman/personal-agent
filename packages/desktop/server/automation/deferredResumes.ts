@@ -91,7 +91,7 @@ function resolveDueAt(input: { delay?: string; at?: string; now: Date }): string
   if (input.delay) {
     const delayMs = parseDeferredResumeDelayMs(input.delay);
     if (!delayMs) {
-      throw new Error('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+      throw new Error('Invalid delay. Use forms like 30s, 10m, 10 minutes, 2h, or 1d.');
     }
 
     return new Date(input.now.getTime() + delayMs).toISOString();

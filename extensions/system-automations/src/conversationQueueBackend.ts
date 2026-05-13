@@ -184,7 +184,7 @@ function resolveScheduledAt(input: { delay?: string; at?: string }): { dueAt: st
   if (!input.delay && !input.at) throw new Error('One of delay or at is required.');
   if (input.delay) {
     const delayMs = parseDeferredResumeDelayMs(input.delay);
-    if (!delayMs) throw new Error('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+    if (!delayMs) throw new Error('Invalid delay. Use forms like 30s, 10m, 10 minutes, 2h, or 1d.');
     return { dueAt: new Date(Date.now() + delayMs).toISOString() };
   }
   const parsed = parseFutureHumanDateTime(input.at as string);

@@ -961,6 +961,7 @@ export class PersonalAgentDaemon {
       record.runId,
     );
 
+    const isBackgroundAgentRunner = spawnInput.argv ? looksLikeBackgroundAgentRunnerEntryPath(spawnInput.argv[1]) : false;
     const childEnv = resolveChildProcessEnv({
       PERSONAL_AGENT_RUN_ID: record.runId,
       PERSONAL_AGENT_RUN_ROOT: record.paths.root,
@@ -970,6 +971,7 @@ export class PersonalAgentDaemon {
       PERSONAL_AGENT_RUN_EVENTS_PATH: record.paths.eventsPath,
       PERSONAL_AGENT_RUN_OUTPUT_LOG_PATH: record.paths.outputLogPath,
       PERSONAL_AGENT_RUN_RESULT_PATH: record.paths.resultPath,
+      ...(isBackgroundAgentRunner ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
     });
 
     const { child } = spawnInput.argv

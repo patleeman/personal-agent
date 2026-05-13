@@ -38,6 +38,9 @@ describe('deferred resume state', () => {
     expect(parseDeferredResumeDelayMs('10m')).toBe(600_000);
     expect(parseDeferredResumeDelayMs('2h')).toBe(7_200_000);
     expect(parseDeferredResumeDelayMs('1d')).toBe(86_400_000);
+    expect(parseDeferredResumeDelayMs('10 minutes')).toBe(600_000);
+    expect(parseDeferredResumeDelayMs('2 hours')).toBe(7_200_000);
+    expect(parseDeferredResumeDelayMs('1 day')).toBe(86_400_000);
     expect(parseDeferredResumeDelayMs('later')).toBeUndefined();
   });
 

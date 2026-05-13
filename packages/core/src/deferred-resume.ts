@@ -151,7 +151,10 @@ function parseSource(value: unknown): DeferredResumeSource | undefined {
 }
 
 export function parseDeferredResumeDelayMs(raw: string): number | undefined {
-  const match = raw.trim().match(/^(\d+)(s|m|h|d)$/i);
+  const match = raw
+    .trim()
+    .toLowerCase()
+    .match(/^(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)$/i);
   if (!match) {
     return undefined;
   }
@@ -164,12 +167,26 @@ export function parseDeferredResumeDelayMs(raw: string): number | undefined {
 
   switch (unit) {
     case 's':
+    case 'sec':
+    case 'secs':
+    case 'second':
+    case 'seconds':
       return value * 1_000;
     case 'm':
+    case 'min':
+    case 'mins':
+    case 'minute':
+    case 'minutes':
       return value * 60_000;
     case 'h':
+    case 'hr':
+    case 'hrs':
+    case 'hour':
+    case 'hours':
       return value * 60 * 60_000;
     case 'd':
+    case 'day':
+    case 'days':
       return value * 24 * 60 * 60_000;
     default:
       return undefined;

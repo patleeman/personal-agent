@@ -160,7 +160,7 @@ function resolveScheduledAt(input: { defer?: string; at?: string }): string | un
   if (input.defer) {
     const delayMs = parseDeferredResumeDelayMs(input.defer);
     if (!delayMs) {
-      throw new Error('Invalid defer value. Use forms like 30s, 10m, 2h, or 1d.');
+      throw new Error('Invalid defer value. Use forms like 30s, 10m, 10 minutes, 2h, or 1d.');
     }
 
     return new Date(Date.now() + delayMs).toISOString();
