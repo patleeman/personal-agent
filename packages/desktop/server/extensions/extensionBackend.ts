@@ -134,7 +134,7 @@ export interface ExtensionBackendContext {
   };
   secrets: {
     /** Resolve a secret registered in this extension's manifest. */
-    get: <T = string>(secretId: string) => T | undefined;
+    get(secretId: string): string | undefined;
   };
   ui: {
     invalidate(topics: string | string[]): void;
