@@ -29,20 +29,12 @@ else
 fi
 
 # ── 2. Resolve pnpm ──────────────────────────────────────
-# Git hooks run in a non-interactive shell that often lacks the user's
-# PATH. Source common profile paths so `pnpm` is findable.
+# Git hooks run in a non-interactive bash shell. Do not source interactive
+# shell rc files here: zsh/bash rc files often assume shell-specific variables
+# and can abort under `set -u`. Instead add the common package-manager bins
+# directly.
 if ! command -v pnpm &>/dev/null; then
-  for _profile in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
-    if [ -f "$_profile" ]; then
-      # shellcheck source=/dev/null
-      source "$_profile" 2>/dev/null || true
-      command -v pnpm &>/dev/null && break
-    fi
-  done
-fi
-
-if ! command -v pnpm &>/dev/null; then
-  export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+  export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/Library/pnpm:$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 fi
 
 PNPM=$(command -v pnpm || true)
