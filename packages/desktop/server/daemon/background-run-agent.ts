@@ -23,8 +23,14 @@ export function looksLikePersonalAgentCliEntryPath(value: string | undefined): b
 
 function resolveBackgroundAgentCliEntryPath(): string | undefined {
   const daemonModulePath = fileURLToPath(import.meta.url);
-  const candidate = resolve(dirname(daemonModulePath), '../../cli/dist/index.js');
-  return existsSync(candidate) ? candidate : undefined;
+  const daemonDir = dirname(daemonModulePath);
+  const candidates = [
+    resolve(daemonDir, '../../../cli/dist/index.js'),
+    resolve(daemonDir, '../../../../../packages/cli/dist/index.js'),
+    resolve(process.cwd(), 'packages/cli/dist/index.js'),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate));
 }
 
 export function buildBackgroundAgentArgv(spec: BackgroundRunAgentSpec): string[] {

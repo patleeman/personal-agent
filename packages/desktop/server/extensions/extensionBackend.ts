@@ -33,6 +33,7 @@ import { createExtensionGitCapability, createExtensionShellCapability } from './
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
 import { createExtensionVaultCapability } from './extensionVault.js';
 import { createExtensionWorkspaceCapability } from './extensionWorkspace.js';
+import { buildLiveSessionResourceOptionsForRuntime } from './runtimeAgentHooks.js';
 
 export interface ExtensionBackendNotifyInput {
   /** Primary notification text. */
@@ -246,10 +247,10 @@ function createBackendContext(
     ...(agentToolContext ? { agentToolContext } : {}),
     runtime: {
       getLiveSessionResourceOptions: () => {
-        if (!serverContext?.buildLiveSessionResourceOptions) {
-          throw new Error('Live session resource option builder is not available for this extension action.');
+        if (serverContext?.buildLiveSessionResourceOptions) {
+          return serverContext.buildLiveSessionResourceOptions(serverContext.getCurrentProfile());
         }
-        return serverContext.buildLiveSessionResourceOptions(serverContext.getCurrentProfile());
+        return buildLiveSessionResourceOptionsForRuntime();
       },
       getRepoRoot: () => serverContext?.getRepoRoot?.() ?? process.cwd(),
     },

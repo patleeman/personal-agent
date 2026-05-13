@@ -281,8 +281,15 @@ function collectImageReferenceGroups(messages: AgentMessage[]): ImageReferenceGr
   return groups;
 }
 
-function readSessionContextMessages(sessionManager: { getEntries(): SessionEntry[]; getLeafId(): string | null }): AgentMessage[] {
-  return buildSessionContext(sessionManager.getEntries(), sessionManager.getLeafId()).messages;
+function readSessionContextMessages(sessionManager?: {
+  getEntries?: () => SessionEntry[];
+  getLeafId?: () => string | null;
+}): AgentMessage[] {
+  if (!sessionManager?.getEntries) {
+    return [];
+  }
+
+  return buildSessionContext(sessionManager.getEntries(), sessionManager.getLeafId?.() ?? null).messages;
 }
 
 function findLastGroup(groups: ImageReferenceGroup[], kind?: ImageReferenceGroup['kind']): ImageReferenceGroup | undefined {
@@ -637,9 +644,9 @@ async function generateImage(input: {
         model: Model<Api>,
       ): Promise<{ ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string }>;
     };
-    sessionManager: {
-      getEntries(): SessionEntry[];
-      getLeafId(): string | null;
+    sessionManager?: {
+      getEntries?: () => SessionEntry[];
+      getLeafId?: () => string | null;
     };
   };
 }): Promise<{
