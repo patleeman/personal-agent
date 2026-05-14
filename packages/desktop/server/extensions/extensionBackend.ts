@@ -801,6 +801,12 @@ export async function invokeExtensionAction(
   }
 }
 
+const PRODUCT_CRITICAL_EXTENSION_SELF_TESTS: Record<string, Record<string, unknown>> = {
+  'system-automations': { scheduledTask: { action: 'list' }, conversationQueue: { action: 'list' } },
+  'system-diffs': { checkpoint: { action: 'list' } },
+  'system-knowledge': { readState: {}, vaultTree: {}, vaultSearch: { q: '', limit: 1 } },
+};
+
 export async function runExtensionSelfTest(
   extensionId: string,
 ): Promise<{ ok: boolean; extensionId: string; checks: Array<{ name: string; ok: boolean; error?: string }> }> {
@@ -813,13 +819,40 @@ export async function runExtensionSelfTest(
     const backend = await loadExtensionBackend(extensionId);
     clearExtensionHealthError(extensionId);
     checks.push({ name: 'backend import', ok: true });
-    for (const action of entry.manifest.backend.actions ?? []) {
+    const actionEntries = entry.manifest.backend.actions ?? [];
+    for (const action of actionEntries) {
       const handlerName = action.handler ?? action.id;
       checks.push({
         name: `action export: ${action.id}`,
         ok: typeof backend[handlerName] === 'function',
         ...(typeof backend[handlerName] === 'function' ? {} : { error: `Missing export ${handlerName}` }),
       });
+    }
+
+    const actionInputs = PRODUCT_CRITICAL_EXTENSION_SELF_TESTS[extensionId] ?? {};
+    for (const [actionId, input] of Object.entries(actionInputs)) {
+      const action = actionEntries.find((candidate) => candidate.id === actionId);
+      const handlerName = action?.handler ?? actionId;
+      const handler = backend[handlerName];
+      if (typeof handler !== 'function') {
+        checks.push({ name: `action smoke: ${actionId}`, ok: false, error: `Missing export ${handlerName}` });
+        continue;
+      }
+      try {
+        const result = await (handler as (actionInput: unknown, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
+          input,
+          createBackendContext(extensionId, undefined, { conversationId: 'extension-self-test', cwd: process.cwd() }),
+        );
+        checks.push({
+          name: `action smoke: ${actionId}`,
+          ok: !(result && typeof result === 'object' && 'ok' in result && result.ok === false),
+          ...(result && typeof result === 'object' && 'ok' in result && result.ok === false
+            ? { error: `Action returned failure: ${JSON.stringify(result)}` }
+            : {}),
+        });
+      } catch (error) {
+        checks.push({ name: `action smoke: ${actionId}`, ok: false, error: error instanceof Error ? error.message : String(error) });
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

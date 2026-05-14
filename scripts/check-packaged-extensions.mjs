@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -46,6 +46,26 @@ const forbiddenBackendPrefixes = [
   '@sinclair/typebox',
   'jsdom',
 ];
+const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 8 * 1024 * 1024;
+const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
+  ['system-automations', 24 * 1024 * 1024],
+  ['system-conversation-tools', 26 * 1024 * 1024],
+  ['system-extension-manager', 24 * 1024 * 1024],
+  ['system-images', 24 * 1024 * 1024],
+  ['system-knowledge', 30 * 1024 * 1024],
+  ['system-openai-native-compaction', 12 * 1024 * 1024],
+  ['system-runs', 24 * 1024 * 1024],
+  ['system-suggested-context', 24 * 1024 * 1024],
+  ['system-web-tools', 24 * 1024 * 1024],
+  ['slack-mcp-gateway', 26 * 1024 * 1024],
+  ['system-session-exchange', 24 * 1024 * 1024],
+]);
+const FORBIDDEN_BUNDLED_PATH_FRAGMENTS = ['/node_modules/@personal-agent/daemon/', '/packages/daemon/'];
+const PRODUCT_CRITICAL_EXTENSION_SMOKE_ACTIONS = new Map([
+  ['system-automations', { scheduledTask: { action: 'list' }, conversationQueue: { action: 'list' } }],
+  ['system-diffs', { checkpoint: { action: 'list' } }],
+  ['system-knowledge', { readState: {}, vaultTree: {}, vaultSearch: { q: '', limit: 1 } }],
+]);
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -98,6 +118,15 @@ function collectNonPortableImports(filePath) {
   return collectImportSpecifiers(filePath).filter((specifier) => specifier.startsWith('/') || specifier.startsWith('file:'));
 }
 
+function collectForbiddenBundledPaths(filePath) {
+  const source = readFileSync(filePath, 'utf8');
+  return FORBIDDEN_BUNDLED_PATH_FRAGMENTS.filter((fragment) => source.includes(fragment));
+}
+
+function backendBundleByteLimit(id) {
+  return BACKEND_BUNDLE_BYTE_LIMITS.get(id) ?? DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT;
+}
+
 function isAllowedBackendImport(specifier) {
   if (allowedBackendBareImports.has(specifier)) return true;
   const packageName = packageNameFor(specifier);
@@ -124,7 +153,9 @@ function frontendEntryPath(extensionDir, manifest) {
   return entry ? join(extensionDir, entry) : undefined;
 }
 
-function safeActionInputFor(manifest, actionId) {
+function safeActionInputFor(id, manifest, actionId) {
+  const criticalInput = PRODUCT_CRITICAL_EXTENSION_SMOKE_ACTIONS.get(id)?.[actionId];
+  if (criticalInput !== undefined) return criticalInput;
   const tool = manifest.contributes?.tools?.find((candidate) => candidate.action === actionId);
   const safeListTools = new Set(['scheduled_task', 'conversation_queue', 'run']);
   if (!tool?.name || !safeListTools.has(tool.name)) return undefined;
@@ -138,7 +169,7 @@ function createSmokeContext(extensionId) {
   return {
     extensionId,
     profile: 'shared',
-    toolContext: { cwd: repoRoot },
+    toolContext: { conversationId: 'extension-smoke-test', cwd: repoRoot },
     ui: { invalidate: noop },
     log: { info: noop, warn: noop, error: noop },
     runtime: { getRepoRoot: () => repoRoot, getLiveSessionResourceOptions: () => ({}) },
@@ -167,7 +198,7 @@ async function smokeBackendActions(id, manifest, backendModule) {
     if (typeof handler !== 'function') {
       throw new Error(`missing backend action handler export "${handlerName}"`);
     }
-    const input = safeActionInputFor(manifest, action.id);
+    const input = safeActionInputFor(id, manifest, action.id);
     if (input === undefined) continue;
     const result = await handler(input, createSmokeContext(id));
     if (result && typeof result === 'object' && 'ok' in result && result.ok === false) {
@@ -198,6 +229,12 @@ for (const extensionDir of listPackagedExtensionDirs()) {
       failures.push(`${id}: missing packaged backend entry ${backendPath}`);
       row.backend = 'missing';
     } else {
+      const backendSize = statSync(backendPath).size;
+      const backendLimit = backendBundleByteLimit(id);
+      const forbiddenBundledPaths = collectForbiddenBundledPaths(backendPath);
+      if (backendSize > backendLimit) failures.push(`${id}: backend bundle is ${backendSize} bytes, above limit ${backendLimit} bytes`);
+      if (forbiddenBundledPaths.length > 0)
+        failures.push(`${id}: backend bundle contains forbidden bundled runtime paths: ${forbiddenBundledPaths.join(', ')}`);
       const bareImports = collectBareImports(backendPath);
       const nonPortableImports = collectNonPortableImports(backendPath);
       const forbidden = bareImports.filter(isForbiddenBackendImport);
