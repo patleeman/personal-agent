@@ -74,13 +74,13 @@ export function ActivityTreeView({
 
   const visibleEntries = useMemo(
     () =>
-      pathModel.entries.filter(({ item }) => {
+      pathModel.entries.filter(({ item, path }) => {
         if (!item.parentId) return true;
         const parent = itemById.get(item.parentId);
         if (parent?.kind === 'group') return !collapsedGroupIds.has(parent.id);
-        return expandedIds.has(item.parentId);
+        return expandedIds.has(item.parentId) || path === selectedPath || Boolean(selectedPath?.startsWith(`${path}/`));
       }),
-    [collapsedGroupIds, expandedIds, itemById, pathModel.entries],
+    [collapsedGroupIds, expandedIds, itemById, pathModel.entries, selectedPath],
   );
 
   if (pathModel.entries.length === 0) {
@@ -91,18 +91,19 @@ export function ActivityTreeView({
     <div className={className} style={style} onClick={contextMenu ? closeContextMenu : undefined}>
       <div role="tree" aria-label="Threads" className="space-y-px px-1 py-0.5">
         {visibleEntries.map(({ item, path }) => {
-          const depth = item.parentId ? Math.max(1, path.split('/').length - 1) : 0;
+          const depth = Math.max(0, path.split('/').filter(Boolean).length - 1);
           const active = path === selectedPath;
           const accentColor = sanitizeCssColor(item.accentColor);
           const backgroundColor = sanitizeCssColor(item.backgroundColor);
           const childCount = childCountByParentId.get(item.id) ?? 0;
-          const expanded = item.kind === 'group' ? !collapsedGroupIds.has(item.id) : expandedIds.has(item.id);
+          const expanded =
+            item.kind === 'group' ? !collapsedGroupIds.has(item.id) : expandedIds.has(item.id) || Boolean(selectedPath?.startsWith(path));
           const canArchive = item.kind === 'conversation' && onArchiveItem;
           const canCreateChild = item.kind === 'group' && onCreateChildItem;
           const conversationIsRunning = item.kind === 'conversation' && item.metadata?.isRunning === true;
           const conversationNeedsAttention = item.kind === 'conversation' && item.metadata?.needsAttention === true;
           const showConversationStatus = conversationIsRunning || conversationNeedsAttention;
-          const rowPaddingLeft = item.kind === 'group' || item.kind === 'conversation' ? 0.5 : 0.5 + depth * 0.5;
+          const rowPaddingLeft = item.kind === 'group' ? 0.5 : 0.5 + depth * 0.5;
           return (
             <button
               key={item.id}

@@ -676,10 +676,10 @@ describe('Sidebar', () => {
     expect(html).not.toContain('move between pinned and open conversations');
   });
 
-  it('keeps child conversations flat in the explicit tab order', () => {
+  it('nests active child conversations under their parent conversation', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['child-1', 'conv-123']));
 
-    const html = renderSidebar('/conversations/new', {
+    const html = renderSidebar('/conversations/child-1', {
       sessions: [
         createSession({ id: 'conv-123', title: 'Parent conversation' }),
         createSession({
@@ -691,9 +691,8 @@ describe('Sidebar', () => {
       ],
     });
 
-    expect(html.indexOf('Child subagent conversation')).toBeLessThan(html.indexOf('Parent conversation'));
-    expect(html).not.toContain('Nested under Parent conversation');
-    expect(html).not.toContain('padding-left:14px');
+    expect(html.indexOf('Parent conversation')).toBeLessThan(html.indexOf('Child subagent conversation'));
+    expect(html).toContain('style="padding-left:1.5rem"');
   });
 
   it('keeps the sidebar focused on chat and system surfaces', () => {

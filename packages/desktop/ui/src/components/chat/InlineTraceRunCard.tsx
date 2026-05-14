@@ -1,7 +1,9 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useAppData } from '../../app/contexts';
 import {
+  getRunConnections,
   getRunHeadline,
   getRunTargetCommand,
   getRunTargetModel,
@@ -90,38 +92,43 @@ export function InlineTraceRunCard({ run, expanded, onToggle }: { run: LinkedRun
   const targetProfile = detailRun ? getRunTargetProfile(detailRun) : null;
   const timeline = detailRun ? getRunTimeline(detailRun) : [];
   const runIsShell = detailRun?.manifest?.kind === 'raw-shell' || Boolean(targetCommand);
+  const conversationRoute = detailRun
+    ? getRunConnections(detailRun, runLookups).find((connection) => connection.label === 'Conversation transcript' && connection.to)?.to
+    : undefined;
   const latestTimelinePoint = timeline.at(-1);
   const resolvedFromMention = resolvedRunId !== run.runId;
 
   return (
     <div ref={cardRef} className="rounded-lg border border-border-subtle/70 bg-elevated/35 overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="w-full px-2.5 py-2 text-left hover:bg-elevated/70 transition-colors"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              {detailRun && (
-                <span
-                  className={cx(
-                    'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider',
-                    runIsShell ? 'border-accent/20 text-accent/70 font-mono' : 'border-accent/20 text-accent',
-                  )}
-                >
-                  {runIsShell ? '›_ Shell' : '✦ Agent'}
-                </span>
-              )}
-              <Pill tone={status.tone}>{status.text}</Pill>
-              <span className="truncate text-[12px] font-medium text-primary">{headline.title}</span>
-            </div>
-            <p className="mt-1 truncate text-[11px] text-secondary">{headline.summary || run.detail || run.runId}</p>
+      <div className="flex items-start gap-3 px-2.5 py-2 hover:bg-elevated/70 transition-colors">
+        <button type="button" onClick={onToggle} aria-expanded={expanded} className="min-w-0 flex-1 text-left">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {detailRun && (
+              <span
+                className={cx(
+                  'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider',
+                  runIsShell ? 'border-accent/20 text-accent/70 font-mono' : 'border-accent/20 text-accent',
+                )}
+              >
+                {runIsShell ? '›_ Shell' : '✦ Agent'}
+              </span>
+            )}
+            <Pill tone={status.tone}>{status.text}</Pill>
+            <span className="truncate text-[12px] font-medium text-primary">{headline.title}</span>
           </div>
-          <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">{expanded ? 'hide' : 'show'}</span>
+          <p className="mt-1 truncate text-[11px] text-secondary">{headline.summary || run.detail || run.runId}</p>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {conversationRoute ? (
+            <Link to={conversationRoute} className="ui-action-button text-[10px]">
+              Open conversation
+            </Link>
+          ) : null}
+          <button type="button" onClick={onToggle} className="text-[10px] uppercase tracking-[0.14em] text-dim">
+            {expanded ? 'hide' : 'show'}
+          </button>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="space-y-2.5 border-t border-border-subtle/70 bg-base/30 px-2.5 py-2.5">

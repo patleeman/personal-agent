@@ -35,6 +35,10 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
   const items: ActivityTreeItem[] = conversations.map((session) => ({
     id: buildConversationActivityId(session.id),
     kind: 'conversation',
+    parentId:
+      session.parentSessionId && conversationIds.has(session.parentSessionId)
+        ? buildConversationActivityId(session.parentSessionId)
+        : undefined,
     title: session.title || 'Untitled thread',
     subtitle: session.cwd || undefined,
     status: session.isRunning ? 'running' : 'idle',

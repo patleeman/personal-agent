@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
+import { useAppData } from '../../app/contexts';
+import { getRunConnections, type RunPresentationLookups } from '../../automation/runPresentation';
 import { NativeExtensionToolBlockHost } from '../../extensions/NativeExtensionToolBlockHost';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
-import type { MessageBlock } from '../../shared/types';
+import type { DurableRunListResult, MessageBlock } from '../../shared/types';
 import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
@@ -10,6 +13,19 @@ import { TerminalToolBlock } from './TerminalToolBlock.js';
 import { type DisclosurePreference, resolveDisclosureOpen, toggleDisclosurePreference, toolMeta } from './toolPresentation.js';
 
 const MAX_VISIBLE_LINKED_RUNS = 5;
+
+function getLinkedRunConversationRoute(
+  runId: string,
+  runs: DurableRunListResult | null | undefined,
+  runLookups: RunPresentationLookups | undefined,
+): string | undefined {
+  const run = runs?.runs.find((candidate) => candidate.runId === runId);
+  if (!run) {
+    return undefined;
+  }
+
+  return getRunConnections(run, runLookups).find((connection) => connection.label === 'Conversation transcript' && connection.to)?.to;
+}
 
 export function ToolBlock({
   block,
@@ -47,6 +63,8 @@ export function ToolBlock({
   const open = resolveDisclosureOpen(autoOpen, preference);
   const terminalBashBlock = isTerminalBashToolBlock(block);
   const extensionRegistry = useExtensionRegistry();
+  const { tasks, sessions, runs } = useAppData();
+  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const extensionRenderer = useMemo(() => {
     if (block.tool === 'bash') {
       return null;
@@ -163,17 +181,31 @@ export function ToolBlock({
             </div>
           )}
           <div className="space-y-1.5">
-            {visibleRuns.map((linkedRun) => (
-              <div key={linkedRun.runId} className="w-full rounded-md px-2 py-1.5 text-left text-dim">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium leading-4 text-primary">{linkedRun.title}</p>
-                    {linkedRun.detail && <p className="mt-1 truncate text-[10px] leading-4 text-secondary/80">{linkedRun.detail}</p>}
+            {visibleRuns.map((linkedRun) => {
+              const conversationRoute = getLinkedRunConversationRoute(linkedRun.runId, runs, runLookups);
+
+              return (
+                <div key={linkedRun.runId} className="w-full rounded-md px-2 py-1.5 text-left text-dim">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium leading-4 text-primary">{linkedRun.title}</p>
+                      {linkedRun.detail && <p className="mt-1 truncate text-[10px] leading-4 text-secondary/80">{linkedRun.detail}</p>}
+                    </div>
+                    {conversationRoute ? (
+                      <Link
+                        to={conversationRoute}
+                        className="ui-action-button shrink-0 text-[10px]"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Open conversation
+                      </Link>
+                    ) : (
+                      <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] opacity-45">linked</span>
+                    )}
                   </div>
-                  <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] opacity-45">linked</span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

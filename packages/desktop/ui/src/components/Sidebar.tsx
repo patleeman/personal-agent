@@ -2288,6 +2288,8 @@ export function Sidebar() {
       if (!group || item.kind !== 'conversation') return item;
 
       usedGroupKeys.add(group.key);
+      if (item.parentId) return item;
+
       return { ...item, parentId: buildActivityTreeGroupId(group.key) } satisfies ActivityTreeItem;
     });
     const groupItems = groupedConversationRows

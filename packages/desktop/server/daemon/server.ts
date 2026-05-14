@@ -980,7 +980,12 @@ export class PersonalAgentDaemon {
       PERSONAL_AGENT_RUN_EVENTS_PATH: record.paths.eventsPath,
       PERSONAL_AGENT_RUN_OUTPUT_LOG_PATH: record.paths.outputLogPath,
       PERSONAL_AGENT_RUN_RESULT_PATH: record.paths.resultPath,
-      ...(isBackgroundAgentRunner ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+      ...(isBackgroundAgentRunner
+        ? {
+            ELECTRON_RUN_AS_NODE: '1',
+            ...(input.source?.filePath ? { PERSONAL_AGENT_PARENT_SESSION_FILE: input.source.filePath } : {}),
+          }
+        : {}),
     });
 
     const { child } = spawnInput.argv

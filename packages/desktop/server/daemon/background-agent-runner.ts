@@ -99,6 +99,11 @@ function writeRunnerResult(summary: string): void {
   writeFileSync(resultPath, `${JSON.stringify({ version: 1, summary }, null, 2)}\n`, 'utf-8');
 }
 
+function readParentSessionFile(): string | undefined {
+  const value = process.env.PERSONAL_AGENT_PARENT_SESSION_FILE?.trim();
+  return value ? value : undefined;
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const agentDir = getPiAgentRuntimeDir();
@@ -130,6 +135,11 @@ async function main(): Promise<void> {
     : args.continueSession && args.sessionDir
       ? SessionManager.continueRecent(args.cwd, args.sessionDir)
       : SessionManager.create(args.cwd, args.sessionDir);
+
+  const parentSessionFile = args.noSession || args.continueSession ? undefined : readParentSessionFile();
+  if (parentSessionFile) {
+    sessionManager.newSession({ parentSession: parentSessionFile });
+  }
 
   const { session } = await createPreparedLiveAgentSession({
     cwd: args.cwd,

@@ -11,6 +11,7 @@ function session(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' | 'tit
     createdAt: overrides.createdAt ?? '2026-05-12T10:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-05-12T10:00:00.000Z',
     isRunning: overrides.isRunning ?? false,
+    parentSessionId: overrides.parentSessionId,
   } as SessionMeta;
 }
 
@@ -51,6 +52,24 @@ describe('buildActivityTreeItems', () => {
         metadata: expect.objectContaining({ isRunning: true, needsAttention: false }),
       }),
     ]);
+  });
+
+  it('nests child conversations under their parent conversation', () => {
+    const items = buildActivityTreeItems({
+      conversations: [
+        session({ id: 'conv-parent', title: 'Parent conversation', updatedAt: '2026-05-12T10:00:00.000Z' }),
+        session({
+          id: 'conv-child',
+          title: 'Subagent conversation',
+          parentSessionId: 'conv-parent',
+          updatedAt: '2026-05-12T10:01:00.000Z',
+        }),
+      ],
+    });
+
+    expect(items.find((item) => item.id === buildConversationActivityId('conv-child'))).toEqual(
+      expect.objectContaining({ parentId: buildConversationActivityId('conv-parent') }),
+    );
   });
 
   it('nests runs under their source conversation when metadata links them', () => {
