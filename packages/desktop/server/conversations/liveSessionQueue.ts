@@ -17,6 +17,8 @@ export interface PromptImageAttachment {
 export interface InternalQueuedAgentMessage {
   role?: string;
   content?: unknown;
+  display?: boolean;
+  customType?: string;
   __personalAgentQueuedPromptId?: string;
 }
 
@@ -136,17 +138,18 @@ export function readQueuedPromptPreviews(
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
   }
 
-  const internalUserQueue = internalQueueMessages.filter(
-    (queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user',
+  const previewableInternalQueue = internalQueueMessages.filter(
+    (queuedMessage): queuedMessage is InternalQueuedAgentMessage =>
+      queuedMessage?.role === 'user' || isHiddenQueuedCustomMessage(queuedMessage),
   );
-  if (internalUserQueue.length === 0) {
+  if (previewableInternalQueue.length === 0) {
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
   }
 
   const alignedInternalQueue =
-    internalUserQueue.length > visibleQueue.length
-      ? internalUserQueue.slice(internalUserQueue.length - visibleQueue.length)
-      : internalUserQueue;
+    previewableInternalQueue.length > visibleQueue.length
+      ? previewableInternalQueue.slice(previewableInternalQueue.length - visibleQueue.length)
+      : previewableInternalQueue;
 
   const previews: QueuedPromptPreview[] = [];
   let searchStartIndex = 0;
@@ -154,6 +157,7 @@ export function readQueuedPromptPreviews(
   for (let index = 0; index < visibleQueue.length; index += 1) {
     const visibleText = visibleQueue[index] ?? '';
     let matchedPreview: QueuedPromptPreview | null = null;
+    let matchedHidden = false;
 
     for (let searchIndex = searchStartIndex; searchIndex < alignedInternalQueue.length; searchIndex += 1) {
       const queuedMessage = alignedInternalQueue[searchIndex];
@@ -162,19 +166,32 @@ export function readQueuedPromptPreviews(
         continue;
       }
 
+      searchStartIndex = searchIndex + 1;
+      if (isHiddenQueuedCustomMessage(queuedMessage)) {
+        matchedHidden = true;
+        break;
+      }
+
       matchedPreview = buildQueuedPromptPreview(
         ensureQueuedPromptPreviewId(queueType, queuedMessage),
         extracted.text,
         extracted.images.length,
       );
-      searchStartIndex = searchIndex + 1;
       break;
     }
 
-    previews.push(matchedPreview ?? createVisibleQueueFallbackPreview(queueType, index, visibleText));
+    if (matchedPreview) {
+      previews.push(matchedPreview);
+    } else if (!matchedHidden) {
+      previews.push(createVisibleQueueFallbackPreview(queueType, index, visibleText));
+    }
   }
 
   return previews;
+}
+
+function isHiddenQueuedCustomMessage(message: InternalQueuedAgentMessage | undefined): boolean {
+  return message?.role === 'custom' && message.display === false;
 }
 
 export function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
