@@ -55,9 +55,17 @@
       "types": "./dist/backend/conversations.d.ts",
       "default": "./dist/backend/conversations.js"
     },
+    "./backend/autoMode": {
+      "types": "./dist/backend/autoMode.d.ts",
+      "default": "./dist/backend/autoMode.js"
+    },
     "./backend/events": {
       "types": "./dist/backend/events.d.ts",
       "default": "./dist/backend/events.js"
+    },
+    "./backend/extensions": {
+      "types": "./dist/backend/extensions.d.ts",
+      "default": "./dist/backend/extensions.js"
     },
     "./backend/images": {
       "types": "./dist/backend/images.d.ts",
@@ -78,6 +86,10 @@
     "./backend/runs": {
       "types": "./dist/backend/runs.d.ts",
       "default": "./dist/backend/runs.js"
+    },
+    "./backend/slackMcpGateway": {
+      "types": "./dist/backend/slackMcpGateway.d.ts",
+      "default": "./dist/backend/slackMcpGateway.js"
     },
     "./backend/runtime": {
       "types": "./dist/backend/runtime.d.ts",

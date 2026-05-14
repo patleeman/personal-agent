@@ -7,7 +7,8 @@ import {
   saveSlackMcpGatewayChannel,
   startSlackMcpGateway,
   stopSlackMcpGateway,
-} from '../../../../packages/desktop/server/extensions/backendApi/slackMcpGateway.js';
+} from '@personal-agent/extensions/backend/slackMcpGateway';
+
 import type { ExtensionBackendContext } from '../../../../packages/desktop/server/extensions/extensionBackend.js';
 
 export async function start(_input: unknown, ctx: ExtensionBackendContext) {

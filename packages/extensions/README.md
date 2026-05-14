@@ -249,6 +249,18 @@ Backend action handlers can also use `ctx.telemetry.record(...)`, which automati
 
 If a system extension needs a host primitive that is not exported here, add it deliberately to this package as a reusable SDK capability. Do not punch through into app internals, and do not hardcode one-off product behavior in the app shell.
 
+### Backend API seam rules
+
+The backend seam is a public SDK contract with a host implementation:
+
+- Public stubs live in `packages/extensions/src/backend/*.ts` and are exported from `packages/extensions/package.json` as `@personal-agent/extensions/backend/{name}`.
+- Host implementations live in `packages/desktop/server/extensions/backendApi/{name}.ts` and are swapped in by the extension build/runtime alias.
+- Extension source may import only the SDK seam, never `packages/desktop/server/...`, `@personal-agent/core`, `@personal-agent/daemon`, or agent-runtime internals directly.
+- Host backend API modules must stay narrow. If a capability needs desktop runtime, daemon, routes, conversations, gateways, or other heavy app internals, lazy-load that implementation inside the called function instead of importing it at module scope.
+- Prefer focused subpaths over the broad `@personal-agent/extensions/backend` barrel so a small extension does not bundle unrelated seams.
+
+`pnpm run check:extensions:quick` runs `scripts/check-extension-backend-api.mjs`, which verifies every SDK backend subpath has a matching host implementation, every host backend API module is exported by the SDK, and backend API modules do not statically import known heavy/runtime internals. If this check fails, fix the seam instead of widening the allowlist. Yes, this is intentionally annoying; annoying beats shipping a signed app with surprise noodle imports.
+
 ## Frontend surfaces
 
 A frontend surface exports a React component referenced by `contributes.views[].component`:
