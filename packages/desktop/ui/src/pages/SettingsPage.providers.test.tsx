@@ -126,12 +126,14 @@ describe('SettingsPage provider model editor', () => {
   let updateModelPreferencesMock: ReturnType<typeof vi.spyOn>;
   let startProviderOAuthLoginMock: ReturnType<typeof vi.spyOn>;
   let removeProviderCredentialMock: ReturnType<typeof vi.spyOn>;
+  let maintainTelemetryDbMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     saveModelProviderModelMock = vi.spyOn(api, 'saveModelProviderModel');
     updateModelPreferencesMock = vi.spyOn(api, 'updateModelPreferences');
     startProviderOAuthLoginMock = vi.spyOn(api, 'startProviderOAuthLogin');
     removeProviderCredentialMock = vi.spyOn(api, 'removeProviderCredential');
+    maintainTelemetryDbMock = vi.spyOn(api, 'maintainTelemetryDb');
     vi.clearAllMocks();
 
     vi.mocked(useTheme).mockReturnValue({
@@ -348,6 +350,17 @@ describe('SettingsPage provider model editor', () => {
       throw new Error(`Unexpected SettingsPage useApi call for key ${key ?? '<none>'}`);
     });
 
+    maintainTelemetryDbMock.mockResolvedValue({
+      appTelemetry: {
+        dbPath: '/tmp/pa/observability/observability.db',
+        maxEvents: 50000,
+        deletedRows: 1,
+        remainingRows: 10,
+        vacuumed: true,
+      },
+      trace: { dbPath: '/tmp/pa/observability/observability.db', maxRowsPerTable: 50000, deletedRows: { trace_stats: 2 }, vacuumed: true },
+    });
+
     saveModelProviderModelMock.mockResolvedValue({
       profile: 'assistant',
       filePath: '/tmp/assistant-models.json',
@@ -391,6 +404,7 @@ describe('SettingsPage provider model editor', () => {
     updateModelPreferencesMock.mockRestore();
     startProviderOAuthLoginMock.mockRestore();
     removeProviderCredentialMock.mockRestore();
+    maintainTelemetryDbMock.mockRestore();
     delete (window as { personalAgentDesktop?: unknown }).personalAgentDesktop;
     for (const root of mountedRoots.splice(0)) {
       act(() => {
@@ -563,6 +577,20 @@ describe('SettingsPage provider model editor', () => {
 
     expect(container.querySelector('#settings-model-provider-id')).toBeNull();
     expect(container.textContent).toContain('Provider · anthropic');
+  });
+
+  it('runs telemetry database maintenance from settings', async () => {
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const button = queryButton(container, 'Prune/vacuum DB');
+    await act(async () => {
+      button.click();
+    });
+    await flushAsyncWork();
+
+    expect(maintainTelemetryDbMock).toHaveBeenCalledWith();
+    expect(container.textContent).toContain('Pruned 1 app telemetry rows and 2 trace rows');
   });
 
   it('renders the vision model selector with image-capable models', async () => {

@@ -3,7 +3,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, rmSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -296,6 +296,25 @@ describe('trace-db', () => {
       toolName: 'read',
       previousCalls: ['bash:git', 'bash:rg'],
     });
+  });
+
+  it('deletes legacy trace DB after successful import', () => {
+    closeTraceDbs();
+    const legacyDir = join(testDir, 'pi-agent', 'state', 'trace');
+    mkdirSync(legacyDir, { recursive: true });
+    const legacyPath = join(legacyDir, 'trace.db');
+    cpSync(resolveObservabilityDbPath(testDir), legacyPath);
+    rmSync(join(testDir, 'observability'), { recursive: true, force: true });
+
+    writeTraceStats({ sessionId: 'post-import-session', modelId: 'gpt-4o', tokensInput: 1, tokensOutput: 2 });
+    closeTraceDbs();
+
+    const db = openSqliteDatabase(resolveObservabilityDbPath(testDir));
+    const imported = db.prepare(`SELECT COUNT(*) AS count FROM trace_stats WHERE session_id = ?`).get(sessionId) as { count: number };
+    db.close();
+
+    expect(imported.count).toBeGreaterThan(0);
+    expect(existsSync(legacyPath)).toBe(false);
   });
 
   it('queryToolFlow normalizes legacy bash apply_patch calls to the apply_patch tool label', () => {
