@@ -1,5 +1,5 @@
 import { clearConversationComposerDraft } from '../conversation/forking';
-import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from '../local/reloadState';
+import { clearStoredState, getSessionStorage, type StorageLike } from '../local/reloadState';
 import type { InjectedPromptMessage, PromptAttachmentRefInput, PromptImageInput } from '../shared/types';
 
 export interface PendingConversationPrompt {
@@ -213,23 +213,6 @@ function buildPendingConversationPromptDispatchingStorageKey(sessionId: string):
   return `pa:reload:conversation:${sessionId}:pending-prompt-dispatching`;
 }
 
-function readPendingConversationPromptDispatchingAt(sessionId: string, storage: StorageLike | null = getSessionStorage()): number | null {
-  if (!sessionId) {
-    return null;
-  }
-
-  return readStoredState<number | null>({
-    key: buildPendingConversationPromptDispatchingStorageKey(sessionId),
-    fallback: null,
-    storage,
-    deserialize: (raw) => {
-      const normalized = raw.trim();
-      const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
-      return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-    },
-  });
-}
-
 export function persistPendingConversationPrompt(
   sessionId: string,
   prompt: PendingConversationPrompt,
@@ -264,64 +247,19 @@ export function persistPendingConversationPrompt(
     inMemoryPendingPrompts.set(sessionId, nextPrompt);
   }
 
-  persistStoredState({
-    key: buildPendingConversationPromptStorageKey(sessionId),
-    value: nextPrompt,
-    storage,
-    shouldPersist: () => shouldPersist,
-  });
+  clearStoredState(storage, buildPendingConversationPromptStorageKey(sessionId));
   emitPendingConversationPromptChanged(sessionId, shouldPersist ? nextPrompt : null, storage);
 }
 
 export function readPendingConversationPrompt(
   sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
+  _storage: StorageLike | null = getSessionStorage(),
 ): PendingConversationPrompt | null {
   if (!sessionId) {
     return null;
   }
 
-  const inMemory = inMemoryPendingPrompts.get(sessionId);
-  if (inMemory) {
-    return inMemory;
-  }
-
-  return readStoredState<PendingConversationPrompt | null>({
-    key: buildPendingConversationPromptStorageKey(sessionId),
-    fallback: null,
-    storage,
-    deserialize: (raw) => {
-      const parsed = JSON.parse(raw) as Partial<PendingConversationPrompt> | null;
-      if (!parsed || typeof parsed !== 'object') {
-        return null;
-      }
-
-      const images = normalizePendingPromptImages(parsed.images);
-      const attachmentRefs = normalizePendingPromptAttachmentRefs(parsed.attachmentRefs);
-      const contextMessages = normalizePendingPromptContextMessages(parsed.contextMessages);
-      const relatedConversationIds = normalizePendingRelatedConversationIds(parsed.relatedConversationIds);
-      const text = typeof parsed.text === 'string' ? parsed.text : '';
-
-      if (
-        text.trim().length === 0 &&
-        images.length === 0 &&
-        attachmentRefs.length === 0 &&
-        contextMessages.length === 0 &&
-        relatedConversationIds.length === 0
-      ) {
-        return null;
-      }
-
-      return {
-        text,
-        behavior: parsed.behavior === 'steer' || parsed.behavior === 'followUp' ? parsed.behavior : undefined,
-        images,
-        attachmentRefs,
-        ...(contextMessages.length > 0 ? { contextMessages } : {}),
-        ...(relatedConversationIds.length > 0 ? { relatedConversationIds } : {}),
-      };
-    },
-  });
+  return inMemoryPendingPrompts.get(sessionId) ?? null;
 }
 
 export function consumePendingConversationPrompt(
@@ -362,9 +300,8 @@ export function isPendingConversationPromptDispatching(sessionId: string, storag
     inFlightPendingPromptDispatches.delete(sessionId);
   }
 
-  const dispatchingAt = readPendingConversationPromptDispatchingAt(sessionId, storage);
-  const ageMs = dispatchingAt === null ? Number.NaN : Date.now() - dispatchingAt;
-  return Number.isSafeInteger(ageMs) && ageMs >= 0 && ageMs < PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS;
+  clearStoredState(storage, buildPendingConversationPromptDispatchingStorageKey(sessionId));
+  return false;
 }
 
 export function setPendingConversationPromptDispatching(
@@ -382,13 +319,7 @@ export function setPendingConversationPromptDispatching(
     inFlightPendingPromptDispatches.delete(sessionId);
   }
 
-  persistStoredState({
-    key: buildPendingConversationPromptDispatchingStorageKey(sessionId),
-    value: Date.now(),
-    storage,
-    serialize: (value) => String(value),
-    shouldPersist: () => dispatching,
-  });
+  clearStoredState(storage, buildPendingConversationPromptDispatchingStorageKey(sessionId));
 
   emitPendingConversationPromptChanged(sessionId, readPendingConversationPrompt(sessionId, storage), storage);
 }

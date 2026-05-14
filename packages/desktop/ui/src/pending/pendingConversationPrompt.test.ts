@@ -30,11 +30,11 @@ const PENDING_CONVERSATION_PROMPT_STORAGE_KEY = 'pa:reload:conversation:session-
 const PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY = 'pa:reload:conversation:session-123:pending-prompt-dispatching';
 
 describe('pendingConversationPrompt helpers', () => {
-  it('builds a stable storage key per session', () => {
+  it('keeps pending prompts in memory only so reloads cannot replay them', () => {
     const storage = createStorage();
 
     persistPendingConversationPrompt(
-      'session-123',
+      'session-memory-only',
       {
         text: 'hello world',
         images: [],
@@ -43,12 +43,13 @@ describe('pendingConversationPrompt helpers', () => {
       storage,
     );
 
-    expect(storage.getItem(PENDING_CONVERSATION_PROMPT_STORAGE_KEY)).toBe(
-      JSON.stringify({ text: 'hello world', images: [], attachmentRefs: [] }),
-    );
+    expect(storage.getItem('pa:reload:conversation:session-memory-only:pending-prompt')).toBeNull();
+    expect(readPendingConversationPrompt('session-memory-only', storage)).toEqual({ text: 'hello world', images: [], attachmentRefs: [] });
+
+    clearPendingConversationPrompt('session-memory-only', null);
   });
 
-  it('persists and restores pending prompts', () => {
+  it('keeps and restores pending prompts within the running renderer', () => {
     const storage = createStorage();
 
     persistPendingConversationPrompt(
@@ -234,17 +235,15 @@ describe('pendingConversationPrompt helpers', () => {
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
   });
 
-  it('drops stored prompts that normalize to empty content', () => {
+  it('ignores legacy stored prompts instead of replaying them after a reload', () => {
     const storage = createStorage();
 
     storage.setItem(
       PENDING_CONVERSATION_PROMPT_STORAGE_KEY,
       JSON.stringify({
-        text: '   ',
-        images: [{ mimeType: '', data: 'missing-mime' }],
-        attachmentRefs: [{ attachmentId: '   ' }],
-        contextMessages: [],
-        relatedConversationIds: [],
+        text: 'do not replay',
+        images: [],
+        attachmentRefs: [],
       }),
     );
 
@@ -300,31 +299,13 @@ describe('pendingConversationPrompt helpers', () => {
     expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
   });
 
-  it('reuses recently persisted dispatching state across navigation but drops stale entries', () => {
+  it('does not restore dispatching state from storage after a reload', () => {
     const storage = createStorage();
-    const nowSpy = vi.spyOn(Date, 'now');
-    const key = PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY;
 
-    nowSpy.mockReturnValue(1_000);
-    setPendingConversationPromptDispatching('session-123', true, storage);
-    setPendingConversationPromptDispatching('session-123', false, null);
+    storage.setItem(PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY, '1000');
 
-    nowSpy.mockReturnValue(30_000);
-    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(true);
-
-    storage.setItem(key, '1000abc');
-    nowSpy.mockReturnValue(30_000);
     expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
-
-    storage.setItem(key, String(Number.MAX_SAFE_INTEGER + 1));
-    nowSpy.mockReturnValue(Number.MAX_SAFE_INTEGER + 30_000);
-    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
-
-    storage.setItem(key, '1000');
-    nowSpy.mockReturnValue(200_000);
-    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
-
-    nowSpy.mockRestore();
+    expect(storage.getItem(PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY)).toBeNull();
   });
 
   it('drops stale in-memory dispatching state when a detached initial prompt never settles', () => {
