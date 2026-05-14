@@ -5,6 +5,7 @@
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.personalagent.ios.companion.shared</string>
+		<string>group.com.personalagent.ios.companion</string>
 	</array>
 </dict>
 </plist>
