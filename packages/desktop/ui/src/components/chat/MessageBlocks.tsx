@@ -85,6 +85,8 @@ export const UserMessage = memo(function UserMessage({
   onOpenFilePath,
   onOpenCheckpoint,
   onInspectImage,
+  isInlineRunExpanded,
+  onToggleInlineRun,
   layout = 'default',
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
@@ -96,6 +98,8 @@ export const UserMessage = memo(function UserMessage({
   onOpenFilePath?: (path: string) => void;
   onOpenCheckpoint?: (checkpointId: string) => void;
   onInspectImage?: (image: InspectableImage) => void;
+  isInlineRunExpanded?: (inlineRunKey: string) => boolean;
+  onToggleInlineRun?: (inlineRunKey: string) => void;
   layout?: ChatViewLayout;
 }) {
   const hasText = block.text.trim().length > 0;
@@ -115,6 +119,8 @@ export const UserMessage = memo(function UserMessage({
     return onForkMessage?.(messageIndex);
   }, [messageIndex, onForkMessage]);
   const canAddressMessage = typeof messageIndex === 'number';
+  const rawRunCallbackRuns = useMemo(() => readRawRunCallbackLinkedRuns(block.text), [block.text]);
+  const showRawRunCallbackCard = rawRunCallbackRuns.length > 0;
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
@@ -145,7 +151,16 @@ export const UserMessage = memo(function UserMessage({
               })}
             </div>
           )}
-          {skillBlock ? (
+          {showRawRunCallbackCard ? (
+            <div className="px-1.5 pb-0.5">
+              <RawRunCallbackCard
+                runs={rawRunCallbackRuns}
+                messageIndex={messageIndex}
+                isInlineRunExpanded={isInlineRunExpanded}
+                onToggleInlineRun={onToggleInlineRun}
+              />
+            </div>
+          ) : skillBlock ? (
             <div className="space-y-2 px-1.5 pb-0.5">
               <SkillInvocationCard skillBlock={skillBlock} className="ui-skill-invocation-user" onOpenFilePath={onOpenFilePath} />
               {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, { onOpenFilePath, onOpenCheckpoint })}

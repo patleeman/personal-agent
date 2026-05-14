@@ -128,6 +128,8 @@ export function ChatRenderItemView({
             onOpenFilePath={onOpenFilePath}
             onOpenCheckpoint={onOpenCheckpoint}
             onInspectImage={onInspectImage}
+            isInlineRunExpanded={isInlineRunExpanded}
+            onToggleInlineRun={onToggleInlineRun}
             layout={layout}
           />
         );
