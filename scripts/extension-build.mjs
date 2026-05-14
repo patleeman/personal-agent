@@ -174,6 +174,24 @@ export const useTransition = React.useTransition;
 export const version = React.version;
 export default React;
 `;
+  const reactDomFacade = `const ReactDom = globalThis.__PA_REACT_DOM__;
+if (!ReactDom) throw new Error('Personal Agent React DOM host runtime is unavailable.');
+export const createPortal = ReactDom.createPortal;
+export const flushSync = ReactDom.flushSync;
+export const findDOMNode = ReactDom.findDOMNode;
+export const hydrate = ReactDom.hydrate;
+export const render = ReactDom.render;
+export const unmountComponentAtNode = ReactDom.unmountComponentAtNode;
+export const unstable_batchedUpdates = ReactDom.unstable_batchedUpdates;
+export const version = ReactDom.version;
+export default ReactDom;
+`;
+  const reactDomClientFacade = `const ReactDomClient = globalThis.__PA_REACT_DOM_CLIENT__;
+if (!ReactDomClient) throw new Error('Personal Agent React DOM client host runtime is unavailable.');
+export const createRoot = ReactDomClient.createRoot;
+export const hydrateRoot = ReactDomClient.hydrateRoot;
+export default ReactDomClient;
+`;
   const jsxRuntimeFacade = `const runtime = globalThis.__PA_REACT_JSX_RUNTIME__;
 if (!runtime) throw new Error('Personal Agent React JSX runtime is unavailable.');
 export const Fragment = runtime.Fragment;
@@ -185,6 +203,11 @@ export const jsxDEV = runtime.jsxDEV;
     name: 'personal-agent-frontend-shared-react',
     setup(buildContext) {
       buildContext.onResolve({ filter: /^react$/ }, () => ({ path: 'pa-shared-react', namespace: 'pa-shared-react' }));
+      buildContext.onResolve({ filter: /^react-dom$/ }, () => ({ path: 'pa-shared-react-dom', namespace: 'pa-shared-react' }));
+      buildContext.onResolve({ filter: /^react-dom\/client$/ }, () => ({
+        path: 'pa-shared-react-dom-client',
+        namespace: 'pa-shared-react',
+      }));
       buildContext.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({
         path: 'pa-shared-react-jsx-runtime',
         namespace: 'pa-shared-react',
@@ -194,6 +217,14 @@ export const jsxDEV = runtime.jsxDEV;
         namespace: 'pa-shared-react',
       }));
       buildContext.onLoad({ filter: /^pa-shared-react$/, namespace: 'pa-shared-react' }, () => ({ contents: reactFacade, loader: 'js' }));
+      buildContext.onLoad({ filter: /^pa-shared-react-dom$/, namespace: 'pa-shared-react' }, () => ({
+        contents: reactDomFacade,
+        loader: 'js',
+      }));
+      buildContext.onLoad({ filter: /^pa-shared-react-dom-client$/, namespace: 'pa-shared-react' }, () => ({
+        contents: reactDomClientFacade,
+        loader: 'js',
+      }));
       buildContext.onLoad({ filter: /^pa-shared-react-jsx-(?:dev-)?runtime$/, namespace: 'pa-shared-react' }, () => ({
         contents: jsxRuntimeFacade,
         loader: 'js',
@@ -220,6 +251,14 @@ function createFrontendExtensionSdkPlugin() {
   return {
     name: 'personal-agent-frontend-extension-sdk',
     setup(buildContext) {
+      buildContext.onResolve({ filter: /^\.\/systemExtensionModules$/ }, (args) => {
+        if (!args.importer.includes('/packages/desktop/ui/src/extensions/')) return;
+        return { path: 'pa-empty-system-extension-modules', namespace: 'pa-extension-sdk' };
+      });
+      buildContext.onLoad({ filter: /^pa-empty-system-extension-modules$/, namespace: 'pa-extension-sdk' }, () => ({
+        contents: 'export const systemExtensionModules = new Map();',
+        loader: 'js',
+      }));
       buildContext.onResolve(
         {
           filter:

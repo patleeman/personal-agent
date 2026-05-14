@@ -206,6 +206,68 @@ function frontendEntryPath(extensionDir, manifest) {
   return entry ? join(extensionDir, entry) : undefined;
 }
 
+function sourceEntryPath(extensionDir, relativePath) {
+  return relativePath ? join(extensionDir, relativePath) : undefined;
+}
+
+function isBuildManifestStale(buildManifestPath, sourcePaths) {
+  if (!existsSync(buildManifestPath)) return true;
+  const buildManifestMtime = statSync(buildManifestPath).mtimeMs;
+  return sourcePaths.filter(Boolean).some((sourcePath) => existsSync(sourcePath) && statSync(sourcePath).mtimeMs > buildManifestMtime);
+}
+
+function collectStringComponents(value, result = new Set()) {
+  if (!value || typeof value !== 'object') return result;
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringComponents(item, result);
+    return result;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'component' && typeof child === 'string') result.add(child);
+    else if (child && typeof child === 'object') collectStringComponents(child, result);
+  }
+  return result;
+}
+
+function assertNoBundledReactRuntime(id, frontendPath) {
+  const source = readFileSync(frontendPath, 'utf8');
+  const forbiddenNeedles = ['ReactCurrentDispatcher', 'dispatcher.useState', 'function useState'];
+  const found = forbiddenNeedles.filter((needle) => source.includes(needle));
+  if (found.length > 0) throw new Error(`frontend bundle appears to include React runtime internals: ${found.join(', ')}`);
+}
+
+function installFrontendSmokeGlobals() {
+  globalThis.window ??= globalThis;
+  globalThis.self ??= globalThis;
+  globalThis.navigator ??= { userAgent: 'personal-agent-extension-smoke' };
+  globalThis.location ??= { href: 'http://localhost/', origin: 'http://localhost' };
+  globalThis.document ??= {
+    createElement: () => ({ style: {}, setAttribute: () => undefined, appendChild: () => undefined }),
+    documentElement: { style: {} },
+    head: { appendChild: () => undefined },
+    body: { appendChild: () => undefined },
+  };
+  globalThis.localStorage ??= { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
+  globalThis.sessionStorage ??= { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
+}
+
+async function smokeFrontendModule(id, manifest, frontendPath) {
+  assertNoBundledReactRuntime(id, frontendPath);
+  installFrontendSmokeGlobals();
+  const React = await import('react');
+  const ReactDom = await import('react-dom');
+  const ReactDomClient = await import('react-dom/client');
+  const ReactJsxRuntime = await import('react/jsx-runtime');
+  globalThis.__PA_REACT__ = React;
+  globalThis.__PA_REACT_DOM__ = ReactDom;
+  globalThis.__PA_REACT_DOM_CLIENT__ = ReactDomClient;
+  globalThis.__PA_REACT_JSX_RUNTIME__ = ReactJsxRuntime;
+  const frontendModule = await import(`${pathToFileURL(frontendPath).href}?smoke=${Date.now()}`);
+  for (const componentName of collectStringComponents(manifest.contributes)) {
+    if (typeof frontendModule[componentName] !== 'function') throw new Error(`missing frontend component export "${componentName}"`);
+  }
+}
+
 function safeActionInputFor(id, manifest, actionId) {
   const criticalInput = criticalSmokeActionInput(id, actionId);
   if (criticalInput !== undefined) return criticalInput;
@@ -274,8 +336,16 @@ for (const extensionDir of listPackagedExtensionDirs()) {
   const buildManifestPath = join(extensionDir, 'dist', 'build-manifest.json');
   const row = { id, backend: 'none', frontend: 'none', actions: manifest.backend?.actions?.length ?? 0, manifest: 'missing' };
   const hasBuildManifest = existsSync(buildManifestPath);
+  const sourcePaths = [
+    manifestPath,
+    sourceEntryPath(extensionDir, manifest.frontend?.entry ? 'src/frontend.tsx' : null),
+    sourceEntryPath(extensionDir, manifest.backend?.entry),
+  ];
 
-  if (hasBuildManifest) row.manifest = 'ok';
+  if (hasBuildManifest) row.manifest = isBuildManifestStale(buildManifestPath, sourcePaths) ? 'stale' : 'ok';
+  if (row.manifest === 'missing') failures.push(`${id}: missing dist/build-manifest.json`);
+  if (row.manifest === 'stale')
+    failures.push(`${id}: dist/build-manifest.json is older than extension source or manifest; rebuild the extension`);
 
   const forbiddenSourceImports = collectForbiddenExtensionSourceImports(extensionDir);
   if (forbiddenSourceImports.length > 0) {
@@ -328,7 +398,13 @@ for (const extensionDir of listPackagedExtensionDirs()) {
       if (unexpected.length > 0) failures.push(`${id}: frontend bundle contains unexpected bare imports: ${unexpected.join(', ')}`);
       if (nonPortableImports.length > 0)
         failures.push(`${id}: frontend bundle contains non-portable absolute imports: ${nonPortableImports.join(', ')}`);
-      row.frontend = bareImports.length > 0 ? `ok (${bareImports.length} external)` : 'ok';
+      try {
+        await smokeFrontendModule(id, manifest, frontendPath);
+        row.frontend = bareImports.length > 0 ? `ok (${bareImports.length} external)` : 'ok';
+      } catch (error) {
+        failures.push(`${id}: frontend smoke import failed: ${error instanceof Error ? error.message : String(error)}`);
+        row.frontend = 'failed';
+      }
     }
   }
 

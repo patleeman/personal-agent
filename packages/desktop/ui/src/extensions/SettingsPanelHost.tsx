@@ -1,4 +1,4 @@
-import { type ComponentType, lazy, Suspense, useMemo } from 'react';
+import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
 import { LoadingState } from '../components/ui';
@@ -47,8 +47,33 @@ export function SettingsPanelHost({ registration }: { registration: ExtensionSet
   );
 
   return (
-    <Suspense fallback={<LoadingState label="Loading extension settings…" />}>
-      <Component pa={pa} settingsContext={{ sectionId: registration.sectionId, extensionId: registration.extensionId }} />
-    </Suspense>
+    <SettingsPanelErrorBoundary extensionId={registration.extensionId} componentId={registration.id}>
+      <Suspense fallback={<LoadingState label="Loading extension settings…" />}>
+        <Component pa={pa} settingsContext={{ sectionId: registration.sectionId, extensionId: registration.extensionId }} />
+      </Suspense>
+    </SettingsPanelErrorBoundary>
   );
+}
+
+class SettingsPanelErrorBoundary extends React.Component<
+  { children: React.ReactNode; extensionId: string; componentId: string },
+  { message: string | null }
+> {
+  state = { message: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { message: error instanceof Error ? error.message : String(error) };
+  }
+
+  render() {
+    if (!this.state.message) return this.props.children;
+    return (
+      <div className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-[12px] text-danger">
+        <p className="font-medium">Extension settings failed to render.</p>
+        <p className="mt-1 font-mono">
+          {this.props.extensionId}:{this.props.componentId} — {this.state.message}
+        </p>
+      </div>
+    );
+  }
 }
