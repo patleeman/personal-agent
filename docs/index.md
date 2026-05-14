@@ -26,6 +26,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Daemon](daemon.md) — background process and runtime lifecycle
 - [Sandboxing](sandboxing.md) — shared process execution launcher, wrapper extensions, and direct process API policy
 - [Activity tree](activity-tree.md) — shared model for conversations, runs, and future sidebar sub-items
+- [Performance diagnostics](performance-diagnostics.md) — renderer timing tripwires for conversation load and API latency
 - [Extension authoring](extensions.md) — build native extensions with manifests, frontend/backend entries, tools, skills, agent hooks, event bus, notifications, stable SDK imports, and integration testing
 - [Extension API types](../packages/extensions/README.md) — SDK package with exported types for frontend and backend code
 - [System extensions](../extensions) — feature-owned docs and implementation packages

@@ -5,10 +5,12 @@ interface PerfApiSample {
   meta: Record<string, unknown> | null;
 }
 
+type ConversationOpenPhase = 'content' | 'rail' | 'extensions';
+
 interface ConversationOpenPhaseSample {
   conversationId: string;
   source: string;
-  phase: 'content' | 'rail';
+  phase: ConversationOpenPhase;
   startedAt: string;
   completedAt: string;
   durationMs: number;
@@ -19,7 +21,7 @@ interface ConversationOpenTracker {
   startedAtMs: number;
   startedAt: string;
   source: string;
-  completedPhases: Set<'content' | 'rail'>;
+  completedPhases: Set<ConversationOpenPhase>;
 }
 
 interface PerfStore {
@@ -115,7 +117,7 @@ export function ensureConversationOpenStart(conversationId: string, source = 'ro
   markConversationOpenStart(normalizedConversationId, source);
 }
 
-export function completeConversationOpenPhase(conversationId: string, phase: 'content' | 'rail', meta?: Record<string, unknown>): void {
+export function completeConversationOpenPhase(conversationId: string, phase: ConversationOpenPhase, meta?: Record<string, unknown>): void {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) {
     return;
@@ -143,7 +145,7 @@ export function completeConversationOpenPhase(conversationId: string, phase: 'co
     console.info('[pa-perf][conversation-open]', sample);
   }
 
-  if (tracker.completedPhases.has('content') && tracker.completedPhases.has('rail')) {
+  if (tracker.completedPhases.has('content') && tracker.completedPhases.has('rail') && tracker.completedPhases.has('extensions')) {
     conversationOpenTrackers.delete(normalizedConversationId);
   }
 }

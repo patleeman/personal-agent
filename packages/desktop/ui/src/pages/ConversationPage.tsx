@@ -2255,6 +2255,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const extensionRegistry = useExtensionRegistry();
 
   useEffect(() => {
+    if (!id || draft || extensionRegistry.loading) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      completeConversationOpenPhase(id, 'extensions', {
+        extensionCount: extensionRegistry.extensions.length,
+        routeCount: extensionRegistry.routes.length,
+        surfaceCount: extensionRegistry.surfaces.length,
+        composerButtonCount: extensionRegistry.composerButtons.length,
+        composerShelfCount: extensionRegistry.composerShelves.length,
+        conversationHeaderElementCount: extensionRegistry.conversationHeaderElements.length,
+        error: extensionRegistry.error,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [
+    draft,
+    extensionRegistry.composerButtons.length,
+    extensionRegistry.composerShelves.length,
+    extensionRegistry.conversationHeaderElements.length,
+    extensionRegistry.error,
+    extensionRegistry.extensions.length,
+    extensionRegistry.loading,
+    extensionRegistry.routes.length,
+    extensionRegistry.surfaces.length,
+    id,
+  ]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => {
       setDebouncedRelatedThreadsQuery(input.trim());
     }, 180);
