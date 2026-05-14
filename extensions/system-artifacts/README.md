@@ -8,7 +8,7 @@ This extension owns the product behavior documented below. Keep extension-specif
 
 # Artifacts
 
-Artifacts are rendered outputs visible inside a conversation. They support HTML, Mermaid diagrams, and LaTeX. Saving one inserts a transcript card you can open, and artifacts also appear in the workbench rail beside the conversation.
+Artifacts are rendered outputs visible inside a conversation. They support HTML, Mermaid diagrams, and copyable LaTeX source. Saving one inserts a transcript card you can open, and artifacts also appear in the workbench rail beside the conversation.
 
 ## Supported Types
 
@@ -16,7 +16,7 @@ Artifacts are rendered outputs visible inside a conversation. They support HTML,
 | --------- | ------------------------------------- | ---------------------------------------------------- |
 | `html`    | Self-contained rendered web content   | Interactive prototypes, styled documents, dashboards |
 | `mermaid` | Diagrams rendered from Mermaid source | Flowcharts, sequence diagrams, architecture diagrams |
-| `latex`   | Typeset mathematics and documents     | Formulas, scientific papers, technical docs          |
+| `latex`   | Copyable LaTeX source                 | Formulas, scientific papers, technical docs          |
 
 ## Creating an Artifact
 
@@ -48,7 +48,7 @@ Artifacts appear in the Artifacts tab of the workbench rail. The right sidebar e
 
 - **HTML** — rendered as a web page in a sandboxed iframe
 - **Mermaid** — rendered as an SVG diagram
-- **LaTeX** — rendered as typeset output
+- **LaTeX** — shown as raw source for copying
 
 Multiple artifacts in a conversation are listed and selectable. Click an artifact to view it.
 

@@ -27,7 +27,7 @@ Use them when you want:
 
 - an HTML report or mockup in the current thread
 - a Mermaid diagram
-- LaTeX source or a math-heavy rendered output
+- LaTeX source
 - an inspectable output that stays attached to the conversation history
 
 Conversation artifacts are the right fit for outputs created through the `artifact` tool.
@@ -44,7 +44,7 @@ Behavior by kind:
 
 - **html** — rendered in an iframe; keep it self-contained by default
 - **mermaid** — rendered as a diagram from raw Mermaid source
-- **latex** — shown as raw LaTeX source, with math preview when appropriate
+- **latex** — shown as raw LaTeX source for copying
 
 ### Storage
 

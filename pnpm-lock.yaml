@@ -316,9 +316,6 @@ importers:
       express:
         specifier: ^4.18.2
         version: 4.22.1
-      katex:
-        specifier: ^0.16.11
-        version: 0.16.38
       mermaid:
         specifier: ^11.7.0
         version: 11.13.0

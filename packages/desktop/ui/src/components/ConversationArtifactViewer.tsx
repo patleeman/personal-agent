@@ -1,9 +1,5 @@
-import 'katex/dist/katex.min.css';
-
-import katex from 'katex';
 import { useEffect, useMemo, useState } from 'react';
 
-import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from '../content/latexArtifacts';
 import type { ConversationArtifactRecord } from '../shared/types';
 import { addNotification } from './notifications/notificationStore';
 import { ErrorState, LoadingState } from './ui';
@@ -99,38 +95,12 @@ function MermaidArtifactViewer({ artifact }: { artifact: ConversationArtifactRec
 }
 
 function LatexArtifactViewer({ artifact }: { artifact: ConversationArtifactRecord }) {
-  const displayMode = useMemo(() => getLatexArtifactDisplayMode(artifact.content), [artifact.content]);
-  const isFullDocument = useMemo(() => looksLikeFullLatexDocument(artifact.content), [artifact.content]);
-  const mathPreviewHtml = useMemo(() => {
-    if (displayMode !== 'math-preview-and-source') {
-      return null;
-    }
-
-    return katex.renderToString(normalizeLatexMathSource(artifact.content), {
-      displayMode: true,
-      throwOnError: false,
-      strict: 'ignore',
-      trust: false,
-    });
-  }, [artifact.content, displayMode]);
-
   return (
     <div className="flex h-full min-h-0 flex-col overflow-auto px-5 py-5">
-      {mathPreviewHtml && (
-        <div className="mb-4 rounded-xl border border-border-subtle bg-white px-6 py-5 text-black shadow-sm">
-          <p className="ui-section-label text-[11px] uppercase tracking-[0.14em] text-slate-500">Math preview</p>
-          <div className="mt-3" dangerouslySetInnerHTML={{ __html: mathPreviewHtml }} />
-        </div>
-      )}
-
       <div className="mb-3 min-w-0">
         <p className="ui-section-label">LaTeX source</p>
         <p className="mt-1 text-[12px] leading-relaxed text-secondary">
-          {isFullDocument
-            ? 'Full LaTeX documents are shown as raw source in the artifact viewer so the entire file remains visible and copyable.'
-            : mathPreviewHtml
-              ? 'This snippet includes a math preview above, with the raw LaTeX source shown below.'
-              : 'Raw LaTeX source is shown directly in the artifact viewer.'}
+          LaTeX artifacts are shown as raw source so the entire file remains visible and copyable.
         </p>
       </div>
 
