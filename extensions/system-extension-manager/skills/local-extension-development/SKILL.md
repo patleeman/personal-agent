@@ -216,6 +216,13 @@ Rules:
 }
 ```
 
+Tool prompt rules:
+
+- `description` and `inputSchema` are already sent to the model as the tool definition; do not repeat parameter/action details in prompt guidance.
+- Add `promptGuidelines` only for behavior the schema cannot express, such as safety boundaries, when not to use the tool, or required follow-up behavior.
+- Keep each tool's prompt guidance to one short sentence by default. If a workflow needs more, write an extension skill and point the agent there.
+- Keep tools coarse and useful. Do not expose every button click as an agent tool.
+
 ### Skill contribution
 
 ```json

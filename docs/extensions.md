@@ -506,6 +506,13 @@ clear validation error from the handler when the current app state does not
 support a call. The legacy `setActiveTools` API is deprecated and blocked by the
 desktop runtime.
 
+The tool definition already gives the model the `description` and JSON-schema
+`inputSchema`, including parameter descriptions. Keep `promptGuidelines`
+high-signal: use them only for behavior the schema cannot express, such as when
+not to use the tool, safety boundaries, or required follow-up behavior. One short
+sentence is the default. If a workflow needs more than that, contribute an
+extension skill instead of stuffing a mini manual into every prompt.
+
 ```json
 {
   "id": "summarize",

@@ -508,6 +508,8 @@ Use extension tools when the agent needs executable runtime behavior backed by e
 
 The runtime registers a stable generated tool name: `extension_{extensionId}_{toolId}` with non-identifier characters normalized to underscores. Keep tools coarse and useful; do not expose every button click as an agent tool.
 
+Tool prompt guidance should be rare and short. The model already receives the tool `description`, JSON-schema `inputSchema`, and parameter descriptions, so do not duplicate action lists or parameter docs in `promptGuidelines`. Use `promptGuidelines` only for behavior the schema cannot encode — safety boundaries, when not to use the tool, or required follow-up behavior — and default to one short sentence. Put longer operational workflows in an extension skill.
+
 ## Surfaces and contribution choices
 
 Pick the smallest surface that matches the product shape. Do not use the right rail as a junk drawer.
