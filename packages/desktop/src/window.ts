@@ -60,6 +60,7 @@ const MAX_SAVED_WINDOW_HEIGHT = 4096;
 const WINDOW_SHOW_FALLBACK_MS = 1500;
 const configuredMediaPermissionPartitions = new Set<string>();
 const EXTERNAL_WINDOW_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+const AGENT_BROWSER_SESSION_KEY = '@global:tab-agent';
 
 interface DesktopRectangle {
   x: number;
@@ -534,40 +535,28 @@ export class DesktopWindowController {
     return this.workbenchBrowser.listTabs(this.mainWindow.webContents.id);
   }
 
-  private resolveBrowserSessionKey(tabId?: string): string | null {
+  private resolveBrowserSessionKey(tabId?: string): string {
     if (tabId) {
       return `@global:tab-${tabId}`;
     }
 
-    return this.getActiveBrowserSessionKey();
+    return this.getActiveBrowserSessionKey() ?? AGENT_BROWSER_SESSION_KEY;
   }
 
   async snapshotWorkbenchBrowser(tabId?: string): Promise<unknown> {
     const key = this.resolveBrowserSessionKey(tabId);
-    if (!key) {
-      throw new Error('Workbench Browser is not active');
-    }
-
     const owner = await this.ensureWorkbenchBrowserOwner(key);
     return this.workbenchBrowser.snapshot(owner, key);
   }
 
   async screenshotWorkbenchBrowser(tabId?: string): Promise<unknown> {
     const key = this.resolveBrowserSessionKey(tabId);
-    if (!key) {
-      throw new Error('Workbench Browser is not active');
-    }
-
     const owner = await this.ensureWorkbenchBrowserOwner(key);
     return this.workbenchBrowser.screenshot(owner, key);
   }
 
   async cdpWorkbenchBrowser(input: { command?: unknown; continueOnError?: unknown; tabId?: string }): Promise<unknown> {
     const key = this.resolveBrowserSessionKey(input.tabId);
-    if (!key) {
-      throw new Error('Workbench Browser is not active');
-    }
-
     const owner = await this.ensureWorkbenchBrowserOwner(key);
     return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: key });
   }

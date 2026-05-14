@@ -2,34 +2,12 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { getWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '@personal-agent/extensions/backend/browser';
 import { Type } from '@sinclair/typebox';
 
-const BrowserToolNames = ['browser_snapshot', 'browser_cdp', 'browser_screenshot'] as const;
-
 function requireHost(): WorkbenchBrowserToolHost {
   const host = getWorkbenchBrowserToolHost();
   if (!host) {
     throw new Error('Workbench Browser tools are only available in the desktop app.');
   }
   return host;
-}
-
-async function requireActiveWorkbenchBrowser(conversationId: string): Promise<WorkbenchBrowserToolHost> {
-  const currentHost = requireHost();
-  if (!(await currentHost.isActive(conversationId))) {
-    throw new Error('Workbench Browser is not active for this conversation. Open the Browser workbench panel before using browser tools.');
-  }
-  return currentHost;
-}
-
-async function isWorkbenchBrowserActive(conversationId: string): Promise<boolean> {
-  const host = getWorkbenchBrowserToolHost();
-  if (!host) {
-    return false;
-  }
-  try {
-    return await host.isActive(conversationId);
-  } catch {
-    return false;
-  }
 }
 
 function tabIdFromSessionKey(sessionKey: string): string {
@@ -163,7 +141,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const host = await requireActiveWorkbenchBrowser(conversationId);
+          const host = requireHost();
           const tabs = await host.listTabs();
           const tabId = (params as { tabId?: string }).tabId;
           const snapshot = await host.snapshot(conversationId, tabId);
@@ -202,9 +180,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const result = await (
-            await requireActiveWorkbenchBrowser(conversationId)
-          ).cdp({
+          const result = await requireHost().cdp({
             conversationId,
             command: params.command,
             ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
@@ -248,7 +224,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const host = await requireActiveWorkbenchBrowser(conversationId);
+          const host = requireHost();
           const tabId = (params as { tabId?: string }).tabId;
           const screenshot = (await host.screenshot(conversationId, tabId)) as {
             dataBase64?: string;

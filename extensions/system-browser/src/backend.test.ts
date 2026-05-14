@@ -91,11 +91,11 @@ describe('workbench browser agent extension', () => {
     expect(pi.on).not.toHaveBeenCalled();
   });
 
-  it('returns inactive browser error from stale tool calls', async () => {
+  it('lets stale tool calls create or reuse a browser session without requiring the panel to be active', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => false,
       listTabs: async () => [],
-      snapshot: async () => ({ url: 'https://example.com/' }),
+      snapshot: async () => ({ url: 'https://example.com/', title: 'Example', loading: false, text: 'Example text', elements: [] }),
       cdp: async () => ({}),
       screenshot: async () => ({}),
     });
@@ -105,8 +105,8 @@ describe('workbench browser agent extension', () => {
       isError?: boolean;
       content?: Array<{ text?: string }>;
     };
-    expect(result.isError).toBe(true);
-    expect(result.content?.[0]?.text).toContain('Workbench Browser is not active');
+    expect(result.isError).not.toBe(true);
+    expect(result.content?.[0]?.text).toContain('https://example.com/');
 
     setWorkbenchBrowserToolHost(null);
   });
