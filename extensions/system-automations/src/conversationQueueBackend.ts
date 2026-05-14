@@ -108,11 +108,11 @@ function buildDeferredResumeQueueItem(resume: DeferredResumeSummary): Conversati
   };
 }
 
-function collectConversationQueueItems(input: { sessionId?: string; sessionFile?: string }): ConversationQueueItem[] {
+async function collectConversationQueueItems(input: { sessionId?: string; sessionFile?: string }): Promise<ConversationQueueItem[]> {
   const items: ConversationQueueItem[] = [];
   if (input.sessionId) {
     try {
-      const queued = listQueuedPromptPreviews(input.sessionId);
+      const queued = await listQueuedPromptPreviews(input.sessionId);
       items.push(
         ...queued.steering.map((preview) => buildLiveQueueItem('steer', preview)),
         ...queued.followUp.map((preview) => buildLiveQueueItem('followUp', preview)),
@@ -122,12 +122,12 @@ function collectConversationQueueItems(input: { sessionId?: string; sessionFile?
     }
   }
   if (input.sessionFile) {
-    const runtimeState = loadAutomationRuntimeStateMap();
-    const automations = listStoredAutomations()
+    const runtimeState = await loadAutomationRuntimeStateMap();
+    const automations = (await listStoredAutomations())
       .filter((task) => task.targetType === 'conversation' && task.threadSessionFile === input.sessionFile)
       .filter((task) => task.schedule.type === 'cron' || !runtimeState[task.id]?.oneTimeResolvedAt);
     items.push(...automations.map(buildAutomationQueueItem));
-    const resumes = getSessionDeferredResumeEntries(loadDeferredResumeState(), input.sessionFile).map(
+    const resumes = (await getSessionDeferredResumeEntries(await loadDeferredResumeState(), input.sessionFile)).map(
       (resume) =>
         ({
           id: resume.id,
@@ -179,7 +179,10 @@ function summarizeAutomationTitle(prompt: string, title?: string): string {
   return readOptionalString(title) ?? prompt.split('\n')[0]?.trim().slice(0, 80) ?? 'Queued continuation';
 }
 
-function resolveScheduledAt(input: { delay?: string; at?: string }): { dueAt: string; interpretation?: string; timeExpression?: string } {
+async function resolveScheduledAt(input: {
+  delay?: string;
+  at?: string;
+}): Promise<{ dueAt: string; interpretation?: string; timeExpression?: string }> {
   if (input.delay && input.at) throw new Error('Specify only one of delay or at.');
   if (!input.delay && !input.at) throw new Error('One of delay or at is required.');
   if (input.delay) {
@@ -187,12 +190,12 @@ function resolveScheduledAt(input: { delay?: string; at?: string }): { dueAt: st
     if (!delayMs) throw new Error('Invalid delay. Use forms like 30s, 10m, 10 minutes, 2h, or 1d.');
     return { dueAt: new Date(Date.now() + delayMs).toISOString() };
   }
-  const parsed = parseFutureHumanDateTime(input.at as string);
+  const parsed = await parseFutureHumanDateTime(input.at as string);
   return { dueAt: parsed.dueAt, interpretation: parsed.interpretation, timeExpression: parsed.input };
 }
 
-function findConversationAutomation(id: string, sessionFile: string) {
-  return listStoredAutomations().find(
+async function findConversationAutomation(id: string, sessionFile: string) {
+  return (await listStoredAutomations()).find(
     (task) => task.id === id && task.targetType === 'conversation' && task.threadSessionFile === sessionFile,
   );
 }
@@ -203,7 +206,7 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
 
   switch (input.action) {
     case 'list': {
-      const items = collectConversationQueueItems({ sessionId, sessionFile });
+      const items = await collectConversationQueueItems({ sessionId, sessionFile });
       return { text: formatQueueList(items), action: 'list', sessionId, sessionFile, items };
     }
     case 'add': {
@@ -227,7 +230,7 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
       if (!sessionFile || !sessionId) throw new Error('Time-based queue entries require a persisted conversation.');
       const delay = trigger === 'delay' ? readRequiredString(input.delay, 'delay') : undefined;
       const at = trigger === 'at' ? readRequiredString(input.at, 'at') : undefined;
-      const scheduled = resolveScheduledAt({ delay, at });
+      const scheduled = await resolveScheduledAt({ delay, at });
       const resume = await scheduleDeferredResumeForSessionFile({
         sessionFile,
         conversationId: sessionId,
@@ -266,9 +269,9 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
         return { text: `Cancelled queued ${liveQueueId.behavior} continuation.`, action: 'cancel', sessionId, id, cancelled };
       }
       if (!sessionFile) throw new Error('Deferred queue cancellation requires a persisted session file.');
-      const automation = findConversationAutomation(id, sessionFile);
+      const automation = await findConversationAutomation(id, sessionFile);
       if (automation) {
-        deleteStoredAutomation(automation.id);
+        await deleteStoredAutomation(automation.id);
         ctx.ui.invalidate(['tasks', 'sessions']);
         return {
           text: `Cancelled queued continuation ${automation.id}.`,

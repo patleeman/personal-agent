@@ -1,7 +1,7 @@
 export const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 8 * 1024 * 1024;
 
 export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
-  ['system-automations', 24 * 1024 * 1024],
+  ['system-automations', 1 * 1024 * 1024],
   ['system-conversation-tools', 26 * 1024 * 1024],
   ['system-extension-manager', 24 * 1024 * 1024],
   ['system-images', 24 * 1024 * 1024],

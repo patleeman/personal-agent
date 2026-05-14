@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const mockScheduleDeferredResume = vi.fn();
-const mockParseFutureDateTime = vi.fn();
-const mockParseDeferredResumeDelayMs = vi.fn();
-const mockInvalidateTopics = vi.fn();
+const mocks = vi.hoisted(() => ({
+  scheduleDeferredResume: vi.fn(),
+  parseFutureDateTime: vi.fn(),
+  parseDeferredResumeDelayMs: vi.fn(),
+  invalidateTopics: vi.fn(),
+}));
 
-// Mock the backend API for the reminder handler
-vi.mock('@personal-agent/extensions/backend', () => ({
-  scheduleDeferredResumeForSessionFile: (...args: unknown[]) => mockScheduleDeferredResume(...args),
-  parseFutureHumanDateTime: (...args: unknown[]) => mockParseFutureDateTime(...args),
+const backendAutomationMock = vi.hoisted(() => ({
+  scheduleDeferredResumeForSessionFile: (...args: unknown[]) => mocks.scheduleDeferredResume(...args),
+  parseFutureHumanDateTime: (...args: unknown[]) => mocks.parseFutureDateTime(...args),
   applyScheduledTaskThreadBinding: vi.fn(),
   buildScheduledTaskThreadDetail: vi.fn(),
   cancelDeferredResumeForSessionFile: vi.fn(),
@@ -24,9 +25,9 @@ vi.mock('@personal-agent/extensions/backend', () => ({
   loadDeferredResumeState: vi.fn(),
   loadScheduledTasksForProfile: vi.fn(),
   normalizeAutomationTargetTypeForSelection: vi.fn(),
-  invalidateAppTopics: (...args: unknown[]) => mockInvalidateTopics(...args),
+  invalidateAppTopics: (...args: unknown[]) => mocks.invalidateTopics(...args),
   pingDaemon: vi.fn().mockResolvedValue(true),
-  parseDeferredResumeDelayMs: (...args: unknown[]) => mockParseDeferredResumeDelayMs(...args),
+  parseDeferredResumeDelayMs: (...args: unknown[]) => mocks.parseDeferredResumeDelayMs(...args),
   promptSession: vi.fn(),
   readSessionConversationId: vi.fn(),
   resolveScheduledTaskForProfile: vi.fn(),
@@ -36,6 +37,11 @@ vi.mock('@personal-agent/extensions/backend', () => ({
   updateStoredAutomation: vi.fn(),
   clearTaskCallbackBinding: vi.fn(),
 }));
+
+// Mock the backend API for the reminder handler
+vi.mock('@personal-agent/extensions/backend', () => backendAutomationMock);
+vi.mock('@personal-agent/extensions/backend/automations', () => backendAutomationMock);
+vi.mock('@personal-agent/extensions/backend/telemetry', () => ({ recordTelemetryEvent: vi.fn() }), { virtual: true });
 
 import { reminder } from './backend.js';
 import { conversationQueue } from './conversationQueueBackend.js';
@@ -56,13 +62,13 @@ describe('system-automations backend', () => {
 
   describe('reminder handler', () => {
     it('schedules a deferred resume with delay', async () => {
-      mockScheduleDeferredResume.mockResolvedValue({ id: 'rem-1', dueAt: '2025-01-01T01:00:00Z', prompt: 'Wake up!', title: 'Alert' });
+      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-1', dueAt: '2025-01-01T01:00:00Z', prompt: 'Wake up!', title: 'Alert' });
 
       const result = await reminder({ prompt: 'Wake up!', title: 'Alert', delay: '1h' }, createCtx());
       expect(result.text).toContain('Scheduled reminder rem-1');
       expect(result.text).toContain('in 1h');
       expect(result.id).toBe('rem-1');
-      expect(mockScheduleDeferredResume).toHaveBeenCalledWith(
+      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionFile: '/tmp/session.json',
           delay: '1h',
@@ -75,17 +81,17 @@ describe('system-automations backend', () => {
     });
 
     it('schedules a deferred resume with at time', async () => {
-      mockParseFutureDateTime.mockReturnValue({
+      mocks.parseFutureDateTime.mockReturnValue({
         input: 'tomorrow 9am',
         dueAt: '2025-01-02T09:00:00Z',
         interpretation: '2025-01-02 09:00:00',
       });
-      mockScheduleDeferredResume.mockResolvedValue({ id: 'rem-2', dueAt: '2025-01-02T09:00:00Z', prompt: 'Meeting', title: 'Meeting' });
+      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-2', dueAt: '2025-01-02T09:00:00Z', prompt: 'Meeting', title: 'Meeting' });
 
       const result = await reminder({ prompt: 'Meeting', title: 'Meeting', at: 'tomorrow 9am' }, createCtx());
       expect(result.text).toContain('Scheduled reminder rem-2');
       expect(result.localDueAt).toBe('2025-01-02 09:00:00');
-      expect(mockScheduleDeferredResume).toHaveBeenCalledWith(
+      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
         expect.objectContaining({
           delay: undefined,
           at: '2025-01-02T09:00:00Z',
@@ -94,10 +100,10 @@ describe('system-automations backend', () => {
     });
 
     it('uses disruptive notify and requireAck true by default', async () => {
-      mockScheduleDeferredResume.mockResolvedValue({ id: 'rem-3', dueAt: '2025-01-01T00:00:00Z', prompt: 'Ping' });
+      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-3', dueAt: '2025-01-01T00:00:00Z', prompt: 'Ping' });
 
       await reminder({ prompt: 'Ping' }, createCtx());
-      expect(mockScheduleDeferredResume).toHaveBeenCalledWith(
+      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
         expect.objectContaining({
           notify: 'disruptive',
           requireAck: true,
@@ -108,7 +114,7 @@ describe('system-automations backend', () => {
 
     it('invalidates sessions and runs topics', async () => {
       const invalidate = vi.fn();
-      mockScheduleDeferredResume.mockResolvedValue({ id: 'rem-4', dueAt: '2025-01-01T00:00:00Z', prompt: 'Ping' });
+      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-4', dueAt: '2025-01-01T00:00:00Z', prompt: 'Ping' });
 
       await reminder({ prompt: 'Ping' }, createCtx({ ui: { invalidate } }));
       expect(invalidate).toHaveBeenCalledWith(['sessions', 'runs']);
@@ -132,8 +138,8 @@ describe('system-automations backend', () => {
 
     it('schedules time-based queue entries as visible deferred resumes', async () => {
       const invalidate = vi.fn();
-      mockParseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
-      mockScheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
+      mocks.parseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
+      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
 
       const result = await conversationQueue(
         { action: 'add', trigger: 'delay', delay: '4h', prompt: 'Keep going', deliverAs: 'followUp', title: 'Resume later' },
@@ -142,7 +148,7 @@ describe('system-automations backend', () => {
 
       expect(result.id).toBe('resume-1');
       expect(result.text).toContain('in 4h');
-      expect(mockScheduleDeferredResume).toHaveBeenCalledWith(
+      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionFile: '/tmp/session.json',
           conversationId: 'sess-1',

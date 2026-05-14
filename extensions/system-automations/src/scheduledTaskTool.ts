@@ -109,15 +109,15 @@ function readOptionalString(value: string | undefined): string | undefined {
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
-function resolveOptionalScheduleAt(
+async function resolveOptionalScheduleAt(
   value: string | undefined,
-): { dueAt: string; interpretation: string; timeExpression: string } | undefined {
+): Promise<{ dueAt: string; interpretation: string; timeExpression: string } | undefined> {
   const normalized = readOptionalString(value);
   if (!normalized) {
     return undefined;
   }
 
-  const parsed = parseFutureHumanDateTime(normalized);
+  const parsed = await parseFutureHumanDateTime(normalized);
   return { dueAt: parsed.dueAt, interpretation: parsed.interpretation, timeExpression: parsed.input };
 }
 
@@ -319,7 +319,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
 
           switch (params.action as ScheduledTaskAction) {
             case 'list': {
-              const loaded = loadScheduledTasksForProfile(profile);
+              const loaded = await loadScheduledTasksForProfile(profile);
               return {
                 content: [{ type: 'text' as const, text: formatTaskList(loaded) }],
                 details: {
@@ -334,8 +334,8 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
 
             case 'get': {
               const taskId = readRequiredString(params.taskId, 'taskId');
-              const { task, runtime } = resolveScheduledTaskForProfile(profile, taskId);
-              const callbackBinding = getTaskCallbackBinding({ profile, taskId });
+              const { task, runtime } = await resolveScheduledTaskForProfile(profile, taskId);
+              const callbackBinding = await getTaskCallbackBinding({ profile, taskId });
               return {
                 content: [{ type: 'text' as const, text: formatTaskDetail(task, runtime, callbackBinding) }],
                 details: {
@@ -348,7 +348,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
             }
 
             case 'save': {
-              const loaded = loadScheduledTasksForProfile(profile);
+              const loaded = await loadScheduledTasksForProfile(profile);
               const taskId = readRequiredString(params.taskId, 'taskId');
               const existing = loaded.tasks.find((task) => task.id === taskId);
               const targetType =
@@ -358,11 +358,11 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
               const deliverAs =
                 targetType === 'conversation' ? (readConversationBehavior(params.deliverAs) ?? existing?.conversationBehavior) : undefined;
               const sessionFile = readOptionalString(ctx?.sessionManager?.getSessionFile?.());
-              const currentConversationId = sessionFile ? readSessionConversationId(sessionFile) : undefined;
+              const currentConversationId = sessionFile ? await readSessionConversationId(sessionFile) : undefined;
               const threadMode = readThreadMode(params.threadMode);
               const threadConversationId = readOptionalString(params.threadConversationId);
               const cwd = params.cwd ?? existing?.cwd;
-              const scheduledAt = resolveOptionalScheduleAt(params.at);
+              const scheduledAt = await resolveOptionalScheduleAt(params.at);
               const shouldBindThread = shouldApplyThreadBinding({
                 targetType,
                 threadMode,
@@ -379,14 +379,14 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                     cwd,
                   })
                 : undefined;
-              const validatedThreadBinding = threadBindingInput ? resolveScheduledTaskThreadBinding(threadBindingInput) : undefined;
+              const validatedThreadBinding = threadBindingInput ? await resolveScheduledTaskThreadBinding(threadBindingInput) : undefined;
 
               if (targetType === 'conversation' && params.deliverResultToConversation === true) {
                 throw new Error('deliverResultToConversation is only supported for background-agent automations.');
               }
 
               const saved = existing
-                ? updateStoredAutomation(taskId, {
+                ? await updateStoredAutomation(taskId, {
                     title: readOptionalString(params.title) ?? existing.title ?? taskId,
                     enabled: params.enabled ?? existing.enabled,
                     cron: params.cron ?? (existing.schedule.type === 'cron' ? existing.schedule.expression : undefined),
@@ -403,7 +403,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                     targetType,
                     conversationBehavior: deliverAs,
                   })
-                : createStoredAutomation({
+                : await createStoredAutomation({
                     id: taskId,
                     title: readOptionalString(params.title) ?? taskId,
                     enabled: params.enabled ?? true,
@@ -418,7 +418,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                     conversationBehavior: deliverAs,
                   });
               const task = validatedThreadBinding
-                ? applyScheduledTaskThreadBinding(saved.id, {
+                ? await applyScheduledTaskThreadBinding(saved.id, {
                     threadMode: validatedThreadBinding.mode,
                     threadConversationId: validatedThreadBinding.conversationId,
                     threadSessionFile: validatedThreadBinding.sessionFile,
@@ -427,13 +427,13 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                 : saved;
 
               if (targetType === 'conversation') {
-                clearTaskCallbackBinding({ profile, taskId });
+                await clearTaskCallbackBinding({ profile, taskId });
               } else if (params.deliverResultToConversation === true) {
                 if (!sessionFile || !currentConversationId) {
                   throw new Error('deliverResultToConversation requires an active persisted conversation.');
                 }
 
-                setTaskCallbackBinding({
+                await setTaskCallbackBinding({
                   profile,
                   taskId,
                   conversationId: currentConversationId,
@@ -446,10 +446,10 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                   autoResumeIfOpen: params.autoResumeIfOpen ?? true,
                 });
               } else if (params.deliverResultToConversation === false) {
-                clearTaskCallbackBinding({ profile, taskId });
+                await clearTaskCallbackBinding({ profile, taskId });
               }
 
-              invalidateAppTopics('tasks');
+              await invalidateAppTopics('tasks');
 
               return {
                 content: [
@@ -475,9 +475,9 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
 
             case 'delete': {
               const taskId = readRequiredString(params.taskId, 'taskId');
-              deleteStoredAutomation(taskId, { profile });
-              clearTaskCallbackBinding({ profile, taskId });
-              invalidateAppTopics('tasks');
+              await deleteStoredAutomation(taskId, { profile });
+              await clearTaskCallbackBinding({ profile, taskId });
+              await invalidateAppTopics('tasks');
 
               return {
                 content: [{ type: 'text' as const, text: `Deleted scheduled task @${taskId}.` }],
@@ -490,7 +490,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
             }
 
             case 'validate': {
-              const loaded = loadScheduledTasksForProfile(profile);
+              const loaded = await loadScheduledTasksForProfile(profile);
               if (params.taskId) {
                 const taskId = readRequiredString(params.taskId, 'taskId');
                 const match = loaded.tasks.find((task) => task.id === taskId);
@@ -558,7 +558,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                 throw new Error(result.reason ?? `Could not start scheduled task @${taskId}.`);
               }
 
-              invalidateAppTopics('tasks', 'runs');
+              await invalidateAppTopics(['tasks', 'runs']);
               return {
                 content: [{ type: 'text' as const, text: `Started scheduled task @${taskId} as run ${result.runId}.` }],
                 details: {

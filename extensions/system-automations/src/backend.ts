@@ -1,6 +1,5 @@
 import { parseFutureHumanDateTime, scheduleDeferredResumeForSessionFile } from '@personal-agent/extensions/backend/automations';
 export { conversationQueue } from './conversationQueueBackend.js';
-export { scheduledTask } from './scheduledTaskBackend.js';
 
 interface AutomationBackendContext {
   toolContext?: { sessionFile?: string; sessionId?: string };
@@ -17,11 +16,16 @@ interface ReminderInput {
   autoResumeIfOpen?: boolean;
 }
 
+export async function scheduledTask(input: unknown, ctx: AutomationBackendContext) {
+  const module = await import('./scheduledTaskBackend.js');
+  return module.scheduledTask(input, ctx as never);
+}
+
 export async function reminder(input: ReminderInput, ctx: AutomationBackendContext) {
   const sessionFile = ctx.toolContext?.sessionFile;
   if (!sessionFile) throw new Error('Reminder requires a persisted session file.');
 
-  const parsedAt = input.at ? parseFutureHumanDateTime(input.at) : undefined;
+  const parsedAt = input.at ? await parseFutureHumanDateTime(input.at) : undefined;
   const reminderRecord = await scheduleDeferredResumeForSessionFile({
     sessionFile,
     delay: input.delay,
