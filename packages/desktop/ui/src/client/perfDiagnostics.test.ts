@@ -6,6 +6,26 @@ describe('perfDiagnostics', () => {
     vi.resetModules();
   });
 
+  it('records chat render timing samples', async () => {
+    const { recordChatRenderTiming } = await import('./perfDiagnostics');
+
+    recordChatRenderTiming({
+      conversationId: 'conv-1',
+      route: '/conversations/conv-1',
+      startedAtMs: performance.now() - 12,
+      meta: { messageCount: 4, toolBlocks: 1 },
+    });
+
+    const perf = (globalThis as typeof globalThis & { __PA_APP_PERF__?: { chatRenderSamples?: unknown[] } }).__PA_APP_PERF__;
+    expect(perf?.chatRenderSamples).toEqual([
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        route: '/conversations/conv-1',
+        meta: { messageCount: 4, toolBlocks: 1 },
+      }),
+    ]);
+  });
+
   it('records conversation extension-open phase timing', async () => {
     const { completeConversationOpenPhase, ensureConversationOpenStart } = await import('./perfDiagnostics');
 

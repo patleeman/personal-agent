@@ -1,5 +1,6 @@
-import React, { memo, type RefObject, useEffect, useMemo, useState } from 'react';
+import React, { memo, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
+import { recordChatRenderTiming } from '../../client/perfDiagnostics';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
@@ -25,6 +26,7 @@ import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
 
 interface ChatViewProps {
   messages: MessageBlock[];
+  conversationId?: string | null;
   messageIndexOffset?: number;
   scrollContainerRef?: RefObject<HTMLDivElement>;
   focusMessageIndex?: number | null;
@@ -89,6 +91,7 @@ function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<
 
 export const ChatView = memo(function ChatView({
   messages,
+  conversationId = null,
   messageIndexOffset = 0,
   scrollContainerRef,
   focusMessageIndex = null,
@@ -119,6 +122,8 @@ export const ChatView = memo(function ChatView({
   windowingHeaderContent,
   anchorWindowingToTail = false,
 }: ChatViewProps) {
+  const renderStartedAtRef = useRef(performance.now());
+  renderStartedAtRef.current = performance.now();
   const extensionRegistry = useExtensionRegistry();
   const standaloneTools = useMemo(() => {
     const tools = new Set<string>();
@@ -133,6 +138,34 @@ export const ChatView = memo(function ChatView({
     return tools;
   }, [extensionRegistry.extensions]);
   const renderItems = useMemo(() => buildChatRenderItems(messages, standaloneTools), [messages, standaloneTools]);
+  const renderItemStats = useMemo(() => {
+    let messageItems = 0;
+    let traceClusters = 0;
+    let traceBlocks = 0;
+    let toolBlocks = 0;
+    let standaloneToolBlocks = 0;
+    let markdownBlocks = 0;
+
+    for (const item of renderItems) {
+      if (item.type === 'trace_cluster') {
+        traceClusters += 1;
+        traceBlocks += item.blocks.length;
+        toolBlocks += item.blocks.filter((block) => block.type === 'tool_use').length;
+        continue;
+      }
+
+      messageItems += 1;
+      const block = item.block;
+      if (block.type === 'tool_use') {
+        toolBlocks += 1;
+        standaloneToolBlocks += 1;
+      } else if (block.type === 'assistant' || block.type === 'user') {
+        markdownBlocks += 1;
+      }
+    }
+
+    return { messageItems, traceClusters, traceBlocks, toolBlocks, standaloneToolBlocks, markdownBlocks };
+  }, [renderItems]);
   const { isInlineRunExpanded, toggleInlineRun } = useInlineTraceRunExpansion(renderItems);
 
   const streamingStatusLabel = isCompacting
@@ -287,6 +320,44 @@ export const ChatView = memo(function ChatView({
       {windowingBadge}
     </div>
   ) : null;
+
+  useEffect(() => {
+    const startedAtMs = renderStartedAtRef.current;
+    const timeout = window.setTimeout(() => {
+      recordChatRenderTiming({
+        conversationId,
+        route: `${window.location.pathname}${window.location.search}`,
+        startedAtMs,
+        meta: {
+          messageCount: messages.length,
+          renderItemCount: renderItems.length,
+          mountedMessageCount,
+          mountedChunkCount,
+          totalChunkCount: renderChunks.length,
+          shouldWindowTranscript,
+          performanceMode,
+          layout,
+          isStreaming,
+          ...renderItemStats,
+        },
+      });
+    });
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    conversationId,
+    isStreaming,
+    layout,
+    messages.length,
+    mountedChunkCount,
+    mountedMessageCount,
+    performanceMode,
+    renderChunks.length,
+    renderItemStats,
+    renderItems.length,
+    shouldWindowTranscript,
+  ]);
+
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>

@@ -24,15 +24,25 @@ interface ConversationOpenTracker {
   completedPhases: Set<ConversationOpenPhase>;
 }
 
+interface ChatRenderSample {
+  conversationId: string | null;
+  route: string | null;
+  recordedAt: string;
+  durationMs: number;
+  meta: Record<string, unknown>;
+}
+
 interface PerfStore {
   apiSamples: PerfApiSample[];
   conversationOpenSamples: ConversationOpenPhaseSample[];
+  chatRenderSamples: ChatRenderSample[];
 }
 
 const MAX_PERF_SAMPLES = 120;
 const perfStore: PerfStore = {
   apiSamples: [],
   conversationOpenSamples: [],
+  chatRenderSamples: [],
 };
 const conversationOpenTrackers = new Map<string, ConversationOpenTracker>();
 publishPerfStore();
@@ -70,6 +80,26 @@ function safeParsePerfMeta(value: string | null): Record<string, unknown> | null
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
+  }
+}
+
+export function recordChatRenderTiming(input: {
+  conversationId?: string | null;
+  route?: string | null;
+  startedAtMs: number;
+  meta: Record<string, unknown>;
+}): void {
+  const sample: ChatRenderSample = {
+    conversationId: input.conversationId ?? null,
+    route: input.route ?? null,
+    recordedAt: new Date().toISOString(),
+    durationMs: Math.max(0, performance.now() - input.startedAtMs),
+    meta: input.meta,
+  };
+  appendSample(perfStore.chatRenderSamples, sample);
+  publishPerfStore();
+  if (shouldLogPerfSamples()) {
+    console.info('[pa-perf][chat-render]', sample);
   }
 }
 

@@ -5552,6 +5552,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             <>
               <ChatView
                 key={visibleTranscriptState?.conversationId ?? id ?? 'draft-conversation'}
+                conversationId={visibleTranscriptState?.conversationId ?? id ?? null}
                 messages={visibleTranscriptMessages}
                 messageIndexOffset={visibleTranscriptMessageIndexOffset}
                 scrollContainerRef={scrollRef}

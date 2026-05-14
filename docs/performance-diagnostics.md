@@ -10,4 +10,6 @@ Conversation navigation records `conversationOpenSamples` with these phases:
 - `extensions` — the shared extension registry is ready for the conversation route.
 - `rail` — the context rail completed its first paint for the conversation.
 
+`chatRenderSamples` record ChatView commit timing plus transcript shape: message count, render item count, mounted/windowed counts, trace clusters, tool blocks, standalone tool blocks, and markdown-like user/assistant blocks.
+
 API samples are recorded when responses include `Server-Timing` or `X-PA-Perf` headers. Keep new diagnostics cheap and side-effect-free; this is a tripwire, not a replacement for browser profiling.
