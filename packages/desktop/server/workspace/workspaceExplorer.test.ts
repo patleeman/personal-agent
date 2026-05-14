@@ -12,7 +12,7 @@ import {
   deleteWorkspacePath,
   listWorkspaceDirectory,
   moveWorkspacePath,
-  readUncommittedDiff,
+  readUncommittedDiffAsync,
   readWorkspaceDiffOverlay,
   readWorkspaceFile,
   renameWorkspacePath,
@@ -92,26 +92,26 @@ describe('workspace explorer', () => {
     expect(overlay.deletedBlocks).toEqual([]);
   });
 
-  it('bounds uncommitted diff payloads for renderer safety', () => {
+  it('bounds uncommitted diff payloads for renderer safety', async () => {
     const repo = createRepo();
     for (let index = 0; index < 30; index += 1) {
       writeFileSync(join(repo, `new-${index}.txt`), `file ${index}\n`);
     }
     writeFileSync(join(repo, 'large.txt'), 'x'.repeat(300 * 1024));
 
-    const result = readUncommittedDiff(repo);
+    const result = await readUncommittedDiffAsync(repo);
 
     expect(result?.changeCount).toBe(31);
     expect(result?.files).toHaveLength(25);
     expect(result?.files.some((file) => file.patch.includes('x'.repeat(1024)))).toBe(false);
   });
 
-  it('reads tracked uncommitted diffs with a single pathspec separator', () => {
+  it('reads tracked uncommitted diffs with a single pathspec separator', async () => {
     const repo = createRepo();
     writeFileSync(join(repo, 'tracked.txt'), 'one\nTWO\nthree\n');
     writeFileSync(join(repo, 'src', 'app.ts'), 'const value = 2;\n');
 
-    const result = readUncommittedDiff(repo);
+    const result = await readUncommittedDiffAsync(repo);
 
     expect(result?.files.map((file) => file.path).sort()).toEqual(['src/app.ts', 'tracked.txt']);
   });

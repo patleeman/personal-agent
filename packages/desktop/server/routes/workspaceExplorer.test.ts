@@ -13,7 +13,7 @@ vi.mock('../workspace/workspaceExplorer.js', () => ({
   renameWorkspacePath: vi.fn(),
   moveWorkspacePath: vi.fn(),
   readWorkspaceDiffOverlay: vi.fn(),
-  readUncommittedDiff: vi.fn(),
+  readUncommittedDiffAsync: vi.fn(),
   readWorkspaceRootSnapshot: vi.fn(),
 }));
 
@@ -189,7 +189,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('GET /api/workspace/uncommitted-diff', () => {
     it('returns diff or empty state', async () => {
-      vi.mocked(workspace.readUncommittedDiff).mockReturnValue(null);
+      vi.mocked(workspace.readUncommittedDiffAsync).mockResolvedValue(null);
       const router = mockRouter();
       registerWorkspaceExplorerRoutes(router as any, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/uncommitted-diff');

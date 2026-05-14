@@ -236,7 +236,7 @@ function normalizeGitStatusPath(statusLine: string, change: GitStatusChangeKind 
   return rawPath;
 }
 
-function parseGitStatusBranch(output: string): string | null {
+export function parseGitStatusBranch(output: string): string | null {
   const branchLine = output.split('\n').find((line) => line.startsWith('## '));
   if (!branchLine) {
     return null;
@@ -254,7 +254,7 @@ function parseGitStatusBranch(output: string): string | null {
   return raw.split('...')[0]?.trim() || null;
 }
 
-function parseGitStatusChanges(output: string): GitStatusChange[] {
+export function parseGitStatusChanges(output: string): GitStatusChange[] {
   const result = new Map<string, GitStatusChangeKind>();
 
   for (const line of output.split('\n')) {

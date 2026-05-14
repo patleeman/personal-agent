@@ -8,7 +8,7 @@ import {
   deleteWorkspacePath,
   listWorkspaceDirectory,
   moveWorkspacePath,
-  readUncommittedDiff,
+  readUncommittedDiffAsync,
   readWorkspaceDiffOverlay,
   readWorkspaceFile,
   readWorkspaceRootSnapshot,
@@ -158,10 +158,10 @@ export function registerWorkspaceExplorerRoutes(
     }
   });
 
-  router.get('/api/workspace/uncommitted-diff', (req, res) => {
+  router.get('/api/workspace/uncommitted-diff', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.query.cwd);
-      const result = readUncommittedDiff(cwd);
+      const result = await readUncommittedDiffAsync(cwd);
       if (!result) {
         res.json({ branch: null, changeCount: 0, linesAdded: 0, linesDeleted: 0, files: [] });
         return;

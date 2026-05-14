@@ -14,10 +14,21 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import { type LocalCheckpointCommitFile, parseCheckpointDiffSections } from '../conversations/conversationCheckpointCommit.js';
-import { type GitStatusChangeKind, readGitRepoInfo, readGitStatusSummary } from './gitStatus.js';
+import { execFileProcess } from '../shared/processLauncher.js';
+import {
+  type GitRepoInfo,
+  type GitStatusChangeKind,
+  type GitStatusSummary,
+  parseGitNumstat,
+  parseGitStatusBranch,
+  parseGitStatusChanges,
+  readGitRepoInfo,
+  readGitStatusSummary,
+} from './gitStatus.js';
 
 export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
 
@@ -486,29 +497,36 @@ export interface UncommittedDiffResult {
   files: LocalCheckpointCommitFile[];
 }
 
-function runGitAllowFailure(args: string[], cwd: string): { stdout: string; exitCode: number } {
+function readChildProcessStdout(error: unknown): string {
+  const childError = error as { stdout?: string | Buffer };
+  if (typeof childError.stdout === 'string') {
+    return childError.stdout;
+  }
+  if (Buffer.isBuffer(childError.stdout)) {
+    return childError.stdout.toString('utf-8');
+  }
+  return '';
+}
+
+function readChildProcessExitCode(error: unknown): number {
+  const childError = error as { status?: number | null; code?: string };
+  return typeof childError.status === 'number' ? childError.status : 1;
+}
+
+async function runGitAllowFailureAsync(args: string[], cwd: string): Promise<{ stdout: string; exitCode: number }> {
   try {
-    return {
-      stdout: execFileSync('git', args, {
-        cwd,
-        stdio: ['ignore', 'pipe', 'ignore'],
-        encoding: 'utf-8',
-        timeout: UNCOMMITTED_DIFF_TIMEOUT_MS,
-        maxBuffer: 8 * 1024 * 1024,
-      }),
-      exitCode: 0,
-    };
+    const result = await execFileProcess({
+      command: 'git',
+      args,
+      cwd,
+      timeoutMs: UNCOMMITTED_DIFF_TIMEOUT_MS,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    return { stdout: result.stdout, exitCode: 0 };
   } catch (error: unknown) {
-    const childError = error as { stdout?: string | Buffer; status?: number | null; code?: string };
-    const stdout =
-      typeof childError.stdout === 'string'
-        ? childError.stdout
-        : Buffer.isBuffer(childError.stdout)
-          ? childError.stdout.toString('utf-8')
-          : '';
     return {
-      stdout,
-      exitCode: typeof childError.status === 'number' ? childError.status : 1,
+      stdout: readChildProcessStdout(error),
+      exitCode: readChildProcessExitCode(error),
     };
   }
 }
@@ -517,18 +535,7 @@ function buildEmptyUntrackedPatch(relativePath: string): string {
   return `diff --git a/dev/null b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +0,0 @@\n`;
 }
 
-function buildUntrackedPatch(root: string, relativePath: string): string {
-  const absolutePath = resolve(root, relativePath);
-  let content: string;
-  try {
-    const stats = statSync(absolutePath);
-    if (!stats.isFile() || stats.size > UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES) {
-      return buildEmptyUntrackedPatch(relativePath);
-    }
-    content = readFileSync(absolutePath, 'utf-8');
-  } catch {
-    content = '';
-  }
+function buildUntrackedPatchFromContent(relativePath: string, content: string): string {
   const lines = content.split('\n');
   const actualLines = lines.length > 0 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
   const lineCount = actualLines.length;
@@ -545,17 +552,85 @@ function buildUntrackedPatch(root: string, relativePath: string): string {
   ].join('\n');
 }
 
-export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
-  const repo = readGitRepoInfo(cwd);
-  if (!repo) {
+async function buildUntrackedPatchAsync(root: string, relativePath: string): Promise<string> {
+  const absolutePath = resolve(root, relativePath);
+  try {
+    const stats = await stat(absolutePath);
+    if (!stats.isFile() || stats.size > UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES) {
+      return buildEmptyUntrackedPatch(relativePath);
+    }
+    return buildUntrackedPatchFromContent(relativePath, await readFile(absolutePath, 'utf-8'));
+  } catch {
+    return buildEmptyUntrackedPatch(relativePath);
+  }
+}
+
+function emptyUncommittedFile(change: { relativePath: string }): LocalCheckpointCommitFile {
+  return {
+    path: change.relativePath,
+    status: 'added',
+    additions: 0,
+    deletions: 0,
+    patch: '',
+  };
+}
+
+function pushParsedPatch(files: LocalCheckpointCommitFile[], patch: string, change: { relativePath: string }) {
+  try {
+    const parsed = parseCheckpointDiffSections(patch);
+    if (parsed.length > 0) {
+      files.push(parsed[0]!);
+      return;
+    }
+  } catch {
+    // Fall through to an empty placeholder row.
+  }
+  files.push(emptyUncommittedFile(change));
+}
+
+async function readGitRepoInfoAsync(cwd: string): Promise<GitRepoInfo | null> {
+  const isWorkTree = await runGitAllowFailureAsync(['rev-parse', '--is-inside-work-tree'], cwd);
+  if (isWorkTree.exitCode !== 0 || isWorkTree.stdout.trim() !== 'true') {
+    return null;
+  }
+  const rootResult = await runGitAllowFailureAsync(['rev-parse', '--show-toplevel'], cwd);
+  if (rootResult.exitCode !== 0) {
+    return null;
+  }
+  const root = resolve(rootResult.stdout.trim());
+  const name = basename(root).trim();
+  return name ? { root, name } : null;
+}
+
+async function readUncommittedStatusAsync(repoRoot: string): Promise<GitStatusSummary | null> {
+  const statusResult = await runGitAllowFailureAsync(['status', '--porcelain=v1', '--branch', '--untracked-files=all'], repoRoot);
+  if (statusResult.exitCode !== 0) {
     return null;
   }
 
-  const status = readGitStatusSummary(repo.root);
-  if (!status) {
-    return null;
-  }
+  const changes = parseGitStatusChanges(statusResult.stdout);
+  const branch = parseGitStatusBranch(statusResult.stdout);
+  const trackedSummary = changes.some((change) => change.change !== 'untracked')
+    ? parseGitNumstat((await runGitAllowFailureAsync(['diff', '--numstat', 'HEAD'], repoRoot)).stdout)
+    : { linesAdded: 0, linesDeleted: 0 };
 
+  return {
+    branch,
+    changeCount: changes.length,
+    linesAdded: trackedSummary.linesAdded,
+    linesDeleted: trackedSummary.linesDeleted,
+    changes,
+  };
+}
+
+async function readUncommittedDiffForRepo(
+  repo: GitRepoInfo,
+  status: GitStatusSummary,
+  options: {
+    buildUntrackedPatch: (root: string, relativePath: string) => Promise<string>;
+    runGit: (args: string[], cwd: string) => Promise<{ stdout: string; exitCode: number }>;
+  },
+): Promise<UncommittedDiffResult> {
   if (status.changes.length === 0) {
     return {
       branch: status.branch,
@@ -571,10 +646,10 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
   const untrackedChanges = status.changes.filter((c) => c.change === 'untracked').slice(0, UNCOMMITTED_DIFF_MAX_RENDERED_FILES);
 
   // Get tracked diffs in one shot so rename detection works. Keep the response bounded; the full repository
-  // status count still comes from readGitStatusSummary, but the renderer only receives a manageable patch set.
+  // status count still comes from git status, but the renderer only receives a manageable patch set.
   if (trackedChanges.length > 0 && files.length < UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
     const fileArgs = trackedChanges.map((c) => c.relativePath);
-    const result = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--find-renames', '--', ...fileArgs], repo.root);
+    const result = await options.runGit(['diff', 'HEAD', '--unified=3', '--find-renames', '--', ...fileArgs], repo.root);
     if (result.exitCode === 0 || result.exitCode === 1) {
       try {
         const parsed = parseCheckpointDiffSections(result.stdout);
@@ -585,7 +660,7 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
           if (files.length >= UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
             break;
           }
-          const fileResult = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--', change.relativePath], repo.root);
+          const fileResult = await options.runGit(['diff', 'HEAD', '--unified=3', '--', change.relativePath], repo.root);
           if (fileResult.exitCode === 0 || fileResult.exitCode === 1) {
             try {
               const fileParsed = parseCheckpointDiffSections(fileResult.stdout);
@@ -601,35 +676,14 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
     }
   }
 
-  // Untracked files — construct patches manually
+  // Untracked files — construct patches manually, capped by file count and file size.
   if (untrackedChanges.length > 0 && files.length < UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
     for (const change of untrackedChanges) {
       if (files.length >= UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
         break;
       }
-      const patch = buildUntrackedPatch(repo.root, change.relativePath);
-      try {
-        const parsed = parseCheckpointDiffSections(patch);
-        if (parsed.length > 0) {
-          files.push(parsed[0]!);
-        } else {
-          files.push({
-            path: change.relativePath,
-            status: 'added',
-            additions: 0,
-            deletions: 0,
-            patch: '',
-          });
-        }
-      } catch {
-        files.push({
-          path: change.relativePath,
-          status: 'added',
-          additions: 0,
-          deletions: 0,
-          patch: '',
-        });
-      }
+      const patch = await options.buildUntrackedPatch(repo.root, change.relativePath);
+      pushParsedPatch(files, patch, change);
     }
   }
 
@@ -640,6 +694,20 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
     linesDeleted: status.linesDeleted,
     files,
   };
+}
+
+export async function readUncommittedDiffAsync(cwd: string): Promise<UncommittedDiffResult | null> {
+  const repo = await readGitRepoInfoAsync(cwd);
+  if (!repo) {
+    return null;
+  }
+
+  const status = await readUncommittedStatusAsync(repo.root);
+  if (!status) {
+    return null;
+  }
+
+  return readUncommittedDiffForRepo(repo, status, { buildUntrackedPatch: buildUntrackedPatchAsync, runGit: runGitAllowFailureAsync });
 }
 
 export const __workspaceExplorerInternals = { parseDiffOverlay, normalizeRelativePath };
