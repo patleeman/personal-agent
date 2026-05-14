@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { normalizeServerExtensionModuleSpecifier, resolveServerModuleSpecifierFrom } from './serverModuleResolver.js';
 
 const previousRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
+const previousCwd = process.cwd();
 const tempRoots: string[] = [];
 
 function makeTempRoot(): string {
@@ -27,6 +28,8 @@ afterEach(() => {
   } else {
     process.env.PERSONAL_AGENT_REPO_ROOT = previousRepoRoot;
   }
+
+  process.chdir(previousCwd);
 
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -90,5 +93,22 @@ describe('resolveServerModuleSpecifierFrom', () => {
     });
 
     expect(resolved).toBe(pathToFileURL(bundledPath).href);
+  });
+
+  it('resolves packaged server modules inside app.asar before falling back to extension siblings', () => {
+    const resourcesRoot = makeTempRoot();
+    const cwdRoot = makeTempRoot();
+    const appAsarPath = join(resourcesRoot, 'app.asar/server/dist/conversations/sessions.js');
+    touch(appAsarPath);
+    delete process.env.PERSONAL_AGENT_REPO_ROOT;
+    process.chdir(cwdRoot);
+
+    const resolved = resolveServerModuleSpecifierFrom({
+      importMetaUrl: pathToFileURL(join(resourcesRoot, 'extensions/system-conversation-tools/dist/backend.mjs')).href,
+      relativeSpecifier: '../../conversations/sessions.js',
+      resourcesPath: resourcesRoot,
+    });
+
+    expect(resolved).toBe(pathToFileURL(appAsarPath).href);
   });
 });

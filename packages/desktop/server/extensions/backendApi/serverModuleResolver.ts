@@ -8,6 +8,7 @@ interface ResolveServerModuleSpecifierOptions {
   importMetaUrl: string;
   relativeSpecifier: string;
   normalize?: (relativeSpecifier: string) => string;
+  resourcesPath?: string;
 }
 
 export function normalizeServerModuleSpecifier(relativeSpecifier: string): string {
@@ -22,11 +23,13 @@ export function resolveServerModuleSpecifierFrom({
   importMetaUrl,
   relativeSpecifier,
   normalize = normalizeServerModuleSpecifier,
+  resourcesPath: providedResourcesPath,
 }: ResolveServerModuleSpecifierOptions): string {
   if (!relativeSpecifier.startsWith('.')) return relativeSpecifier;
 
   const normalized = normalize(relativeSpecifier);
   const currentDir = dirname(fileURLToPath(importMetaUrl));
+  const resourcesPath = providedResourcesPath ?? process.resourcesPath;
   const candidates = [
     ...(process.env.PERSONAL_AGENT_REPO_ROOT
       ? [
@@ -37,12 +40,13 @@ export function resolveServerModuleSpecifierFrom({
     resolve(process.cwd(), 'packages/desktop/server/dist', normalized),
     resolve(process.cwd(), 'packages/desktop/dist/server', normalized),
     resolve(currentDir, relativeSpecifier),
-    ...(typeof process.resourcesPath === 'string'
+    ...(typeof resourcesPath === 'string'
       ? [
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/server/dist', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/server/dist', normalized),
-          resolve(process.resourcesPath, 'server/dist', normalized),
+          resolve(resourcesPath, 'app.asar.unpacked/packages/desktop/server/dist', normalized),
+          resolve(resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
+          resolve(resourcesPath, 'app.asar.unpacked/server/dist', normalized),
+          resolve(resourcesPath, 'app.asar/server/dist', normalized),
+          resolve(resourcesPath, 'server/dist', normalized),
         ]
       : []),
   ];
