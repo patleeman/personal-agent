@@ -39,6 +39,7 @@ export type ExtensionIconName =
   | 'terminal';
 export type ExtensionPermission =
   | 'agent:run'
+  | 'agent:conversations'
   | 'runs:read'
   | 'runs:start'
   | 'runs:cancel'

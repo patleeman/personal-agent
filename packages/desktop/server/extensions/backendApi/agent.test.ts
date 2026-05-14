@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resetExtensionAgentDynamicImportForTests, runAgentTask, setExtensionAgentDynamicImportForTests } from './agent.js';
+import {
+  createAgentConversation,
+  disposeAgentConversation,
+  getAgentConversation,
+  listAgentConversations,
+  resetExtensionAgentDynamicImportForTests,
+  runAgentTask,
+  sendAgentMessage,
+  setExtensionAgentDynamicImportForTests,
+} from './agent.js';
 
 function createSession(overrides?: { prompt?: () => Promise<void>; messages?: unknown[]; emitText?: boolean }) {
   const subscribers: Array<(event: any) => void> = [];
@@ -17,6 +26,7 @@ function createSession(overrides?: { prompt?: () => Promise<void>; messages?: un
         handler({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'probe result' }] } }),
       );
     }),
+    abort: vi.fn(),
     dispose: vi.fn(),
   };
   return session;
@@ -34,7 +44,9 @@ function installImporter(options?: { session?: ReturnType<typeof createSession>;
       };
     }
     if (specifier === '../extensionRegistry.js') {
-      return { findExtensionEntry: vi.fn(() => ({ manifest: { permissions: options?.permissions ?? ['agent:run'] } })) };
+      return {
+        findExtensionEntry: vi.fn(() => ({ manifest: { permissions: options?.permissions ?? ['agent:run', 'agent:conversations'] } })),
+      };
     }
     throw new Error(`unexpected import: ${specifier}`);
   });
@@ -62,13 +74,14 @@ describe('extension agent backend API', () => {
   afterEach(() => {
     resetExtensionAgentDynamicImportForTests();
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
-  it('runs a host-owned no-tools agent task and returns assistant text', async () => {
+  it('runs runAgentTask as create/send/dispose sugar', async () => {
     const { createAgentSession, session } = installImporter();
 
     const result = await runAgentTask(
-      { prompt: 'Describe', modelRef: 'openai/gpt-vision', images: [{ type: 'image', data: 'abc', mimeType: 'image/png' }] },
+      { prompt: 'Describe', modelRef: 'openai/gpt-vision', images: [{ type: 'image', data: 'abc', mimeType: 'image/png' }], tools: 'none' },
       createCtx(),
     );
 
@@ -76,6 +89,36 @@ describe('extension agent backend API', () => {
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/workspace', noTools: 'all' }));
     expect(session.prompt).toHaveBeenCalledWith('Describe', { images: [{ type: 'image', data: 'abc', mimeType: 'image/png' }] });
     expect(session.dispose).toHaveBeenCalled();
+  });
+
+  it('keeps extension-owned hidden conversations for multiple sends', async () => {
+    installImporter();
+    const ctx = createCtx();
+
+    const created = await createAgentConversation({ title: 'Probe thread', tools: 'none' }, ctx);
+    const first = await sendAgentMessage({ conversationId: created.id, text: 'first' }, ctx);
+    const second = await sendAgentMessage({ conversationId: created.id, text: 'second' }, ctx);
+    const listed = await listAgentConversations({}, ctx);
+    const fetched = await getAgentConversation({ conversationId: created.id }, ctx);
+
+    expect(first.text).toBe('probe result');
+    expect(second.text).toBe('probe result');
+    expect(listed.map((item) => item.id)).toContain(created.id);
+    expect(fetched).toMatchObject({
+      id: created.id,
+      ownerExtensionId: 'system-image-probe',
+      visibility: 'hidden',
+      persistence: 'ephemeral',
+    });
+  });
+
+  it('hides conversations from other extension owners', async () => {
+    installImporter();
+    const created = await createAgentConversation({ title: 'Private' }, createCtx());
+
+    await expect(getAgentConversation({ conversationId: created.id }, createCtx({ extensionId: 'other-extension' }))).rejects.toThrow(
+      'not found',
+    );
   });
 
   it('falls back to session messages when no message_end event emits text', async () => {
@@ -97,13 +140,25 @@ describe('extension agent backend API', () => {
     ).rejects.toThrow('does not accept images');
   });
 
-  it('requires agent:run permission when extension id is known', async () => {
-    installImporter({ permissions: [] });
+  it('requires agent:conversations permission for retained sessions', async () => {
+    installImporter({ permissions: ['agent:run'] });
 
-    await expect(runAgentTask({ prompt: 'Describe' }, createCtx())).rejects.toThrow('requires permission agent:run');
+    await expect(createAgentConversation({ title: 'Denied' }, createCtx())).rejects.toThrow('requires permission agent:conversations');
   });
 
-  it('disposes the session when a task times out', async () => {
+  it('disposes retained sessions explicitly', async () => {
+    const { session } = installImporter();
+    const created = await createAgentConversation({ title: 'Dispose me' }, createCtx());
+
+    await expect(disposeAgentConversation({ conversationId: created.id }, createCtx())).resolves.toEqual({
+      ok: true,
+      conversationId: created.id,
+    });
+    expect(session.dispose).toHaveBeenCalled();
+    await expect(getAgentConversation({ conversationId: created.id }, createCtx())).rejects.toThrow('not found');
+  });
+
+  it('aborts and disposes the session when a task times out', async () => {
     vi.useFakeTimers();
     const session = createSession({ prompt: () => new Promise(() => undefined) });
     installImporter({ session });
@@ -112,7 +167,7 @@ describe('extension agent backend API', () => {
     await vi.advanceTimersByTimeAsync(10);
 
     await assertion;
+    expect(session.abort).toHaveBeenCalled();
     expect(session.dispose).toHaveBeenCalled();
-    vi.useRealTimers();
   });
 });

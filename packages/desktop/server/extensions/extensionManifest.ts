@@ -42,6 +42,7 @@ export type ExtensionIconName = (typeof EXTENSION_ICON_NAMES)[number];
 
 export const EXTENSION_PERMISSIONS = [
   'agent:run',
+  'agent:conversations',
   'runs:read',
   'runs:start',
   'runs:cancel',
