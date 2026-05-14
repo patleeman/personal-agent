@@ -36,7 +36,7 @@ export async function queueLiveSessionPromptContext(
   const customMessage = {
     customType,
     content: message,
-    display: false,
+    display: true,
     details: undefined,
   };
 

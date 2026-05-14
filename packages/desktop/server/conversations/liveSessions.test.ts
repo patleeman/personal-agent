@@ -3096,6 +3096,7 @@ describe('queuePromptContext', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'referenced_context',
       content: 'Conversation automation context',
+      display: true,
       details: undefined,
     });
   });
@@ -3125,6 +3126,7 @@ describe('queuePromptContext', () => {
       {
         customType: 'referenced_context',
         content: 'Conversation automation context',
+        display: true,
         details: undefined,
       },
       {
