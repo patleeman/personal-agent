@@ -1,6 +1,3 @@
-import { createImageAgentExtension } from './imageTool.js';
-import { createImageProbeAgentExtension } from './probeImageTool.js';
-
 interface ImageBackendContext {
   agentToolContext?: unknown;
   toolContext?: { preferredVisionModel?: string };
@@ -57,7 +54,8 @@ async function executeRegisteredTool(factory: (pi: RegisterToolApi) => void, inp
 }
 
 export async function image(input: unknown, ctx: ImageBackendContext) {
-  const result = (await executeRegisteredTool(createImageAgentExtension(), input, ctx)) as ToolExecutionResult;
+  const module = await import('./imageTool.js');
+  const result = (await executeRegisteredTool(module.createImageAgentExtension(), input, ctx)) as ToolExecutionResult;
   return {
     text: extractToolText(result),
     ...(result.content ? { content: result.content } : {}),
@@ -71,8 +69,9 @@ export async function probeImage(input: unknown, ctx: ImageBackendContext) {
   if (!preferredVisionModel) {
     throw new Error('Probe image requires a configured preferred vision model.');
   }
+  const module = await import('./probeImageTool.js');
   const result = (await executeRegisteredTool(
-    createImageProbeAgentExtension({ getPreferredVisionModel: () => preferredVisionModel }),
+    module.createImageProbeAgentExtension({ getPreferredVisionModel: () => preferredVisionModel }),
     input,
     ctx,
   )) as ToolExecutionResult;

@@ -23,12 +23,12 @@ interface SettingsRecord {
 }
 
 export async function listExtensions(_input: unknown, _ctx: ExtensionBackendContext) {
-  return { ok: true, extensions: listExtensionInstallSummaries() };
+  return { ok: true, extensions: await listExtensionInstallSummaries() };
 }
 
 export async function createExtension(input: unknown, _ctx: ExtensionBackendContext) {
   const body = asRecord(input);
-  const result = createRuntimeExtension({
+  const result = await createRuntimeExtension({
     id: body.id,
     name: body.name,
     description: body.description,
@@ -39,7 +39,7 @@ export async function createExtension(input: unknown, _ctx: ExtensionBackendCont
 
 export async function snapshotExtension(input: ExtensionIdInput, _ctx: ExtensionBackendContext) {
   const extensionId = requireExtensionId(input);
-  return { ok: true, ...(snapshotRuntimeExtension(extensionId) as object) };
+  return { ok: true, ...((await snapshotRuntimeExtension(extensionId)) as object) };
 }
 
 export async function buildExtension(input: ExtensionIdInput, _ctx: ExtensionBackendContext) {
