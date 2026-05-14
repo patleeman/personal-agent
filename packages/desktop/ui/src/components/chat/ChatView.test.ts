@@ -1376,25 +1376,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toMatch(/content-visibility/i);
   });
 
-  it('positions the windowing badge below sticky history controls when given a top offset', () => {
-    const html = renderToStaticMarkup(
-      createElement(ChatView, {
-        messages: Array.from({ length: 96 }, (_, index) => ({
-          type: 'text' as const,
-          ts: `2026-03-11T18:01:${String(index).padStart(2, '0')}.000Z`,
-          text: `Windowed block ${index + 1}`,
-        })),
-        performanceMode: 'aggressive',
-        scrollContainerRef: { current: null },
-        windowingBadgeTopOffset: 56,
-      }),
-    );
-
-    expect(html).toContain('windowing');
-    expect(html).toContain('style="top:56px"');
-  });
-
-  it('renders history controls and windowing counts in one chrome row', () => {
+  it('renders transcript boundary content inline before windowed messages', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: Array.from({ length: 96 }, (_, index) => ({
@@ -1404,12 +1386,14 @@ describe('chat view streaming disclosure', () => {
         })),
         performanceMode: 'aggressive',
         scrollContainerRef: { current: null },
-        windowingHeaderContent: createElement('div', null, 'Showing latest 96 of 2128 blocks.'),
+        windowingHeaderContent: createElement('div', null, 'Earlier conversation hidden · Viewing 75–100% · Load previous 10%'),
       }),
     );
 
-    expect(html).toContain('Showing latest 96 of 2128 blocks.');
-    expect(html).toContain('windowing');
-    expect(html).not.toContain('style="top:');
+    expect(html).toContain('Earlier conversation hidden');
+    expect(html).toContain('Viewing 75–100%');
+    expect(html).toContain('Load previous 10%');
+    expect(html).not.toContain('windowing');
+    expect(html).not.toContain('mounted');
   });
 });

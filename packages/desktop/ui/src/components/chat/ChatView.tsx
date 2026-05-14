@@ -5,14 +5,9 @@ import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import { ChatRenderItemView } from './ChatRenderItemView.js';
-import { SelectionContextMenu, StreamingIndicator, WindowingBadge } from './ChatTranscriptChrome.js';
+import { SelectionContextMenu, StreamingIndicator } from './ChatTranscriptChrome.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
-import {
-  CHAT_VIEW_RENDERING_PROFILE,
-  CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
-  type ChatViewPerformanceMode,
-  WindowedChatChunk,
-} from './chatWindowing.js';
+import { CHAT_VIEW_RENDERING_PROFILE, type ChatViewPerformanceMode, WindowedChatChunk } from './chatWindowing.js';
 import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
 import { SystemPromptMessage } from './MessageBlocks.js';
 import { getStreamingStatusLabel } from './toolPresentation.js';
@@ -54,7 +49,6 @@ interface ChatViewProps {
   resumeConversationBusy?: boolean;
   resumeConversationTitle?: string | null;
   resumeConversationLabel?: string;
-  windowingBadgeTopOffset?: number;
   windowingHeaderContent?: React.ReactNode;
   anchorWindowingToTail?: boolean;
   systemPrompt?: string | null;
@@ -120,7 +114,6 @@ export const ChatView = memo(function ChatView({
   resumeConversationBusy = false,
   resumeConversationTitle,
   resumeConversationLabel = 'continue',
-  windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
   windowingHeaderContent,
   anchorWindowingToTail = false,
   systemPrompt = null,
@@ -307,22 +300,7 @@ export const ChatView = memo(function ChatView({
     ? visibleChunkRange.chunks.reduce((sum, chunk) => sum + chunk.spanCount, 0)
     : messages.length;
   const mountedChunkCount = visibleChunkRange?.chunks.length ?? renderChunks.length;
-  const windowingBadge = shouldWindowTranscript ? (
-    <WindowingBadge
-      topOffset={windowingBadgeTopOffset}
-      loadedMessageCount={messages.length}
-      mountedMessageCount={mountedMessageCount}
-      mountedChunkCount={mountedChunkCount}
-      totalChunkCount={renderChunks.length}
-      inline={Boolean(windowingHeaderContent)}
-    />
-  ) : null;
-  const windowingHeader = windowingHeaderContent ? (
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0">{windowingHeaderContent}</div>
-      {windowingBadge}
-    </div>
-  ) : null;
+  const transcriptBoundary = windowingHeaderContent ? <div className="mb-5">{windowingHeaderContent}</div> : null;
 
   useEffect(() => {
     const startedAtMs = renderStartedAtRef.current;
@@ -379,9 +357,8 @@ export const ChatView = memo(function ChatView({
         {/* Bottom padding (pb-24) keeps the last message clear of the input area
             when the user is scrolled to the bottom and the textarea grows
             while typing (e.g. multi-line input). */}
-        {windowingHeader}
-        {!windowingHeader ? windowingBadge : null}
         {systemPrompt?.trim() ? <SystemPromptMessage text={systemPrompt} /> : null}
+        {transcriptBoundary}
         {shouldWindowTranscript ? windowedTranscript : fullTranscript}
         {showStreamingIndicator && (
           <div className={shouldWindowTranscript && visibleChunkRange?.chunks.length ? '' : 'mt-4'}>

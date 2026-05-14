@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SelectionContextMenu, StreamingIndicator, WindowingBadge } from './ChatTranscriptChrome.js';
+import { SelectionContextMenu, StreamingIndicator } from './ChatTranscriptChrome.js';
 
 describe('ChatTranscriptChrome', () => {
   it('renders streaming status accessibly', () => {
@@ -10,17 +10,6 @@ describe('ChatTranscriptChrome', () => {
 
     expect(html).toContain('role="status"');
     expect(html).toContain('Working…');
-  });
-
-  it('renders compact windowing counts', () => {
-    const html = renderToStaticMarkup(
-      <WindowingBadge topOffset={-10} loadedMessageCount={12_000} mountedMessageCount={1_200} mountedChunkCount={2} totalChunkCount={9} />,
-    );
-
-    expect(html).toContain('top:0px');
-    expect(html).toContain('12k loaded');
-    expect(html).toContain('1.2k mounted');
-    expect(html).toContain('2/9 chunks');
   });
 
   it('renders reply and copy actions when reply selection is available', () => {

@@ -26,7 +26,6 @@ export const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, ChatWi
 };
 
 export const CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT = 96;
-export const CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX = 12;
 
 export interface ChatRenderChunk {
   key: string;

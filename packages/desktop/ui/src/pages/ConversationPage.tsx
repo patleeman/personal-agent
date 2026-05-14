@@ -321,6 +321,7 @@ interface ExcalidrawEditorSavePayload {
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 60;
 const HISTORICAL_TAIL_BLOCKS_STEP = 200;
+const HISTORICAL_TAIL_BLOCKS_STEP_PERCENT = 10;
 const MAX_RELATED_THREAD_SELECTIONS = 5;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
 const RELATED_THREAD_RECENT_WINDOW_DAYS = 3;
@@ -1043,7 +1044,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // re-fetched if the user scrolls back up.
   const { computedMessages, computedHistoricalBlockOffset, computedHistoricalTotalBlocks } = useMemo(() => {
     const msgs = computedMessagesRaw;
-    if (!msgs || msgs.length <= MAX_RENDERED_BLOCKS) {
+    const maxRenderedBlocks = Math.max(MAX_RENDERED_BLOCKS, Math.min(historicalTailBlocks, computedHistoricalTotalBlocksRaw));
+    if (!msgs || msgs.length <= maxRenderedBlocks) {
       return {
         computedMessages: msgs,
         computedHistoricalBlockOffset: computedHistoricalBlockOffsetRaw,
@@ -1051,13 +1053,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       };
     }
 
-    const excess = msgs.length - MAX_RENDERED_BLOCKS;
+    const excess = msgs.length - maxRenderedBlocks;
     return {
       computedMessages: msgs.slice(excess),
       computedHistoricalBlockOffset: computedHistoricalBlockOffsetRaw + excess,
       computedHistoricalTotalBlocks: computedHistoricalTotalBlocksRaw,
     };
-  }, [computedHistoricalBlockOffsetRaw, computedHistoricalTotalBlocksRaw, computedMessagesRaw]);
+  }, [computedHistoricalBlockOffsetRaw, computedHistoricalTotalBlocksRaw, computedMessagesRaw, historicalTailBlocks]);
 
   const [stableTranscriptState, setStableTranscriptState] = useState<{
     conversationId: string;
@@ -2081,7 +2083,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [id, realMessages, scrollToBottom, showInitialHistoricalWarmupLoader]);
 
   const loadOlderMessages = useCallback(
-    (targetMessageIndex?: number, options?: { automatic?: boolean }) => {
+    (targetMessageIndex?: number, options?: { automatic?: boolean; tailBlockStep?: number }) => {
       if (!id || sessionLoading || historicalTotalBlocks <= 0) {
         return;
       }
@@ -2090,13 +2092,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
+      const tailBlockStep = Math.max(1, Math.ceil(options?.tailBlockStep ?? HISTORICAL_TAIL_BLOCKS_STEP));
       const minimumTailBlocks =
         typeof targetMessageIndex === 'number'
-          ? Math.max(
-              historicalTailBlocks + HISTORICAL_TAIL_BLOCKS_STEP,
-              historicalTotalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING,
-            )
-          : historicalTailBlocks + HISTORICAL_TAIL_BLOCKS_STEP;
+          ? Math.max(historicalTailBlocks + tailBlockStep, historicalTotalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING)
+          : historicalTailBlocks + tailBlockStep;
       const nextTailBlocks = Math.min(historicalTotalBlocks, minimumTailBlocks);
 
       if (nextTailBlocks <= historicalTailBlocks) {
@@ -5376,8 +5376,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         : null;
   const visibleTranscriptMessages = visibleTranscriptState?.messages;
   const visibleTranscriptMessageIndexOffset = visibleTranscriptState?.historicalBlockOffset ?? 0;
+  const visibleTranscriptTotalBlocks = visibleTranscriptState?.historicalTotalBlocks ?? 0;
+  const visibleTranscriptCount = visibleTranscriptMessages?.length ?? 0;
   const visibleTranscriptHasOlderBlocks =
     !showConversationLoadingState && !draft && Boolean(id) && visibleTranscriptState?.conversationId === id && showHistoricalLoadMore;
+  const visibleTranscriptStartPercent =
+    visibleTranscriptTotalBlocks > 0
+      ? Math.min(100, Math.max(0, Math.ceil((visibleTranscriptMessageIndexOffset / visibleTranscriptTotalBlocks) * 100)))
+      : 0;
+  const visibleTranscriptEndPercent =
+    visibleTranscriptTotalBlocks > 0
+      ? Math.min(
+          100,
+          Math.max(
+            visibleTranscriptStartPercent,
+            Math.ceil(((visibleTranscriptMessageIndexOffset + visibleTranscriptCount) / visibleTranscriptTotalBlocks) * 100),
+          ),
+        )
+      : 100;
+  const previousTranscriptPercent = Math.min(HISTORICAL_TAIL_BLOCKS_STEP_PERCENT, Math.max(1, visibleTranscriptStartPercent));
+  const previousTranscriptBlockStep = Math.max(1, Math.ceil((visibleTranscriptTotalBlocks * previousTranscriptPercent) / 100));
   const renderingStaleTranscript = Boolean(visibleTranscriptState?.conversationId && id && visibleTranscriptState.conversationId !== id);
   const showInlineConversationLoadingState = shouldShowConversationInlineLoadingState({
     showConversationLoadingState,
@@ -5586,27 +5604,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
                 windowingHeaderContent={
                   visibleTranscriptHasOlderBlocks ? (
-                    <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                      <div className="min-w-0 text-secondary/80">
-                        Showing latest{' '}
-                        <span className="font-medium text-primary/85">
-                          {realMessages?.length ?? visibleTranscriptMessages?.length ?? 0}
-                        </span>{' '}
-                        of <span className="font-medium text-primary/85">{historicalTotalBlocks}</span> blocks.
+                    <div className="relative my-2 flex items-center gap-3 py-3 text-[11px] text-secondary/80">
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border-subtle to-border-subtle" aria-hidden />
+                      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full bg-surface/90 px-3 py-1.5 shadow-sm">
+                        <span>Earlier conversation hidden</span>
+                        <span className="text-dim" aria-hidden>
+                          ·
+                        </span>
+                        <span>
+                          Viewing {visibleTranscriptStartPercent}–{visibleTranscriptEndPercent}%
+                        </span>
+                        <span className="text-dim" aria-hidden>
+                          ·
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => loadOlderMessages(undefined, { tailBlockStep: previousTranscriptBlockStep })}
+                          disabled={sessionLoading}
+                          className="font-medium text-accent hover:text-primary disabled:pointer-events-none disabled:text-secondary/60"
+                        >
+                          {sessionLoading ? 'Loading earlier…' : `Load previous ${previousTranscriptPercent}%`}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => loadOlderMessages()}
-                        disabled={sessionLoading}
-                        className="ui-toolbar-button shrink-0 text-[11px] text-secondary/90 hover:text-primary"
-                      >
-                        {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older`}
-                      </button>
+                      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-border-subtle to-border-subtle" aria-hidden />
                     </div>
                   ) : undefined
                 }
                 anchorWindowingToTail={atBottom}
-                windowingBadgeTopOffset={conversationHeaderOffset + 12}
               />
             </>
           ) : (
@@ -5729,7 +5753,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       conversationRunningForPage,
       conversationPerformanceMode,
       submitAskUserQuestion,
-      historicalTotalBlocks,
+      visibleTranscriptStartPercent,
+      visibleTranscriptEndPercent,
+      previousTranscriptPercent,
+      previousTranscriptBlockStep,
       availableDraftWorkspacePaths,
       hasDraftCwd,
       clearDraftConversationCwdSelection,
