@@ -7,6 +7,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { init, parse } from 'es-module-lexer';
 
+import { backendBundleByteLimit, criticalSmokeActionInput, FORBIDDEN_BUNDLED_PATH_FRAGMENTS } from './extension-hardening-config.mjs';
+
 process.setMaxListeners(0);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -46,26 +48,6 @@ const forbiddenBackendPrefixes = [
   '@sinclair/typebox',
   'jsdom',
 ];
-const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 8 * 1024 * 1024;
-const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
-  ['system-automations', 24 * 1024 * 1024],
-  ['system-conversation-tools', 26 * 1024 * 1024],
-  ['system-extension-manager', 24 * 1024 * 1024],
-  ['system-images', 24 * 1024 * 1024],
-  ['system-knowledge', 30 * 1024 * 1024],
-  ['system-openai-native-compaction', 12 * 1024 * 1024],
-  ['system-runs', 24 * 1024 * 1024],
-  ['system-suggested-context', 24 * 1024 * 1024],
-  ['system-web-tools', 24 * 1024 * 1024],
-  ['slack-mcp-gateway', 26 * 1024 * 1024],
-  ['system-session-exchange', 24 * 1024 * 1024],
-]);
-const FORBIDDEN_BUNDLED_PATH_FRAGMENTS = ['/node_modules/@personal-agent/daemon/', '/packages/daemon/'];
-const PRODUCT_CRITICAL_EXTENSION_SMOKE_ACTIONS = new Map([
-  ['system-automations', { scheduledTask: { action: 'list' }, conversationQueue: { action: 'list' } }],
-  ['system-diffs', { checkpoint: { action: 'list' } }],
-  ['system-knowledge', { readState: {}, vaultTree: {}, vaultSearch: { q: '', limit: 1 } }],
-]);
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -123,10 +105,6 @@ function collectForbiddenBundledPaths(filePath) {
   return FORBIDDEN_BUNDLED_PATH_FRAGMENTS.filter((fragment) => source.includes(fragment));
 }
 
-function backendBundleByteLimit(id) {
-  return BACKEND_BUNDLE_BYTE_LIMITS.get(id) ?? DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT;
-}
-
 function isAllowedBackendImport(specifier) {
   if (allowedBackendBareImports.has(specifier)) return true;
   const packageName = packageNameFor(specifier);
@@ -154,7 +132,7 @@ function frontendEntryPath(extensionDir, manifest) {
 }
 
 function safeActionInputFor(id, manifest, actionId) {
-  const criticalInput = PRODUCT_CRITICAL_EXTENSION_SMOKE_ACTIONS.get(id)?.[actionId];
+  const criticalInput = criticalSmokeActionInput(id, actionId);
   if (criticalInput !== undefined) return criticalInput;
   const tool = manifest.contributes?.tools?.find((candidate) => candidate.action === actionId);
   const safeListTools = new Set(['scheduled_task', 'conversation_queue', 'run']);

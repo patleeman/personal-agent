@@ -1051,10 +1051,12 @@ that are not available inside the packaged desktop app, such as
 `@earendil-works/pi-coding-agent`, `@personal-agent/core`,
 `@personal-agent/daemon`, `jsdom`, and `@sinclair/typebox`. It also rejects
 absolute or `file:` imports, forbidden bundled runtime path fragments, and backend
-bundles over their explicit byte budget, so release-temp paths, accidental daemon
-bundling, or runaway backend API seams cannot hide in extension output after the
-build. This catches the “works from repo node_modules, breaks in the signed app”
-class of extension bug before release.
+bundles over their explicit byte budget. The packaged-extension hardening knobs
+live in `scripts/extension-hardening-config.mjs`, so smoke inputs and size budgets
+are explicit instead of being buried in the checker. This catches release-temp
+paths, accidental daemon bundling, runaway backend API seams, and the “works from
+repo node_modules, breaks in the signed app” class of extension bug before
+release.
 
 The desktop server also runs an enabled-extension backend health check on startup.
 Failures are logged, surfaced as extension diagnostics, and shown by Extension
