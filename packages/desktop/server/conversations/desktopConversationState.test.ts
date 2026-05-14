@@ -485,6 +485,7 @@ describe('readDesktopConversationState', () => {
         controllerAcquiredAt: null,
       },
       autoModeState: null,
+      systemPrompt: null,
       cwdChange: null,
     });
 
@@ -543,6 +544,7 @@ describe('readDesktopConversationState', () => {
           controllerAcquiredAt: null,
         },
         autoModeState: null,
+        systemPrompt: null,
         cwdChange: null,
       },
     });
@@ -577,6 +579,7 @@ describe('readDesktopConversationState', () => {
       parallelJobs: [],
       presence: { surfaces: [], controllerSurfaceId: null, controllerSurfaceType: null, controllerAcquiredAt: null },
       autoModeState: null,
+      systemPrompt: null,
       cwdChange: null,
     });
 
@@ -619,6 +622,7 @@ describe('readDesktopConversationState', () => {
       parallelJobs: [],
       presence: { surfaces: [], controllerSurfaceId: null, controllerSurfaceType: null, controllerAcquiredAt: null },
       autoModeState: null,
+      systemPrompt: null,
       cwdChange: null,
     });
 

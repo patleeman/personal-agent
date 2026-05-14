@@ -86,6 +86,7 @@ describe('ConversationPage desktop local state', () => {
               controllerAcquiredAt: null,
             },
             autoModeState: null,
+            systemPrompt: 'You are a local desktop agent.',
             cwdChange: null,
           },
         },
@@ -101,6 +102,8 @@ describe('ConversationPage desktop local state', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('System prompt');
+    expect(html).toContain('Runtime instructions available for inspection.');
     expect(html).toContain('hello from desktop state');
     expect(html).toContain('desktop state reply');
     expect(html).toContain('Local desktop state');

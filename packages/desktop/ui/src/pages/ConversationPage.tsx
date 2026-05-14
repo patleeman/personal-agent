@@ -5554,6 +5554,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 key={visibleTranscriptState?.conversationId ?? id ?? 'draft-conversation'}
                 conversationId={visibleTranscriptState?.conversationId ?? id ?? null}
                 messages={visibleTranscriptMessages}
+                systemPrompt={isLiveSession ? stream.systemPrompt : null}
                 messageIndexOffset={visibleTranscriptMessageIndexOffset}
                 scrollContainerRef={scrollRef}
                 focusMessageIndex={renderingStaleTranscript ? null : requestedFocusMessageIndex}

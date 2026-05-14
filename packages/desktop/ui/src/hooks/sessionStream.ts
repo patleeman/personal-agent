@@ -29,6 +29,7 @@ export interface StreamState {
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   goalState: ThreadGoal | null;
+  systemPrompt: string | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -57,6 +58,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   parallelJobs: [],
   presence: createEmptyLiveSessionPresenceState(),
   goalState: null,
+  systemPrompt: null,
   cwdChange: null,
 };
 

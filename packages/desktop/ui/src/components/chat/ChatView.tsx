@@ -14,6 +14,7 @@ import {
   WindowedChatChunk,
 } from './chatWindowing.js';
 import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
+import { SystemPromptMessage } from './MessageBlocks.js';
 import { getStreamingStatusLabel } from './toolPresentation.js';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
 import { useChatReplySelection } from './useChatReplySelection.js';
@@ -56,6 +57,7 @@ interface ChatViewProps {
   windowingBadgeTopOffset?: number;
   windowingHeaderContent?: React.ReactNode;
   anchorWindowingToTail?: boolean;
+  systemPrompt?: string | null;
 }
 
 function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<HTMLDivElement>): boolean {
@@ -121,6 +123,7 @@ export const ChatView = memo(function ChatView({
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
   windowingHeaderContent,
   anchorWindowingToTail = false,
+  systemPrompt = null,
 }: ChatViewProps) {
   const renderStartedAtRef = useRef(performance.now());
   renderStartedAtRef.current = performance.now();
@@ -378,6 +381,7 @@ export const ChatView = memo(function ChatView({
             while typing (e.g. multi-line input). */}
         {windowingHeader}
         {!windowingHeader ? windowingBadge : null}
+        {systemPrompt?.trim() ? <SystemPromptMessage text={systemPrompt} /> : null}
         {shouldWindowTranscript ? windowedTranscript : fullTranscript}
         {showStreamingIndicator && (
           <div className={shouldWindowTranscript && visibleChunkRange?.chunks.length ? '' : 'mt-4'}>

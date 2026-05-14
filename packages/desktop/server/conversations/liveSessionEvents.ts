@@ -28,6 +28,7 @@ export type SseEvent =
       totalBlocks: number;
       isStreaming: boolean;
       goalState?: ThreadGoal | null;
+      systemPrompt?: string | null;
     }
   | { type: 'agent_start' }
   | { type: 'agent_end' }

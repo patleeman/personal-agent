@@ -44,6 +44,7 @@ export interface LiveSessionStateSnapshot {
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   parallelJobs: ParallelPromptPreview[];
   goalState: ThreadGoal | null;
+  systemPrompt: string | null;
   presence: LiveSessionPresenceState;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
@@ -129,6 +130,7 @@ export function readLiveSessionStateSnapshotFromEntry(
     isCompacting: entry.isCompacting === true,
     hasStaleTurnState: hasQueuedOrActiveStaleTurn(entry),
     goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
+    systemPrompt: entry.session.systemPrompt?.trim() || null,
     error: entry.currentTurnError ?? null,
     title,
     tokens,

@@ -65,6 +65,7 @@ export interface DesktopConversationStreamState {
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   goalState: import('./sessions.js').ThreadGoal | null;
+  systemPrompt: string | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -115,6 +116,7 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
     },
     cwdChange: null,
     goalState: null,
+    systemPrompt: null,
   };
 }
 
@@ -282,6 +284,7 @@ export function createDesktopConversationStreamStateFromSnapshot(snapshot: LiveS
     parallelJobs: snapshot.parallelJobs,
     presence: snapshot.presence,
     cwdChange: snapshot.cwdChange,
+    systemPrompt: snapshot.systemPrompt,
     autoModeState: null,
     ...(snapshot.goalState ? { goalState: snapshot.goalState } : {}),
   };
@@ -308,6 +311,7 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
         isCompacting: false,
         error: null,
         goalState: 'goalState' in event ? (event.goalState as import('./sessions.js').ThreadGoal | null) : prev.goalState,
+        systemPrompt: 'systemPrompt' in event ? (event.systemPrompt ?? null) : prev.systemPrompt,
       };
     }
 

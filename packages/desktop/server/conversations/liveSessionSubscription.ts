@@ -74,9 +74,11 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
 ): void {
   ensureStaleTurnState(entry);
   const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
+  const systemPrompt = entry.session.systemPrompt?.trim() || null;
   subscription.send({
     type: 'snapshot',
     goalState,
+    ...(systemPrompt ? { systemPrompt } : {}),
     ...buildLiveSessionSnapshot(entry, options?.tailBlocks),
   });
   const title = resolveTitle(entry);

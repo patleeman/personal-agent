@@ -934,6 +934,7 @@ interface DesktopConversationStreamState {
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
+  systemPrompt: string | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -954,6 +955,7 @@ export type SseEvent =
       totalBlocks: number;
       isStreaming: boolean;
       goalState?: ThreadGoal | null;
+      systemPrompt?: string | null;
     }
   | { type: 'agent_start' }
   | { type: 'agent_end' }

@@ -17,6 +17,8 @@ function formatSystemEventLabel(customType?: string): string {
   switch (customType) {
     case 'goal-continuation':
       return 'Goal continuation';
+    case 'system_prompt':
+      return 'System prompt';
     case 'referenced_context':
       return 'Context added';
     case 'browser-comments':
@@ -324,6 +326,24 @@ function SystemEventFrame({
     </details>
   );
 }
+
+export const SystemPromptMessage = memo(function SystemPromptMessage({ text }: { text: string }) {
+  const normalizedText = text.trim();
+  if (!normalizedText) {
+    return null;
+  }
+
+  return (
+    <SystemEventFrame
+      label="System prompt"
+      preview="Runtime instructions available for inspection."
+      ts={new Date(0).toISOString()}
+      dataAttributes={{ 'data-context-type': 'system_prompt' }}
+    >
+      <div className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">{renderText(normalizedText)}</div>
+    </SystemEventFrame>
+  );
+});
 
 export const SystemEventMessage = memo(function SystemEventMessage({
   block,

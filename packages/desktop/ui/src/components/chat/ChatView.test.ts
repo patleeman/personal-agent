@@ -986,6 +986,29 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('renders the system prompt as an optional collapsed transcript disclosure', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        systemPrompt: 'You are Patrick’s personal agent.\nUse the repo instructions.',
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Start',
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain('<details');
+    expect(html).toContain('data-context-type="system_prompt"');
+    expect(html).toContain('System prompt');
+    expect(html).toContain('Runtime instructions available for inspection.');
+    expect(html).toContain('You are Patrick');
+    expect(html).toContain('rounded-xl');
+    expect(html).not.toContain('ui-message-card-assistant');
+  });
+
   it('renders context blocks as quiet expandable system events', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
