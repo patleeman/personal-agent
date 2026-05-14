@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type {
@@ -93,17 +93,40 @@ function pcm16ToFloat32(data: Buffer): Float32Array {
   return output;
 }
 
-const _require = createRequire(fileURLToPath(import.meta.url));
-const hostRequire = createRequire(join(process.cwd(), 'package.json'));
+function buildWhisperRequireCandidatePaths(moduleUrl: string, cwd: string): string[] {
+  const moduleFile = fileURLToPath(moduleUrl);
+  const candidates = [join(cwd, 'package.json'), moduleFile];
+
+  let current = dirname(moduleFile);
+  for (let depth = 0; depth < 8; depth += 1) {
+    candidates.push(join(current, 'package.json'));
+    candidates.push(join(current, 'packages', 'desktop', 'package.json'));
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return [...new Set(candidates)];
+}
 
 let whisperCppModule: WhisperCppNodeModule | undefined;
 
 function loadWhisperCpp(): WhisperCppNodeModule {
   if (!whisperCppModule) {
-    try {
-      whisperCppModule = hostRequire('whisper-cpp-node') as WhisperCppNodeModule;
-    } catch {
-      whisperCppModule = _require('whisper-cpp-node') as WhisperCppNodeModule;
+    const errors: string[] = [];
+    for (const candidate of buildWhisperRequireCandidatePaths(import.meta.url, process.cwd())) {
+      try {
+        whisperCppModule = createRequire(candidate)('whisper-cpp-node') as WhisperCppNodeModule;
+        break;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (!whisperCppModule) {
+      throw new Error(
+        `Cannot load whisper-cpp-node. Install desktop dependencies with pnpm install. Tried ${errors.length} resolution paths.`,
+      );
     }
   }
   return whisperCppModule;
@@ -252,6 +275,7 @@ export class LocalWhisperTranscriptionProvider {
 }
 
 export const testExports = {
+  buildWhisperRequireCandidatePaths,
   normalizeLocalWhisperModel,
   resolveModelFileName,
   resolveModelDownloadUrl,
