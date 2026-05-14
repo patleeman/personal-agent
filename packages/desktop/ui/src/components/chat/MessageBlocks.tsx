@@ -15,16 +15,44 @@ import { buildReplySelectionScopeProps, type ReplySelectionGestureHandler } from
 import { buildSummaryPreview } from './summaryPreview.js';
 
 function formatInjectedContextLabel(customType?: string): string {
-  if (!customType || customType === 'referenced_context') {
-    return 'Injected context';
-  }
+  switch (customType) {
+    case 'goal-continuation':
+      return 'Goal continuation';
+    case 'referenced_context':
+      return 'Context added';
+    case 'browser-comments':
+      return 'Browser comments';
+    case 'conversation_workspace_change':
+      return 'Workspace changed';
+    case 'parallel_result':
+      return 'Parallel response imported';
+    case 'conversation_automation_review':
+    case 'conversation_automation_item':
+    case 'conversation_automation_post_turn_review':
+      return 'Automation event';
+    default: {
+      const normalized = customType?.replace(/[_-]+/g, ' ').trim();
+      if (!normalized) {
+        return 'Context added';
+      }
 
-  const normalized = customType.replace(/[_-]+/g, ' ').trim();
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    }
+  }
+}
+
+function summarizeContextText(text: string): string {
+  const normalized = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
+
   if (!normalized) {
-    return 'Injected context';
+    return 'Details available';
   }
 
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return normalized.length > 140 ? `${normalized.slice(0, 137).trimEnd()}…` : normalized;
 }
 
 // ── UserMessage ───────────────────────────────────────────────────────────────
@@ -293,31 +321,31 @@ export const ContextMessage = memo(function ContextMessage({
   const rawRunCallbackRuns = useMemo(() => readRawRunCallbackLinkedRuns(block.text), [block.text]);
   const showRawRunCallbackCard = rawRunCallbackRuns.length > 0;
 
+  const preview = summarizeContextText(block.text);
+
   return (
-    <div className="group">
-      <div
-        className="rounded-2xl rounded-l-md border-l-2 border-warning/35 bg-warning/5 px-3.5 py-3"
-        data-context-type={block.customType ?? 'injected_context'}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-warning">{label}</p>
-          <span className="flex-1" />
-          <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-        </div>
-        <div {...replySelectionScopeProps} className="pt-2 text-primary">
-          {showRawRunCallbackCard ? (
-            <RawRunCallbackCard
-              runs={rawRunCallbackRuns}
-              messageIndex={messageIndex}
-              isInlineRunExpanded={isInlineRunExpanded}
-              onToggleInlineRun={onToggleInlineRun}
-            />
-          ) : (
-            renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
-          )}
-        </div>
+    <details className="group border-y border-border-subtle/40 py-2" data-context-type={block.customType ?? 'injected_context'}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
+        <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
+          ›
+        </span>
+        <span className="font-medium text-primary/80">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-dim">{preview}</span>
+        <span className="ui-message-meta shrink-0">{timeAgo(block.ts)}</span>
+      </summary>
+      <div {...replySelectionScopeProps} className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
+        {showRawRunCallbackCard ? (
+          <RawRunCallbackCard
+            runs={rawRunCallbackRuns}
+            messageIndex={messageIndex}
+            isInlineRunExpanded={isInlineRunExpanded}
+            onToggleInlineRun={onToggleInlineRun}
+          />
+        ) : (
+          renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
+        )}
       </div>
-    </div>
+    </details>
   );
 });
 

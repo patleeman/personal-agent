@@ -983,7 +983,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
-  it('renders injected context blocks with dedicated reminder styling', () => {
+  it('renders context blocks as quiet expandable system events', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -997,9 +997,11 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Injected context');
+    expect(html).toContain('<details');
+    expect(html).toContain('Context added');
     expect(html).toContain('data-context-type="referenced_context"');
-    expect(html).toContain('Conversation automation context:');
+    expect(html).toContain('Conversation automation context');
+    expect(html).not.toContain('border-warning');
     expect(html).not.toContain('ui-chat-avatar-mark">pa<');
     expect(html).not.toContain('ui-message-card-assistant');
   });
@@ -1018,6 +1020,7 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
+    expect(html).toContain('<details');
     expect(html).toContain('Goal continuation');
     expect(html).toContain('data-context-type="goal-continuation"');
     expect(html).toContain('Objective: keep shipping');
