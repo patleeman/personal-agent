@@ -1,20 +1,14 @@
+import { HOST_VIEW_COMPONENT_DEFINITIONS, type HostViewComponentDefinition } from '@personal-agent/extensions/host-view-components';
 import React, { lazy } from 'react';
 
 import type { NativeExtensionClient } from './nativePaClient';
 import type { NativeExtensionViewSummary } from './types';
 
-export interface HostViewComponentDefinition {
-  id: string;
-  title: string;
-  description: string;
-  locations: Array<'main' | 'rightRail' | 'workbench'>;
-  propsSchema: Record<string, unknown>;
-  overrideSlots: Record<string, unknown>;
-  examples: Array<Record<string, unknown>>;
-  load: () => Promise<{ default: ExtensionHostViewComponent }>;
-}
+export type { HostViewComponentDefinition };
 
-export type ExtensionHostViewComponent = React.ComponentType<{
+export type ExtensionHostViewComponent = React.ComponentType<ExtensionHostViewComponentProps>;
+
+export interface ExtensionHostViewComponentProps {
   pa: NativeExtensionClient;
   context: {
     extensionId: string;
@@ -29,151 +23,68 @@ export type ExtensionHostViewComponent = React.ComponentType<{
   surface: NativeExtensionViewSummary;
   params: Record<string, string>;
   hostProps?: Record<string, unknown>;
-  Override?: React.ComponentType<Record<string, unknown>>;
-}>;
+  slotOverrides?: Record<string, React.ComponentType<ExtensionHostViewComponentProps>>;
+}
 
-const emptyPropsSchema = { type: 'object', additionalProperties: false } as const;
+export type ExtensionHostViewWrapperComponent = React.ComponentType<
+  ExtensionHostViewComponentProps & { HostComponent: ExtensionHostViewComponent }
+>;
 
-export const hostViewComponentDefinitions: HostViewComponentDefinition[] = [
-  {
-    id: 'workbench.artifacts.rail',
-    title: 'Artifacts rail',
-    description: 'Conversation artifact list for the workbench right rail.',
-    locations: ['rightRail'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.artifacts.rail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-artifacts/src/panels')).ArtifactsPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.artifacts.detail',
-    title: 'Artifact detail',
-    description: 'Conversation artifact detail pane for the workbench.',
-    locations: ['workbench'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.artifacts.detail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-artifacts/src/panels')).ArtifactDetailPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.diffs.rail',
-    title: 'Diffs rail',
-    description: 'Conversation checkpoint list for the workbench right rail.',
-    locations: ['rightRail'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.diffs.rail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-diffs/src/panels')).ConversationDiffsPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.diffs.detail',
-    title: 'Diff detail',
-    description: 'Conversation checkpoint diff detail pane for the workbench.',
-    locations: ['workbench'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.diffs.detail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-diffs/src/panels'))
-        .ConversationDiffDetailPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.files.rail',
-    title: 'Workspace files rail',
-    description: 'Workspace file explorer rail.',
-    locations: ['rightRail'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.files.rail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-files/src/panels')).WorkspaceFilesPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.files.detail',
-    title: 'Workspace file detail',
-    description: 'Workspace file detail pane.',
-    locations: ['workbench'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.files.detail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-files/src/panels')).WorkspaceFileDetailPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.runs.rail',
-    title: 'Background work rail',
-    description: 'Conversation background work rail.',
-    locations: ['rightRail'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.runs.rail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-runs/src/panels'))
-        .ConversationBackgroundWorkPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.runs.detail',
-    title: 'Background work detail',
-    description: 'Conversation background work detail pane.',
-    locations: ['workbench'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.runs.detail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-runs/src/panels'))
-        .ConversationBackgroundWorkDetailPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.browser.rail',
-    title: 'Browser rail',
-    description: 'Workbench browser tab rail.',
-    locations: ['rightRail'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.browser.rail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-browser/src/panels')).BrowserTabsPanel as ExtensionHostViewComponent,
-    }),
-  },
-  {
-    id: 'workbench.browser.detail',
-    title: 'Browser detail',
-    description: 'Workbench browser detail pane.',
-    locations: ['workbench'],
-    propsSchema: emptyPropsSchema,
-    overrideSlots: {},
-    examples: [{ component: { host: 'workbench.browser.detail' } }],
-    load: async () => ({
-      default: (await import('../../../../../extensions/system-browser/src/panels')).BrowserWorkbenchPanel as ExtensionHostViewComponent,
-    }),
-  },
-];
+const componentLoaders: Record<string, () => Promise<{ default: ExtensionHostViewComponent }>> = {
+  'workbench.artifacts.rail': async () => ({
+    default: (await import('../../../../../extensions/system-artifacts/src/panels')).ArtifactsPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.artifacts.detail': async () => ({
+    default: (await import('../../../../../extensions/system-artifacts/src/panels')).ArtifactDetailPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.diffs.rail': async () => ({
+    default: (await import('../../../../../extensions/system-diffs/src/panels')).ConversationDiffsPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.diffs.detail': async () => ({
+    default: (await import('../../../../../extensions/system-diffs/src/panels')).ConversationDiffDetailPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.files.rail': async () => ({
+    default: (await import('../../../../../extensions/system-files/src/panels')).WorkspaceFilesPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.files.detail': async () => ({
+    default: (await import('../../../../../extensions/system-files/src/panels')).WorkspaceFileDetailPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.runs.rail': async () => ({
+    default: (await import('../../../../../extensions/system-runs/src/panels'))
+      .ConversationBackgroundWorkPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.runs.detail': async () => ({
+    default: (await import('../../../../../extensions/system-runs/src/panels'))
+      .ConversationBackgroundWorkDetailPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.browser.rail': async () => ({
+    default: (await import('../../../../../extensions/system-browser/src/panels')).BrowserTabsPanel as ExtensionHostViewComponent,
+  }),
+  'workbench.browser.detail': async () => ({
+    default: (await import('../../../../../extensions/system-browser/src/panels')).BrowserWorkbenchPanel as ExtensionHostViewComponent,
+  }),
+};
 
-export const hostViewComponentRegistry = new Map(hostViewComponentDefinitions.map((definition) => [definition.id, definition]));
+export const hostViewComponentDefinitions: HostViewComponentDefinition[] = [...HOST_VIEW_COMPONENT_DEFINITIONS];
+
+export const hostViewComponentRegistry = new Map(
+  hostViewComponentDefinitions.map((definition) => [definition.id, { ...definition, load: componentLoaders[definition.id] }]),
+);
 
 export function isHostViewComponentReference(
   value: unknown,
-): value is { host: string; props?: Record<string, unknown>; override?: string } {
+): value is { host: string; props?: Record<string, unknown>; override?: string; overrides?: Record<string, string> } {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { host?: unknown }).host === 'string');
 }
 
-export function getHostViewComponentDefinition(id: string): HostViewComponentDefinition | undefined {
+export function getHostViewComponentDefinition(
+  id: string,
+): (HostViewComponentDefinition & { load?: () => Promise<{ default: ExtensionHostViewComponent }> }) | undefined {
   return hostViewComponentRegistry.get(id);
 }
 
 export function lazyHostViewComponent(id: string) {
   const definition = getHostViewComponentDefinition(id);
-  if (!definition) throw new Error(`Unknown host view component: ${id}`);
+  if (!definition?.load) throw new Error(`Unknown host view component: ${id}`);
   return lazy(definition.load);
 }

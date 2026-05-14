@@ -23,6 +23,10 @@
       "types": "./dist/workbench.d.ts",
       "default": "./dist/workbench.js"
     },
+    "./host-view-components": {
+      "types": "./dist/host-view-components.d.ts",
+      "default": "./dist/host-view-components.js"
+    },
     "./workbench-artifacts": {
       "types": "./dist/workbench-artifacts.d.ts",
       "default": "./dist/workbench-artifacts.js"

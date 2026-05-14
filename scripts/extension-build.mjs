@@ -141,6 +141,7 @@ function createFrontendExtensionSdkPlugin() {
     '@personal-agent/extensions/workbench': 'workbench.ts',
     '@personal-agent/extensions/data': 'data.ts',
     '@personal-agent/extensions/settings': 'settings.ts',
+    '@personal-agent/extensions/host-view-components': 'host-view-components.ts',
     '@personal-agent/extensions/workbench-artifacts': 'workbench-artifacts.ts',
     '@personal-agent/extensions/workbench-browser': 'workbench-browser.ts',
     '@personal-agent/extensions/workbench-diffs': 'workbench-diffs.ts',
@@ -154,7 +155,7 @@ function createFrontendExtensionSdkPlugin() {
       buildContext.onResolve(
         {
           filter:
-            /^@personal-agent\/extensions\/(host|ui|workbench|workbench-artifacts|workbench-browser|workbench-diffs|workbench-files|workbench-runs|workbench-transcript|data|settings)$/,
+            /^@personal-agent\/extensions\/(host|ui|workbench|host-view-components|workbench-artifacts|workbench-browser|workbench-diffs|workbench-files|workbench-runs|workbench-transcript|data|settings)$/,
         },
         (args) => {
           const moduleFile = moduleFiles[args.path];
@@ -198,6 +199,9 @@ function createExtensionBackendApiPlugin() {
       }));
       buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend\/(.+)$/ }, (args) => ({
         path: join(repoRoot, `packages/desktop/server/extensions/backendApi/${args.path.split('/').pop()}.ts`),
+      }));
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/host-view-components$/ }, () => ({
+        path: join(repoRoot, 'packages/extensions/src/host-view-components.ts'),
       }));
       buildContext.onResolve({ filter: /^@personal-agent\/daemon$/ }, (args) => {
         const desktopDaemonBundle = join(repoRoot, 'packages/desktop/server/dist/daemon/index.js');

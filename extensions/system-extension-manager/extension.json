@@ -18,6 +18,7 @@
       { "id": "buildExtension", "handler": "buildExtension", "title": "Build extension" },
       { "id": "reloadExtension", "handler": "reloadExtension", "title": "Reload extension" },
       { "id": "validateExtension", "handler": "validateExtension", "title": "Validate extension" },
+      { "id": "listHostViewComponents", "handler": "listHostViewComponents", "title": "List host view components" },
       { "id": "readSearchPaths", "handler": "readSearchPaths", "title": "Read extension search paths" },
       { "id": "updateSearchPaths", "handler": "updateSearchPaths", "title": "Update extension search paths" },
       { "id": "manageExtension", "handler": "manageExtension", "title": "Manage extension" }
@@ -51,7 +52,7 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "action": { "type": "string", "enum": ["list", "create", "snapshot", "build", "reload", "validate"] },
+            "action": { "type": "string", "enum": ["list", "create", "snapshot", "build", "reload", "validate", "hostViewComponents"] },
             "id": { "type": "string", "description": "Extension id." },
             "extensionId": { "type": "string", "description": "Extension id; alias for id." },
             "name": { "type": "string", "description": "Display name when creating an extension." },

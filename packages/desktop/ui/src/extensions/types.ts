@@ -476,7 +476,10 @@ export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; 
 export interface ExtensionHostComponentReference {
   host: string;
   props?: Record<string, unknown>;
+  /** Legacy shorthand for overrides.wrapper. */
   override?: string;
+  /** Extension frontend exports used to customize supported host override slots. */
+  overrides?: Record<string, string>;
 }
 
 export type ExtensionComponentReference = string | ExtensionHostComponentReference;

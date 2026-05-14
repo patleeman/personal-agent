@@ -11,6 +11,7 @@ export default defineConfig({
       '@personal-agent/extensions/host': resolve(__dirname, 'src/extensions/host.ts'),
       '@personal-agent/extensions/ui': resolve(__dirname, 'src/extensions/ui.ts'),
       '@personal-agent/extensions/workbench': resolve(__dirname, 'src/extensions/workbench.ts'),
+      '@personal-agent/extensions/host-view-components': resolve(__dirname, '../../../packages/extensions/src/host-view-components.ts'),
       '@personal-agent/extensions/workbench-artifacts': resolve(__dirname, 'src/extensions/workbench-artifacts.ts'),
       '@personal-agent/extensions/workbench-browser': resolve(__dirname, 'src/extensions/workbench-browser.ts'),
       '@personal-agent/extensions/workbench-diffs': resolve(__dirname, 'src/extensions/workbench-diffs.ts'),

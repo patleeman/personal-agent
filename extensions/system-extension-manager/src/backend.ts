@@ -10,6 +10,7 @@ import {
   snapshotRuntimeExtension,
   validateExtensionPackage,
 } from '@personal-agent/extensions/backend/extensions';
+import { HOST_VIEW_COMPONENT_DEFINITIONS } from '@personal-agent/extensions/host-view-components';
 
 const ADDITIONAL_EXTENSION_PATHS_SETTING = 'extensions.additionalPaths';
 
@@ -24,6 +25,10 @@ interface SettingsRecord {
 
 export async function listExtensions(_input: unknown, _ctx: ExtensionBackendContext) {
   return { ok: true, extensions: await listExtensionInstallSummaries() };
+}
+
+export async function listHostViewComponents(_input: unknown, _ctx: ExtensionBackendContext) {
+  return { ok: true, hostViewComponents: HOST_VIEW_COMPONENT_DEFINITIONS };
 }
 
 export async function createExtension(input: unknown, _ctx: ExtensionBackendContext) {
@@ -92,6 +97,7 @@ export async function manageExtension(input: unknown, ctx: ExtensionBackendConte
   if (action === 'build') return buildExtension(input as ExtensionIdInput, ctx);
   if (action === 'reload') return reloadExtension(input as ExtensionIdInput, ctx);
   if (action === 'validate') return validateExtension(input, ctx);
+  if (action === 'hostViewComponents') return listHostViewComponents(input, ctx);
   if (action === 'readSearchPaths') return readSearchPaths(input, ctx);
   if (action === 'updateSearchPaths') return updateSearchPaths(input, ctx);
   throw new Error(`Unsupported extension manager action: ${action}`);

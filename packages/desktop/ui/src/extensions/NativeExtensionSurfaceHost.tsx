@@ -4,27 +4,19 @@ import { buildApiPath } from '../client/apiBase';
 import { addNotification } from '../components/notifications/notificationStore';
 import { ErrorState, LoadingState } from '../components/ui';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
-import { isHostViewComponentReference, lazyHostViewComponent } from './hostViewComponents';
-import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
+import {
+  type ExtensionHostViewComponent,
+  type ExtensionHostViewComponentProps,
+  type ExtensionHostViewWrapperComponent,
+  isHostViewComponentReference,
+  lazyHostViewComponent,
+} from './hostViewComponents';
+import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
 import { useExtensionStyles } from './useExtensionStyles';
 
-type ExtensionComponent = ComponentType<{
-  pa: NativeExtensionClient;
-  context: {
-    extensionId: string;
-    surfaceId: string;
-    route?: string | null;
-    pathname: string;
-    search: string;
-    hash: string;
-    conversationId?: string | null;
-    cwd?: string | null;
-  };
-  surface: NativeExtensionViewSummary;
-  params: Record<string, string>;
-}>;
+type ExtensionComponent = ComponentType<ExtensionHostViewComponentProps>;
 
 function loadExtensionModule(surface: NativeExtensionViewSummary, revision: number, retryNonce?: number): Promise<Record<string, unknown>> {
   const systemLoader = systemExtensionModules.get(surface.extensionId);
@@ -38,21 +30,24 @@ function loadExtensionModule(surface: NativeExtensionViewSummary, revision: numb
   return import(/* @vite-ignore */ source) as Promise<Record<string, unknown>>;
 }
 
+async function loadExtensionModuleWithRetry(surface: NativeExtensionViewSummary, revision: number): Promise<Record<string, unknown>> {
+  try {
+    return await loadExtensionModule(surface, revision);
+  } catch {
+    // Browser module loaders permanently cache failed dynamic imports by URL.
+    // If an extension was rebuilt after an earlier bad bundle, retry once with
+    // a fresh URL so the fixed dist/frontend.js can load without an app restart.
+    return loadExtensionModule(surface, revision, Date.now());
+  }
+}
+
 function extensionModuleKey(surface: NativeExtensionViewSummary): string {
   return `${surface.extensionId}:${surface.id}:${surface.frontend?.entry ?? ''}`;
 }
 
 function lazyExtensionComponent(surface: NativeExtensionViewSummary, revision: number) {
   return lazy(async () => {
-    let module: Record<string, unknown>;
-    try {
-      module = await loadExtensionModule(surface, revision);
-    } catch (error) {
-      // Browser module loaders permanently cache failed dynamic imports by URL.
-      // If an extension was rebuilt after an earlier bad bundle, retry once with
-      // a fresh URL so the fixed dist/frontend.js can load without an app restart.
-      module = await loadExtensionModule(surface, revision, Date.now());
-    }
+    const module = await loadExtensionModuleWithRetry(surface, revision);
     if (typeof surface.component !== 'string') {
       throw new Error(`Extension component export is only available for custom component references.`);
     }
@@ -61,6 +56,53 @@ function lazyExtensionComponent(surface: NativeExtensionViewSummary, revision: n
       throw new Error(`Extension component not found: ${surface.component}`);
     }
     return { default: component as ExtensionComponent };
+  });
+}
+
+function normalizeSlotOverrides(component: NativeExtensionViewSummary['component']): Record<string, string> {
+  if (!isHostViewComponentReference(component)) return {};
+  const overrides = component.overrides && typeof component.overrides === 'object' ? { ...component.overrides } : {};
+  if (component.override && !overrides.wrapper) overrides.wrapper = component.override;
+  return overrides;
+}
+
+function lazyHostViewSurfaceComponent(surface: NativeExtensionViewSummary, revision: number) {
+  if (!isHostViewComponentReference(surface.component)) throw new Error('Host view component reference expected.');
+  const hostId = surface.component.host;
+  const slotOverrideExports = normalizeSlotOverrides(surface.component);
+  const wrapperExport = slotOverrideExports.wrapper;
+  const slotExports = Object.fromEntries(Object.entries(slotOverrideExports).filter(([slot]) => slot !== 'wrapper'));
+  const HostComponent = lazyHostViewComponent(hostId);
+
+  if (!wrapperExport && Object.keys(slotExports).length === 0) {
+    return HostComponent;
+  }
+
+  return lazy(async () => {
+    const module = await loadExtensionModuleWithRetry(surface, revision);
+    const slotOverrides: Record<string, React.ComponentType<ExtensionHostViewComponentProps>> = {};
+    for (const [slot, exportName] of Object.entries(slotExports)) {
+      const slotComponent = module[exportName];
+      if (typeof slotComponent !== 'function') throw new Error(`Extension host view override not found: ${slot} -> ${exportName}`);
+      slotOverrides[slot] = slotComponent as React.ComponentType<ExtensionHostViewComponentProps>;
+    }
+
+    if (wrapperExport) {
+      const wrapper = module[wrapperExport];
+      if (typeof wrapper !== 'function') throw new Error(`Extension host view wrapper override not found: ${wrapperExport}`);
+      const Wrapper = wrapper as ExtensionHostViewWrapperComponent;
+      return {
+        default: function HostViewWrapper(props: ExtensionHostViewComponentProps) {
+          return <Wrapper {...props} HostComponent={HostComponent as ExtensionHostViewComponent} slotOverrides={slotOverrides} />;
+        },
+      };
+    }
+
+    return {
+      default: function HostViewWithSlotOverrides(props: ExtensionHostViewComponentProps) {
+        return <HostComponent {...props} slotOverrides={slotOverrides} />;
+      },
+    };
   });
 }
 
@@ -88,7 +130,7 @@ export function NativeExtensionSurfaceHost({
   const pa = useMemo(() => createNativeExtensionClient(surface.extensionId), [surface.extensionId]);
   const moduleKey = extensionModuleKey(surface);
   const Component = useMemo(() => {
-    if (isHostViewComponentReference(surface.component)) return lazyHostViewComponent(surface.component.host);
+    if (isHostViewComponentReference(surface.component)) return lazyHostViewSurfaceComponent(surface, getExtensionRegistryRevision());
     return lazyExtensionComponent(surface, getExtensionRegistryRevision());
   }, [surface, moduleKey]);
   const context = useMemo(

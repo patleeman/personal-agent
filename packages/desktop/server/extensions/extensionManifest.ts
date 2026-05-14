@@ -24,19 +24,12 @@ export type ExtensionViewActivation = (typeof EXTENSION_VIEW_ACTIVATIONS)[number
 export const EXTENSION_ROUTE_CAPABILITIES = ['contextRail', 'workbench', 'workbenchFilePane', 'knowledgeFiles', 'settingsSection'] as const;
 export type ExtensionRouteCapability = (typeof EXTENSION_ROUTE_CAPABILITIES)[number];
 
-export const EXTENSION_HOST_VIEW_COMPONENTS = [
-  'workbench.artifacts.rail',
-  'workbench.artifacts.detail',
-  'workbench.diffs.rail',
-  'workbench.diffs.detail',
-  'workbench.files.rail',
-  'workbench.files.detail',
-  'workbench.runs.rail',
-  'workbench.runs.detail',
-  'workbench.browser.rail',
-  'workbench.browser.detail',
-] as const;
-export type ExtensionHostViewComponentId = (typeof EXTENSION_HOST_VIEW_COMPONENTS)[number];
+export {
+  HOST_VIEW_COMPONENT_IDS as EXTENSION_HOST_VIEW_COMPONENTS,
+  type HostViewComponentId as ExtensionHostViewComponentId,
+  getHostViewComponentDefinition,
+  HOST_VIEW_COMPONENT_DEFINITIONS,
+} from '../../../extensions/src/host-view-components.js';
 
 export const EXTENSION_ICON_NAMES = [
   'app',
@@ -300,7 +293,10 @@ export interface ExtensionQuickOpenContribution {
 export interface ExtensionHostComponentReference {
   host: string;
   props?: Record<string, unknown>;
+  /** Legacy shorthand for overrides.wrapper. */
   override?: string;
+  /** Extension frontend exports used to customize supported host override slots. */
+  overrides?: Record<string, string>;
 }
 
 export type ExtensionComponentReference = string | ExtensionHostComponentReference;

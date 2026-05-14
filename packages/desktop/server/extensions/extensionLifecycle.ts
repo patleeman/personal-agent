@@ -386,6 +386,7 @@ function resolveDesktopUiExtensionModule(moduleName: string): string | null {
     '@personal-agent/extensions/host': 'host.ts',
     '@personal-agent/extensions/ui': 'ui.ts',
     '@personal-agent/extensions/workbench': 'workbench.ts',
+    '@personal-agent/extensions/host-view-components': 'host-view-components.ts',
     '@personal-agent/extensions/data': 'data.ts',
     '@personal-agent/extensions/settings': 'settings.ts',
     '@personal-agent/extensions/workbench-artifacts': 'workbench-artifacts.ts',
@@ -436,7 +437,7 @@ function createFrontendExtensionSdkPlugin(): Plugin {
       build.onResolve(
         {
           filter:
-            /^@personal-agent\/extensions\/(host|ui|workbench|workbench-artifacts|workbench-browser|workbench-diffs|workbench-files|workbench-runs|workbench-transcript|data|settings)$/,
+            /^@personal-agent\/extensions\/(host|ui|workbench|host-view-components|workbench-artifacts|workbench-browser|workbench-diffs|workbench-files|workbench-runs|workbench-transcript|data|settings)$/,
         },
         (args) => {
           const resolved = resolveDesktopUiExtensionModule(args.path);
