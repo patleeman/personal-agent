@@ -47,6 +47,47 @@ describe('ConversationQueueShelf', () => {
     expect(html).toContain('remote');
   });
 
+  it('renders background-run follow-ups as compact summaries', () => {
+    const html = renderToString(
+      <ConversationQueueShelf
+        pendingQueue={[
+          {
+            id: 'follow-1',
+            text: [
+              'Background task run-123 has finished.',
+              'taskSlug=release-preflight-checks',
+              'status=completed',
+              'log=/tmp/runs/run-123/output.log',
+              'command=pnpm run check:extensions',
+              '',
+              'Recent log tail:',
+              'Composer input tools: 1...',
+              '',
+              'Use run get/logs if you need more detail. Then continue from this point.',
+            ].join('\n'),
+            imageCount: 0,
+            restorable: true,
+            type: 'followUp',
+            queueIndex: 0,
+          },
+        ]}
+        parallelJobs={[]}
+        conversationNeedsTakeover={false}
+        onRestoreQueuedPrompt={vi.fn()}
+        onManageParallelJob={vi.fn()}
+        onOpenConversation={vi.fn()}
+      />,
+    );
+
+    const visibleText = html.replace(/<!-- -->/g, '');
+    expect(visibleText).toContain('Background task');
+    expect(visibleText).toContain('release-preflight-checks completed');
+    expect(visibleText).toContain('$ pnpm run check:extensions');
+    expect(visibleText).toContain('Composer input tools: 1...');
+    expect(html).not.toContain('taskSlug=release-preflight-checks');
+    expect(html).not.toContain('/tmp/runs/run-123/output.log');
+  });
+
   it('renders parallel job details and actions', () => {
     const html = renderToString(
       <ConversationQueueShelf

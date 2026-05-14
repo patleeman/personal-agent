@@ -15,6 +15,7 @@ import {
   resolveConversationContextUsageTokens,
   resolveConversationGitSummaryPresentation,
   selectUnattachedMentionItems,
+  summarizeQueuedRunCallbackPrompt,
   truncateConversationShelfText,
 } from './conversationComposerPresentation';
 
@@ -148,6 +149,34 @@ describe('conversation composer presentation helpers', () => {
     expect(formatParallelJobContextSummary({ imageCount: 1, attachmentRefs: ['a', 'b'] })).toBe('1 image · 2 attachments');
     expect(formatParallelJobContextSummary({ imageCount: 1.5, attachmentRefs: [] })).toBeNull();
     expect(formatParallelJobContextSummary({ imageCount: 0, attachmentRefs: [] })).toBeNull();
+  });
+
+  it('summarizes raw background-run callback prompts for the queue shelf', () => {
+    expect(
+      summarizeQueuedRunCallbackPrompt(
+        [
+          'Background task run-123 has finished.',
+          'taskSlug=release-preflight-checks',
+          'status=completed',
+          'log=/tmp/runs/run-123/output.log',
+          'command=pnpm run check:extensions',
+          '',
+          'Recent log tail:',
+          'Composer input tools: 1...',
+          'last useful line',
+          '',
+          'Use run get/logs if you need more detail. Then continue from this point.',
+        ].join('\n'),
+      ),
+    ).toEqual({
+      runId: 'run-123',
+      taskSlug: 'release-preflight-checks',
+      status: 'completed',
+      title: 'release-preflight-checks completed',
+      command: 'pnpm run check:extensions',
+      logTail: 'Composer input tools: 1...\nlast useful line',
+    });
+    expect(summarizeQueuedRunCallbackPrompt('normal follow-up')).toBeNull();
   });
 
   it('formats composer actions and git summary chips', () => {

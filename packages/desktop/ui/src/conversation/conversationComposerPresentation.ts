@@ -120,6 +120,70 @@ export function formatQueuedPromptImageSummary(imageCount: number): string | nul
   return `${imageCount} image${imageCount === 1 ? '' : 's'} attached`;
 }
 
+export interface QueuedRunCallbackSummary {
+  runId: string;
+  taskSlug: string;
+  status: string;
+  title: string;
+  command?: string;
+  logTail?: string;
+}
+
+function readKeyValueLine(lines: string[], key: string): string | undefined {
+  const prefix = `${key}=`;
+  const value = lines
+    .find((line) => line.startsWith(prefix))
+    ?.slice(prefix.length)
+    .trim();
+  return value ? value : undefined;
+}
+
+function formatBackgroundRunStatus(status: string): string {
+  switch (status) {
+    case 'completed':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'interrupted':
+      return 'interrupted';
+    default:
+      return 'finished';
+  }
+}
+
+export function summarizeQueuedRunCallbackPrompt(text: string): QueuedRunCallbackSummary | null {
+  const normalized = text.replace(/\r\n?/g, '\n').trim();
+  const runId = normalized.match(/^\s*(?:Durable run|Background task)\s+(\S+)\s+has finished\./)?.[1];
+  if (!runId || !/\nRecent log tail:\n/.test(normalized)) {
+    return null;
+  }
+
+  const lines = normalized.split('\n');
+  const taskSlug = readKeyValueLine(lines, 'taskSlug');
+  const status = readKeyValueLine(lines, 'status');
+  const logPath = readKeyValueLine(lines, 'log');
+  if (!taskSlug || !status || !logPath) {
+    return null;
+  }
+
+  const logTailStart = lines.findIndex((line) => line.trim() === 'Recent log tail:');
+  const rawLogTail = logTailStart >= 0 ? lines.slice(logTailStart + 1).join('\n') : '';
+  const logTail = rawLogTail.replace(/\n\s*Use run get\/logs if you need more detail\. Then continue from this point\.\s*$/s, '').trim();
+
+  const command = readKeyValueLine(lines, 'command');
+
+  return {
+    runId,
+    taskSlug,
+    status,
+    title: `${taskSlug} ${formatBackgroundRunStatus(status)}`,
+    ...(command ? { command } : {}),
+    ...(logTail ? { logTail } : {}),
+  };
+}
+
 export function formatParallelJobStatusLabel(status: 'running' | 'ready' | 'failed' | 'importing'): string {
   switch (status) {
     case 'running':

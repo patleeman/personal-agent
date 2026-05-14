@@ -3,6 +3,7 @@ import {
   formatParallelJobStatusLabel,
   formatQueuedPromptImageSummary,
   formatQueuedPromptShelfText,
+  summarizeQueuedRunCallbackPrompt,
   truncateConversationShelfText,
 } from '../../conversation/conversationComposerPresentation';
 import type { ParallelPromptPreview } from '../../shared/types';
@@ -37,41 +38,60 @@ export function ConversationQueueShelf({
       {pendingQueue.length > 0 && (
         <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
           <span className="ui-section-label">Queued</span>
-          {pendingQueue.map((message) => (
-            <div key={message.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
-              <Pill tone={message.type === 'steer' ? 'warning' : 'teal'} className="mt-0.5">
-                {message.type === 'steer' ? '⤵ steer' : '↷ followup'}
-              </Pill>
-              <div className="min-w-0">
-                <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
-                  {truncateConversationShelfText(formatQueuedPromptShelfText(message.text, message.imageCount))}
-                </p>
-                {formatQueuedPromptImageSummary(message.imageCount) ? (
-                  <p className="mt-0.5 text-[11px] text-dim">{formatQueuedPromptImageSummary(message.imageCount)}</p>
-                ) : null}
+          {pendingQueue.map((message) => {
+            const runCallbackSummary = summarizeQueuedRunCallbackPrompt(message.text);
+            const imageSummary = formatQueuedPromptImageSummary(message.imageCount);
+
+            return (
+              <div key={message.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
+                <Pill tone={message.type === 'steer' ? 'warning' : 'teal'} className="mt-0.5">
+                  {message.type === 'steer' ? '⤵ steer' : '↷ followup'}
+                </Pill>
+                <div className="min-w-0">
+                  {runCallbackSummary ? (
+                    <>
+                      <p className="break-words text-[11px] font-medium leading-relaxed text-secondary">
+                        Background task {runCallbackSummary.title}
+                      </p>
+                      {runCallbackSummary.command ? (
+                        <p className="mt-0.5 truncate font-mono text-[11px] text-dim">$ {runCallbackSummary.command}</p>
+                      ) : null}
+                      {runCallbackSummary.logTail ? (
+                        <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-dim">
+                          {truncateConversationShelfText(runCallbackSummary.logTail, { maxChars: 180, maxLines: 2 })}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
+                      {truncateConversationShelfText(formatQueuedPromptShelfText(message.text, message.imageCount))}
+                    </p>
+                  )}
+                  {imageSummary ? <p className="mt-0.5 text-[11px] text-dim">{imageSummary}</p> : null}
+                </div>
+                {message.restorable !== false ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRestoreQueuedPrompt(message.type, message.queueIndex, message.id);
+                    }}
+                    disabled={conversationNeedsTakeover}
+                    className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
+                    title={
+                      conversationNeedsTakeover
+                        ? 'Take over this conversation before restoring queued prompts'
+                        : 'Restore this queued prompt to the composer'
+                    }
+                    aria-label="Restore queued prompt to the composer"
+                  >
+                    restore
+                  </button>
+                ) : (
+                  <span className="shrink-0 pt-0.5 text-[11px] text-dim/70">remote</span>
+                )}
               </div>
-              {message.restorable !== false ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onRestoreQueuedPrompt(message.type, message.queueIndex, message.id);
-                  }}
-                  disabled={conversationNeedsTakeover}
-                  className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
-                  title={
-                    conversationNeedsTakeover
-                      ? 'Take over this conversation before restoring queued prompts'
-                      : 'Restore this queued prompt to the composer'
-                  }
-                  aria-label="Restore queued prompt to the composer"
-                >
-                  restore
-                </button>
-              ) : (
-                <span className="shrink-0 pt-0.5 text-[11px] text-dim/70">remote</span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
