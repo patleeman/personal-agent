@@ -4,6 +4,7 @@ import type { ParallelPromptPreview } from './liveSessionParallelJobs.js';
 import type { LiveSessionPresenceState } from './liveSessionPresence.js';
 import type { QueuedPromptPreview } from './liveSessionQueue.js';
 import { buildDisplayBlocksFromEntries, type DisplayBlock, getAssistantErrorDisplayMessage, type ThreadGoal } from './sessions.js';
+import { normalizeTranscriptToolName } from './toolNames.js';
 
 export interface LiveContextUsageSegment {
   key: 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
@@ -119,7 +120,7 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
       return {
         type: 'tool_start',
         toolCallId: event.toolCallId,
-        toolName: event.toolName,
+        toolName: normalizeTranscriptToolName(event.toolName),
         args: event.args,
       };
     }
@@ -144,7 +145,7 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
       return {
         type: 'tool_end',
         toolCallId: event.toolCallId,
-        toolName: event.toolName,
+        toolName: normalizeTranscriptToolName(event.toolName),
         isError: event.isError,
         durationMs: Math.max(0, Date.now() - start),
         output: outputText,

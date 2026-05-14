@@ -36,6 +36,25 @@ describe('toSse tool execution events', () => {
     expect(end && 'details' in end ? end.details : undefined).toBeUndefined();
   });
 
+  it('canonicalizes shell aliases to bash before broadcasting', () => {
+    const start = toSse({
+      type: 'tool_execution_start',
+      toolCallId: 'shell-1',
+      toolName: '_shell',
+      args: { command: 'pwd', background: true },
+    } as never);
+    const end = toSse({
+      type: 'tool_execution_end',
+      toolCallId: 'shell-1',
+      toolName: 'shell',
+      isError: false,
+      result: { content: [{ type: 'text', text: 'done' }] },
+    } as never);
+
+    expect(start).toMatchObject({ type: 'tool_start', toolName: 'bash' });
+    expect(end).toMatchObject({ type: 'tool_end', toolName: 'bash' });
+  });
+
   it('preserves explicit bash tool details without forcing terminal mode', () => {
     const end = toSse({
       type: 'tool_execution_end',

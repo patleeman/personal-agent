@@ -121,12 +121,6 @@ describe('linkedRuns', () => {
       output: 'Started background command run-desktop-dev-abc123 for desktop-dev.',
       details: { action: 'start', runId: 'run-desktop-dev-abc123' },
     };
-    const shelvedStartBlock: Extract<MessageBlock, { type: 'tool_use' }> = {
-      ...startBlock,
-      tool: '_shell',
-      output: 'Started background command run-desktop-dev-pinned-sidebar for desktop-dev-pinned-sidebar.',
-      details: { action: 'start', runId: 'run-desktop-dev-pinned-sidebar' },
-    };
     const inspectBlock: Extract<MessageBlock, { type: 'tool_use' }> = {
       type: 'tool_use',
       ts: '2026-04-26T00:00:00.000Z',
@@ -137,9 +131,8 @@ describe('linkedRuns', () => {
     };
 
     expect(readLinkedRuns(startBlock)).toEqual({ scope: 'mentioned', runs: [] });
-    expect(readLinkedRuns(shelvedStartBlock)).toEqual({ scope: 'mentioned', runs: [] });
     expect(readLinkedRuns(inspectBlock)).toEqual({ scope: 'mentioned', runs: [] });
-    expect(collectTraceClusterLinkedRuns([startBlock, shelvedStartBlock, inspectBlock])).toEqual([]);
+    expect(collectTraceClusterLinkedRuns([startBlock, inspectBlock])).toEqual([]);
   });
 
   it('collects trace cluster linked runs from newest to oldest without duplicates', () => {

@@ -154,7 +154,7 @@ describe('desktopConversationState reducer', () => {
     expect(state.blocks).toEqual([
       {
         type: 'tool_use',
-        tool: 'shell',
+        tool: 'bash',
         input: { cmd: 'pwd' },
         output: 'final output',
         status: 'ok',

@@ -1175,6 +1175,27 @@ describe('sessions', () => {
     expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toContain('Imported summary note.');
   });
 
+  it('canonicalizes shell tool aliases in display blocks', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'assistant-shell-call',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'call-1', name: '_shell', arguments: { command: 'pwd', background: true } }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'tool_use',
+        tool: 'bash',
+        input: { command: 'pwd', background: true },
+      }),
+    ]);
+  });
+
   it('keeps hidden custom context entries out of the visible transcript', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {

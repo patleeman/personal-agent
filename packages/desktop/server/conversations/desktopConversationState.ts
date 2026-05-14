@@ -10,6 +10,7 @@ import type {
   SseEvent,
 } from './liveSessions.js';
 import { readLiveSessionStateSnapshot } from './liveSessions.js';
+import { normalizeTranscriptToolName } from './toolNames.js';
 
 export interface DesktopConversationMessageBlock {
   type: 'user' | 'text' | 'context' | 'summary' | 'thinking' | 'tool_use' | 'image' | 'error';
@@ -235,7 +236,7 @@ function displayBlockToMessageBlock(block: {
       return {
         type: 'tool_use',
         id: block.id,
-        tool: block.tool,
+        tool: normalizeTranscriptToolName(block.tool ?? 'unknown'),
         input: block.input,
         output: block.output,
         durationMs: block.durationMs,
@@ -402,10 +403,11 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
 
     case 'tool_start': {
       const input = (event.args ?? {}) as Record<string, unknown>;
-      const details = readLiveTerminalBashDetails(event.toolName, input);
+      const toolName = normalizeTranscriptToolName(event.toolName);
+      const details = readLiveTerminalBashDetails(toolName, input);
       blocks.push({
         type: 'tool_use',
-        tool: event.toolName,
+        tool: toolName,
         input,
         output: '',
         status: 'running',
@@ -450,7 +452,7 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
           details: event.details ?? block.details,
         };
       }
-      const goalState = readGoalStateFromToolDetails(event.toolName, event.details);
+      const goalState = readGoalStateFromToolDetails(normalizeTranscriptToolName(event.toolName), event.details);
       return {
         ...prev,
         blocks,

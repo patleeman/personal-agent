@@ -28,15 +28,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function isShellToolName(tool: string): boolean {
-  return tool === 'bash' || tool === 'shell' || tool === '_shell';
-}
-
 export function isBackgroundShellStart(block: Extract<MessageBlock, { type: 'tool_use' }>): boolean {
   const input = isRecord(block.input) ? block.input : null;
   const details = isRecord(block.details) ? block.details : null;
 
-  if (isShellToolName(block.tool)) {
+  if (block.tool === 'bash') {
     return input?.background === true || details?.background === true;
   }
 

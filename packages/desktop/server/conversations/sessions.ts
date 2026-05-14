@@ -33,6 +33,7 @@ import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/cor
 
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { readSessionContextUsageFromEntries, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
+import { normalizeTranscriptToolName } from './toolNames.js';
 
 const DEFAULT_SESSIONS_DIR = getDurableSessionsDir();
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
@@ -1154,7 +1155,7 @@ function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAn
             type: 'tool_use',
             id: `${baseId}-c${blocks.length}`,
             ts,
-            tool: block.name ?? 'unknown',
+            tool: normalizeTranscriptToolName(block.name ?? 'unknown'),
             input: block.arguments ?? {},
             output: '',
             toolCallId: block.id,
