@@ -143,30 +143,11 @@ export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> 
   tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
 }
 
-function readCustomMessageDisplayFlagType(event: AgentSessionEvent): string | null {
-  if (event.type !== 'message_start') {
-    return null;
-  }
-  const message = event.message as unknown;
-  if (!message || typeof message !== 'object') {
-    return null;
-  }
-  const record = message as Record<string, unknown>;
-  return record.role === 'custom' && Object.prototype.hasOwnProperty.call(record, 'display') && typeof record.customType === 'string'
-    ? record.customType
-    : null;
-}
-
 export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   entry: TEntry,
   event: AgentSessionEvent,
   callbacks: LiveSessionEventCallbacks<TEntry>,
 ): void {
-  const customMessageDisplayFlagType = readCustomMessageDisplayFlagType(event);
-  if (customMessageDisplayFlagType) {
-    throw new Error(`Custom transcript message "${customMessageDisplayFlagType}" must not use the display flag.`);
-  }
-
   const activeStaleTurnCustomType = clearQueuedStaleTurn(entry, event);
   if (activeStaleTurnCustomType) {
     entry.activeStaleTurnCustomType = activeStaleTurnCustomType;

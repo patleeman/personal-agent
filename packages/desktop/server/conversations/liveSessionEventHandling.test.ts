@@ -496,8 +496,8 @@ describe('legacy auto mode continuation quarantine', () => {
   });
 
   describe('custom message display flags', () => {
-    it('rejects custom message display flags before they can affect transcript visibility', () => {
-      const entry = makeEntry();
+    it('allows pi custom message display flags required by the session API', () => {
+      const entry = makeEntry({ activeStaleTurnCustomType: null });
       const cbs = makeCallbacks();
 
       expect(() =>
@@ -509,7 +509,7 @@ describe('legacy auto mode continuation quarantine', () => {
           } as any,
           cbs,
         ),
-      ).toThrow('Custom transcript message "goal-continuation" must not use the display flag.');
+      ).not.toThrow();
 
       expect(entry.activeStaleTurnCustomType).toBeNull();
     });

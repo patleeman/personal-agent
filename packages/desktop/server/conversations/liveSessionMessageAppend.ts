@@ -36,6 +36,7 @@ export async function queueLiveSessionPromptContext(
   const customMessage = {
     customType,
     content: message,
+    display: false,
     details: undefined,
   };
 
@@ -108,6 +109,7 @@ export async function appendVisibleLiveSessionCustomMessage<TEntry extends LiveS
   const customMessage = {
     customType,
     content: message,
+    display: true,
     details,
   };
   await entry.session.sendCustomMessage(customMessage);
@@ -130,6 +132,7 @@ export async function appendParallelImportedLiveSessionMessage<TEntry extends Li
   const customMessage = {
     customType: 'parallel_result',
     content: `Imported parallel response from ${details.childConversationId}.`,
+    display: true,
     details,
   };
   await entry.session.sendCustomMessage(customMessage);

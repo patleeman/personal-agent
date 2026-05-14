@@ -3096,6 +3096,7 @@ describe('queuePromptContext', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'referenced_context',
       content: 'Conversation automation context',
+      display: false,
       details: undefined,
     });
   });
@@ -3125,6 +3126,7 @@ describe('queuePromptContext', () => {
       {
         customType: 'referenced_context',
         content: 'Conversation automation context',
+        display: false,
         details: undefined,
       },
       {
@@ -3700,6 +3702,7 @@ describe('appendVisibleCustomMessage', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'automation_note',
       content: 'Show this note.',
+      display: true,
       details: { severity: 'info' },
     });
   });
