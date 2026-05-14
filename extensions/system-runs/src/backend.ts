@@ -207,6 +207,8 @@ async function startBackgroundCommand(input: unknown, ctx: NativeBackendContext)
     text: `Started background command ${result.runId} for ${taskSlug}.`,
     details: {
       action: 'start',
+      displayMode: 'terminal',
+      command,
       runId: result.runId,
       taskSlug,
       cwd,

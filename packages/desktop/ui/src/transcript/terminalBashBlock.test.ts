@@ -16,6 +16,19 @@ describe('terminalBashBlock', () => {
     ).toEqual([{ id: 'example-wrapper', label: 'Example Wrapper' }]);
   });
 
+  it('reads background command starts as terminal bash presentations', () => {
+    expect(
+      readTerminalBashToolPresentation({
+        type: 'tool_use',
+        id: 'tool-1',
+        tool: 'background_command',
+        input: { action: 'start', command: 'npm run desktop:dev' },
+        details: { action: 'start', runId: 'run-123' },
+        status: 'done',
+      } as never),
+    ).toMatchObject({ command: 'npm run desktop:dev' });
+  });
+
   it('ignores fractional bash exit codes', () => {
     expect(
       readTerminalBashToolPresentation({

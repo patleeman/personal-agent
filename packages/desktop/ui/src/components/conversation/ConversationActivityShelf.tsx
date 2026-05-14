@@ -4,7 +4,7 @@ import { describeDeferredResumeStatus, formatDeferredResumeWhen } from '../../de
 import type { DeferredResumeSummary, DurableRunRecord } from '../../shared/types';
 import { cx } from '../ui';
 
-function isRunShell(run: DurableRunRecord): boolean {
+function isRunBash(run: DurableRunRecord): boolean {
   return run.manifest?.kind === 'raw-shell' || Boolean(getRunTargetCommand(run));
 }
 
@@ -85,8 +85,8 @@ export function ConversationActivityShelf({
 
                 return (
                   <div key={run.runId} className="flex items-start gap-2 text-[12px]">
-                    <span className={cx('mt-1 shrink-0 font-mono text-[10px]', isRunShell(run) ? 'text-accent/60' : 'text-accent')}>
-                      {isRunShell(run) ? '›_' : '✦'}
+                    <span className={cx('mt-1 shrink-0 font-mono text-[10px]', isRunBash(run) ? 'text-accent/60' : 'text-accent')}>
+                      {isRunBash(run) ? '$' : '✦'}
                     </span>
                     <button
                       type="button"
@@ -100,7 +100,7 @@ export function ConversationActivityShelf({
                         <span className={cx('shrink-0 font-medium', statusClass)}>{statusLabel}</span>
                         <span className="truncate text-primary">{headline.title}</span>
                         <span className="shrink-0 text-[9px] uppercase tracking-wider text-dim/60">
-                          {isRunShell(run) ? 'Shell' : 'Agent'}
+                          {isRunBash(run) ? 'Bash' : 'Agent'}
                         </span>
                       </div>
                       <div className="mt-0.5 text-[11px] text-dim">{summary}</div>

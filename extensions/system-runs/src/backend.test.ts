@@ -106,6 +106,7 @@ describe('system-runs backend', () => {
     const result = await bash({ command: 'sleep 1', background: true, taskSlug: 'sleep' }, createCtx());
 
     expect(result.text).toBe('Started background command run-123 for sleep.');
+    expect(result.details).toMatchObject({ displayMode: 'terminal', command: 'sleep 1', runId: 'run-123' });
     expect(mockStartBackgroundRun).toHaveBeenCalledWith(
       expect.objectContaining({ taskSlug: 'sleep', cwd: '/tmp/repo', shellCommand: 'sleep 1' }),
     );
@@ -119,6 +120,7 @@ describe('system-runs backend', () => {
     const result = await background_command({ action: 'start', command: 'sleep 1', taskSlug: 'sleep' }, createCtx());
 
     expect(result.text).toBe('Started background command run-456 for sleep.');
+    expect(result.details).toMatchObject({ displayMode: 'terminal', command: 'sleep 1', runId: 'run-456' });
     expect(mockStartBackgroundRun).toHaveBeenCalledWith(
       expect.objectContaining({ taskSlug: 'sleep', cwd: '/tmp/repo', shellCommand: 'sleep 1' }),
     );

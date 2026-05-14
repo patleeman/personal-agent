@@ -55,6 +55,38 @@ describe('ConversationActivityShelf', () => {
     expect(html).toContain('hide');
   });
 
+  it('labels shell-backed background runs as Bash', () => {
+    const shellRun = {
+      ...run,
+      manifest: { kind: 'background-run', spec: { shellCommand: 'npm test', metadata: { taskSlug: 'tests' } } },
+      status: { status: 'completed' },
+    } as DurableRunRecord;
+
+    const html = renderToString(
+      <ConversationActivityShelf
+        backgroundRuns={[shellRun]}
+        backgroundRunIndicatorText="completed · tests"
+        showBackgroundRunDetails
+        runLookups={{}}
+        onToggleBackgroundRunDetails={vi.fn()}
+        deferredResumes={[]}
+        deferredResumeIndicatorText="none"
+        deferredResumeNowMs={Date.parse('2026-04-01T09:00:00.000Z')}
+        hasReadyDeferredResumes={false}
+        isLiveSession={false}
+        deferredResumesBusy={false}
+        showDeferredResumeDetails={false}
+        onContinueDeferredResumesNow={vi.fn()}
+        onToggleDeferredResumeDetails={vi.fn()}
+        onFireDeferredResumeNow={vi.fn()}
+        onCancelDeferredResume={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('Bash');
+    expect(html).not.toContain('Shell');
+  });
+
   it('renders deferred resume summary and expanded actions', () => {
     const html = renderToString(
       <ConversationActivityShelf
