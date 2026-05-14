@@ -30,7 +30,7 @@ function readJsonBody(response: Awaited<ReturnType<typeof dispatchDesktopLocalAp
 describe('desktop local API conversation actions', () => {
   it('drops unsafe desktop local API tail block limits', () => {
     expect(normalizeDesktopLocalApiTailBlocks(20)).toBe(20);
-    expect(normalizeDesktopLocalApiTailBlocks(5000)).toBe(1000);
+    expect(normalizeDesktopLocalApiTailBlocks(50000)).toBe(10000);
     expect(normalizeDesktopLocalApiTailBlocks(Number.MAX_SAFE_INTEGER + 1)).toBeUndefined();
   });
 

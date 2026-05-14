@@ -13,7 +13,7 @@ import type { ThreadGoal } from './sessions.js';
 import { type DisplayBlock, readGoalFromEntries, readSessionBlocksByFile } from './sessions.js';
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
-const MAX_LIVE_SNAPSHOT_TAIL_BLOCKS = 1000;
+const MAX_LIVE_SNAPSHOT_TAIL_BLOCKS = 10000;
 
 function normalizeLiveSnapshotTailBlocks(value: number | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0

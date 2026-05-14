@@ -14,7 +14,7 @@ type DesktopConversationStateEnvelope = {
   };
 };
 
-const MAX_DESKTOP_CONVERSATION_STATE_TAIL_BLOCKS = 1000;
+const MAX_DESKTOP_CONVERSATION_STATE_TAIL_BLOCKS = 10000;
 
 export function normalizeDesktopConversationStateTailBlocks(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0

@@ -1539,9 +1539,9 @@ describe('api desktop transport', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { api } = await import('./api');
-    await api.sessionDetail('session-1', { tailBlocks: 5000 });
+    await api.sessionDetail('session-1', { tailBlocks: 50000 });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1?tailBlocks=1000', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1?tailBlocks=10000', {
       method: 'GET',
       cache: 'no-store',
     });
@@ -1570,9 +1570,9 @@ describe('api desktop transport', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { api } = await import('./api');
-    await api.conversationBootstrap('conversation-1', { tailBlocks: 5000 });
+    await api.conversationBootstrap('conversation-1', { tailBlocks: 50000 });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/conversations/conversation-1/bootstrap?tailBlocks=1000', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/conversations/conversation-1/bootstrap?tailBlocks=10000', {
       method: 'GET',
       cache: 'no-store',
     });

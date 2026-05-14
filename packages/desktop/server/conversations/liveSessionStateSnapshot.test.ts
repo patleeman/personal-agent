@@ -46,9 +46,9 @@ describe('liveSessionStateSnapshot', () => {
           state: { messages: [] },
         },
       } as never,
-      5000,
+      50000,
     );
 
-    expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/tmp/session.jsonl', { tailBlocks: 1000 });
+    expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/tmp/session.jsonl', { tailBlocks: 10000 });
   });
 });

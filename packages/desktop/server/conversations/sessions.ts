@@ -2261,8 +2261,12 @@ function resolveTailBlockLimit(tailBlocks: number | undefined, totalBlocks: numb
   return Math.min(tailBlocks, totalBlocks);
 }
 
+const MAX_SESSION_DETAIL_TAIL_BLOCKS = 10000;
+
 function normalizeTailBlockRequest(tailBlocks: number | undefined): number | undefined {
-  return typeof tailBlocks === 'number' && Number.isSafeInteger(tailBlocks) && tailBlocks > 0 ? Math.min(1000, tailBlocks) : undefined;
+  return typeof tailBlocks === 'number' && Number.isSafeInteger(tailBlocks) && tailBlocks > 0
+    ? Math.min(MAX_SESSION_DETAIL_TAIL_BLOCKS, tailBlocks)
+    : undefined;
 }
 
 function buildSessionDetailCacheKey(filePath: string, tailBlocks?: number): string {

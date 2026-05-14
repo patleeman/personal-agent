@@ -26,7 +26,7 @@ describe('normalizeDesktopConversationStateTailBlocks', () => {
   });
 
   it('caps expensive desktop conversation tail block limits', () => {
-    expect(normalizeDesktopConversationStateTailBlocks(5000)).toBe(1000);
+    expect(normalizeDesktopConversationStateTailBlocks(50000)).toBe(10000);
   });
 });
 

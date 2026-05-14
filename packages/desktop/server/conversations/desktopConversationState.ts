@@ -519,7 +519,7 @@ export async function readDesktopConversationState(input: {
   }
   const tailBlocks =
     typeof input.tailBlocks === 'number' && Number.isSafeInteger(input.tailBlocks) && input.tailBlocks > 0
-      ? Math.min(1000, input.tailBlocks)
+      ? Math.min(10000, input.tailBlocks)
       : undefined;
 
   const sessionMeta = readConversationSessionMetaCapability(conversationId);

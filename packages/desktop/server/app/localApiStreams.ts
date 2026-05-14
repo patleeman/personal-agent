@@ -10,7 +10,7 @@ import type { DisplayBlock } from '../conversations/sessions.js';
 import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 import { readWorkspaceRootSnapshot } from '../workspace/workspaceExplorer.js';
 
-const MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS = 1000;
+const MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS = 10000;
 
 export type DesktopLocalApiStreamEvent =
   | { type: 'open' }

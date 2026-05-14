@@ -459,7 +459,7 @@ export function readConversationSessionMeta(conversationId: string) {
 
 type SessionDetailRouteReadResult = ReturnType<typeof readSessionBlocksWithTelemetry>;
 
-const MAX_SESSION_DETAIL_TAIL_BLOCKS = 1000;
+const MAX_SESSION_DETAIL_TAIL_BLOCKS = 10000;
 
 function normalizeSessionDetailTailBlocks(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0

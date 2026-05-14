@@ -97,9 +97,9 @@ describe('localApiStreams', () => {
     const unsubscribe = vi.fn();
     subscribeLiveSessionMock.mockReturnValue(unsubscribe);
 
-    await subscribeDesktopLocalApiStreamByUrl(new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=5000'), vi.fn());
+    await subscribeDesktopLocalApiStreamByUrl(new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=50000'), vi.fn());
 
-    expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), { tailBlocks: 1000 });
+    expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), { tailBlocks: 10000 });
   });
 
   it('streams debounced workspace changes through the desktop local API bridge without recursive repo watches', async () => {

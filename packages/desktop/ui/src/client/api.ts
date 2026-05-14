@@ -245,8 +245,10 @@ async function shouldUseDesktopLocalConversationCapabilities(_conversationId: st
   return Boolean(getDesktopBridge()) && (await shouldUseDesktopLocalCapabilities());
 }
 
+const MAX_TRANSCRIPT_TAIL_BLOCKS = 10000;
+
 function normalizeTailBlocksParam(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(1000, value) : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(MAX_TRANSCRIPT_TAIL_BLOCKS, value) : undefined;
 }
 
 export function normalizeDurableRunLogTailParam(value: unknown): number | undefined {

@@ -260,7 +260,7 @@ describe('conversationService', () => {
     expect(parseTailBlocksQuery('0')).toBeUndefined();
     expect(parseTailBlocksQuery('8abc')).toBeUndefined();
     expect(parseTailBlocksQuery(String(Number.MAX_SAFE_INTEGER + 1))).toBeUndefined();
-    expect(parseTailBlocksQuery('5000')).toBe(1000);
+    expect(parseTailBlocksQuery('50000')).toBe(10000);
   });
 
   it('publishes deduped session meta change events and refreshes the sessions snapshot', () => {
@@ -593,10 +593,10 @@ describe('conversationService', () => {
       readSessionDetailForRoute({
         conversationId: 'conversation-capped',
         profile: 'assistant',
-        tailBlocks: 5000,
+        tailBlocks: 50000,
       }),
     ).resolves.toMatchObject({ sessionRead: { detail: { id: 'detail-capped' } } });
-    expect(readSessionBlocksWithTelemetryMock).toHaveBeenLastCalledWith('conversation-capped', { tailBlocks: 1000 });
+    expect(readSessionBlocksWithTelemetryMock).toHaveBeenLastCalledWith('conversation-capped', { tailBlocks: 10000 });
 
     readSessionBlocksWithTelemetryMock.mockReturnValueOnce({
       detail: null,
