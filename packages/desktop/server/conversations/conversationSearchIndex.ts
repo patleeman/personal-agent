@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { getPiAgentRuntimeDir, openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+import { getPiAgentRuntimeDir, type SqliteDatabase } from '@personal-agent/core';
 
+import { openRecoveringRuntimeSqliteDb } from '../shared/sqliteRuntimeRecovery.js';
 import { readConversationSummary } from './conversationSummaries.js';
 import { listSessions, readSessionSearchText, type SessionMeta } from './sessions.js';
 
@@ -45,7 +46,7 @@ function getDb(): SqliteDatabase {
 
   const dbFile = resolveSearchDbFile();
   mkdirSync(dirname(dbFile), { recursive: true });
-  db = openSqliteDatabase(dbFile);
+  db = openRecoveringRuntimeSqliteDb(dbFile);
   db.pragma('journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS conversation_search_index (

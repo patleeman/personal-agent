@@ -3,10 +3,11 @@ import { dirname, join } from 'node:path';
 
 import { type Api, completeSimple, type Model } from '@earendil-works/pi-ai';
 import { AuthStorage } from '@earendil-works/pi-coding-agent';
-import { getPiAgentRuntimeDir, openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+import { getPiAgentRuntimeDir, type SqliteDatabase } from '@personal-agent/core';
 
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
 import { logWarn } from '../shared/logging.js';
+import { openRecoveringRuntimeSqliteDb } from '../shared/sqliteRuntimeRecovery.js';
 import { readConversationAutoTitleSettings } from './conversationAutoTitle.js';
 import { readSessionSearchText, type SessionMeta } from './sessions.js';
 
@@ -75,7 +76,7 @@ function getDb(): SqliteDatabase {
 
   const dbFile = resolveSummaryDbFile();
   mkdirSync(dirname(dbFile), { recursive: true });
-  db = openSqliteDatabase(dbFile);
+  db = openRecoveringRuntimeSqliteDb(dbFile);
   db.pragma('journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS conversation_summaries (
