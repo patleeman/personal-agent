@@ -1084,6 +1084,9 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('data-block-id="assistant-1"');
     expect(html).toContain('data-block-id="context-1"');
     expect(html).toContain('data-block-id="summary-1"');
+    expect(html).toContain('data-summary-kind="branch"');
+    expect(html).toContain('<details');
+    expect(html).not.toContain('border-teal');
   });
 
   it('renders specific compaction kinds when the summary title provides one', () => {

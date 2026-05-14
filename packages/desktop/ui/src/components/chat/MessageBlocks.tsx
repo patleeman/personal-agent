@@ -1,9 +1,9 @@
-import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo } from 'react';
 
 import { parseSkillBlock } from '../../markdown/markdownExtensions';
 import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
-import { cx, SurfacePanel } from '../ui';
+import { cx } from '../ui';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import { ImagePreview, type InspectableImage } from './ImageMessageBlocks.js';
 import { InlineTraceRunCard } from './InlineTraceRunCard.js';
@@ -12,7 +12,6 @@ import { readMentionedLinkedRunsFromText } from './linkedRuns.js';
 import { renderMarkdownText, renderText, SkillInvocationCard } from './MarkdownMessage.js';
 import { MessageActions } from './MessageActions.js';
 import { buildReplySelectionScopeProps, type ReplySelectionGestureHandler } from './replySelection.js';
-import { buildSummaryPreview } from './summaryPreview.js';
 
 function formatSystemEventLabel(customType?: string): string {
   switch (customType) {
@@ -420,11 +419,6 @@ export const SummaryMessage = memo(function SummaryMessage({
         return {
           label: resolveCompactionSummaryLabel(block.title),
           detail: resolveCompactionSummaryDetail(block.title, block.detail),
-          accentClass: 'border-warning/25 bg-warning/5',
-          markerClass: 'border-warning/25 bg-warning/10 text-warning',
-          labelClass: 'text-warning',
-          marker: '≋',
-          shouldCollapse: true,
         };
       case 'related':
         return {
@@ -432,96 +426,28 @@ export const SummaryMessage = memo(function SummaryMessage({
           detail:
             block.detail?.trim() ||
             'Selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
-          accentClass: 'border-accent/20 bg-accent/5',
-          markerClass: 'border-accent/25 bg-accent/10 text-accent',
-          labelClass: 'text-accent',
-          marker: '⟲',
-          shouldCollapse: true,
         };
       default:
         return {
           label: block.title || 'Branch summary',
           detail: block.detail?.trim() || 'Context from another branch was summarized while preserving the current path.',
-          accentClass: 'border-teal/20 bg-teal/5',
-          markerClass: 'border-teal/25 bg-teal/10 text-teal',
-          labelClass: 'text-teal',
-          marker: '⑂',
-          shouldCollapse: false,
         };
     }
   })();
-  const previewLineCount = 4;
-  const previewText = useMemo(
-    () => (summaryPresentation.shouldCollapse ? buildSummaryPreview(block.text, previewLineCount) : ''),
-    [block.text, summaryPresentation.shouldCollapse],
-  );
-  const [expanded, setExpanded] = useState(() => !summaryPresentation.shouldCollapse);
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
-  if (block.kind === 'compaction' || block.kind === 'related') {
-    return (
-      <SystemEventFrame
-        label={summaryPresentation.label}
-        preview={summaryPresentation.detail}
-        ts={block.ts}
-        dataAttributes={{ 'data-summary-kind': block.kind }}
-      >
-        <div {...replySelectionScopeProps} className="space-y-3 pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
-          {block.kind === 'compaction' ? <p className="text-[12px] leading-relaxed text-secondary">{summaryPresentation.detail}</p> : null}
-          {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
-        </div>
-      </SystemEventFrame>
-    );
-  }
-
   return (
-    <div className="group">
-      <SurfacePanel muted className={cx('px-3.5 py-3.5', summaryPresentation.accentClass)} data-summary-kind={block.kind}>
-        <div className="flex items-start gap-3">
-          <div
-            className={cx(
-              'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold',
-              summaryPresentation.markerClass,
-            )}
-          >
-            <span aria-hidden="true">{summaryPresentation.marker}</span>
-          </div>
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className={cx('text-[10px] font-semibold uppercase tracking-[0.18em]', summaryPresentation.labelClass)}>
-                {summaryPresentation.label}
-              </p>
-              <span className="flex-1" />
-              <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-            </div>
-            <div {...replySelectionScopeProps} className="space-y-3">
-              <p className="text-[12px] leading-relaxed text-secondary">{summaryPresentation.detail}</p>
-              <div className="text-primary">
-                {summaryPresentation.shouldCollapse && !expanded ? (
-                  <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
-                ) : (
-                  renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
-                )}
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              {summaryPresentation.shouldCollapse && (
-                <button
-                  type="button"
-                  className="ui-action-button text-[11px]"
-                  aria-expanded={expanded}
-                  onClick={() => setExpanded((current) => !current)}
-                >
-                  {expanded ? 'Hide summary' : 'Show summary'}
-                </button>
-              )}
-              <span className="flex-1" />
-              <MessageActions />
-            </div>
-          </div>
-        </div>
-      </SurfacePanel>
-    </div>
+    <SystemEventFrame
+      label={summaryPresentation.label}
+      preview={summaryPresentation.detail}
+      ts={block.ts}
+      dataAttributes={{ 'data-summary-kind': block.kind }}
+    >
+      <div {...replySelectionScopeProps} className="space-y-3 pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
+        {block.kind === 'compaction' ? <p className="text-[12px] leading-relaxed text-secondary">{summaryPresentation.detail}</p> : null}
+        {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
+      </div>
+    </SystemEventFrame>
   );
 });
