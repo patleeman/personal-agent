@@ -14,6 +14,15 @@ rmSync(outdir, { recursive: true, force: true });
 const createRequireBanner =
   'import { createRequire as __paServerCreateRequire } from "node:module"; const require = __paServerCreateRequire(import.meta.url);';
 
+const extensionApiAliasPlugin = {
+  name: 'extension-api-aliases',
+  setup(build) {
+    build.onResolve({ filter: /^@personal-agent\/extensions\/host-view-components$/ }, () => ({
+      path: resolve(packageRoot, '..', 'extensions', 'src', 'host-view-components.ts'),
+    }));
+  },
+};
+
 const sharedEsbuildOptions = {
   bundle: true,
   platform: 'node',
@@ -24,6 +33,7 @@ const sharedEsbuildOptions = {
   legalComments: 'none',
   logLevel: 'info',
   external: ['@xenova/transformers', 'better-sqlite3', 'electron', 'esbuild', 'fsevents'],
+  plugins: [extensionApiAliasPlugin],
 };
 
 const bundleOutputs = [

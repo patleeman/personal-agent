@@ -29,7 +29,7 @@ export {
   type HostViewComponentId as ExtensionHostViewComponentId,
   getHostViewComponentDefinition,
   HOST_VIEW_COMPONENT_DEFINITIONS,
-} from '../../../extensions/src/host-view-components.js';
+} from '@personal-agent/extensions/host-view-components';
 
 export const EXTENSION_ICON_NAMES = [
   'app',

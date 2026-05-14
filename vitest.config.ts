@@ -9,6 +9,7 @@ export default defineConfig({
       '@personal-agent/extensions/host': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/host.ts'),
       '@personal-agent/extensions/ui': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/ui.ts'),
       '@personal-agent/extensions/workbench': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/workbench.ts'),
+      '@personal-agent/extensions/host-view-components': resolve(process.cwd(), 'packages/extensions/src/host-view-components.ts'),
       '@personal-agent/extensions/data': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/data.ts'),
       '@personal-agent/extensions/settings': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/settings.ts'),
       '@personal-agent/extensions/excalidraw': resolve(process.cwd(), 'packages/extensions/src/excalidraw.ts'),

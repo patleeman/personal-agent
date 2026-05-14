@@ -8,7 +8,8 @@
     "noEmitOnError": false,
     "paths": {
       "@personal-agent/core": ["../core/src"],
-      "@personal-agent/daemon": ["./server/daemon"]
+      "@personal-agent/daemon": ["./server/daemon"],
+      "@personal-agent/extensions/host-view-components": ["../extensions/dist/host-view-components.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "server/**/*.ts", "server/**/*.tsx"],
