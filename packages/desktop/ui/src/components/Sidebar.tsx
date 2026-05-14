@@ -12,7 +12,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { type ActivityTreeItem, buildActivityTreeItems, buildConversationActivityId } from '../activity/activityTree';
 import { applyActivityTreeItemStyleProviders } from '../activity/activityTreeExtensionStyles';
-import { ActivityTreeView } from '../activity/ActivityTreeView';
+import { type ActivityTreeDropPosition, ActivityTreeView } from '../activity/ActivityTreeView';
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
@@ -2297,7 +2297,7 @@ export function Sidebar() {
       return { ...item, parentId: buildActivityTreeGroupId(group.key) } satisfies ActivityTreeItem;
     });
     const groupItems = groupedConversationRows
-      .filter((group) => usedGroupKeys.has(group.key))
+      .filter((group) => threadsFilterMode === 'all' || usedGroupKeys.has(group.key))
       .map(
         (group) =>
           ({
@@ -2311,9 +2311,13 @@ export function Sidebar() {
       );
 
     return [...groupItems, ...groupedItems];
-  }, [activityTreeSessions, groupedConversationRows, pinnedIds, runs, threadsOrganizeMode]);
+  }, [activityTreeSessions, groupedConversationRows, pinnedIds, runs, threadsFilterMode, threadsOrganizeMode]);
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
+  const collapsedActivityTreeGroupItemIds = useMemo(
+    () => new Set(collapsedConversationGroupKeys.map((key) => buildActivityTreeGroupId(key))),
+    [collapsedConversationGroupKeys],
+  );
   const conversationItemBySessionId = useMemo(
     () => new Map(renderedConversationItems.map((item) => [item.session.id, item] as const)),
     [renderedConversationItems],
@@ -2472,7 +2476,7 @@ export function Sidebar() {
     setConversationCwdDropTargetGroupKey(null);
   }
 
-  function getDropPosition(event: DragEvent<HTMLDivElement>): OpenConversationDropPosition {
+  function getDropPosition(event: DragEvent<HTMLElement>): OpenConversationDropPosition {
     const bounds = event.currentTarget.getBoundingClientRect();
     return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
   }
@@ -2507,7 +2511,7 @@ export function Sidebar() {
     return normalizeConversationGroupCwd(draggedSession.cwd) !== normalizeConversationGroupCwd(targetGroup.cwd);
   }
 
-  function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+  function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLElement>) {
     setDraggingSessionId(sessionId);
     setDraggingSection(section);
     setDraggingGroupKey(null);
@@ -2519,7 +2523,7 @@ export function Sidebar() {
     event.dataTransfer.setData('text/plain', sessionId);
   }
 
-  function handleConversationGroupDragStart(groupKey: string, event: DragEvent<HTMLDivElement>) {
+  function handleConversationGroupDragStart(groupKey: string, event: DragEvent<HTMLElement>) {
     setDraggingGroupKey(groupKey);
     setDraggingSessionId(null);
     setDraggingSection(null);
@@ -2603,7 +2607,7 @@ export function Sidebar() {
     setGroupDropTarget((current) => (current?.groupKey === groupKey && current.position === position ? current : { groupKey, position }));
   }
 
-  async function handleConversationCwdDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
+  async function handleConversationCwdDrop(targetGroupKey: string, event: DragEvent<HTMLElement>) {
     event.preventDefault();
 
     const draggedConversationId =
@@ -2674,7 +2678,11 @@ export function Sidebar() {
     clearDragState();
   }
 
-  function handleConversationGroupDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
+  function handleConversationGroupDrop(
+    targetGroupKey: string,
+    event: DragEvent<HTMLElement>,
+    explicitPosition?: OpenConversationDropPosition,
+  ) {
     event.preventDefault();
 
     const draggedConversationId =
@@ -2712,7 +2720,7 @@ export function Sidebar() {
       return;
     }
 
-    const insertIndex = getDropPosition(event) === 'before' ? adjustedTargetIndex : adjustedTargetIndex + 1;
+    const insertIndex = (explicitPosition ?? getDropPosition(event)) === 'before' ? adjustedTargetIndex : adjustedTargetIndex + 1;
     nextGroupedRows.splice(insertIndex, 0, draggedGroup);
 
     persistManualConversationGroupOrder(nextGroupedRows.map((group) => group.key));
@@ -2740,7 +2748,7 @@ export function Sidebar() {
     clearDragState();
   }
 
-  function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+  function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLElement>) {
     event.preventDefault();
     const targetGroupKey = conversationGroupKeyBySessionId.get(sessionId);
     const draggedConversationId =
@@ -2758,6 +2766,137 @@ export function Sidebar() {
     }
 
     handleConversationDrop(section, sessionId, getDropPosition(event));
+  }
+
+  function getActivityTreeConversationId(item: ActivityTreeItem): string | null {
+    const conversationId = item.metadata?.conversationId;
+    return typeof conversationId === 'string' && conversationId.trim() ? conversationId : null;
+  }
+
+  function getActivityTreeGroupKey(item: ActivityTreeItem): string | null {
+    const groupKey = item.metadata?.groupKey;
+    return typeof groupKey === 'string' && groupKey.trim() ? groupKey : null;
+  }
+
+  function getActivityTreeConversationSection(conversationId: string): ConversationShelf | null {
+    return conversationItemBySessionId.get(conversationId)?.section ?? null;
+  }
+
+  function canDragActivityTreeItem(item: ActivityTreeItem): boolean {
+    if (!canReorderConversationRows) {
+      return false;
+    }
+
+    if (item.kind === 'group') {
+      return canReorderConversationGroups && Boolean(getActivityTreeGroupKey(item));
+    }
+
+    if (item.kind !== 'conversation') {
+      return false;
+    }
+
+    const conversationId = getActivityTreeConversationId(item);
+    return Boolean(conversationId && conversationId !== DRAFT_CONVERSATION_ID);
+  }
+
+  function canDropActivityTreeItem(
+    draggedItem: ActivityTreeItem,
+    targetItem: ActivityTreeItem,
+    _position: ActivityTreeDropPosition,
+  ): boolean {
+    const draggedConversationId = getActivityTreeConversationId(draggedItem);
+    if (draggedConversationId) {
+      if (targetItem.kind === 'group') {
+        const targetGroupKey = getActivityTreeGroupKey(targetItem);
+        return Boolean(targetGroupKey && canDropConversationOnGroup(draggedConversationId, targetGroupKey));
+      }
+
+      const targetConversationId = getActivityTreeConversationId(targetItem);
+      if (!targetConversationId || targetConversationId === draggedConversationId) {
+        return false;
+      }
+
+      const draggedSection = getActivityTreeConversationSection(draggedConversationId);
+      const targetSection = getActivityTreeConversationSection(targetConversationId);
+      if (!draggedSection || !targetSection || draggedSection !== targetSection) {
+        return false;
+      }
+
+      const targetGroupKey = conversationGroupKeyBySessionId.get(targetConversationId);
+      return (
+        canDropConversationOnSession(draggedConversationId, targetConversationId) ||
+        Boolean(targetGroupKey && canDropConversationOnGroup(draggedConversationId, targetGroupKey))
+      );
+    }
+
+    const draggedGroupKey = getActivityTreeGroupKey(draggedItem);
+    const targetGroupKey = getActivityTreeGroupKey(targetItem);
+    return Boolean(
+      draggedGroupKey &&
+      targetGroupKey &&
+      draggedGroupKey !== targetGroupKey &&
+      canDropConversationGroupOnGroup(draggedGroupKey, targetGroupKey),
+    );
+  }
+
+  function handleActivityTreeDragStart(item: ActivityTreeItem, event: DragEvent<HTMLElement>) {
+    const conversationId = getActivityTreeConversationId(item);
+    if (conversationId) {
+      const section = getActivityTreeConversationSection(conversationId);
+      if (section) {
+        handleTabDragStart(section, conversationId, event);
+      }
+      return;
+    }
+
+    const groupKey = getActivityTreeGroupKey(item);
+    if (groupKey) {
+      handleConversationGroupDragStart(groupKey, event);
+    }
+  }
+
+  function handleActivityTreeDrop(
+    draggedItem: ActivityTreeItem,
+    targetItem: ActivityTreeItem,
+    position: ActivityTreeDropPosition,
+    event: DragEvent<HTMLElement>,
+  ) {
+    const draggedConversationId = getActivityTreeConversationId(draggedItem);
+    if (draggedConversationId) {
+      const targetGroupKey = getActivityTreeGroupKey(targetItem);
+      if (targetGroupKey) {
+        void handleConversationCwdDrop(targetGroupKey, event);
+        return;
+      }
+
+      const targetConversationId = getActivityTreeConversationId(targetItem);
+      const targetSection = targetConversationId ? getActivityTreeConversationSection(targetConversationId) : null;
+      const targetConversationGroupKey = targetConversationId ? conversationGroupKeyBySessionId.get(targetConversationId) : null;
+      if (
+        targetConversationId &&
+        targetConversationGroupKey &&
+        !canDropConversationOnSession(draggedConversationId, targetConversationId) &&
+        canDropConversationOnGroup(draggedConversationId, targetConversationGroupKey)
+      ) {
+        void handleConversationCwdDrop(targetConversationGroupKey, event);
+        return;
+      }
+
+      if (targetConversationId && targetSection) {
+        handleConversationDrop(targetSection, targetConversationId, position);
+      } else {
+        clearDragState();
+      }
+      return;
+    }
+
+    const targetGroupKey = getActivityTreeGroupKey(targetItem);
+    if (targetGroupKey) {
+      handleConversationGroupDrop(targetGroupKey, event, position);
+      return;
+    }
+
+    clearDragState();
   }
 
   useEffect(() => {
@@ -3573,6 +3712,18 @@ export function Sidebar() {
                 items={activityTreeItems}
                 activeItemId={activeActivityTreeItemId}
                 className="h-[calc(100vh-9rem)] min-h-[12rem]"
+                canDragItem={canDragActivityTreeItem}
+                canDropItem={canDropActivityTreeItem}
+                collapsedGroupItemIds={collapsedActivityTreeGroupItemIds}
+                onToggleGroupItem={(item) => {
+                  const groupKey = getActivityTreeGroupKey(item);
+                  if (groupKey) {
+                    toggleConversationGroupCollapsed(groupKey);
+                  }
+                }}
+                onDragStartItem={handleActivityTreeDragStart}
+                onDropItem={handleActivityTreeDrop}
+                onDragEndItem={clearDragState}
                 onArchiveItem={(item) => {
                   const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
                   if (conversationId) {

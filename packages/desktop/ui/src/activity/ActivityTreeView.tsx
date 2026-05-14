@@ -1,19 +1,39 @@
 import type { FileTreeContextMenuOpenContext } from '@pierre/trees';
-import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import type { CSSProperties, DragEvent, ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { ConversationStatusText } from '../components/ConversationStatusText';
+import { timeAgoCompact } from '../shared/utils';
 import type { ActivityTreeItem } from './activityTree';
 import { buildActivityTreePathModel } from './activityTreePaths';
+
+export type ActivityTreeDropPosition = 'before' | 'after';
 
 interface ActivityTreeViewProps {
   items: readonly ActivityTreeItem[];
   activeItemId?: string | null;
   className?: string;
   style?: CSSProperties;
+  canDragItem?: (item: ActivityTreeItem) => boolean;
+  canDropItem?: (
+    draggedItem: ActivityTreeItem,
+    targetItem: ActivityTreeItem,
+    position: ActivityTreeDropPosition,
+    event: DragEvent<HTMLElement>,
+  ) => boolean;
+  collapsedGroupItemIds?: ReadonlySet<string>;
+  onToggleGroupItem?: (item: ActivityTreeItem) => void;
   onArchiveItem?: (item: ActivityTreeItem) => void;
   onCreateChildItem?: (item: ActivityTreeItem) => void;
   onOpenItem?: (item: ActivityTreeItem) => void;
+  onDragStartItem?: (item: ActivityTreeItem, event: DragEvent<HTMLElement>) => void;
+  onDropItem?: (
+    draggedItem: ActivityTreeItem,
+    targetItem: ActivityTreeItem,
+    position: ActivityTreeDropPosition,
+    event: DragEvent<HTMLElement>,
+  ) => void;
+  onDragEndItem?: () => void;
   renderContextMenu?: (item: ActivityTreeItem, context: FileTreeContextMenuOpenContext) => ReactNode;
 }
 
@@ -46,9 +66,16 @@ export function ActivityTreeView({
   activeItemId,
   className,
   style,
+  canDragItem,
+  canDropItem,
+  collapsedGroupItemIds,
+  onToggleGroupItem,
   onArchiveItem,
   onCreateChildItem,
   onOpenItem,
+  onDragStartItem,
+  onDropItem,
+  onDragEndItem,
   renderContextMenu,
 }: ActivityTreeViewProps) {
   const pathModel = useMemo(() => buildActivityTreePathModel(items), [items]);
@@ -65,19 +92,30 @@ export function ActivityTreeView({
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [contextMenu, setContextMenu] = useState<ActivityTreeContextMenuState | null>(null);
+  const draggedItemIdRef = useRef<string | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ itemId: string; position: ActivityTreeDropPosition } | null>(null);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
-  const toggleGroupCollapsed = useCallback((itemId: string) => {
-    setCollapsedGroupIds((current) => {
-      const next = new Set(current);
-      if (next.has(itemId)) {
-        next.delete(itemId);
-      } else {
-        next.add(itemId);
+  const toggleGroupCollapsed = useCallback(
+    (item: ActivityTreeItem) => {
+      if (collapsedGroupItemIds && onToggleGroupItem) {
+        onToggleGroupItem(item);
+        return;
       }
-      return next;
-    });
-  }, []);
+
+      setCollapsedGroupIds((current) => {
+        const next = new Set(current);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+        } else {
+          next.add(item.id);
+        }
+        return next;
+      });
+    },
+    [collapsedGroupItemIds, onToggleGroupItem],
+  );
   const toggleExpanded = useCallback((itemId: string) => {
     setExpandedIds((current) => {
       const next = new Set(current);
@@ -95,11 +133,22 @@ export function ActivityTreeView({
       pathModel.entries.filter(({ item, path }) => {
         if (!item.parentId) return true;
         const parent = itemById.get(item.parentId);
-        if (parent?.kind === 'group') return !collapsedGroupIds.has(parent.id);
+        if (parent?.kind === 'group') return !(collapsedGroupItemIds ?? collapsedGroupIds).has(parent.id);
         return expandedIds.has(item.parentId) || path === selectedPath || Boolean(selectedPath?.startsWith(`${path}/`));
       }),
-    [collapsedGroupIds, expandedIds, itemById, pathModel.entries, selectedPath],
+    [collapsedGroupIds, collapsedGroupItemIds, expandedIds, itemById, pathModel.entries, selectedPath],
   );
+
+  function getDropPosition(event: DragEvent<HTMLElement>): ActivityTreeDropPosition {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+  }
+
+  function clearDragState() {
+    draggedItemIdRef.current = null;
+    setDraggedItemId(null);
+    setDropTarget(null);
+  }
 
   if (pathModel.entries.length === 0) {
     return <p className="px-4 py-2 text-[12px] text-dim">No threads yet.</p>;
@@ -115,7 +164,11 @@ export function ActivityTreeView({
           const backgroundColor = sanitizeCssColor(item.backgroundColor);
           const childCount = childCountByParentId.get(item.id) ?? 0;
           const expanded =
-            item.kind === 'group' ? !collapsedGroupIds.has(item.id) : expandedIds.has(item.id) || Boolean(selectedPath?.startsWith(path));
+            item.kind === 'group'
+              ? !(collapsedGroupItemIds ?? collapsedGroupIds).has(item.id)
+              : expandedIds.has(item.id) || Boolean(selectedPath?.startsWith(path));
+          const canDrag = Boolean(canDragItem?.(item));
+          const rowDropPosition = dropTarget?.itemId === item.id ? dropTarget.position : null;
           const canArchive = item.kind === 'conversation' && onArchiveItem;
           const canCreateChild = item.kind === 'group' && onCreateChildItem;
           const conversationIsRunning = item.kind === 'conversation' && item.metadata?.isRunning === true;
@@ -129,10 +182,60 @@ export function ActivityTreeView({
               type="button"
               role="treeitem"
               aria-selected={active ? 'true' : 'false'}
+              draggable={canDrag}
+              onDragStart={
+                canDrag
+                  ? (event) => {
+                      draggedItemIdRef.current = item.id;
+                      setDraggedItemId(item.id);
+                      onDragStartItem?.(item, event);
+                    }
+                  : undefined
+              }
+              onDragOver={(event) => {
+                const currentDraggedItemId = draggedItemIdRef.current ?? draggedItemId;
+                const draggedItem = currentDraggedItemId ? itemById.get(currentDraggedItemId) : null;
+                if (!draggedItem || draggedItem.id === item.id) {
+                  setDropTarget(null);
+                  return;
+                }
+
+                const position = getDropPosition(event);
+                if (!canDropItem?.(draggedItem, item, position, event)) {
+                  if (dropTarget?.itemId === item.id) setDropTarget(null);
+                  return;
+                }
+
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTarget((current) =>
+                  current?.itemId === item.id && current.position === position ? current : { itemId: item.id, position },
+                );
+              }}
+              onDrop={(event) => {
+                const currentDraggedItemId = draggedItemIdRef.current ?? draggedItemId;
+                const draggedItem = currentDraggedItemId ? itemById.get(currentDraggedItemId) : null;
+                if (!draggedItem) {
+                  clearDragState();
+                  return;
+                }
+
+                const position = getDropPosition(event);
+                if (canDropItem?.(draggedItem, item, position, event)) {
+                  event.preventDefault();
+                  onDropItem?.(draggedItem, item, position, event);
+                }
+                clearDragState();
+              }}
+              onDragEnd={() => {
+                clearDragState();
+                onDragEndItem?.();
+              }}
               className={[
-                'ui-sidebar-session-row group flex w-full items-center gap-1 select-none text-left',
+                'ui-sidebar-session-row group relative flex w-full items-center gap-1 select-none text-left',
                 item.kind === 'group' && 'font-semibold',
                 active && 'ui-sidebar-session-row-active',
+                canDrag && (draggedItemId === item.id ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -141,10 +244,19 @@ export function ActivityTreeView({
                 ...(backgroundColor ? { backgroundColor } : {}),
                 ...(accentColor ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : {}),
               }}
-              title={typeof item.metadata?.tooltip === 'string' ? item.metadata.tooltip : item.subtitle}
+              data-sidebar-session-id={typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : undefined}
+              data-sidebar-group-key={typeof item.metadata?.groupKey === 'string' ? item.metadata.groupKey : undefined}
+              title={
+                canDrag
+                  ? 'Drag to reorder conversations'
+                  : typeof item.metadata?.tooltip === 'string'
+                    ? item.metadata.tooltip
+                    : item.subtitle
+              }
+              aria-expanded={item.kind === 'group' ? expanded : undefined}
               onClick={() => {
                 if (item.kind === 'group') {
-                  toggleGroupCollapsed(item.id);
+                  toggleGroupCollapsed(item);
                   return;
                 }
                 onOpenItem?.(item);
@@ -156,6 +268,15 @@ export function ActivityTreeView({
                 setContextMenu({ item, x: event.clientX, y: event.clientY });
               }}
             >
+              {rowDropPosition ? (
+                <span
+                  aria-hidden="true"
+                  className={[
+                    'pointer-events-none absolute left-2 right-2 z-10 h-0.5 rounded-full bg-accent/80',
+                    rowDropPosition === 'before' ? 'top-0' : 'bottom-0',
+                  ].join(' ')}
+                />
+              ) : null}
               {showConversationStatus ? (
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
                   <ConversationStatusText isRunning={conversationIsRunning} needsAttention={conversationNeedsAttention} />
@@ -165,11 +286,11 @@ export function ActivityTreeView({
                   role="button"
                   tabIndex={-1}
                   className="-ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-dim hover:text-primary"
-                  aria-label={expanded ? 'Collapse workspace' : 'Expand workspace'}
+                  aria-label={`${expanded ? 'Collapse' : 'Expand'} ${item.title}`}
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    toggleGroupCollapsed(item.id);
+                    toggleGroupCollapsed(item);
                   }}
                 >
                   {expanded ? '▾' : '▸'}
@@ -207,8 +328,12 @@ export function ActivityTreeView({
                   role="button"
                   tabIndex={-1}
                   className="shrink-0 rounded px-1 text-[16px] leading-none text-dim hover:bg-surface-hover hover:text-primary"
-                  aria-label="Workspace actions"
-                  title="Workspace actions"
+                  aria-label={`Workspace actions for ${item.title}`}
+                  title={
+                    typeof item.metadata?.cwd === 'string'
+                      ? `Workspace actions for ${item.metadata.cwd}`
+                      : `Workspace actions for ${item.title}`
+                  }
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -224,8 +349,12 @@ export function ActivityTreeView({
                   role="button"
                   tabIndex={-1}
                   className="shrink-0 rounded px-1 text-[14px] leading-none text-dim hover:bg-surface-hover hover:text-primary"
-                  aria-label="New thread in workspace"
-                  title="New thread in workspace"
+                  aria-label={`New conversation in ${item.title}`}
+                  title={
+                    typeof item.metadata?.cwd === 'string'
+                      ? `New conversation in ${item.metadata.cwd}`
+                      : `New conversation in ${item.title}`
+                  }
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -233,6 +362,11 @@ export function ActivityTreeView({
                   }}
                 >
                   +
+                </span>
+              ) : null}
+              {item.kind === 'conversation' && item.updatedAt ? (
+                <span className="ui-sidebar-session-meta ui-sidebar-session-time shrink-0 whitespace-nowrap">
+                  {timeAgoCompact(item.updatedAt)}
                 </span>
               ) : null}
               {canArchive ? (
