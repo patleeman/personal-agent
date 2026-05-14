@@ -1,45 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  activateNextHiddenTurn,
   clearActiveHiddenTurnAfterTerminalEvent,
   createLiveSessionHiddenTurnState,
   hasQueuedOrActiveHiddenTurn,
+  shouldSuppressLiveEventForHiddenTurn,
 } from './liveSessionHiddenTurns.js';
 
 describe('live session hidden turns', () => {
-  it('clears a non-turn hidden custom message after its message_end event', () => {
+  it('does not support hidden turns or suppress events', () => {
     const state = createLiveSessionHiddenTurnState();
-    state.activeHiddenTurnCustomType = 'related_conversation_pointers';
+    state.pendingHiddenTurnCustomTypes = ['legacy-hidden'];
+    state.activeHiddenTurnCustomType = 'legacy-active';
 
-    const cleared = clearActiveHiddenTurnAfterTerminalEvent(state, {
-      type: 'message_end',
-      message: {
-        role: 'custom',
-        customType: 'related_conversation_pointers',
-        display: false,
-        content: 'Pointers',
-      },
-    } as any);
-
-    expect(cleared).toBe(true);
     expect(hasQueuedOrActiveHiddenTurn(state)).toBe(false);
+    expect(activateNextHiddenTurn(state, { type: 'agent_start' } as any)).toBeNull();
+    expect(state.pendingHiddenTurnCustomTypes).toEqual([]);
+    expect(state.activeHiddenTurnCustomType).toBeNull();
+    expect(shouldSuppressLiveEventForHiddenTurn(state, { type: 'message_update' } as any)).toBe(false);
   });
 
-  it('keeps a hidden turn active when another message ends', () => {
+  it('clears stale hidden-turn state without preserving hidden behavior', () => {
     const state = createLiveSessionHiddenTurnState();
-    state.activeHiddenTurnCustomType = 'conversation_automation_post_turn_review';
+    state.pendingHiddenTurnCustomTypes = ['queued'];
+    state.activeHiddenTurnCustomType = 'active';
 
-    const cleared = clearActiveHiddenTurnAfterTerminalEvent(state, {
-      type: 'message_end',
-      message: {
-        role: 'custom',
-        customType: 'related_conversation_pointers',
-        display: false,
-        content: 'Pointers',
-      },
-    } as any);
-
-    expect(cleared).toBe(false);
-    expect(state.activeHiddenTurnCustomType).toBe('conversation_automation_post_turn_review');
+    expect(clearActiveHiddenTurnAfterTerminalEvent(state, { type: 'turn_end' } as any)).toBe(true);
+    expect(state.pendingHiddenTurnCustomTypes).toEqual([]);
+    expect(state.activeHiddenTurnCustomType).toBeNull();
+    expect(hasQueuedOrActiveHiddenTurn(state)).toBe(false);
   });
 });

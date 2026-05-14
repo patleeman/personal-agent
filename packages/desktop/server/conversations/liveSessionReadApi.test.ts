@@ -45,7 +45,7 @@ describe('computeLiveSessionRunning', () => {
     ).toBe(true);
   });
 
-  it('returns true when session.isStreaming is true but a hidden turn is active — hasPendingHiddenTurn catches it', () => {
+  it('returns true when session.isStreaming is true even if a stale hidden-turn marker exists', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
@@ -70,28 +70,17 @@ describe('computeLiveSessionRunning', () => {
     ).toBe(false);
   });
 
-  it('returns true when a hidden turn is pending even without streaming', () => {
+  it('ignores stale hidden-turn markers when the session is otherwise idle', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
           session: { isStreaming: false } as any,
           lastDurableRunState: 'waiting',
           pendingHiddenTurnCustomTypes: ['auto_mode'],
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it('returns true when a hidden turn is active even with lastDurableRunState waiting', () => {
-    expect(
-      computeLiveSessionRunning(
-        makeEntry({
-          session: { isStreaming: false } as any,
-          lastDurableRunState: 'waiting',
           activeHiddenTurnCustomType: 'auto_mode',
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('returns true when lastDurableRunState is running', () => {
@@ -110,14 +99,14 @@ describe('computeLiveSessionRunning', () => {
           activeHiddenTurnCustomType: 'auto_mode',
         }),
       ),
-    ).toBe(true); // hasQueuedOrActiveHiddenTurn catches it
+    ).toBe(true);
   });
 
   it('returns false for an idle session with no lastDurableRunState set', () => {
     expect(computeLiveSessionRunning(makeEntry({ lastDurableRunState: undefined }))).toBe(false);
   });
 
-  it('returns true when interrupted durable run with active hidden turn', () => {
+  it('returns false when interrupted durable run only has a stale hidden-turn marker', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
@@ -125,6 +114,6 @@ describe('computeLiveSessionRunning', () => {
           activeHiddenTurnCustomType: 'auto_mode',
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

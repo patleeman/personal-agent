@@ -14,7 +14,7 @@ describe('liveSessionQueue', () => {
     expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasHiddenTurnQueued: false })).toBeUndefined();
     expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: true, hasHiddenTurnQueued: false })).toBe('followUp');
     expect(normalizeQueuedPromptBehavior('steer', { isStreaming: true, hasHiddenTurnQueued: false })).toBe('steer');
-    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasHiddenTurnQueued: true })).toBe('followUp');
+    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasHiddenTurnQueued: true })).toBeUndefined();
   });
 
   it('builds previews from internal queued user messages and keeps image-only prompts restorable', () => {

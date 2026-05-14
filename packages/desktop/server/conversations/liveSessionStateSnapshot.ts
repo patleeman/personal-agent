@@ -63,7 +63,7 @@ export interface LiveSessionSnapshot {
 
 export function buildLiveSessionSnapshot(entry: LiveSessionSnapshotHost, tailBlocks?: number): LiveSessionSnapshot {
   const liveBlocks = buildLiveStateBlocks(entry.session, {
-    omitStreamMessage: Boolean(entry.activeHiddenTurnCustomType),
+    omitStreamMessage: false,
   });
   const sessionFile = entry.session.sessionFile?.trim();
   if (!sessionFile || !existsSync(sessionFile)) {
@@ -125,7 +125,7 @@ export function readLiveSessionStateSnapshotFromEntry(
   return {
     ...buildLiveSessionSnapshot(entry, tailBlocks),
     hasSnapshot: true,
-    isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
+    isStreaming: entry.session.isStreaming,
     isCompacting: entry.isCompacting === true,
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
     goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),

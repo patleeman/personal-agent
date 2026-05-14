@@ -19,7 +19,6 @@ export interface LiveSessionReadHost extends LiveSessionHiddenTurnState {
  *
  *  A session is running when:
  *   - The agent is actively streaming (agent runtime), OR
- *   - A hidden turn is active or queued (auto mode, etc.), OR
  *   - A manual/auto compaction is in progress, OR
  *   - The durable run state is 'running' or 'recovering'
  *
@@ -30,12 +29,11 @@ export function computeLiveSessionRunning(entry: LiveSessionReadHost): boolean {
   if (entry.isCompacting) {
     return true;
   }
-  if (entry.lastDurableRunState === 'waiting' && !hasQueuedOrActiveHiddenTurn(entry)) {
+  if (entry.lastDurableRunState === 'waiting') {
     return false;
   }
   return Boolean(
-    (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
-    hasQueuedOrActiveHiddenTurn(entry) ||
+    entry.session.isStreaming ||
     entry.lastDurableRunState === 'running' ||
     entry.lastDurableRunState === 'recovering',
   );
@@ -61,9 +59,7 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
         ? true
         : entry.lastDurableRunState === 'waiting'
           ? false
-          : (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
-            entry.lastDurableRunState === 'running' ||
-            entry.lastDurableRunState === 'recovering',
+          : entry.session.isStreaming || entry.lastDurableRunState === 'running' || entry.lastDurableRunState === 'recovering',
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
   }));

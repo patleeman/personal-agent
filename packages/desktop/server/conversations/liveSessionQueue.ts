@@ -44,10 +44,6 @@ export function normalizeQueuedPromptBehavior(
     return behavior ?? 'followUp';
   }
 
-  if (options.hasHiddenTurnQueued) {
-    return behavior ?? 'followUp';
-  }
-
   return undefined;
 }
 
