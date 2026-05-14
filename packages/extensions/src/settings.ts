@@ -13,6 +13,7 @@ export type ProviderAuthSummary = unknown;
 export type ProviderEditorDraft = unknown;
 export type ProviderOAuthLoginState = unknown;
 export type ProviderOAuthLoginStreamEvent = unknown;
+export type TelemetryDbMaintenanceResult = unknown;
 export interface ColorTheme {
   id: string;
   label: string;

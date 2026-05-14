@@ -7,6 +7,7 @@ const LOG_DIR = 'telemetry';
 const LOG_PREFIX = 'app-telemetry-';
 const LOG_SUFFIX = '.jsonl';
 const DEFAULT_RETENTION_DAYS = 30;
+const DEFAULT_MAX_LOG_FILE_BYTES = 10 * 1024 * 1024;
 const PRUNE_EVERY_WRITES = 250;
 
 const writeCounts = new Map<string, number>();
@@ -32,9 +33,40 @@ export function resolveAppTelemetryLogDir(stateRoot?: string): string {
   return join(stateRoot ?? getStateRoot(), 'logs', LOG_DIR);
 }
 
-export function resolveAppTelemetryLogPath(ts: string, stateRoot?: string): string {
-  const day = /^\d{4}-\d{2}-\d{2}/.exec(ts)?.[0] ?? new Date().toISOString().slice(0, 10);
-  return join(resolveAppTelemetryLogDir(stateRoot), `${LOG_PREFIX}${day}${LOG_SUFFIX}`);
+function resolveAppTelemetryLogDay(ts: string): string {
+  return /^\d{4}-\d{2}-\d{2}/.exec(ts)?.[0] ?? new Date().toISOString().slice(0, 10);
+}
+
+function resolveMaxLogFileBytes(): number {
+  const raw = process.env.PERSONAL_AGENT_APP_TELEMETRY_LOG_MAX_BYTES;
+  if (!raw) return DEFAULT_MAX_LOG_FILE_BYTES;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : DEFAULT_MAX_LOG_FILE_BYTES;
+}
+
+export function resolveAppTelemetryLogPath(ts: string, stateRoot?: string, lineBytes = 0): string {
+  const day = resolveAppTelemetryLogDay(ts);
+  const dir = resolveAppTelemetryLogDir(stateRoot);
+  const basePath = join(dir, `${LOG_PREFIX}${day}${LOG_SUFFIX}`);
+  const maxBytes = resolveMaxLogFileBytes();
+
+  try {
+    if (!existsSync(basePath) || statSync(basePath).size + lineBytes <= maxBytes) return basePath;
+
+    let nextSegment = 1;
+    const segmentPrefix = `${LOG_PREFIX}${day}.`;
+    for (const fileName of readdirSync(dir)) {
+      if (!fileName.startsWith(segmentPrefix) || !fileName.endsWith(LOG_SUFFIX)) continue;
+      const segment = Number.parseInt(fileName.slice(segmentPrefix.length, -LOG_SUFFIX.length), 10);
+      if (!Number.isSafeInteger(segment)) continue;
+      nextSegment = Math.max(nextSegment, segment + 1);
+      const candidate = join(dir, fileName);
+      if (statSync(candidate).size + lineBytes <= maxBytes) return candidate;
+    }
+    return join(dir, `${LOG_PREFIX}${day}.${nextSegment}${LOG_SUFFIX}`);
+  } catch {
+    return basePath;
+  }
 }
 
 function resolveRetentionDays(): number {
@@ -48,15 +80,23 @@ export function closeAppTelemetryLogs(): void {
   writeCounts.clear();
 }
 
+function logTelemetryStorageError(message: string, error: unknown): void {
+  console.error(
+    `[telemetry] ${message}`,
+    error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) },
+  );
+}
+
 export function writeAppTelemetryLogEvent(event: AppTelemetryLogEvent, stateRoot?: string): void {
+  const line = `${JSON.stringify(event)}\n`;
   try {
-    const path = resolveAppTelemetryLogPath(event.ts, stateRoot);
     const dir = resolveAppTelemetryLogDir(stateRoot);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    appendFileSync(path, `${JSON.stringify(event)}\n`, 'utf-8');
+    const path = resolveAppTelemetryLogPath(event.ts, stateRoot, Buffer.byteLength(line, 'utf-8'));
+    appendFileSync(path, line, 'utf-8');
     maybePruneAppTelemetryLogs(stateRoot);
-  } catch {
-    // Raw telemetry must never affect app behavior.
+  } catch (error) {
+    logTelemetryStorageError('failed to write app telemetry JSONL event', error);
   }
 }
 
@@ -75,8 +115,8 @@ function maybePruneAppTelemetryLogs(stateRoot?: string): void {
       const stat = statSync(path);
       if (stat.mtimeMs < cutoff) rmSync(path, { force: true });
     }
-  } catch {
-    // Best-effort retention only.
+  } catch (error) {
+    logTelemetryStorageError('failed to prune app telemetry JSONL logs', error);
   }
 }
 

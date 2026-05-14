@@ -70,6 +70,7 @@ import type {
   SkillFoldersState,
   SystemPromptAggregate,
   SystemPromptPoint,
+  TelemetryDbMaintenanceResult,
   ToolFlowResult,
   ToolsState,
   TraceAgentLoop,
@@ -1506,6 +1507,7 @@ export const api = {
   tracesSessionIntegrity: (range?: string) => get<AppTelemetryEventRow[]>(`/traces/session-integrity${range ? `?range=${range}` : ''}`),
   telemetryLogs: () => get<AppTelemetryLogDiagnostics>('/telemetry/logs'),
   exportTelemetryLogs: (input?: { since?: string }) => post<AppTelemetryLogBundleExport>('/telemetry/logs/export', input ?? {}),
+  maintainTelemetryDb: () => post<TelemetryDbMaintenanceResult>('/telemetry/db/maintenance'),
 
   // ── Unified settings store ──────────────────────────────────────
 

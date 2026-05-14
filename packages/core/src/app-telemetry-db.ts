@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 
 import {
   type AppTelemetryLogEvent,
@@ -67,6 +67,21 @@ function resolveAppTelemetryDbPath(stateRoot?: string): string {
   return resolveObservabilityDbPath(stateRoot);
 }
 
+function logTelemetryStorageError(message: string, error: unknown): void {
+  console.error(
+    `[telemetry] ${message}`,
+    error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) },
+  );
+}
+
+function deleteLegacyAppTelemetryDb(legacyPath: string): void {
+  try {
+    rmSync(legacyPath, { force: true });
+  } catch (error) {
+    logTelemetryStorageError(`failed to delete imported legacy app telemetry DB at ${legacyPath}`, error);
+  }
+}
+
 function importLegacyAppTelemetryEvents(db: SqliteDatabase, stateRoot?: string): void {
   const legacyPath = resolveLegacyAppTelemetryDbPath(stateRoot);
   if (!existsSync(legacyPath) || legacyPath === resolveAppTelemetryDbPath(stateRoot)) return;
@@ -74,8 +89,12 @@ function importLegacyAppTelemetryEvents(db: SqliteDatabase, stateRoot?: string):
   const imported = db.prepare(`SELECT value FROM observability_imports WHERE key = ?`).get('app-telemetry') as
     | { value?: string }
     | undefined;
-  if (imported?.value === legacyPath) return;
+  if (imported?.value === legacyPath) {
+    deleteLegacyAppTelemetryDb(legacyPath);
+    return;
+  }
 
+  let importedSuccessfully = false;
   try {
     db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_app_telemetry`);
     db.exec(`
@@ -90,14 +109,16 @@ function importLegacyAppTelemetryEvents(db: SqliteDatabase, stateRoot?: string):
       legacyPath,
       new Date().toISOString(),
     );
-  } catch {
-    // Legacy import is best-effort; new writes still use the unified DB.
+    importedSuccessfully = true;
+  } catch (error) {
+    logTelemetryStorageError(`failed to import legacy app telemetry DB at ${legacyPath}`, error);
   } finally {
     try {
       db.exec(`DETACH DATABASE legacy_app_telemetry`);
     } catch {
       // ignore
     }
+    if (importedSuccessfully) deleteLegacyAppTelemetryDb(legacyPath);
   }
 }
 
@@ -193,6 +214,11 @@ function resolveMaxEvents(): number {
   return Number.isSafeInteger(parsed) && parsed >= 1_000 ? parsed : DEFAULT_MAX_EVENTS;
 }
 
+function countAppTelemetryEvents(db: SqliteDatabase): number {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM app_telemetry_events`).get() as { count?: unknown } | undefined;
+  return typeof row?.count === 'number' ? row.count : 0;
+}
+
 function maybePruneAppTelemetryEvents(db: SqliteDatabase, dbPath: string, input: { force?: boolean } = {}): void {
   if (!input.force) {
     const count = (writeCounts.get(dbPath) ?? 0) + 1;
@@ -265,12 +291,30 @@ export function writeAppTelemetryEvent(input: AppTelemetryEventInput): void {
       );
 
       maybePruneAppTelemetryEvents(db, dbPath);
-    } catch {
-      // SQLite indexing must never affect app behavior. The JSONL log is the source of truth.
+    } catch (error) {
+      logTelemetryStorageError('failed to index app telemetry event into SQLite', error);
     }
-  } catch {
-    // Telemetry must never affect app behavior.
+  } catch (error) {
+    logTelemetryStorageError('failed to normalize app telemetry event', error);
   }
+}
+
+export interface AppTelemetryDbMaintenanceResult {
+  dbPath: string;
+  maxEvents: number;
+  deletedRows: number;
+  remainingRows: number;
+  vacuumed: boolean;
+}
+
+export function maintainAppTelemetryDb(stateRoot?: string): AppTelemetryDbMaintenanceResult {
+  const dbPath = resolveAppTelemetryDbPath(stateRoot);
+  const db = getAppTelemetryDb(stateRoot);
+  const before = countAppTelemetryEvents(db);
+  maybePruneAppTelemetryEvents(db, dbPath, { force: true });
+  const after = countAppTelemetryEvents(db);
+  db.exec(`VACUUM`);
+  return { dbPath, maxEvents: resolveMaxEvents(), deletedRows: Math.max(0, before - after), remainingRows: after, vacuumed: true };
 }
 
 function mapEventRow(row: Record<string, unknown>): AppTelemetryEventRow {

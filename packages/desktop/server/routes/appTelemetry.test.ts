@@ -1,14 +1,24 @@
-const { exportAppTelemetryLogBundleMock, listAppTelemetryLogFilesMock, persistAppTelemetryEventMock, resolveAppTelemetryLogDirMock } =
-  vi.hoisted(() => ({
-    exportAppTelemetryLogBundleMock: vi.fn(),
-    listAppTelemetryLogFilesMock: vi.fn(),
-    persistAppTelemetryEventMock: vi.fn(),
-    resolveAppTelemetryLogDirMock: vi.fn(),
-  }));
+const {
+  exportAppTelemetryLogBundleMock,
+  listAppTelemetryLogFilesMock,
+  maintainAppTelemetryDbMock,
+  maintainTraceDbMock,
+  persistAppTelemetryEventMock,
+  resolveAppTelemetryLogDirMock,
+} = vi.hoisted(() => ({
+  exportAppTelemetryLogBundleMock: vi.fn(),
+  listAppTelemetryLogFilesMock: vi.fn(),
+  maintainAppTelemetryDbMock: vi.fn(),
+  maintainTraceDbMock: vi.fn(),
+  persistAppTelemetryEventMock: vi.fn(),
+  resolveAppTelemetryLogDirMock: vi.fn(),
+}));
 
 vi.mock('@personal-agent/core', () => ({
   exportAppTelemetryLogBundle: exportAppTelemetryLogBundleMock,
   listAppTelemetryLogFiles: listAppTelemetryLogFilesMock,
+  maintainAppTelemetryDb: maintainAppTelemetryDbMock,
+  maintainTraceDb: maintainTraceDbMock,
   resolveAppTelemetryLogDir: resolveAppTelemetryLogDirMock,
 }));
 
@@ -24,9 +34,24 @@ describe('app telemetry routes', () => {
   beforeEach(() => {
     exportAppTelemetryLogBundleMock.mockReset();
     listAppTelemetryLogFilesMock.mockReset();
+    maintainAppTelemetryDbMock.mockReset();
+    maintainTraceDbMock.mockReset();
     persistAppTelemetryEventMock.mockReset();
     resolveAppTelemetryLogDirMock.mockReset();
     listAppTelemetryLogFilesMock.mockReturnValue([]);
+    maintainAppTelemetryDbMock.mockReturnValue({
+      dbPath: '/tmp/pa/observability/observability.db',
+      maxEvents: 50000,
+      deletedRows: 1,
+      remainingRows: 2,
+      vacuumed: true,
+    });
+    maintainTraceDbMock.mockReturnValue({
+      dbPath: '/tmp/pa/observability/observability.db',
+      maxRowsPerTable: 50000,
+      deletedRows: { trace_stats: 3 },
+      vacuumed: true,
+    });
     resolveAppTelemetryLogDirMock.mockReturnValue('/tmp/pa/logs/telemetry');
   });
 
@@ -109,6 +134,30 @@ describe('app telemetry routes', () => {
       fileCount: 1,
       eventCount: 2,
       sizeBytes: 99,
+    });
+  });
+
+  it('runs telemetry database maintenance', () => {
+    const routes: Record<string, (req: any, res: any) => void> = {};
+    registerAppTelemetryRoutes({
+      get: (path: string, handler: any) => void (routes[path] = handler),
+      post: (path: string, handler: any) => void (routes[path] = handler),
+    });
+    const json = vi.fn();
+
+    routes['/api/telemetry/db/maintenance']({ body: {}, headers: {} }, { status: vi.fn().mockReturnThis(), json });
+
+    expect(maintainAppTelemetryDbMock).toHaveBeenCalledWith();
+    expect(maintainTraceDbMock).toHaveBeenCalledWith();
+    expect(json).toHaveBeenCalledWith({
+      appTelemetry: {
+        dbPath: '/tmp/pa/observability/observability.db',
+        maxEvents: 50000,
+        deletedRows: 1,
+        remainingRows: 2,
+        vacuumed: true,
+      },
+      trace: { dbPath: '/tmp/pa/observability/observability.db', maxRowsPerTable: 50000, deletedRows: { trace_stats: 3 }, vacuumed: true },
     });
   });
 

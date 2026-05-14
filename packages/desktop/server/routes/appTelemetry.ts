@@ -1,4 +1,10 @@
-import { exportAppTelemetryLogBundle, listAppTelemetryLogFiles, resolveAppTelemetryLogDir } from '@personal-agent/core';
+import {
+  exportAppTelemetryLogBundle,
+  listAppTelemetryLogFiles,
+  maintainAppTelemetryDb,
+  maintainTraceDb,
+  resolveAppTelemetryLogDir,
+} from '@personal-agent/core';
 import type { Express } from 'express';
 
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
@@ -35,6 +41,10 @@ export function registerAppTelemetryRoutes(router: Pick<Express, 'get' | 'post'>
   router.post('/api/telemetry/logs/export', (req, res) => {
     const result = exportAppTelemetryLogBundle({ since: readSinceParam(req.body?.since) });
     res.status(201).json(result);
+  });
+
+  router.post('/api/telemetry/db/maintenance', (_req, res) => {
+    res.json({ appTelemetry: maintainAppTelemetryDb(), trace: maintainTraceDb() });
   });
 
   router.post('/api/telemetry/event', (req, res) => {

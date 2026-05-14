@@ -9,7 +9,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 
 import {
   applyObservabilityMigrations,
@@ -232,13 +232,32 @@ const TRACE_TABLES = [
   'trace_context_pointer_inspect',
 ] as const;
 
+function logTraceStorageError(message: string, error: unknown): void {
+  console.error(
+    `[telemetry] ${message}`,
+    error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) },
+  );
+}
+
+function deleteLegacyTraceDb(legacyPath: string): void {
+  try {
+    rmSync(legacyPath, { force: true });
+  } catch (error) {
+    logTraceStorageError(`failed to delete imported legacy trace DB at ${legacyPath}`, error);
+  }
+}
+
 function importLegacyTraceRows(db: SqliteDatabase, stateRoot?: string): void {
   const legacyPath = resolveLegacyTraceDbPath(stateRoot);
   if (!existsSync(legacyPath) || legacyPath === resolveTraceDbPath(stateRoot)) return;
 
   const imported = db.prepare(`SELECT value FROM observability_imports WHERE key = ?`).get('trace') as { value?: string } | undefined;
-  if (imported?.value === legacyPath) return;
+  if (imported?.value === legacyPath) {
+    deleteLegacyTraceDb(legacyPath);
+    return;
+  }
 
+  let importedSuccessfully = false;
   try {
     db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_trace`);
     for (const table of TRACE_TABLES) {
@@ -249,14 +268,16 @@ function importLegacyTraceRows(db: SqliteDatabase, stateRoot?: string): void {
       legacyPath,
       new Date().toISOString(),
     );
-  } catch {
-    // Legacy import is best-effort; new writes still use the unified DB.
+    importedSuccessfully = true;
+  } catch (error) {
+    logTraceStorageError(`failed to import legacy trace DB at ${legacyPath}`, error);
   } finally {
     try {
       db.exec(`DETACH DATABASE legacy_trace`);
     } catch {
       // ignore
     }
+    if (importedSuccessfully) deleteLegacyTraceDb(legacyPath);
   }
 }
 
@@ -287,6 +308,35 @@ function pruneTraceTable(db: SqliteDatabase, table: string, maxRows = resolveTra
   ).run(maxRows);
 }
 
+export interface TraceDbMaintenanceResult {
+  dbPath: string;
+  maxRowsPerTable: number;
+  deletedRows: Record<string, number>;
+  vacuumed: boolean;
+}
+
+function pruneAndVacuumTraceDb(db: SqliteDatabase): Omit<TraceDbMaintenanceResult, 'dbPath'> {
+  const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const deletedRows: Record<string, number> = {};
+  for (const table of TRACE_TABLES) {
+    const ttlResult = db.prepare(`DELETE FROM ${table} WHERE ts < ?`).run(cutoff) as { changes?: number };
+    const beforeCap = (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count?: unknown } | undefined)?.count;
+    pruneTraceTable(db, table);
+    const afterCap = (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count?: unknown } | undefined)?.count;
+    deletedRows[table] =
+      (typeof ttlResult.changes === 'number' ? ttlResult.changes : 0) +
+      (typeof beforeCap === 'number' && typeof afterCap === 'number' ? Math.max(0, beforeCap - afterCap) : 0);
+  }
+  db.exec(`VACUUM`);
+  return { maxRowsPerTable: resolveTraceTableMaxRows(), deletedRows, vacuumed: true };
+}
+
+export function maintainTraceDb(stateRoot?: string): TraceDbMaintenanceResult {
+  const dbPath = resolveTraceDbPath(stateRoot);
+  const db = getTraceDb(stateRoot);
+  return { dbPath, ...pruneAndVacuumTraceDb(db) };
+}
+
 function getTraceDb(stateRoot?: string): SqliteDatabase {
   const path = resolveTraceDbPath(stateRoot);
   const cached = dbCache.get(path);
@@ -309,14 +359,9 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
 
   // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {
-    const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    for (const table of TRACE_TABLES) {
-      db.prepare(`DELETE FROM ${table} WHERE ts < ?`).run(cutoff);
-      pruneTraceTable(db, table);
-    }
-    db.exec(`VACUUM`);
-  } catch {
-    // Non-fatal
+    pruneAndVacuumTraceDb(db);
+  } catch (error) {
+    logTraceStorageError('failed to prune/vacuum trace DB', error);
   }
 
   try {

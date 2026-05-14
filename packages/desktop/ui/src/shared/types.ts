@@ -1428,6 +1428,22 @@ export interface AppTelemetryLogBundleExport {
   sizeBytes: number;
 }
 
+export interface TelemetryDbMaintenanceResult {
+  appTelemetry: {
+    dbPath: string;
+    maxEvents: number;
+    deletedRows: number;
+    remainingRows: number;
+    vacuumed: boolean;
+  };
+  trace: {
+    dbPath: string;
+    maxRowsPerTable: number;
+    deletedRows: Record<string, number>;
+    vacuumed: boolean;
+  };
+}
+
 export interface TraceSummary {
   activeSessions: number;
   runsToday: number;

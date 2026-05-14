@@ -5,7 +5,7 @@
  * but not yet first-class trace metrics.
  */
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 
 import { closeAppTelemetryLogs, readAppTelemetryLogEvents, writeAppTelemetryLogEvent } from './app-telemetry-log.js';
 import {
@@ -54,11 +54,28 @@ export function closeAppTelemetryDbs() {
 function resolveAppTelemetryDbPath(stateRoot) {
   return resolveObservabilityDbPath(stateRoot);
 }
+function logTelemetryStorageError(message, error) {
+  console.error(
+    `[telemetry] ${message}`,
+    error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) },
+  );
+}
+function deleteLegacyAppTelemetryDb(legacyPath) {
+  try {
+    rmSync(legacyPath, { force: true });
+  } catch (error) {
+    logTelemetryStorageError(`failed to delete imported legacy app telemetry DB at ${legacyPath}`, error);
+  }
+}
 function importLegacyAppTelemetryEvents(db, stateRoot) {
   const legacyPath = resolveLegacyAppTelemetryDbPath(stateRoot);
   if (!existsSync(legacyPath) || legacyPath === resolveAppTelemetryDbPath(stateRoot)) return;
   const imported = db.prepare(`SELECT value FROM observability_imports WHERE key = ?`).get('app-telemetry');
-  if (imported?.value === legacyPath) return;
+  if (imported?.value === legacyPath) {
+    deleteLegacyAppTelemetryDb(legacyPath);
+    return;
+  }
+  let importedSuccessfully = false;
   try {
     db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_app_telemetry`);
     db.exec(`
@@ -73,11 +90,14 @@ function importLegacyAppTelemetryEvents(db, stateRoot) {
       legacyPath,
       new Date().toISOString(),
     );
-  } catch {
+    importedSuccessfully = true;
+  } catch (error) {
+    logTelemetryStorageError(`failed to import legacy app telemetry DB at ${legacyPath}`, error);
   } finally {
     try {
       db.exec(`DETACH DATABASE legacy_app_telemetry`);
     } catch {}
+    if (importedSuccessfully) deleteLegacyAppTelemetryDb(legacyPath);
   }
 }
 function getAppTelemetryDb(stateRoot) {
@@ -128,6 +148,10 @@ function resolveMaxEvents() {
   if (!raw) return DEFAULT_MAX_EVENTS;
   const parsed = Number.parseInt(raw, 10);
   return Number.isSafeInteger(parsed) && parsed >= 1_000 ? parsed : DEFAULT_MAX_EVENTS;
+}
+function countAppTelemetryEvents(db) {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM app_telemetry_events`).get();
+  return typeof row?.count === 'number' ? row.count : 0;
 }
 function maybePruneAppTelemetryEvents(db, dbPath, input = {}) {
   if (!input.force) {
@@ -194,12 +218,21 @@ export function writeAppTelemetryEvent(input) {
         stringifyMetadata(event.metadata),
       );
       maybePruneAppTelemetryEvents(db, dbPath);
-    } catch {
-      // SQLite indexing must never affect app behavior. The JSONL log is the source of truth.
+    } catch (error) {
+      logTelemetryStorageError('failed to index app telemetry event into SQLite', error);
     }
-  } catch {
-    // Telemetry must never affect app behavior.
+  } catch (error) {
+    logTelemetryStorageError('failed to normalize app telemetry event', error);
   }
+}
+export function maintainAppTelemetryDb(stateRoot) {
+  const dbPath = resolveAppTelemetryDbPath(stateRoot);
+  const db = getAppTelemetryDb(stateRoot);
+  const before = countAppTelemetryEvents(db);
+  maybePruneAppTelemetryEvents(db, dbPath, { force: true });
+  const after = countAppTelemetryEvents(db);
+  db.exec(`VACUUM`);
+  return { dbPath, maxEvents: resolveMaxEvents(), deletedRows: Math.max(0, before - after), remainingRows: after, vacuumed: true };
 }
 function mapEventRow(row) {
   return {

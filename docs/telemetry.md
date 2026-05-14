@@ -8,10 +8,10 @@ Telemetry is local to the active state root. The default state root is `~/.local
 
 | Data                          | Location                                                                                  | Role                                                       |
 | ----------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Raw app telemetry             | `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD.jsonl`                              | Source of truth for generic app events. Append-only JSONL. |
+| Raw app telemetry             | `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD[.N].jsonl`                          | Source of truth for generic app events. Append-only JSONL. |
 | Telemetry export bundles      | `<state-root>/exports/telemetry/app-telemetry-<timestamp>.jsonl`                          | Bug-report bundles generated from Settings.                |
 | Query index and trace metrics | `<state-root>/observability/observability.db`                                             | SQLite index for UI queries plus structured trace tables.  |
-| Legacy trace DBs              | `<state-root>/pi-agent/state/trace/*.db` or `<state-root>/sync/pi-agent/state/trace/*.db` | Imported once when present, then left untouched.           |
+| Legacy trace DBs              | `<state-root>/pi-agent/state/trace/*.db` or `<state-root>/sync/pi-agent/state/trace/*.db` | Imported once when present, then deleted after success.    |
 
 The important bit: **raw app telemetry lives in JSONL first**. SQLite is a derived index for convenient filtering and charts. If SQLite is locked, migrating, or corrupt, telemetry writes should still preserve the raw event in the log file.
 
@@ -56,9 +56,9 @@ The main app telemetry seam is `writeAppTelemetryEvent` in `packages/core/src/ap
 Write flow:
 
 1. Normalize and bound the event fields.
-2. Append the event to `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD.jsonl`.
+2. Append the event to `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD[.N].jsonl`.
 3. Try to insert the same event into `observability/observability.db` as a derived index.
-4. Swallow telemetry failures so telemetry never breaks app behavior.
+4. Log telemetry storage failures to stderr/server logs, but do not break app behavior.
 
 The desktop server adds an in-process queue in `packages/desktop/server/traces/appTelemetry.ts` so hot paths can fire-and-forget. If that queue overflows, the app records a `system/telemetry/queue_drop` event before shedding buffered events.
 
@@ -90,17 +90,20 @@ Settings → Desktop includes a **Telemetry logs** panel. It shows:
 - recent JSONL files
 - **Open log folder** for local inspection
 - **Export JSONL bundle** for bug reports
+- **Prune/vacuum DB** to run the app telemetry and trace SQLite cleanup immediately
 
-The export endpoint writes a combined JSONL bundle under `<state-root>/exports/telemetry/` and returns the path so the desktop bridge can open it in Finder.
+The export endpoint writes a combined JSONL bundle under `<state-root>/exports/telemetry/` and returns the path so the desktop bridge can open it in Finder. The maintenance endpoint prunes capped app telemetry rows, prunes/caps trace tables, and runs `VACUUM` on the shared observability database.
 
 ## Retention and caps
 
-App telemetry has two independent limits:
+App telemetry has independent log and SQLite limits:
 
 - `PERSONAL_AGENT_APP_TELEMETRY_LOG_RETENTION_DAYS` controls best-effort JSONL file retention. Default: `30` days.
+- `PERSONAL_AGENT_APP_TELEMETRY_LOG_MAX_BYTES` controls size-based rollover within a day. Default: `10485760` bytes. When the daily file would exceed this, writes continue in `app-telemetry-YYYY-MM-DD.1.jsonl`, `.2.jsonl`, and so on.
 - `PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS` controls the derived SQLite app telemetry row cap. Default: `50000` rows. Values below `1000` are ignored.
+- `PERSONAL_AGENT_TRACE_TABLE_MAX_ROWS` controls the per-table trace cap. Default: `50000` rows. Trace tables also prune rows older than 90 days on open/maintenance.
 
-Retention is best-effort and runs during writes. It should never block or crash the app.
+Retention is best-effort and runs during writes. Manual Settings maintenance runs pruning and SQLite vacuuming on demand. Neither path should crash the app; failures are emitted to the server logs.
 
 ## Development rules
 
@@ -108,4 +111,4 @@ Retention is best-effort and runs during writes. It should never block or crash 
 - Treat SQLite as a query/index/cache layer unless the data is inherently aggregate trace data.
 - Do not add mandatory migrations for new app telemetry metadata. Add fields inside `metadata` unless the UI needs a real indexed column.
 - Do not put secrets, prompts, API keys, or raw credential-bearing payloads into telemetry.
-- Keep telemetry writes fire-and-forget. User-visible behavior should not depend on telemetry succeeding.
+- Keep telemetry writes fire-and-forget. User-visible behavior should not depend on telemetry succeeding, but storage/indexing failures should still emit errors to logs.

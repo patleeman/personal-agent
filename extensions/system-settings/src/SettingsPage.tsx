@@ -40,6 +40,7 @@ import {
   SettingsField,
   SettingsPanelHost,
   subscribeDesktopProviderOAuthLogin,
+  type TelemetryDbMaintenanceResult,
   type ThemePreference,
   THINKING_LEVEL_OPTIONS,
   ToolbarButton,
@@ -1221,7 +1222,7 @@ function formatTelemetryLogBytes(bytes: number): string {
 
 function TelemetryLogsSettingsPanel() {
   const { data, loading, error, refetch } = useApi<AppTelemetryLogDiagnostics>(api.telemetryLogs as never, 'telemetry-logs');
-  const [action, setAction] = useState<'open' | 'export' | null>(null);
+  const [action, setAction] = useState<'open' | 'export' | 'maintain' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const openPath = useCallback(async (path: string) => {
@@ -1267,6 +1268,22 @@ function TelemetryLogsSettingsPanel() {
     }
   }, [openPath, refetch]);
 
+  const maintainTelemetryDb = useCallback(async () => {
+    setAction('maintain');
+    setNotice(null);
+    try {
+      const result = (await api.maintainTelemetryDb()) as TelemetryDbMaintenanceResult;
+      const traceDeleted = Object.values(result.trace.deletedRows).reduce((total, value) => total + value, 0);
+      setNotice(
+        `Pruned ${result.appTelemetry.deletedRows} app telemetry rows and ${traceDeleted} trace rows, then vacuumed ${result.appTelemetry.dbPath}.`,
+      );
+    } catch (nextError) {
+      setNotice(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }, []);
+
   return (
     <SettingsPanel
       title="Telemetry logs"
@@ -1278,6 +1295,9 @@ function TelemetryLogsSettingsPanel() {
           </button>
           <button type="button" className={ACTION_BUTTON_CLASS} onClick={exportLogs} disabled={action !== null}>
             {action === 'export' ? 'Exporting…' : 'Export JSONL bundle'}
+          </button>
+          <button type="button" className={ACTION_BUTTON_CLASS} onClick={maintainTelemetryDb} disabled={action !== null}>
+            {action === 'maintain' ? 'Pruning…' : 'Prune/vacuum DB'}
           </button>
         </>
       }

@@ -8,7 +8,7 @@
  * All writes are fire-and-forget — they never block the session loop.
  */
 import { randomUUID } from 'crypto';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 import {
   applyObservabilityMigrations,
   ensureObservabilityDbDir,
@@ -218,11 +218,28 @@ const TRACE_TABLES = [
   'trace_suggested_context',
   'trace_context_pointer_inspect',
 ];
+function logTraceStorageError(message, error) {
+  console.error(
+    `[telemetry] ${message}`,
+    error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) },
+  );
+}
+function deleteLegacyTraceDb(legacyPath) {
+  try {
+    rmSync(legacyPath, { force: true });
+  } catch (error) {
+    logTraceStorageError(`failed to delete imported legacy trace DB at ${legacyPath}`, error);
+  }
+}
 function importLegacyTraceRows(db, stateRoot) {
   const legacyPath = resolveLegacyTraceDbPath(stateRoot);
   if (!existsSync(legacyPath) || legacyPath === resolveTraceDbPath(stateRoot)) return;
   const imported = db.prepare(`SELECT value FROM observability_imports WHERE key = ?`).get('trace');
-  if (imported?.value === legacyPath) return;
+  if (imported?.value === legacyPath) {
+    deleteLegacyTraceDb(legacyPath);
+    return;
+  }
+  let importedSuccessfully = false;
   try {
     db.exec(`ATTACH DATABASE ${JSON.stringify(legacyPath)} AS legacy_trace`);
     for (const table of TRACE_TABLES) {
@@ -233,11 +250,14 @@ function importLegacyTraceRows(db, stateRoot) {
       legacyPath,
       new Date().toISOString(),
     );
-  } catch {
+    importedSuccessfully = true;
+  } catch (error) {
+    logTraceStorageError(`failed to import legacy trace DB at ${legacyPath}`, error);
   } finally {
     try {
       db.exec(`DETACH DATABASE legacy_trace`);
     } catch {}
+    if (importedSuccessfully) deleteLegacyTraceDb(legacyPath);
   }
 }
 // Prune rows older than this many days and cap each trace table on every DB open.
@@ -264,6 +284,26 @@ function pruneTraceTable(db, table, maxRows = resolveTraceTableMaxRows()) {
   `,
   ).run(maxRows);
 }
+function pruneAndVacuumTraceDb(db) {
+  const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const deletedRows = {};
+  for (const table of TRACE_TABLES) {
+    const ttlResult = db.prepare(`DELETE FROM ${table} WHERE ts < ?`).run(cutoff);
+    const beforeCap = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count;
+    pruneTraceTable(db, table);
+    const afterCap = db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count;
+    deletedRows[table] =
+      (typeof ttlResult.changes === 'number' ? ttlResult.changes : 0) +
+      (typeof beforeCap === 'number' && typeof afterCap === 'number' ? Math.max(0, beforeCap - afterCap) : 0);
+  }
+  db.exec(`VACUUM`);
+  return { maxRowsPerTable: resolveTraceTableMaxRows(), deletedRows, vacuumed: true };
+}
+export function maintainTraceDb(stateRoot) {
+  const dbPath = resolveTraceDbPath(stateRoot);
+  const db = getTraceDb(stateRoot);
+  return { dbPath, ...pruneAndVacuumTraceDb(db) };
+}
 function getTraceDb(stateRoot) {
   const path = resolveTraceDbPath(stateRoot);
   const cached = dbCache.get(path);
@@ -280,14 +320,9 @@ function getTraceDb(stateRoot) {
   importLegacyTraceRows(db, stateRoot);
   // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {
-    const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    for (const table of TRACE_TABLES) {
-      db.prepare(`DELETE FROM ${table} WHERE ts < ?`).run(cutoff);
-      pruneTraceTable(db, table);
-    }
-    db.exec(`VACUUM`);
-  } catch {
-    // Non-fatal
+    pruneAndVacuumTraceDb(db);
+  } catch (error) {
+    logTraceStorageError('failed to prune/vacuum trace DB', error);
   }
   try {
     const pointerIdsCutoff = new Date(Date.now() - SUGGESTED_CONTEXT_POINTER_IDS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
