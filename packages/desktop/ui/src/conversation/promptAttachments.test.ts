@@ -4,6 +4,7 @@ import {
   base64ToFile,
   buildComposerFilePreparationNotices,
   type ComposerDrawingAttachment,
+  type ComposerImageAttachment,
   constrainPromptImageDimensions,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
@@ -46,8 +47,8 @@ describe('promptAttachments', () => {
     );
 
     expect(restoredQueued[0]?.name).toBe('queued-followUp-2-1.jpg');
-    expect(restoredQueued[0]?.type).toBe('image/jpeg');
-    expect(await restoredQueued[0]?.text()).toBe('hello');
+    expect(restoredQueued[0]?.mimeType).toBe('image/jpeg');
+    expect(restoredQueued[0]?.data).toBe(globalThis.btoa('hello'));
     expect(restoredComposer[0]?.name).toBe('draft-image-1.png');
   });
 
@@ -97,21 +98,34 @@ describe('promptAttachments', () => {
       dirty: true,
     } as ComposerDrawingAttachment;
     const image = new File(['image'], 'photo.jpg', { type: 'image/jpeg' });
+    const imageAttachment = {
+      localId: 'image-1',
+      name: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      data: globalThis.btoa('image'),
+      previewUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+      size: 5,
+    } satisfies ComposerImageAttachment;
     const parsedDrawing = new File(['{}'], 'sketch.excalidraw', { type: '' });
     const brokenDrawing = new File(['bad'], 'broken.excalidraw', { type: '' });
     const rejected = new File(['notes'], 'notes.txt', { type: 'text/plain' });
 
-    const result = await prepareComposerFiles([image, parsedDrawing, brokenDrawing, rejected], async (file) => {
-      if (file.name === 'broken.excalidraw') {
-        throw new Error('Invalid scene');
-      }
-      return drawing;
-    });
+    const result = await prepareComposerFiles(
+      [image, parsedDrawing, brokenDrawing, rejected],
+      async (file) => {
+        if (file.name === 'broken.excalidraw') {
+          throw new Error('Invalid scene');
+        }
+        return drawing;
+      },
+      async () => imageAttachment,
+    );
 
-    expect(result.imageFiles).toEqual([image]);
+    expect(result.imageAttachments).toEqual([imageAttachment]);
     expect(result.drawingAttachments).toEqual([drawing]);
     expect(result.drawingParseFailures).toEqual([{ fileName: 'broken.excalidraw', message: 'Invalid scene' }]);
     expect(result.rejectedFileNames).toEqual(['notes.txt']);
+    expect(result.imageReadFailures).toEqual([]);
   });
 
   it('reads files from paste/drop transfer file lists', () => {
@@ -128,19 +142,32 @@ describe('promptAttachments', () => {
   it('falls back to image attachment when png drawing parsing fails', async () => {
     const image = new File(['image'], 'maybe-drawing.png', { type: 'image/png' });
 
-    const result = await prepareComposerFiles([image], async () => {
-      throw new Error('No embedded scene');
-    });
+    const imageAttachment = {
+      localId: 'image-1',
+      name: 'maybe-drawing.png',
+      mimeType: 'image/png',
+      data: globalThis.btoa('image'),
+      previewUrl: 'data:image/png;base64,aW1hZ2U=',
+      size: 5,
+    } satisfies ComposerImageAttachment;
 
-    expect(result.imageFiles).toEqual([image]);
+    const result = await prepareComposerFiles(
+      [image],
+      async () => {
+        throw new Error('No embedded scene');
+      },
+      async () => imageAttachment,
+    );
+
+    expect(result.imageAttachments).toEqual([imageAttachment]);
     expect(result.drawingAttachments).toEqual([]);
     expect(result.drawingParseFailures).toEqual([]);
     expect(result.rejectedFileNames).toEqual([]);
   });
 
   it('removes composer image and drawing attachments by stable identity', () => {
-    const firstImage = new File(['one'], 'one.png', { type: 'image/png' });
-    const secondImage = new File(['two'], 'two.png', { type: 'image/png' });
+    const firstImage = { localId: 'image-1', name: 'one.png', mimeType: 'image/png', data: 'one', previewUrl: 'one', size: 3 };
+    const secondImage = { localId: 'image-2', name: 'two.png', mimeType: 'image/png', data: 'two', previewUrl: 'two', size: 3 };
     const firstDrawing = { localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment;
     const secondDrawing = { localId: 'drawing-2', title: 'Two' } as ComposerDrawingAttachment;
 
@@ -155,11 +182,13 @@ describe('promptAttachments', () => {
       buildComposerFilePreparationNotices({
         drawingAttachments: [{ localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment],
         drawingParseFailures: [{ fileName: 'broken.excalidraw', message: 'Invalid scene' }],
+        imageReadFailures: [{ fileName: 'gone.png', message: 'Could not read image attachment "gone.png": missing' }],
         rejectedFileNames: ['a.txt', 'b.mov', 'c.zip', 'd.bin'],
       }),
     ).toEqual([
       { tone: 'accent', text: 'Attached 1 drawing.' },
       { tone: 'danger', text: 'Failed to parse broken.excalidraw: Invalid scene', durationMs: 4000 },
+      { tone: 'danger', text: 'Could not read image attachment "gone.png": missing', durationMs: 4000 },
       { tone: 'danger', text: 'Unsupported file type: a.txt, b.mov, c.zip, +1 more', durationMs: 4000 },
     ]);
 
@@ -170,6 +199,7 @@ describe('promptAttachments', () => {
           { localId: 'drawing-2', title: 'Two' } as ComposerDrawingAttachment,
         ],
         drawingParseFailures: [],
+        imageReadFailures: [],
         rejectedFileNames: [],
       }),
     ).toEqual([{ tone: 'accent', text: 'Attached 2 drawings.' }]);

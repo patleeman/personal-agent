@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 
 import { clearDraftConversationAttachments, readDraftConversationAttachments } from './draftConversation';
-import { type ComposerDrawingAttachment, restoreComposerImageFiles } from './promptAttachments';
+import { type ComposerDrawingAttachment, type ComposerImageAttachment, restoreComposerImageFiles } from './promptAttachments';
 
 interface UseInitialDraftAttachmentHydrationOptions {
   draft: boolean;
   conversationId: string | undefined;
   enabled: boolean;
   locationKey: string;
-  setAttachments: (attachments: File[]) => void;
+  setAttachments: (attachments: ComposerImageAttachment[]) => void;
   setDrawingAttachments: (attachments: ComposerDrawingAttachment[]) => void;
 }
 

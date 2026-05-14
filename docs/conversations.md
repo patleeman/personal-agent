@@ -10,7 +10,7 @@ Type a message and press Enter to send it to the agent. The agent processes the 
 
 ## Composer
 
-The composer is the text input area at the bottom of the conversation view.
+The composer is the text input area at the bottom of the conversation view. Image attachments are read into the draft as soon as they are added, so temporary screenshots can still be sent after their original files are cleaned up.
 
 | Feature            | How                                                           |
 | ------------------ | ------------------------------------------------------------- |

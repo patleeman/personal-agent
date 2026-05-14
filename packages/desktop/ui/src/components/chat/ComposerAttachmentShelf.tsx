@@ -9,6 +9,14 @@ interface ComposerAttachmentShelfDrawingAttachment {
   previewUrl: string;
 }
 
+interface ComposerImageAttachment {
+  localId: string;
+  name?: string;
+  mimeType: string;
+  size: number;
+  previewUrl?: string;
+}
+
 interface ComposerPreviewImage {
   alt: string;
   src: string;
@@ -17,7 +25,7 @@ interface ComposerPreviewImage {
 }
 
 interface ComposerAttachmentShelfProps {
-  attachments: File[];
+  attachments: ComposerImageAttachment[];
   drawingAttachments: ComposerAttachmentShelfDrawingAttachment[];
   drawingsBusy?: boolean;
   drawingsError?: string | null;
@@ -155,19 +163,16 @@ export function ComposerAttachmentShelf({
     setPreviewImage(null);
   }, []);
 
-  const openAttachmentPreview = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) {
+  const openAttachmentPreview = useCallback((attachment: ComposerImageAttachment) => {
+    if (!attachment.mimeType.startsWith('image/') || !attachment.previewUrl) {
       return;
     }
 
-    const src = URL.createObjectURL(file);
+    const label = attachment.name || 'Image attachment';
     setPreviewImage({
-      alt: file.name,
-      src,
-      label: file.name,
-      dispose: () => {
-        URL.revokeObjectURL(src);
-      },
+      alt: label,
+      src: attachment.previewUrl,
+      label,
     });
   }, []);
 
@@ -185,18 +190,19 @@ export function ComposerAttachmentShelf({
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 px-1 py-2">
           {attachments.map((file, index) => {
-            const canPreview = file.type.startsWith('image/');
+            const fileName = file.name || 'Image attachment';
+            const canPreview = file.mimeType.startsWith('image/') && Boolean(file.previewUrl);
             const summary = (
               <>
-                <span className="shrink-0">{fileIcon(file.type)}</span>
-                <span className="truncate text-secondary">{file.name}</span>
+                <span className="shrink-0">{fileIcon(file.mimeType)}</span>
+                <span className="truncate text-secondary">{fileName}</span>
                 <span className="shrink-0 text-dim">{formatBytes(file.size)}</span>
               </>
             );
 
             return (
               <div
-                key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                key={file.localId || `${fileName}-${file.size}-${index}`}
                 className="flex max-w-[220px] items-center gap-1 rounded-lg border border-border-subtle bg-elevated text-[11px]"
               >
                 {canPreview ? (
@@ -204,8 +210,8 @@ export function ComposerAttachmentShelf({
                     type="button"
                     onClick={() => openAttachmentPreview(file)}
                     className="flex min-w-0 flex-1 cursor-zoom-in items-center gap-1.5 rounded-l-[inherit] px-2 py-1 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                    title={`Preview ${file.name}`}
-                    aria-label={`Preview ${file.name}`}
+                    title={`Preview ${fileName}`}
+                    aria-label={`Preview ${fileName}`}
                   >
                     {summary}
                   </button>
@@ -216,7 +222,7 @@ export function ComposerAttachmentShelf({
                   type="button"
                   onClick={() => onRemoveAttachment(index)}
                   className="ui-icon-button ui-icon-button-compact mr-1 shrink-0 leading-none"
-                  title={`Remove ${file.name}`}
+                  title={`Remove ${fileName}`}
                 >
                   ×
                 </button>

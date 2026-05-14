@@ -167,6 +167,7 @@ import {
   buildComposerFilePreparationNotices,
   buildPromptImages,
   type ComposerDrawingAttachment,
+  type ComposerImageAttachment,
   createComposerDrawingLocalId,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
@@ -1580,7 +1581,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const keyboardInset = useVisualViewportKeyboardInset();
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<ComposerImageAttachment[]>([]);
   const showTextOnlyImageHint =
     attachments.length > 0 && selectedComposerModel !== null && !selectedComposerModel.input?.includes('image') && !defaultVisionModel;
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
@@ -1660,30 +1661,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     const mutationVersion = beginDraftConversationAttachmentsMutation();
+    const images = buildPromptImages(attachments);
+    if (!isDraftConversationAttachmentsMutationCurrent(mutationVersion)) {
+      return;
+    }
 
-    void buildPromptImages(attachments)
-      .then((images) => {
-        if (!isDraftConversationAttachmentsMutationCurrent(mutationVersion)) {
-          return;
-        }
+    const nextAttachments = {
+      images,
+      drawings: drawingAttachments,
+    };
 
-        const nextAttachments = {
-          images,
-          drawings: drawingAttachments,
-        };
+    if (draft) {
+      persistDraftConversationAttachments(nextAttachments);
+      return;
+    }
 
-        if (draft) {
-          persistDraftConversationAttachments(nextAttachments);
-          return;
-        }
-
-        if (id) {
-          persistConversationAttachments(id, nextAttachments);
-        }
-      })
-      .catch(() => {
-        // Ignore composer attachment persistence failures.
-      });
+    if (id) {
+      persistConversationAttachments(id, nextAttachments);
+    }
   }, [attachments, draft, drawingAttachments, id]);
 
   useEffect(() => {
@@ -1706,9 +1701,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [composerHistory, composerHistoryIndex, input]);
 
   const restoreComposerDraft = useCallback(
-    async (nextInput: string, nextAttachments: File[], nextDrawingAttachments: ComposerDrawingAttachment[]) => {
+    async (nextInput: string, nextAttachments: ComposerImageAttachment[], nextDrawingAttachments: ComposerDrawingAttachment[]) => {
       try {
-        const images = await buildPromptImages(nextAttachments);
+        const images = buildPromptImages(nextAttachments);
         const persistedAttachments = {
           images,
           drawings: nextDrawingAttachments,
@@ -3757,23 +3752,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     void saveModelPreference(modelId);
   }
 
-  function addImageAttachments(files: File[]) {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    if (imageFiles.length > 0) {
-      setAttachments((prev) => [...prev, ...imageFiles]);
+  function addImageAttachments(imageAttachments: ComposerImageAttachment[]) {
+    if (imageAttachments.length > 0) {
+      setAttachments((prev) => [...prev, ...imageAttachments]);
     }
   }
 
   async function addComposerFiles(files: File[]) {
     const {
-      imageFiles: nextImageFiles,
+      imageAttachments: nextImageAttachments,
       drawingAttachments: nextDrawingAttachments,
       rejectedFileNames,
       drawingParseFailures,
+      imageReadFailures,
     } = await prepareComposerFiles(files);
 
-    if (nextImageFiles.length > 0) {
-      addImageAttachments(nextImageFiles);
+    if (nextImageAttachments.length > 0) {
+      addImageAttachments(nextImageAttachments);
     }
 
     if (nextDrawingAttachments.length > 0) {
@@ -3783,6 +3778,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     for (const notice of buildComposerFilePreparationNotices({
       drawingAttachments: nextDrawingAttachments,
       drawingParseFailures,
+      imageReadFailures,
       rejectedFileNames,
     })) {
       showNotice(notice.tone, notice.text, notice.durationMs);
@@ -4458,7 +4454,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const filePromptImages = await buildPromptImages(pendingImageAttachments);
+      const filePromptImages = buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
       const textToSend = slashTextToSend ?? text;
@@ -4832,7 +4828,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const filePromptImages = await buildPromptImages(pendingImageAttachments);
+      const filePromptImages = buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
 

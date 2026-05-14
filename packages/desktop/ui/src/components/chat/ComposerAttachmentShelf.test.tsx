@@ -11,6 +11,15 @@ const mountedRoots: Root[] = [];
 const createObjectURLMock = vi.fn();
 const revokeObjectURLMock = vi.fn();
 
+const imageAttachment = {
+  localId: 'image-1',
+  name: 'Screenshot 2026-04-22.png',
+  mimeType: 'image/png',
+  data: 'cHJldmlldw==',
+  previewUrl: 'data:image/png;base64,cHJldmlldw==',
+  size: 7,
+};
+
 function renderShelf(overrides: Partial<React.ComponentProps<typeof ComposerAttachmentShelf>> = {}) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -67,18 +76,17 @@ describe('ComposerAttachmentShelf', () => {
     document.body.innerHTML = '';
   });
 
-  it('opens an image preview for composer file attachments and revokes the object url when closed', () => {
-    const file = new File(['preview'], 'Screenshot 2026-04-22.png', { type: 'image/png' });
-    const { container } = renderShelf({ attachments: [file] });
+  it('opens an image preview for composer image attachments without touching the original file', () => {
+    const { container } = renderShelf({ attachments: [imageAttachment] });
 
     click(container.querySelector('button[aria-label="Preview Screenshot 2026-04-22.png"]'));
 
-    expect(createObjectURLMock).toHaveBeenCalledWith(file);
+    expect(createObjectURLMock).not.toHaveBeenCalled();
     expect(container.querySelector('[role="dialog"][aria-label="Screenshot 2026-04-22.png"]')).not.toBeNull();
 
     click(container.querySelector('button[aria-label="Close image preview"]'));
 
-    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:composer-preview');
+    expect(revokeObjectURLMock).not.toHaveBeenCalled();
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
@@ -102,9 +110,8 @@ describe('ComposerAttachmentShelf', () => {
   });
 
   it('keeps remove actions wired up', () => {
-    const file = new File(['preview'], 'Screenshot 2026-04-22.png', { type: 'image/png' });
     const { container, onRemoveAttachment, onRemoveDrawingAttachment } = renderShelf({
-      attachments: [file],
+      attachments: [imageAttachment],
       drawingAttachments: [
         {
           localId: 'drawing-1',

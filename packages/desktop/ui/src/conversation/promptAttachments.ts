@@ -9,6 +9,11 @@ import type { DraftConversationDrawingAttachment } from './draftConversation';
 
 export type ComposerDrawingAttachment = DraftConversationDrawingAttachment;
 
+export interface ComposerImageAttachment extends PromptImageInput {
+  localId: string;
+  size: number;
+}
+
 const MAX_PROMPT_IMAGE_DIMENSION = 2000;
 const MAX_COMPOSER_DRAWING_REVISION = 1_000_000;
 
@@ -104,20 +109,29 @@ export function constrainPromptImageDimensions(
   };
 }
 
-async function preparePromptImage(file: File): Promise<PromptImageInput> {
-  const previewUrl = await readFileAsDataUrl(file);
+async function preparePromptImage(file: File): Promise<ComposerImageAttachment> {
+  let previewUrl: string;
+  try {
+    previewUrl = await readFileAsDataUrl(file);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not read image attachment "${file.name || 'Unnamed file'}": ${message}`);
+  }
   const mimeType = file.type || 'image/png';
+  const localId = createComposerImageLocalId();
 
   try {
     const image = await loadImageFromDataUrl(previewUrl);
     const targetSize = constrainPromptImageDimensions(image.naturalWidth, image.naturalHeight);
     if (targetSize.width === image.naturalWidth && targetSize.height === image.naturalHeight) {
       return {
+        localId,
         name: file.name,
         mimeType,
         data: dataUrlToBase64(previewUrl),
         previewUrl,
-      } satisfies PromptImageInput;
+        size: file.size,
+      } satisfies ComposerImageAttachment;
     }
 
     const canvas = document.createElement('canvas');
@@ -138,18 +152,22 @@ async function preparePromptImage(file: File): Promise<PromptImageInput> {
     const resizedPreviewUrl = await readBlobAsDataUrl(outputBlob, file.name);
 
     return {
+      localId,
       name: file.name,
       mimeType: outputBlob.type || outputMimeType,
       data: dataUrlToBase64(resizedPreviewUrl),
       previewUrl: resizedPreviewUrl,
-    } satisfies PromptImageInput;
+      size: outputBlob.size || file.size,
+    } satisfies ComposerImageAttachment;
   } catch {
     return {
+      localId,
       name: file.name,
       mimeType,
       data: dataUrlToBase64(previewUrl),
       previewUrl,
-    } satisfies PromptImageInput;
+      size: file.size,
+    } satisfies ComposerImageAttachment;
   }
 }
 
@@ -191,40 +209,65 @@ export function screenshotCaptureImageToFile(image: { data: string; mimeType: st
   return base64ToFile(image.data, image.mimeType, image.name?.trim() || 'Screenshot.png');
 }
 
+function buildComposerImageAttachment(image: PromptImageInput, name: string): ComposerImageAttachment | null {
+  const normalizedMimeType = image.mimeType.trim();
+  const file = safeBase64ToFile(image.data, normalizedMimeType, name);
+  if (!file) {
+    return null;
+  }
+
+  return {
+    localId: createComposerImageLocalId(),
+    name,
+    mimeType: normalizedMimeType,
+    data: image.data,
+    previewUrl: image.previewUrl ?? `data:${normalizedMimeType};base64,${image.data}`,
+    size: file.size,
+  };
+}
+
 export function restoreQueuedImageFiles(
   images: PromptImageInput[] | undefined | null,
   behavior: 'steer' | 'followUp',
   queueIndex: number,
-): File[] {
+): ComposerImageAttachment[] {
   const normalizedImages = Array.isArray(images) ? images : [];
   return normalizedImages.flatMap((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
     const name = image.name?.trim() || `queued-${behavior}-${queueIndex + 1}-${imageIndex + 1}.${extension}`;
-    const file = safeBase64ToFile(image.data, image.mimeType, name);
-    return file ? [file] : [];
+    const attachment = buildComposerImageAttachment(image, name);
+    return attachment ? [attachment] : [];
   });
 }
 
-export function restoreComposerImageFiles(images: PromptImageInput[] | undefined | null, fallbackNamePrefix: string): File[] {
+export function restoreComposerImageFiles(
+  images: PromptImageInput[] | undefined | null,
+  fallbackNamePrefix: string,
+): ComposerImageAttachment[] {
   const normalizedImages = Array.isArray(images) ? images : [];
   return normalizedImages.flatMap((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
     const name = image.name?.trim() || `${fallbackNamePrefix}-${imageIndex + 1}.${extension}`;
-    const file = safeBase64ToFile(image.data, image.mimeType, name);
-    return file ? [file] : [];
+    const attachment = buildComposerImageAttachment(image, name);
+    return attachment ? [attachment] : [];
   });
 }
 
-export async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
-  const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-  return Promise.all(imageFiles.map((file) => preparePromptImage(file)));
+export function buildPromptImages(attachments: ComposerImageAttachment[]): PromptImageInput[] {
+  return attachments.map(({ name, mimeType, data, previewUrl }) => ({
+    ...(name ? { name } : {}),
+    mimeType,
+    data,
+    ...(previewUrl ? { previewUrl } : {}),
+  }));
 }
 
 export interface PreparedComposerFiles {
-  imageFiles: File[];
+  imageAttachments: ComposerImageAttachment[];
   drawingAttachments: ComposerDrawingAttachment[];
   rejectedFileNames: string[];
   drawingParseFailures: Array<{ fileName: string; message: string }>;
+  imageReadFailures: Array<{ fileName: string; message: string }>;
 }
 
 export interface ComposerFilePreparationNotice {
@@ -246,11 +289,13 @@ export function hasComposerTransferFiles(files: ComposerTransferFileList): boole
 export async function prepareComposerFiles(
   files: File[],
   buildDrawing: (file: File) => Promise<ComposerDrawingAttachment> = buildComposerDrawingFromFile,
+  buildImage: (file: File) => Promise<ComposerImageAttachment> = preparePromptImage,
 ): Promise<PreparedComposerFiles> {
-  const imageFiles: File[] = [];
+  const imageAttachments: ComposerImageAttachment[] = [];
   const drawingAttachments: ComposerDrawingAttachment[] = [];
   const rejectedFileNames: string[] = [];
   const drawingParseFailures: PreparedComposerFiles['drawingParseFailures'] = [];
+  const imageReadFailures: PreparedComposerFiles['imageReadFailures'] = [];
 
   for (const file of files) {
     if (isPotentialExcalidrawFile(file)) {
@@ -270,7 +315,14 @@ export async function prepareComposerFiles(
     }
 
     if (file.type.startsWith('image/')) {
-      imageFiles.push(file);
+      try {
+        imageAttachments.push(await buildImage(file));
+      } catch (error) {
+        imageReadFailures.push({
+          fileName: file.name || 'Unnamed file',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       continue;
     }
 
@@ -278,15 +330,16 @@ export async function prepareComposerFiles(
   }
 
   return {
-    imageFiles,
+    imageAttachments,
     drawingAttachments,
     rejectedFileNames,
     drawingParseFailures,
+    imageReadFailures,
   };
 }
 
 export function buildComposerFilePreparationNotices(
-  prepared: Pick<PreparedComposerFiles, 'drawingAttachments' | 'drawingParseFailures' | 'rejectedFileNames'>,
+  prepared: Pick<PreparedComposerFiles, 'drawingAttachments' | 'drawingParseFailures' | 'imageReadFailures' | 'rejectedFileNames'>,
 ): ComposerFilePreparationNotice[] {
   const notices: ComposerFilePreparationNotice[] = [];
 
@@ -305,6 +358,14 @@ export function buildComposerFilePreparationNotices(
     });
   }
 
+  for (const failure of prepared.imageReadFailures) {
+    notices.push({
+      tone: 'danger',
+      text: failure.message.includes(failure.fileName) ? failure.message : `Could not read ${failure.fileName}: ${failure.message}`,
+      durationMs: 4000,
+    });
+  }
+
   if (prepared.rejectedFileNames.length > 0) {
     const preview = prepared.rejectedFileNames.slice(0, 3).join(', ');
     const suffix = prepared.rejectedFileNames.length > 3 ? `, +${prepared.rejectedFileNames.length - 3} more` : '';
@@ -318,8 +379,8 @@ export function buildComposerFilePreparationNotices(
   return notices;
 }
 
-export function removeComposerImageFileAtIndex(files: File[], indexToRemove: number): File[] {
-  return files.filter((_, index) => index !== indexToRemove);
+export function removeComposerImageFileAtIndex(attachments: ComposerImageAttachment[], indexToRemove: number): ComposerImageAttachment[] {
+  return attachments.filter((_, index) => index !== indexToRemove);
 }
 
 export function removeComposerDrawingAttachmentByLocalId(
@@ -327,6 +388,10 @@ export function removeComposerDrawingAttachmentByLocalId(
   localId: string,
 ): ComposerDrawingAttachment[] {
   return attachments.filter((attachment) => attachment.localId !== localId);
+}
+
+function createComposerImageLocalId(): string {
+  return `image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function createComposerDrawingLocalId(): string {
