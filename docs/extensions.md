@@ -1007,7 +1007,7 @@ pnpm test
 experimental extension backend from its built `dist/` output, verifies backend
 action handler exports, smoke-calls known safe `list` tools (`scheduled_task`,
 `conversation_queue`, `run`), and runs product-critical smoke calls for Knowledge,
-Runs, Automations, and Diffs extension actions. It fails on forbidden bare imports
+Automations, and Diffs extension actions. It fails on forbidden bare imports
 that are not available inside the packaged desktop app, such as
 `@earendil-works/pi-coding-agent`, `@personal-agent/core`,
 `@personal-agent/daemon`, `jsdom`, and `@sinclair/typebox`. It also rejects
