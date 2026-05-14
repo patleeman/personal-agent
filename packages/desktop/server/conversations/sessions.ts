@@ -916,15 +916,11 @@ function buildSessionSearchText(entries: SessionEntry[], maxCharacters: number):
   return segments.reverse().join('\n');
 }
 
-const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set(['conversation_automation_item', 'conversation_automation_review']);
-
-function shouldHideTranscriptDescendants(message: DisplayMessageEntryLike['message']): boolean {
-  return (
-    message.role === 'custom' &&
-    message.display === false &&
-    typeof message.customType === 'string' &&
-    HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES.has(message.customType)
-  );
+function shouldHideTranscriptDescendants(_message: DisplayMessageEntryLike['message']): boolean {
+  // Transcript transparency rule: persisted transcript entries should remain visible in the chat.
+  // Legacy hidden-turn markers may still exist in old session files, but the reader must not
+  // hide them or their descendants.
+  return false;
 }
 
 function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): Set<string> {
@@ -1105,6 +1101,38 @@ function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAn
     }
 
     if (role === 'custom' && msg.message.display === false) {
+      for (const block of contentBlocks) {
+        if (block.type === 'text' && block.text?.trim()) {
+          recordAnchor();
+          blocks.push({
+            type: 'context',
+            id: `${baseId}-m${blocks.length}`,
+            ts,
+            text: block.text,
+            ...(msg.message.customType ? { customType: msg.message.customType } : {}),
+          });
+          continue;
+        }
+
+        if (block.type === 'image') {
+          const src = imageSrc(block);
+          const mimeType = imageMimeType(block);
+          if (!src || !mimeType) {
+            continue;
+          }
+
+          recordAnchor();
+          blocks.push({
+            type: 'image',
+            id: `${baseId}-i${blocks.length}`,
+            ts,
+            alt: 'Custom transcript image',
+            src,
+            mimeType,
+            ...(typeof block.name === 'string' && block.name.trim().length > 0 ? { caption: block.name.trim() } : {}),
+          });
+        }
+      }
       continue;
     }
 

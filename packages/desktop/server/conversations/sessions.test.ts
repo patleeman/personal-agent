@@ -489,7 +489,7 @@ describe('sessions', () => {
     ]);
   });
 
-  it('keeps hidden archived automation turns out of the visible tail', () => {
+  it('keeps legacy hidden archived automation turns visible in the tail', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
 
@@ -554,15 +554,17 @@ describe('sessions', () => {
     );
 
     const detail = readSessionBlocks('session-tail-hidden', { tailBlocks: 5 });
-    expect(detail?.totalBlocks).toBe(2);
+    expect(detail?.totalBlocks).toBe(4);
     expect(detail?.blockOffset).toBe(0);
     expect(detail?.blocks).toEqual([
       expect.objectContaining({ type: 'user', text: 'Visible prompt' }),
       expect.objectContaining({ type: 'text', text: 'Visible answer' }),
+      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
+      expect.objectContaining({ type: 'text', text: 'Hidden assistant reply' }),
     ]);
   });
 
-  it('keeps later user turns visible in archived tails after hidden automation turns', () => {
+  it('keeps later user turns visible in archived tails after legacy hidden automation turns', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
 
@@ -1196,7 +1198,7 @@ describe('sessions', () => {
     ]);
   });
 
-  it('keeps hidden custom context entries out of the visible transcript', () => {
+  it('renders legacy hidden custom context entries in the visible transcript', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
         id: 'context-1',
@@ -1210,7 +1212,15 @@ describe('sessions', () => {
       },
     ]);
 
-    expect(blocks).toEqual([]);
+    expect(blocks).toEqual([
+      {
+        type: 'context',
+        id: 'context-1-m0',
+        ts: '2026-03-12T16:00:00.000Z',
+        customType: 'referenced_context',
+        text: 'Conversation automation context:\n- Review the agent reminders.',
+      },
+    ]);
   });
 
   it('renders visible goal continuations as context blocks instead of assistant messages', () => {
@@ -1331,7 +1341,7 @@ describe('sessions', () => {
     expect((blocks[0] as Extract<(typeof blocks)[number], { type: 'summary' }>).text).toContain('Wakeups use durable run callbacks.');
   });
 
-  it('keeps assistant replies from generic hidden custom turns out of the visible transcript', () => {
+  it('shows assistant replies from generic legacy hidden custom turns in the visible transcript', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
         id: 'user-1',
@@ -1378,6 +1388,15 @@ describe('sessions', () => {
       expect.objectContaining({
         type: 'user',
         text: 'Create a new project.',
+      }),
+      expect.objectContaining({
+        type: 'context',
+        customType: 'conversation_automation_review',
+        text: 'Hidden bookkeeping prompt.',
+      }),
+      expect.objectContaining({
+        type: 'text',
+        text: 'No automation changes needed.',
       }),
     ]);
   });
@@ -1465,6 +1484,11 @@ describe('sessions', () => {
         text: 'First visible assistant reply.',
       }),
       expect.objectContaining({
+        type: 'context',
+        customType: 'conversation_automation_post_turn_review',
+        text: 'Hidden bookkeeping prompt.',
+      }),
+      expect.objectContaining({
         type: 'thinking',
         text: 'Reviewing whether auto mode should keep going.',
       }),
@@ -1521,6 +1545,11 @@ describe('sessions', () => {
       expect.objectContaining({
         type: 'user',
         text: 'Use the referenced project context.',
+      }),
+      expect.objectContaining({
+        type: 'context',
+        customType: 'referenced_context',
+        text: 'Referenced project: @foo',
       }),
       expect.objectContaining({
         type: 'text',

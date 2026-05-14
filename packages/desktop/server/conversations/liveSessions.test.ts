@@ -552,7 +552,7 @@ describe('parallel prompt job management', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         customType: 'parallel_result',
-        display: false,
+        display: true,
         details: expect.objectContaining({ childConversationId: 'child-ready', status: 'complete' }),
       }),
     );
@@ -3066,7 +3066,7 @@ describe('queued prompt restore', () => {
 });
 
 describe('queuePromptContext', () => {
-  it('appends hidden context immediately when the session is idle so the user prompt stays latest', async () => {
+  it('appends visible context immediately when the session is idle so the user prompt stays latest', async () => {
     const sendCustomMessage = vi.fn(async () => undefined);
 
     setLiveEntry('session-idle-context', {
@@ -3090,12 +3090,12 @@ describe('queuePromptContext', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'referenced_context',
       content: 'Conversation automation context',
-      display: false,
+      display: true,
       details: undefined,
     });
   });
 
-  it('queues hidden context for the next turn while the session is streaming', async () => {
+  it('queues visible context for the next turn while the session is streaming', async () => {
     const sendCustomMessage = vi.fn(async () => undefined);
 
     setLiveEntry('session-streaming-context', {
@@ -3120,7 +3120,7 @@ describe('queuePromptContext', () => {
       {
         customType: 'referenced_context',
         content: 'Conversation automation context',
-        display: false,
+        display: true,
         details: undefined,
       },
       {
@@ -3129,7 +3129,7 @@ describe('queuePromptContext', () => {
     );
   });
 
-  it('ignores blank hidden context payloads', async () => {
+  it('ignores blank context payloads', async () => {
     const sendCustomMessage = vi.fn(async () => undefined);
 
     setLiveEntry('session-blank-context', {

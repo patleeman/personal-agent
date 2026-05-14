@@ -496,22 +496,22 @@ describe('legacy auto mode continuation quarantine', () => {
   });
 
   describe('hidden custom turns', () => {
-    it('treats hidden custom messages as active hidden turns before agent_start', () => {
+    it('rejects hidden custom messages before they can become invisible transcript turns', () => {
       const entry = makeEntry();
       const cbs = makeCallbacks();
 
-      handleLiveSessionEvent(
-        entry,
-        {
-          type: 'message_start',
-          message: { role: 'custom', customType: 'goal-continuation', display: false, content: 'Goal continuation.' },
-        } as any,
-        cbs,
-      );
-      handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
+      expect(() =>
+        handleLiveSessionEvent(
+          entry,
+          {
+            type: 'message_start',
+            message: { role: 'custom', customType: 'goal-continuation', display: false, content: 'Goal continuation.' },
+          } as any,
+          cbs,
+        ),
+      ).toThrow('Custom transcript message "goal-continuation" must be visible.');
 
-      expect(entry.activeHiddenTurnCustomType).toBe('goal-continuation');
-      expect(cbs.broadcast).not.toHaveBeenCalledWith(entry, { type: 'agent_start' });
+      expect(entry.activeHiddenTurnCustomType).toBeNull();
     });
   });
 

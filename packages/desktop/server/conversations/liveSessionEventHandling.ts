@@ -160,7 +160,12 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   event: AgentSessionEvent,
   callbacks: LiveSessionEventCallbacks<TEntry>,
 ): void {
-  const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event) ?? readHiddenCustomMessageType(event);
+  const hiddenCustomMessageType = readHiddenCustomMessageType(event);
+  if (hiddenCustomMessageType) {
+    throw new Error(`Custom transcript message "${hiddenCustomMessageType}" must be visible.`);
+  }
+
+  const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event);
   if (activeHiddenTurnCustomType) {
     entry.activeHiddenTurnCustomType = activeHiddenTurnCustomType;
   }
