@@ -1,5 +1,7 @@
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '@earendil-works/pi-coding-agent';
+
+const DEFAULT_MAX_BYTES = 50 * 1024;
+const DEFAULT_MAX_LINES = 2000;
 
 interface ExaSearchResult {
   title?: string;
@@ -25,6 +27,34 @@ function getExaApiKey(ctx?: ExtensionBackendContext): string | undefined {
   return ctx?.secrets.get('exaApiKey');
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function truncateHead(content: string, options: { maxLines: number; maxBytes: number }) {
+  const lines = content.split(/\r?\n/);
+  let output = lines.slice(0, options.maxLines).join('\n');
+  let outputBytes = Buffer.byteLength(output, 'utf8');
+
+  if (outputBytes > options.maxBytes) {
+    let end = Math.min(output.length, options.maxBytes);
+    while (end > 0 && Buffer.byteLength(output.slice(0, end), 'utf8') > options.maxBytes) end -= 1;
+    output = output.slice(0, end);
+    outputBytes = Buffer.byteLength(output, 'utf8');
+  }
+
+  return {
+    content: output,
+    truncated: lines.length > options.maxLines || output.length < content.length,
+    outputLines: output ? output.split(/\r?\n/).length : 0,
+    totalLines: lines.length,
+    outputBytes,
+    totalBytes: Buffer.byteLength(content, 'utf8'),
+  };
+}
+
 function formatTruncatedContent(content: string): { text: string; truncated: boolean } {
   const truncation = truncateHead(content, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
   let text = truncation.content;
@@ -36,7 +66,7 @@ function formatTruncatedContent(content: string): { text: string; truncated: boo
   return { text, truncated: truncation.truncated };
 }
 
-export async function webFetch(input: { url: string; raw?: boolean }, ctx?: ExtensionBackendContext) {
+export async function webFetch(input: { url: string; raw?: boolean }, _ctx?: ExtensionBackendContext) {
   const { url, raw } = input;
   try {
     const response = await fetch(url, {
