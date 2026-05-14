@@ -24,8 +24,10 @@ function parentPath(path: string): string {
   return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
 }
 
+const INITIAL_EXPANDED_DIFF_FILES = 1;
+
 function expandedFilePathSet(files: Array<{ path: string }>): Set<string> {
-  return new Set(files.map((file) => file.path));
+  return new Set(files.slice(0, INITIAL_EXPANDED_DIFF_FILES).map((file) => file.path));
 }
 
 function DiffViewToggle({ currentView, onChange }: { currentView: DiffViewMode; onChange: (nextView: DiffViewMode) => void }) {

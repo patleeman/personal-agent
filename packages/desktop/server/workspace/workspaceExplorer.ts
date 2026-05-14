@@ -71,7 +71,8 @@ export interface WorkspaceDiffOverlay extends WorkspaceRootSnapshot {
 
 const MAX_FILE_BYTES = 1024 * 512;
 const MAX_DIFF_FILE_BYTES = 1024 * 1024;
-const UNCOMMITTED_DIFF_MAX_FILES = 200;
+const UNCOMMITTED_DIFF_MAX_RENDERED_FILES = 25;
+const UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES = 256 * 1024;
 const UNCOMMITTED_DIFF_TIMEOUT_MS = 5_000;
 
 function runGit(args: string[], cwd: string): string {
@@ -512,10 +513,18 @@ function runGitAllowFailure(args: string[], cwd: string): { stdout: string; exit
   }
 }
 
+function buildEmptyUntrackedPatch(relativePath: string): string {
+  return `diff --git a/dev/null b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +0,0 @@\n`;
+}
+
 function buildUntrackedPatch(root: string, relativePath: string): string {
   const absolutePath = resolve(root, relativePath);
   let content: string;
   try {
+    const stats = statSync(absolutePath);
+    if (!stats.isFile() || stats.size > UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES) {
+      return buildEmptyUntrackedPatch(relativePath);
+    }
     content = readFileSync(absolutePath, 'utf-8');
   } catch {
     content = '';
@@ -524,7 +533,7 @@ function buildUntrackedPatch(root: string, relativePath: string): string {
   const actualLines = lines.length > 0 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
   const lineCount = actualLines.length;
   if (lineCount === 0) {
-    return `diff --git a/dev/null b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +0,0 @@\n`;
+    return buildEmptyUntrackedPatch(relativePath);
   }
   return [
     `diff --git a/dev/null b/${relativePath}`,
@@ -558,20 +567,24 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
   }
 
   const files: LocalCheckpointCommitFile[] = [];
-  const trackedChanges = status.changes.filter((c) => c.change !== 'untracked');
-  const untrackedChanges = status.changes.filter((c) => c.change === 'untracked');
+  const trackedChanges = status.changes.filter((c) => c.change !== 'untracked').slice(0, UNCOMMITTED_DIFF_MAX_RENDERED_FILES);
+  const untrackedChanges = status.changes.filter((c) => c.change === 'untracked').slice(0, UNCOMMITTED_DIFF_MAX_RENDERED_FILES);
 
-  // Get tracked diffs in one shot so rename detection works
-  if (trackedChanges.length > 0) {
-    const fileArgs = trackedChanges.flatMap((c) => ['--', c.relativePath]);
-    const result = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--find-renames', ...fileArgs], repo.root);
+  // Get tracked diffs in one shot so rename detection works. Keep the response bounded; the full repository
+  // status count still comes from readGitStatusSummary, but the renderer only receives a manageable patch set.
+  if (trackedChanges.length > 0 && files.length < UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
+    const fileArgs = trackedChanges.map((c) => c.relativePath);
+    const result = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--find-renames', '--', ...fileArgs], repo.root);
     if (result.exitCode === 0 || result.exitCode === 1) {
       try {
         const parsed = parseCheckpointDiffSections(result.stdout);
-        files.push(...parsed);
+        files.push(...parsed.slice(0, UNCOMMITTED_DIFF_MAX_RENDERED_FILES - files.length));
       } catch {
         // Fall back to per-file diffing
         for (const change of trackedChanges) {
+          if (files.length >= UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
+            break;
+          }
           const fileResult = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--', change.relativePath], repo.root);
           if (fileResult.exitCode === 0 || fileResult.exitCode === 1) {
             try {
@@ -589,9 +602,9 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
   }
 
   // Untracked files — construct patches manually
-  if (untrackedChanges.length > 0 && files.length < UNCOMMITTED_DIFF_MAX_FILES) {
+  if (untrackedChanges.length > 0 && files.length < UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
     for (const change of untrackedChanges) {
-      if (files.length >= UNCOMMITTED_DIFF_MAX_FILES) {
+      if (files.length >= UNCOMMITTED_DIFF_MAX_RENDERED_FILES) {
         break;
       }
       const patch = buildUntrackedPatch(repo.root, change.relativePath);
@@ -622,9 +635,9 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
 
   return {
     branch: status.branch,
-    changeCount: files.length,
-    linesAdded: files.reduce((sum, f) => sum + f.additions, 0),
-    linesDeleted: files.reduce((sum, f) => sum + f.deletions, 0),
+    changeCount: status.changeCount,
+    linesAdded: status.linesAdded,
+    linesDeleted: status.linesDeleted,
     files,
   };
 }
