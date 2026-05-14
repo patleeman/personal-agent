@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import { parseSkillBlock } from '../../markdown/markdownExtensions';
 import type { MessageBlock } from '../../shared/types';
@@ -298,6 +298,34 @@ function RawRunCallbackCard({
   );
 }
 
+function SystemEventFrame({
+  label,
+  preview,
+  ts,
+  dataAttributes,
+  children,
+}: {
+  label: string;
+  preview: string;
+  ts: string;
+  dataAttributes: Record<string, string>;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group border-y border-border-subtle/40 py-2" {...dataAttributes}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
+        <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
+          ›
+        </span>
+        <span className="font-medium text-primary/80">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-dim">{preview}</span>
+        <span className="ui-message-meta shrink-0">{timeAgo(ts)}</span>
+      </summary>
+      {children}
+    </details>
+  );
+}
+
 export const SystemEventMessage = memo(function SystemEventMessage({
   block,
   messageIndex,
@@ -324,15 +352,12 @@ export const SystemEventMessage = memo(function SystemEventMessage({
   const preview = summarizeSystemEventText(block.text);
 
   return (
-    <details className="group border-y border-border-subtle/40 py-2" data-context-type={block.customType ?? 'injected_context'}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
-        <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
-          ›
-        </span>
-        <span className="font-medium text-primary/80">{label}</span>
-        <span className="min-w-0 flex-1 truncate text-dim">{preview}</span>
-        <span className="ui-message-meta shrink-0">{timeAgo(block.ts)}</span>
-      </summary>
+    <SystemEventFrame
+      label={label}
+      preview={preview}
+      ts={block.ts}
+      dataAttributes={{ 'data-context-type': block.customType ?? 'injected_context' }}
+    >
       <div {...replySelectionScopeProps} className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
         {showRawRunCallbackCard ? (
           <RawRunCallbackCard
@@ -345,7 +370,7 @@ export const SystemEventMessage = memo(function SystemEventMessage({
           renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
         )}
       </div>
-    </details>
+    </SystemEventFrame>
   );
 });
 
@@ -434,21 +459,19 @@ export const SummaryMessage = memo(function SummaryMessage({
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
-  if (block.kind === 'related') {
+  if (block.kind === 'compaction' || block.kind === 'related') {
     return (
-      <details className="group border-y border-border-subtle/40 py-2" data-summary-kind={block.kind}>
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
-          <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
-            ›
-          </span>
-          <span className="font-medium text-primary/80">{summaryPresentation.label}</span>
-          <span className="min-w-0 flex-1 truncate text-dim">{summaryPresentation.detail}</span>
-          <span className="ui-message-meta shrink-0">{timeAgo(block.ts)}</span>
-        </summary>
-        <div {...replySelectionScopeProps} className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
+      <SystemEventFrame
+        label={summaryPresentation.label}
+        preview={summaryPresentation.detail}
+        ts={block.ts}
+        dataAttributes={{ 'data-summary-kind': block.kind }}
+      >
+        <div {...replySelectionScopeProps} className="space-y-3 pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
+          {block.kind === 'compaction' ? <p className="text-[12px] leading-relaxed text-secondary">{summaryPresentation.detail}</p> : null}
           {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
         </div>
-      </details>
+      </SystemEventFrame>
     );
   }
 

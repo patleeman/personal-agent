@@ -975,10 +975,11 @@ describe('chat view streaming disclosure', () => {
     );
 
     expect(html).toContain('data-summary-kind="compaction"');
+    expect(html).toContain('<details');
     expect(html).toContain('Context compacted');
     expect(html).toContain('Older turns were summarized to keep the active context window focused.');
-    expect(html).toContain('Show summary');
-    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('Show summary');
+    expect(html).not.toContain('border-warning');
     expect(html).not.toContain('ui-chat-avatar-mark">pa<');
     expect(html).not.toContain('ui-message-card-assistant');
   });
@@ -1125,7 +1126,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('This used Codex compaction under the hood.');
   });
 
-  it('collapses long compaction summaries to a short preview by default', () => {
+  it('renders long compaction summaries inside the shared system event frame', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -1140,12 +1141,12 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Show summary');
+    expect(html).toContain('data-summary-kind="compaction"');
+    expect(html).toContain('<details');
+    expect(html).not.toContain('Show summary');
     expect(html).toContain('Goal');
     expect(html).toContain('First item.');
-    expect(html).toContain('Third item.');
-    expect(html).not.toContain('Fourth item.');
-    expect(html).not.toContain('Fifth item.');
+    expect(html).toContain('Fifth item.');
   });
 
   it('renders reused thread summaries as collapsed transcript events', () => {
