@@ -4,6 +4,15 @@ vi.mock('../../../packages/desktop/server/secrets/secretStore.js', () => ({
   resolveSecret: () => process.env.EXA_API_KEY?.trim() || undefined,
 }));
 
+vi.mock('@personal-agent/extensions/backend/webContent', () => ({
+  extractReadableHtml: vi.fn(async ({ html }) => ({ markdown: html.replace(/<[^>]+>/g, '').trim(), title: 'Example' })),
+  parseDuckDuckGoHtml: vi.fn(async ({ html }) =>
+    html.includes('result__a')
+      ? [{ title: 'Example Title', url: 'https://example.org/page', snippet: 'This is a sample snippet text.' }]
+      : [],
+  ),
+}));
+
 import { webFetch, webSearch } from './backend.js';
 
 describe('system-web-tools backend', () => {

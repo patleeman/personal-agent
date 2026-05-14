@@ -1,4 +1,5 @@
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
+import { extractReadableHtml, parseDuckDuckGoHtml } from '@personal-agent/extensions/backend/webContent';
 
 const DEFAULT_MAX_BYTES = 50 * 1024;
 const DEFAULT_MAX_LINES = 2000;
@@ -88,34 +89,9 @@ export async function webFetch(input: { url: string; raw?: boolean }, _ctx?: Ext
       return { text: formatted.text, url, contentType, raw: Boolean(raw), truncated: formatted.truncated };
     }
 
-    const { JSDOM } = await import('jsdom');
-    const { Readability } = await import('@mozilla/readability');
-    const TurndownModule = await import('turndown');
-    const Turndown = TurndownModule.default || TurndownModule;
-
-    const dom = new JSDOM(body, { url });
-    const article = new Readability(dom.window.document).parse();
-    let markdown: string;
-
-    if (article?.content) {
-      const td = new Turndown({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
-      markdown = td.turndown(article.content);
-      if (article.title) markdown = `# ${article.title}\n\n${markdown}`;
-    } else {
-      const fallbackDom = new JSDOM(body, { url });
-      const document = fallbackDom.window.document;
-      document.querySelectorAll('script, style, noscript, nav, header, footer, aside').forEach((element: Element) => element.remove());
-      const main = document.querySelector("main, article, [role='main'], .content, #content") || document.body;
-      markdown = (main?.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!markdown) return { text: '(Could not extract readable content from page)', url };
-    }
-
-    markdown = markdown
-      .replace(/ +/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    const formatted = formatTruncatedContent(markdown);
-    return { text: formatted.text, url, title: article?.title, truncated: formatted.truncated };
+    const readable = await extractReadableHtml({ html: body, url }, _ctx);
+    const formatted = formatTruncatedContent(readable.markdown);
+    return { text: formatted.text, url, title: readable.title, truncated: formatted.truncated };
   } catch (error) {
     throw new Error(`Error fetching ${url}: ${getErrorMessage(error)}`);
   }
@@ -182,24 +158,7 @@ export async function webSearch(input: { query: string; count?: number; page?: n
   if (!response.ok) throw new Error(`Search failed: HTTP ${response.status}`);
 
   const html = await response.text();
-  const { JSDOM } = await import('jsdom');
-  const document = new JSDOM(html).window.document;
-  const results: Array<{ title: string; url: string; snippet: string }> = [];
-
-  document.querySelectorAll('.result').forEach((element: Element) => {
-    if (results.length >= maxResults) return;
-    const titleElement = element.querySelector('.result__title a, .result__a');
-    const snippetElement = element.querySelector('.result__snippet');
-    if (!titleElement) return;
-    const title = titleElement.textContent?.trim() || '';
-    let href = titleElement.getAttribute('href') || '';
-    if (href.includes('uddg=')) {
-      const match = href.match(/uddg=([^&]+)/);
-      if (match) href = decodeURIComponent(match[1]);
-    }
-    const snippet = snippetElement?.textContent?.trim() || '';
-    if (title && href) results.push({ title, url: href, snippet });
-  });
+  const results = await parseDuckDuckGoHtml({ html, maxResults }, ctx);
 
   if (results.length === 0) return { text: `No results found for: ${query} (page ${page})`, query, page, count: 0, source: 'duckduckgo' };
 

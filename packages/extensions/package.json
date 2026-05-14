@@ -107,6 +107,10 @@
       "types": "./dist/backend/telemetry.d.ts",
       "default": "./dist/backend/telemetry.js"
     },
+    "./backend/webContent": {
+      "types": "./dist/backend/webContent.d.ts",
+      "default": "./dist/backend/webContent.js"
+    },
     "./backend/artifacts": {
       "types": "./dist/backend/artifacts.d.ts",
       "default": "./dist/backend/artifacts.js"

@@ -45,6 +45,10 @@ export default defineConfig({
         process.cwd(),
         'packages/desktop/server/extensions/backendApi/slackMcpGateway.ts',
       ),
+      '@personal-agent/extensions/backend/webContent': resolve(
+        process.cwd(),
+        'packages/desktop/server/extensions/backendApi/webContent.ts',
+      ),
       '@personal-agent/extensions/backend': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/index.ts'),
     },
   },
