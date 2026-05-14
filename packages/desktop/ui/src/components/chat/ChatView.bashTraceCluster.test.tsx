@@ -83,6 +83,24 @@ afterEach(() => {
 });
 
 describe('ChatView bash trace clusters', () => {
+  it('does not mount collapsed trace blocks until the cluster is expanded', () => {
+    const bashBlock = {
+      id: 'tool-1',
+      type: 'tool_use',
+      ts: '2026-05-13T10:56:49.000Z',
+      tool: 'bash',
+      input: { command: 'pwd' },
+      output: '/Users/patrick/workingdir/personal-agent',
+      status: 'ok',
+    } satisfies Extract<MessageBlock, { type: 'tool_use' }>;
+
+    const { container } = renderChatView([bashBlock]);
+
+    expect(container.textContent).toContain('Internal work');
+    expect(container.textContent).not.toContain('pwd');
+    expect(container.querySelector('[data-extension-tool-host="true"]')).toBeNull();
+  });
+
   it('shows the generic bash tool card when an internal-work cluster is expanded', () => {
     const bashBlock = {
       id: 'tool-1',

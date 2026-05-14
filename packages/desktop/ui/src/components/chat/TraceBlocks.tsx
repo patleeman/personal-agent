@@ -204,8 +204,22 @@ export function TraceClusterBlock({
   const title = stableActive ? 'Working' : 'Internal work';
   const autoOpen = shouldAutoOpenTraceCluster(stableActive, false);
   const open = resolveDisclosureOpen(autoOpen, preference);
-  const hiddenBlockCount = Math.max(0, blocks.length - MAX_VISIBLE_TRACE_BLOCKS);
-  const visibleBlocks = showAllBlocks || hiddenBlockCount === 0 ? blocks : blocks.slice(-MAX_VISIBLE_TRACE_BLOCKS);
+  const runningBlockIndex = useMemo(
+    () => blocks.findIndex((block) => block.type === 'tool_use' && (block.status === 'running' || !!block.running)),
+    [blocks],
+  );
+  const visibleBlocks = useMemo(() => {
+    if (!open) {
+      return runningBlockIndex >= 0 ? [blocks[runningBlockIndex]] : [];
+    }
+
+    if (showAllBlocks || blocks.length <= MAX_VISIBLE_TRACE_BLOCKS) {
+      return blocks;
+    }
+
+    return blocks.slice(-MAX_VISIBLE_TRACE_BLOCKS);
+  }, [blocks, open, runningBlockIndex, showAllBlocks]);
+  const hiddenBlockCount = open ? Math.max(0, blocks.length - visibleBlocks.length) : 0;
   const visibleStartIndex = blocks.length - visibleBlocks.length;
   const panelClassName = cx(
     'flex-1 rounded-xl border px-2.5 py-2 text-left transition-colors',
@@ -310,7 +324,7 @@ export function TraceClusterBlock({
             </div>
           )}
           {visibleBlocks.map((block, index) => {
-            const blockIndex = visibleStartIndex + index;
+            const blockIndex = open ? visibleStartIndex + index : runningBlockIndex;
             const autoOpen = shouldAutoOpenConversationBlock(block, blockIndex, blocks.length, stableActive);
 
             switch (block.type) {
