@@ -4855,7 +4855,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (!stream.isStreaming && !liveSessionHasPendingHiddenTurn) {
+    if (!allowQueuedPrompts) {
       showNotice('danger', 'Parallel prompts are only available while this conversation is busy.', 4000);
       return;
     }
@@ -4907,7 +4907,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   async function submitComposerActionForModifiers(altKeyHeld: boolean, parallelKeyHeld: boolean) {
     const nextSubmit = resolveConversationComposerSubmitState(
-      stream.isStreaming,
+      composerRunState.streamControlsActive,
       altKeyHeld,
       liveSessionHasPendingHiddenTurn,
       parallelKeyHeld,
@@ -5294,10 +5294,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerShowsQuestionSubmit = shouldShowQuestionSubmitAsPrimaryComposerAction(
     Boolean(pendingAskUserQuestion),
     composerHasContent,
-    stream.isStreaming,
+    composerRunState.streamControlsActive,
   );
   const composerSubmit = resolveConversationComposerSubmitState(
-    stream.isStreaming,
+    composerRunState.streamControlsActive,
     composerAltHeld,
     liveSessionHasPendingHiddenTurn,
     composerParallelHeld,
