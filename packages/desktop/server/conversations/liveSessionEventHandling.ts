@@ -143,17 +143,6 @@ export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> 
   tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
 }
 
-function handleHiddenAutoReviewTurnEnd<TEntry extends LiveSessionEventHost>(
-  entry: TEntry,
-  activeHiddenTurnCustomType: string | null,
-  callbacks: LiveSessionEventCallbacks<TEntry>,
-): void {
-  if (activeHiddenTurnCustomType !== 'conversation_automation_post_turn_review') return;
-  if (!entry.pendingAutoModeContinuation) return;
-  entry.pendingAutoModeContinuation = false;
-  void callbacks.requestConversationAutoModeContinuationTurn(entry.sessionId);
-}
-
 export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   entry: TEntry,
   event: AgentSessionEvent,
@@ -174,7 +163,9 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       metadata: { hiddenTurnCustomType: activeHiddenTurnCustomType },
     });
 
-    handleHiddenAutoReviewTurnEnd(entry, activeHiddenTurnCustomType, callbacks);
+    if (activeHiddenTurnCustomType === 'conversation_automation_post_turn_review') {
+      entry.pendingAutoModeContinuation = false;
+    }
 
     callbacks.notifyLifecycleHandlers(entry, 'turn_end');
     void callbacks.applyPendingConversationWorkingDirectoryChange(entry);

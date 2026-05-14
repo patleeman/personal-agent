@@ -428,7 +428,7 @@ describe('trace persistence hooks', () => {
   });
 });
 
-describe('auto mode continuation flow', () => {
+describe('legacy auto mode continuation quarantine', () => {
   const REVIEW_TYPE = 'conversation_automation_post_turn_review';
 
   function makeEntry(overrides: Record<string, unknown> = {}) {
@@ -465,7 +465,7 @@ describe('auto mode continuation flow', () => {
   }
 
   describe('nudge mode review turn', () => {
-    it('schedules continuation when pendingAutoModeContinuation is true', async () => {
+    it('clears legacy continuation intent without scheduling another hidden turn', async () => {
       const entry = makeEntry({
         pendingAutoModeContinuation: true,
         activeHiddenTurnCustomType: REVIEW_TYPE,
@@ -477,7 +477,7 @@ describe('auto mode continuation flow', () => {
       // The handler uses queueMicrotask; flush microtasks
       await new Promise((resolve) => queueMicrotask(resolve));
 
-      expect(cbs.requestConversationAutoModeContinuationTurn).toHaveBeenCalledWith('sess-auto');
+      expect(cbs.requestConversationAutoModeContinuationTurn).not.toHaveBeenCalled();
       expect(cbs.requestConversationAutoModeTurn).not.toHaveBeenCalled();
     });
 

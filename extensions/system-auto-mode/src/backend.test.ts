@@ -186,6 +186,65 @@ describe('system-goal-mode extension', () => {
     );
   });
 
+  it('runs a live-streaming goal scenario from mid-turn enable through completion', async () => {
+    vi.useFakeTimers();
+    try {
+      const { setGoal, updateGoal, turnEnd, sendMessage, appendEntry, ctx } = createHarness();
+
+      await setGoal.execute('goal-1', { objective: 'ship the fix' }, new AbortController().signal, vi.fn(), ctx);
+      await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+
+      expect(sendMessage).not.toHaveBeenCalled();
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          customType: 'goal-continuation',
+          display: false,
+          content: expect.stringContaining('Objective: ship the fix'),
+        }),
+        { deliverAs: 'followUp', triggerTurn: true },
+      );
+
+      await updateGoal.execute('goal-2', { status: 'complete' }, new AbortController().signal, vi.fn(), ctx);
+      await turnEnd({ toolResults: [] }, ctx);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(appendEntry).toHaveBeenCalledWith(
+        'conversation-goal',
+        expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved', noProgressTurns: 0 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops a realistic continuation loop after two no-tool turns', async () => {
+    vi.useFakeTimers();
+    try {
+      const { turnEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship the fix')]);
+
+      await turnEnd({ toolResults: [] }, ctx);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'active', noProgressTurns: 1 }));
+
+      await turnEnd({ toolResults: [] }, ctx);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(appendEntry).toHaveBeenCalledWith(
+        'conversation-goal',
+        expect.objectContaining({ objective: '', status: 'complete', stopReason: 'no progress', noProgressTurns: 0 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not schedule a continuation when goal mode is disabled before turn_end', async () => {
     const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it'), completeGoal('goal achieved')]);
 
