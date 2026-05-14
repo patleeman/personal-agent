@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -100,6 +100,7 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
   const backendSource = resolve(packageRoot, 'src', 'backend.ts');
   const frontendEntry = manifest.frontend?.entry ? resolve(packageRoot, manifest.frontend.entry) : undefined;
   const backendEntry = manifest.backend?.entry ? resolve(packageRoot, manifest.backend.entry) : undefined;
+  const backendRuntimeEntry = resolveBackendRuntimeEntry(packageRoot, manifest);
 
   if (manifest.frontend?.entry) {
     if (!existsSync(frontendEntry!))
@@ -112,39 +113,19 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
         'Build the extension.',
       );
     if (!existsSync(frontendSource)) add(findings, 'warning', 'missing-frontend-source', 'src/frontend.tsx is missing.', frontendSource);
-    else if (frontendEntry && existsSync(frontendEntry) && statSync(frontendEntry).mtimeMs + 1000 < statSync(frontendSource).mtimeMs) {
-      add(
-        findings,
-        'warning',
-        'stale-frontend-dist',
-        'dist frontend output is older than src/frontend.tsx.',
-        frontendEntry,
-        'Rebuild the extension.',
-      );
-    }
   }
 
   if (manifest.backend?.entry) {
-    if (!existsSync(backendEntry!))
+    if (!backendRuntimeEntry || !existsSync(backendRuntimeEntry))
       add(
         findings,
         'error',
         'missing-backend-dist',
-        `Backend entry is missing: ${manifest.backend.entry}`,
-        backendEntry,
+        `Backend runtime entry is missing: ${isSourceBackendEntry(manifest.backend.entry) ? 'dist/backend.mjs' : manifest.backend.entry}`,
+        backendRuntimeEntry,
         'Build the extension.',
       );
     if (!existsSync(backendSource)) add(findings, 'warning', 'missing-backend-source', 'src/backend.ts is missing.', backendSource);
-    else if (backendEntry && existsSync(backendEntry) && statSync(backendEntry).mtimeMs + 1000 < statSync(backendSource).mtimeMs) {
-      add(
-        findings,
-        'warning',
-        'stale-backend-dist',
-        'dist backend output is older than src/backend.ts.',
-        backendEntry,
-        'Rebuild the extension.',
-      );
-    }
     if (existsSync(backendSource)) validateForbiddenSourceImports(backendSource, findings);
   }
 
@@ -200,24 +181,79 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
     if (skillPath && !existsSync(resolve(packageRoot, skillPath)))
       add(findings, 'error', 'missing-skill', `Skill file is missing: ${skillPath}`, resolve(packageRoot, skillPath));
   }
+
+  validateDistFreshness(packageRoot, manifest, findings);
 }
 
 function isSourceBackendEntry(entryPath: string): boolean {
   return /\.[cm]?tsx?$/.test(entryPath);
 }
 
+function resolveBackendRuntimeEntry(packageRoot: string, manifest: ExtensionManifest): string | undefined {
+  const backendEntry = manifest.backend?.entry;
+  if (!backendEntry) return undefined;
+  return resolve(packageRoot, isSourceBackendEntry(backendEntry) ? 'dist/backend.mjs' : backendEntry);
+}
+
+function latestMtimeUnder(path: string): number | null {
+  if (!existsSync(path)) return null;
+  const stats = statSync(path);
+  if (stats.isFile()) return stats.mtimeMs;
+  if (!stats.isDirectory()) return null;
+
+  let latest: number | null = null;
+  for (const dirent of readdirSync(path, { withFileTypes: true })) {
+    if (dirent.name === 'node_modules' || dirent.name === 'dist' || dirent.name === '.git') continue;
+    const childLatest = latestMtimeUnder(resolve(path, dirent.name));
+    if (childLatest !== null && (latest === null || childLatest > latest)) latest = childLatest;
+  }
+  return latest;
+}
+
+function validateDistFreshness(packageRoot: string, manifest: ExtensionManifest, findings: ExtensionDoctorFinding[]) {
+  const sourceLatest = Math.max(
+    latestMtimeUnder(resolve(packageRoot, 'src')) ?? 0,
+    latestMtimeUnder(resolve(packageRoot, 'extension.json')) ?? 0,
+  );
+  if (sourceLatest <= 0) return;
+
+  const severity: ExtensionDoctorSeverity = manifest.packageType === 'system' ? 'error' : 'warning';
+  const frontendEntry = manifest.frontend?.entry ? resolve(packageRoot, manifest.frontend.entry) : undefined;
+  if (frontendEntry && existsSync(frontendEntry) && statSync(frontendEntry).mtimeMs + 1000 < sourceLatest) {
+    add(
+      findings,
+      severity,
+      'stale-frontend-dist',
+      'dist frontend output is older than extension source or manifest.',
+      frontendEntry,
+      'Rebuild the extension.',
+    );
+  }
+
+  const backendEntry = resolveBackendRuntimeEntry(packageRoot, manifest);
+  if (backendEntry && existsSync(backendEntry) && statSync(backendEntry).mtimeMs + 1000 < sourceLatest) {
+    add(
+      findings,
+      severity,
+      'stale-backend-dist',
+      'dist backend output is older than extension source or manifest.',
+      backendEntry,
+      'Rebuild the extension.',
+    );
+  }
+}
+
 async function validateBuiltImports(packageRoot: string, manifest: ExtensionManifest, findings: ExtensionDoctorFinding[]) {
   await init;
   const frontendEntry = manifest.frontend?.entry ? resolve(packageRoot, manifest.frontend.entry) : undefined;
-  const backendEntry = manifest.backend?.entry ? resolve(packageRoot, manifest.backend.entry) : undefined;
+  const backendEntry = resolveBackendRuntimeEntry(packageRoot, manifest);
   if (frontendEntry && existsSync(frontendEntry)) validatePortableImports(frontendEntry, findings, 'frontend');
-  if (backendEntry && existsSync(backendEntry) && !isSourceBackendEntry(backendEntry))
-    validatePortableImports(backendEntry, findings, 'backend');
+  if (backendEntry && existsSync(backendEntry)) validatePortableImports(backendEntry, findings, 'backend');
 }
 
 async function validateBackendImport(packageRoot: string, manifest: ExtensionManifest, findings: ExtensionDoctorFinding[]) {
-  const backendEntry = manifest.backend?.entry ? resolve(packageRoot, manifest.backend.entry) : undefined;
-  if (!backendEntry || !existsSync(backendEntry) || isSourceBackendEntry(backendEntry)) return;
+  const backendEntry = resolveBackendRuntimeEntry(packageRoot, manifest);
+  if (!backendEntry || !existsSync(backendEntry)) return;
   try {
     await import(`${pathToFileURL(backendEntry).href}?paDoctor=${Date.now()}`);
   } catch (error) {

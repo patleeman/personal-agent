@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -63,6 +63,21 @@ function findAllStringConflicts(items: Array<[string, string]>): Map<string, str
   return conflicts;
 }
 
+function latestMtimeUnder(path: string): number | null {
+  if (!existsSync(path)) return null;
+  const stats = statSync(path);
+  if (stats.isFile()) return stats.mtimeMs;
+  if (!stats.isDirectory()) return null;
+
+  let latest: number | null = null;
+  for (const dirent of readdirSync(path, { withFileTypes: true })) {
+    if (dirent.name === 'node_modules' || dirent.name === 'dist' || dirent.name === '.git') continue;
+    const childLatest = latestMtimeUnder(resolve(path, dirent.name));
+    if (childLatest !== null && (latest === null || childLatest > latest)) latest = childLatest;
+  }
+  return latest;
+}
+
 /* ------------------------------------------------------------------ */
 /*  1. Manifest Structural Validation                                  */
 /* ------------------------------------------------------------------ */
@@ -103,19 +118,18 @@ describe('extension manifests - structural validation', () => {
     expect(invalid, 'Invalid system extensions').toEqual([]);
   });
 
-  it('no extensions have unexpected errors or diagnostics', () => {
-    const withErrors = summaries.filter((s) => (s.errors?.length ?? 0) > 0);
-    const withDiagnostics = summaries.filter((s) => (s.diagnostics?.length ?? 0) > 0);
-    // System extensions should never have runtime errors
-    const systemWithErrors = withErrors.filter((s) => s.packageType === 'system');
-    expect(systemWithErrors, 'System extensions with errors').toEqual([]);
-    // Collect all diagnostics as informational only — note them but don't fail
-    if (withDiagnostics.length > 0) {
-      console.warn(
-        'Extensions with diagnostics:',
-        withDiagnostics.map((s) => `${s.id}: ${s.diagnostics?.join(', ')}`),
-      );
-    }
+  it('no system extensions have unexpected errors or diagnostics', () => {
+    const systemWithErrors = summaries.filter((s) => s.packageType === 'system' && (s.errors?.length ?? 0) > 0);
+    const systemWithDiagnostics = summaries.filter((s) => s.packageType === 'system' && (s.diagnostics?.length ?? 0) > 0);
+
+    expect(
+      systemWithErrors.map((s) => `${s.id}: ${s.errors?.join(', ')}`),
+      'System extensions with errors',
+    ).toEqual([]);
+    expect(
+      systemWithDiagnostics.map((s) => `${s.id}: ${s.diagnostics?.join(', ')}`),
+      'System extensions with diagnostics',
+    ).toEqual([]);
   });
 
   it('all contributions are structurally valid (no missing required fields)', () => {
@@ -936,36 +950,38 @@ describe('extension backends - file existence and structural checks', () => {
     }
   });
 
-  it('prebuilt dist files are newer than their source files (build is not stale)', () => {
+  it('prebuilt dist files are newer than extension source and manifest files (build is not stale)', () => {
     for (const s of summaries) {
       if (s.packageType !== 'system') continue;
       const backendEntry = s.manifest.backend?.entry;
       const frontendEntry = s.manifest.frontend?.entry;
+      const sourceLatest = Math.max(
+        latestMtimeUnder(resolve(s.packageRoot ?? '', 'src')) ?? 0,
+        latestMtimeUnder(resolve(s.packageRoot ?? '', 'extension.json')) ?? 0,
+      );
 
-      // Check backend: src/backend.ts must be older than dist/backend.mjs
       if (backendEntry) {
         const sourcePath = resolve(s.packageRoot ?? '', backendEntry);
         const builtPath = resolve(s.packageRoot ?? '', 'dist', 'backend.mjs');
         if (existsSync(sourcePath) && existsSync(builtPath)) {
-          const sourceMtime = statSync(sourcePath).mtimeMs;
+          const sourceMtime = Math.max(statSync(sourcePath).mtimeMs, sourceLatest);
           const builtMtime = statSync(builtPath).mtimeMs;
           expect(
-            builtMtime >= sourceMtime - 1000, // 1s grace for filesystem timestamp rounding
-            `${s.id}: dist/backend.mjs (${new Date(builtMtime).toISOString()}) is older than ${backendEntry} (${new Date(sourceMtime).toISOString()}) — rebuild needed`,
+            builtMtime >= sourceMtime - 1000,
+            `${s.id}: dist/backend.mjs (${new Date(builtMtime).toISOString()}) is older than extension source (${new Date(sourceMtime).toISOString()}) — rebuild needed`,
           ).toBe(true);
         }
       }
 
-      // Check frontend: src/frontend.tsx must be older than dist/frontend.js
       if (frontendEntry) {
         const sourcePath = resolve(s.packageRoot ?? '', 'src', 'frontend.tsx');
         const builtPath = resolve(s.packageRoot ?? '', frontendEntry);
         if (existsSync(sourcePath) && existsSync(builtPath)) {
-          const sourceMtime = statSync(sourcePath).mtimeMs;
+          const sourceMtime = Math.max(statSync(sourcePath).mtimeMs, sourceLatest);
           const builtMtime = statSync(builtPath).mtimeMs;
           expect(
             builtMtime >= sourceMtime - 1000,
-            `${s.id}: ${frontendEntry} (${new Date(builtMtime).toISOString()}) is older than src/frontend.tsx (${new Date(sourceMtime).toISOString()}) — rebuild needed`,
+            `${s.id}: ${frontendEntry} (${new Date(builtMtime).toISOString()}) is older than extension source (${new Date(sourceMtime).toISOString()}) — rebuild needed`,
           ).toBe(true);
         }
       }

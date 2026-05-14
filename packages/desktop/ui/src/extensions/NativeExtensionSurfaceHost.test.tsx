@@ -26,6 +26,16 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../client/api', () => ({ api: apiMocks }));
+vi.mock('./systemExtensionModules', () => ({
+  systemExtensionModules: new Map([
+    [
+      'system-automations',
+      async () => ({
+        AutomationsPage: (await import('../../../../../extensions/system-automations/src/frontend')).AutomationsPage,
+      }),
+    ],
+  ]),
+}));
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 

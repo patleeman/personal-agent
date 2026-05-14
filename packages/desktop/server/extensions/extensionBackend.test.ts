@@ -13,21 +13,21 @@ import {
 const TEST_EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../extensions/system-auto-mode');
 
 describe('extension backend load targeting', () => {
-  it('only prefers prebuilt bundled backends when running a packaged desktop app', () => {
-    expect(shouldPreferPrebuiltSystemExtensionBackend({ resourcesPath: undefined, env: {} })).toBe(false);
+  it('prefers prebuilt system backends unless extension authoring mode is explicit', () => {
+    expect(shouldPreferPrebuiltSystemExtensionBackend({ resourcesPath: undefined, env: {} })).toBe(true);
     expect(isPrebuiltOnlyExtensionRuntime({ resourcesPath: undefined, env: {} })).toBe(false);
     expect(
       shouldPreferPrebuiltSystemExtensionBackend({
         resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
         env: { PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1' },
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldPreferPrebuiltSystemExtensionBackend({
         resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
-        env: {},
+        env: { PERSONAL_AGENT_EXTENSION_AUTHORING: '1' },
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isPrebuiltOnlyExtensionRuntime({
         resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
@@ -66,7 +66,7 @@ describe('extension backend load targeting', () => {
     });
   });
 
-  it('does not bypass source rebuilds for source-backed runtime extensions or dev desktop bundles', () => {
+  it('does not bypass source rebuilds for source-backed runtime extensions or extension authoring mode', () => {
     expect(
       resolveExtensionBackendLoadTarget({ source: 'runtime', packageRoot: TEST_EXTENSION_ROOT }, 'src/backend.ts', {
         resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
@@ -89,7 +89,7 @@ describe('extension backend load targeting', () => {
         { source: 'system', packageRoot: TEST_EXTENSION_ROOT },
         {
           resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
-          env: { PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1' },
+          env: { PERSONAL_AGENT_EXTENSION_AUTHORING: '1' },
         },
       ),
     ).toBeNull();

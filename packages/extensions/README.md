@@ -67,7 +67,7 @@ Personal Agent owns the build command. Run it from the repo root:
 pnpm run extension:build -- ~/.local/state/personal-agent/extensions/agent-board
 ```
 
-The builder compiles frontend React to `dist/frontend.js`, backend Node code to `dist/backend.mjs`, and bundles normal third-party dependencies. Host packages such as `react`, `react-dom`, and `@personal-agent/extensions` are treated as provided by the app.
+The builder compiles frontend React to `dist/frontend.js`, backend Node code to `dist/backend.mjs`, and bundles normal third-party dependencies. Host packages such as `react`, `react-dom`, and `@personal-agent/extensions` are treated as provided by the app. Backend `dist/` output is the runtime contract for system extensions, and stale or missing system-extension bundles fail validation.
 
 Packaged desktop releases only load prebuilt `dist/` files. They do not run esbuild for extensions at runtime, so imported/user extensions must already include their built frontend/backend bundles.
 

@@ -4,6 +4,7 @@ import type { SessionMeta } from '../shared/types';
 import {
   clearWorkbenchOnlySearchParamsForCompact,
   isDiffsRailMode,
+  isRunsRailMode,
   readStoredPanelWidth,
   readStoredWorkbenchExplorerOpen,
   resolveActiveExtensionWorkbenchSurface,
@@ -106,7 +107,7 @@ describe('Layout workbench rail state', () => {
     expect(shouldRenderExtensionToolPanelInWorkbenchNav('system-artifacts')).toBe(true);
   });
 
-  it('resolves built-in file rail detail views without extension mode state', () => {
+  it('resolves built-in slot detail views without extension mode state', () => {
     expect(
       resolveActiveExtensionWorkbenchSurface({
         activeWorkbenchTool: 'files',
@@ -114,12 +115,28 @@ describe('Layout workbench rail state', () => {
         extensionWorkbenchSurfaces: [{ extensionId: 'system-files', id: 'files-workbench' } as never],
       }),
     ).toEqual({ extensionId: 'system-files', id: 'files-workbench' });
+
+    expect(
+      resolveActiveExtensionWorkbenchSurface({
+        activeWorkbenchTool: 'browser',
+        extensionRightToolPanels: [
+          { extensionId: 'system-browser', id: 'browser-tool', detailView: 'browser-workbench', toolSlot: 'browser' } as never,
+        ],
+        extensionWorkbenchSurfaces: [{ extensionId: 'system-browser', id: 'browser-workbench' } as never],
+      }),
+    ).toEqual({ extensionId: 'system-browser', id: 'browser-workbench' });
   });
 
   it('recognizes extension-backed diffs as diffs rail mode', () => {
     expect(isDiffsRailMode('diffs')).toBe(true);
     expect(isDiffsRailMode('extension:system-diffs:conversation-diffs')).toBe(true);
     expect(isDiffsRailMode('extension:system-files:file-explorer')).toBe(false);
+  });
+
+  it('recognizes extension-backed runs as runs rail mode', () => {
+    expect(isRunsRailMode('runs')).toBe(true);
+    expect(isRunsRailMode('extension:system-runs:conversation-runs')).toBe(true);
+    expect(isRunsRailMode('extension:system-files:file-explorer')).toBe(false);
   });
 
   it('defaults the diffs rail to uncommitted changes when present', () => {

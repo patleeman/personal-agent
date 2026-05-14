@@ -1017,15 +1017,18 @@ bug before release.
 
 The desktop server also runs an enabled-extension backend health check on startup.
 Failures are logged, surfaced as extension diagnostics, and shown by Extension
-Manager instead of silently making tools or actions disappear. Extension builds
-write `dist/build-manifest.json` with output files, byte sizes, and remaining
-external imports. Extension Manager also exposes the `extension_manager` agent
-tool for local extension authoring: `list`, `create`, `snapshot`, `build`,
-`validate`, and `reload`. Run `validate` after each build to check manifest
-references, dist files, stale output, frontend/backend exports, tool schemas,
-skill files, forbidden process imports, non-portable bundled imports, and backend
-import crashes for one extension. The release publisher reruns the
-packaged-extension check against the built `.app` before notarization/upload.
+Manager instead of silently making tools or actions disappear. System extension
+diagnostics are release blockers: the integration smoke suite fails when a system
+extension has registry errors, diagnostics, stale `dist/` output, missing exports,
+forbidden imports, or backend import crashes. Extension builds write
+`dist/build-manifest.json` with output files, byte sizes, and remaining external
+imports. Extension Manager also exposes the `extension_manager` agent tool for
+local extension authoring: `list`, `create`, `snapshot`, `build`, `validate`, and
+`reload`. Run `validate` after each build to check manifest references, dist
+files, stale output, frontend/backend exports, tool schemas, skill files,
+forbidden process imports, non-portable bundled imports, and backend import
+crashes for one extension. The release publisher reruns the packaged-extension
+check against the built `.app` before notarization/upload.
 
 The integration suite covers 79 tests across 12 categories:
 
@@ -1088,4 +1091,4 @@ See the system extensions in `extensions/` for practical examples:
 Each system extension has a complete `extension.json` manifest and
 `src/backend.ts` + optionally `src/frontend.tsx`.
 
-Bundled system extensions keep source next to their built output for development. If `backend.entry` points at source (`src/backend.ts`), the dev app recompiles it on load and packaged builds switch to sibling `dist/backend.mjs`. If `backend.entry` already points at built output such as `dist/backend.mjs`, both dev and packaged builds load that file directly.
+Bundled system extensions keep source next to their built output for development. Backend `dist/` output is authoritative by default in both dev and packaged runtimes: if `backend.entry` points at source (`src/backend.ts`), normal app startup loads sibling `dist/backend.mjs`; source recompilation is reserved for explicit extension-authoring mode (`PERSONAL_AGENT_EXTENSION_AUTHORING=1`). If `backend.entry` already points at built output such as `dist/backend.mjs`, both dev and packaged builds load that file directly. System extension frontends are bundled into the desktop renderer from source so they share the app's React singleton; their `dist/frontend.js` bundles are still built and validated as release artifacts.

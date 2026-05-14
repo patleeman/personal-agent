@@ -174,6 +174,10 @@ export function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
   return mode === 'diffs' || mode.startsWith('extension:system-diffs:');
 }
 
+export function isRunsRailMode(mode: WorkbenchRailMode): boolean {
+  return mode === 'runs' || mode.startsWith('extension:system-runs:');
+}
+
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
   return (
     value === 'toggle-sidebar' ||
@@ -303,7 +307,7 @@ export function shouldResetWorkbenchRunsOnConversationChange(input: {
     return false;
   }
 
-  return input.activeTool === 'runs' || input.activeRunId !== null;
+  return isRunsRailMode(input.activeTool) || input.activeRunId !== null;
 }
 
 export function clearWorkbenchOnlySearchParamsForCompact(search: string): string {
@@ -575,7 +579,7 @@ function WorkbenchDocumentPane({
     );
   }
 
-  if (activeTool === 'browser') {
+  if (activeTool === 'browser' || activeTool !== 'files') {
     return null;
   }
 
@@ -1006,7 +1010,9 @@ function WorkbenchKnowledgeRail({
                   ? handleDiffsModeSelect()
                   : getSurfaceToolSlot(surface) === 'artifacts'
                     ? handleArtifactsModeSelect()
-                    : handleExtensionToolPanelSelect(surface)
+                    : getSurfaceToolSlot(surface) === 'runs'
+                      ? handleRunsModeSelect()
+                      : handleExtensionToolPanelSelect(surface)
               }
             >
               <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
@@ -1242,6 +1248,10 @@ export function Layout() {
   );
   const systemDiffsExtensionSurface = useMemo(
     () => findExtensionToolPanelBySlot(extensionRightToolPanels, 'diffs'),
+    [extensionRightToolPanels],
+  );
+  const systemRunsExtensionSurface = useMemo(
+    () => findExtensionToolPanelBySlot(extensionRightToolPanels, 'runs'),
     [extensionRightToolPanels],
   );
   const systemKnowledgeExtensionSurface = useMemo(
@@ -1487,8 +1497,8 @@ export function Layout() {
       return;
     }
 
-    setActiveConversationTool('runs');
-  }, [activeConversationId, activeWorkbenchRunFromSearch]);
+    setActiveConversationTool(resolveWorkbenchRailMode('runs', systemRunsExtensionSurface));
+  }, [activeConversationId, activeWorkbenchRunFromSearch, setActiveConversationTool, systemRunsExtensionSurface]);
 
   useEffect(() => {
     if (!activeWorkbenchKnowledgeFileId) {

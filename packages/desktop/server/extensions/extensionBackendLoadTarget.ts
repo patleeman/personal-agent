@@ -55,7 +55,8 @@ export function shouldPreferPrebuiltSystemExtensionBackend(
     env?: NodeJS.ProcessEnv;
   } = {},
 ): boolean {
-  return isPrebuiltOnlyExtensionRuntime(options);
+  const env = options.env ?? process.env;
+  return env.PERSONAL_AGENT_EXTENSION_AUTHORING !== '1';
 }
 
 export function resolveExtensionBackendLoadTarget(
@@ -75,7 +76,11 @@ export function resolveExtensionBackendLoadTarget(
     return null;
   }
 
-  if (entry.source === 'system' && isSourceExtensionBackendEntry(normalizedBackendEntry) && isPrebuiltOnlyExtensionRuntime(options)) {
+  if (
+    entry.source === 'system' &&
+    isSourceExtensionBackendEntry(normalizedBackendEntry) &&
+    shouldPreferPrebuiltSystemExtensionBackend(options)
+  ) {
     return buildPrebuiltExtensionBackendLoadTarget(resolve(entry.packageRoot, 'dist', 'backend.mjs'));
   }
 
