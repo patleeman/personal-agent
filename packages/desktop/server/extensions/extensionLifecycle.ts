@@ -388,6 +388,12 @@ function resolveDesktopUiExtensionModule(moduleName: string): string | null {
     '@personal-agent/extensions/workbench': 'workbench.ts',
     '@personal-agent/extensions/data': 'data.ts',
     '@personal-agent/extensions/settings': 'settings.ts',
+    '@personal-agent/extensions/workbench-artifacts': 'workbench-artifacts.ts',
+    '@personal-agent/extensions/workbench-browser': 'workbench-browser.ts',
+    '@personal-agent/extensions/workbench-diffs': 'workbench-diffs.ts',
+    '@personal-agent/extensions/workbench-files': 'workbench-files.ts',
+    '@personal-agent/extensions/workbench-runs': 'workbench-runs.ts',
+    '@personal-agent/extensions/workbench-transcript': 'workbench-transcript.ts',
   };
   const moduleFile = moduleFiles[moduleName];
   if (!moduleFile) {
@@ -427,13 +433,19 @@ function createFrontendExtensionSdkPlugin(): Plugin {
   return {
     name: 'personal-agent-frontend-extension-sdk',
     setup(build) {
-      build.onResolve({ filter: /^@personal-agent\/extensions\/(host|ui|workbench|data|settings)$/ }, (args) => {
-        const resolved = resolveDesktopUiExtensionModule(args.path);
-        if (!resolved) {
-          return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
-        }
-        return { path: resolved };
-      });
+      build.onResolve(
+        {
+          filter:
+            /^@personal-agent\/extensions\/(host|ui|workbench|workbench-artifacts|workbench-browser|workbench-diffs|workbench-files|workbench-runs|workbench-transcript|data|settings)$/,
+        },
+        (args) => {
+          const resolved = resolveDesktopUiExtensionModule(args.path);
+          if (!resolved) {
+            return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
+          }
+          return { path: resolved };
+        },
+      );
     },
   };
 }

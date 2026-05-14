@@ -23,6 +23,30 @@
       "types": "./dist/workbench.d.ts",
       "default": "./dist/workbench.js"
     },
+    "./workbench-artifacts": {
+      "types": "./dist/workbench-artifacts.d.ts",
+      "default": "./dist/workbench-artifacts.js"
+    },
+    "./workbench-browser": {
+      "types": "./dist/workbench-browser.d.ts",
+      "default": "./dist/workbench-browser.js"
+    },
+    "./workbench-diffs": {
+      "types": "./dist/workbench-diffs.d.ts",
+      "default": "./dist/workbench-diffs.js"
+    },
+    "./workbench-files": {
+      "types": "./dist/workbench-files.d.ts",
+      "default": "./dist/workbench-files.js"
+    },
+    "./workbench-runs": {
+      "types": "./dist/workbench-runs.d.ts",
+      "default": "./dist/workbench-runs.js"
+    },
+    "./workbench-transcript": {
+      "types": "./dist/workbench-transcript.d.ts",
+      "default": "./dist/workbench-transcript.js"
+    },
     "./data": {
       "types": "./dist/data.d.ts",
       "default": "./dist/data.js"

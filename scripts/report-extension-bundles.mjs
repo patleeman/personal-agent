@@ -31,10 +31,7 @@ function backendPath(dir, manifest) {
 function frontendInitialPaths(dir, manifest) {
   const entry = manifest.frontend?.entry;
   if (!entry) return [];
-  const paths = [join(dir, entry)];
-  const cssPath = join(dirname(join(dir, entry)), 'frontend.css');
-  if (existsSync(cssPath)) paths.push(cssPath);
-  return paths;
+  return [entry, ...(manifest.frontend?.styles ?? [])].map((item) => join(dir, item));
 }
 
 function formatBytes(bytes) {

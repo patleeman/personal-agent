@@ -1,45 +1,24 @@
-import { describeAskUserQuestionState, readAskUserQuestionPresentation, TerminalToolBlock } from '@personal-agent/extensions/workbench';
+import { lazy, Suspense } from 'react';
 
-import { AskUserQuestionToolBlock } from './AskUserQuestionToolBlock.js';
+type AskProps = Parameters<typeof import('./panels.js').AskUserQuestionTranscriptRenderer>[0];
+type TerminalProps = Parameters<typeof import('./panels.js').TerminalBashTranscriptRenderer>[0];
+const LazyAskUserQuestionTranscriptRenderer = lazy(async () => ({
+  default: (await import('./panels.js')).AskUserQuestionTranscriptRenderer,
+}));
+const LazyTerminalBashTranscriptRenderer = lazy(async () => ({ default: (await import('./panels.js')).TerminalBashTranscriptRenderer }));
+const fallback = <div className="px-3 py-2 text-[12px] text-dim">Loading tool output…</div>;
 
-export function AskUserQuestionTranscriptRenderer({
-  block,
-  context,
-}: {
-  block: never;
-  context: {
-    messages?: never[];
-    messageIndex?: number;
-    onSubmitAskUserQuestion?: (presentation: never, answers: never) => Promise<void> | void;
-    askUserQuestionDisplayMode?: 'inline' | 'composer';
-  };
-}) {
-  const presentation = readAskUserQuestionPresentation(block);
-  if (!presentation) return null;
-  const state = describeAskUserQuestionState(context.messages, context.messageIndex);
+export function AskUserQuestionTranscriptRenderer(props: AskProps) {
   return (
-    <AskUserQuestionToolBlock
-      block={block}
-      presentation={presentation}
-      state={state}
-      onSubmit={context.onSubmitAskUserQuestion}
-      mode={context.askUserQuestionDisplayMode ?? 'inline'}
-    />
+    <Suspense fallback={fallback}>
+      <LazyAskUserQuestionTranscriptRenderer {...props} />
+    </Suspense>
   );
 }
-
-export function TerminalBashTranscriptRenderer({
-  block,
-  context,
-}: {
-  block: never;
-  context: { onHydrateMessage?: unknown; hydratingMessageBlockIds?: unknown };
-}) {
+export function TerminalBashTranscriptRenderer(props: TerminalProps) {
   return (
-    <TerminalToolBlock
-      block={block}
-      onHydrateMessage={context.onHydrateMessage}
-      hydratingMessageBlockIds={context.hydratingMessageBlockIds}
-    />
+    <Suspense fallback={fallback}>
+      <LazyTerminalBashTranscriptRenderer {...props} />
+    </Suspense>
   );
 }

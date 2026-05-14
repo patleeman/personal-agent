@@ -1,6 +1,15 @@
 export const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 2 * 1024 * 1024;
 
-export const FRONTEND_INITIAL_BUNDLE_BYTE_LIMITS = new Map([['system-excalidraw-input', 64 * 1024]]);
+export const FRONTEND_INITIAL_BUNDLE_BYTE_LIMITS = new Map([
+  ['system-artifacts', 64 * 1024],
+  ['system-browser', 64 * 1024],
+  ['system-conversation-tools', 64 * 1024],
+  ['system-diffs', 64 * 1024],
+  ['system-excalidraw-input', 64 * 1024],
+  ['system-extension-manager', 64 * 1024],
+  ['system-files', 64 * 1024],
+  ['system-runs', 64 * 1024],
+]);
 
 export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
   ['system-automations', 1 * 1024 * 1024],

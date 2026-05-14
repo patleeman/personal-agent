@@ -87,6 +87,12 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
       '@personal-agent/extensions/host',
       '@personal-agent/extensions/ui',
       '@personal-agent/extensions/workbench',
+      '@personal-agent/extensions/workbench-artifacts',
+      '@personal-agent/extensions/workbench-browser',
+      '@personal-agent/extensions/workbench-diffs',
+      '@personal-agent/extensions/workbench-files',
+      '@personal-agent/extensions/workbench-runs',
+      '@personal-agent/extensions/workbench-transcript',
       '@personal-agent/extensions/settings',
       '@personal-agent/extensions/data',
       '@personal-agent/extensions/excalidraw',
@@ -135,18 +141,30 @@ function createFrontendExtensionSdkPlugin() {
     '@personal-agent/extensions/workbench': 'workbench.ts',
     '@personal-agent/extensions/data': 'data.ts',
     '@personal-agent/extensions/settings': 'settings.ts',
+    '@personal-agent/extensions/workbench-artifacts': 'workbench-artifacts.ts',
+    '@personal-agent/extensions/workbench-browser': 'workbench-browser.ts',
+    '@personal-agent/extensions/workbench-diffs': 'workbench-diffs.ts',
+    '@personal-agent/extensions/workbench-files': 'workbench-files.ts',
+    '@personal-agent/extensions/workbench-runs': 'workbench-runs.ts',
+    '@personal-agent/extensions/workbench-transcript': 'workbench-transcript.ts',
   };
   return {
     name: 'personal-agent-frontend-extension-sdk',
     setup(buildContext) {
-      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/(host|ui|workbench|data|settings)$/ }, (args) => {
-        const moduleFile = moduleFiles[args.path];
-        const resolved = moduleFile ? join(repoRoot, 'packages/desktop/ui/src/extensions', moduleFile) : null;
-        if (!resolved || !existsSync(resolved)) {
-          return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
-        }
-        return { path: resolved };
-      });
+      buildContext.onResolve(
+        {
+          filter:
+            /^@personal-agent\/extensions\/(host|ui|workbench|workbench-artifacts|workbench-browser|workbench-diffs|workbench-files|workbench-runs|workbench-transcript|data|settings)$/,
+        },
+        (args) => {
+          const moduleFile = moduleFiles[args.path];
+          const resolved = moduleFile ? join(repoRoot, 'packages/desktop/ui/src/extensions', moduleFile) : null;
+          if (!resolved || !existsSync(resolved)) {
+            return { errors: [{ text: `Could not resolve ${args.path} for frontend extension build.` }] };
+          }
+          return { path: resolved };
+        },
+      );
     },
   };
 }
