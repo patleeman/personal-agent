@@ -453,7 +453,7 @@ export function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }
 
   return {
     scope: 'mentioned',
-    runs: extractDurableRunIdsFromBlock(block).map((runId) => presentLinkedRun(runId)),
+    runs: [],
   };
 }
 

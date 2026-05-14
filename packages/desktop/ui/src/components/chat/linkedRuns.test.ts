@@ -97,7 +97,7 @@ describe('linkedRuns', () => {
     ]);
   });
 
-  it('falls back to durable run ids mentioned in generic tool blocks', () => {
+  it('ignores durable run ids mentioned in generic tool blocks', () => {
     const linkedRuns = readLinkedRuns({
       type: 'tool_use',
       ts: '2026-04-26T00:00:00.000Z',
@@ -108,7 +108,7 @@ describe('linkedRuns', () => {
 
     expect(linkedRuns).toEqual({
       scope: 'mentioned',
-      runs: [{ runId: 'run-foo-bar-abc123', title: 'Foo bar', detail: 'background task' }],
+      runs: [],
     });
   });
 

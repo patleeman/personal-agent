@@ -336,7 +336,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('cursor-zoom-in');
   });
 
-  it('renders mentioned runs as left-aligned action rows with a human-readable title', () => {
+  it('does not render background task cards for plain run id mentions', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -353,10 +353,9 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Background task: Continuous conversations next chunk ui');
-    expect(html).toContain('Background task mentioned by this step');
-    expect(html).toContain('text-left');
-    expect(html).toContain('1 background task mentioned in this step');
+    expect(html).not.toContain('Background task: Continuous conversations next chunk ui');
+    expect(html).not.toContain('Background task mentioned by this step');
+    expect(html).not.toContain('background task mentioned in this step');
   });
 
   it('shows run tool previews and linked run metadata for started agent runs', () => {
@@ -538,8 +537,7 @@ describe('chat view streaming disclosure', () => {
       ),
     );
 
-    expect(html).toContain('ui-preview-check');
-    expect(html).toContain('running');
+    expect(html).not.toContain('ui-preview-check');
     expect(html).not.toContain('linked Ui preview check');
   });
 
