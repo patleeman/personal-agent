@@ -79,6 +79,24 @@ await Promise.all([
   }),
 ]);
 
+// jiti's bundled Babel copy contains a duplicate TypeScript heritage switch case. When
+// another esbuild pass parses our server bundle, it reports a noisy duplicate-case warning.
+const removeDuplicateTypeScriptHeritageCase = (bundleOutput) => {
+  const source = readFileSync(bundleOutput, 'utf-8');
+  const cleaned = source.replaceAll(
+    'case"TSExpressionWithTypeArguments":case"TSExpressionWithTypeArguments":',
+    'case"TSExpressionWithTypeArguments":',
+  );
+
+  if (cleaned !== source) {
+    writeFileSync(bundleOutput, cleaned);
+  }
+};
+
+for (const bundleOutput of bundleOutputs) {
+  removeDuplicateTypeScriptHeritageCase(bundleOutput);
+}
+
 const jsdomXhrSyncWorker = resolve(packageRoot, 'node_modules/jsdom/lib/jsdom/living/xhr/xhr-sync-worker.js');
 const piCodingAgentPackageJson = resolve(packageRoot, 'node_modules/@earendil-works/pi-coding-agent/package.json');
 const piCodingAgentPackageMetadata = existsSync(piCodingAgentPackageJson)
