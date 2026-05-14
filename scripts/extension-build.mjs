@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,11 +25,15 @@ if (!existsSync(manifestPath)) {
 }
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+const emitSourceMaps = process.env.PA_EXTENSION_SOURCEMAP === '1' || process.env.PA_EXTENSION_SOURCEMAP === 'true';
 if (manifest.schemaVersion !== 2) {
   console.error('Only native extension manifest schemaVersion 2 is supported by this builder.');
   process.exit(1);
 }
 
+// dist is generated. Clear it first so stale chunks, maps, and backend helper
+// files do not survive rebuilds and accidentally ship in packaged releases.
+rmSync(join(packageRoot, 'dist'), { recursive: true, force: true });
 mkdirSync(join(packageRoot, 'dist'), { recursive: true });
 
 const buildOutputs = [];
@@ -50,7 +54,7 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
     format: 'esm',
     target: 'es2022',
     jsx: 'automatic',
-    sourcemap: true,
+    sourcemap: emitSourceMaps,
     logLevel: 'info',
     conditions: ['browser', 'production'],
     loader: {
@@ -78,7 +82,7 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     platform: 'node',
     format: 'esm',
     target: 'node20',
-    sourcemap: true,
+    sourcemap: emitSourceMaps,
     logLevel: 'info',
     banner: {
       js: 'import { createRequire as __paExtensionCreateRequire } from "node:module"; const require = __paExtensionCreateRequire(import.meta.url);',
