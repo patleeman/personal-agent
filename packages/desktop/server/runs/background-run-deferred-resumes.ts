@@ -1,5 +1,4 @@
 import { createHash } from 'crypto';
-import { existsSync, readFileSync } from 'fs';
 
 import { getBackgroundRunCallbackDelivery } from './background-run-callbacks.js';
 import {
@@ -13,8 +12,6 @@ import {
   type ScannedDurableRun,
 } from './store.js';
 
-const SINGLE_RUN_LOG_TAIL_LINES = 60;
-const BATCH_RUN_LOG_TAIL_LINES = 20;
 const MAX_COMMAND_LENGTH = 500;
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 
@@ -142,18 +139,6 @@ function isActiveStatus(status: DurableRunStatus | undefined): boolean {
   return status === 'queued' || status === 'running' || status === 'recovering' || status === 'waiting';
 }
 
-function readRunLogTail(logPath: string, maxLines: number): string {
-  if (!existsSync(logPath)) {
-    return '';
-  }
-
-  try {
-    return readFileSync(logPath, 'utf-8').replace(/\r\n/g, '\n').split('\n').slice(-maxLines).join('\n').trim();
-  } catch {
-    return '';
-  }
-}
-
 function describeRunCommand(run: ScannedDurableRun): string | undefined {
   const payload = readCheckpointPayload(run.checkpoint);
 
@@ -194,51 +179,44 @@ function sortRuns(runs: EligibleBackgroundRun[]): EligibleBackgroundRun[] {
   });
 }
 
-function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
+function readRunTaskSlug(run: ScannedDurableRun): string {
   // Support both old structure (spec.taskSlug) and new (spec.metadata.taskSlug)
-  const spec = run.run.manifest?.spec ?? {};
-  const taskSlug = readOptionalString(isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug) ?? 'unknown';
+  const spec = run.manifest?.spec ?? {};
+  return readOptionalString(isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug) ?? 'unknown';
+}
+
+function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
+  const taskSlug = readRunTaskSlug(run.run);
   const status = run.run.status?.status ?? 'unknown';
-  const logText = readRunLogTail(run.run.paths.outputLogPath, SINGLE_RUN_LOG_TAIL_LINES) || '(empty log)';
-  const lines = [
-    `Background task ${run.run.runId} has finished.`,
-    `taskSlug=${taskSlug}`,
-    `status=${status}`,
-    `log=${run.run.paths.outputLogPath}`,
-  ];
+  const lines = [`Background task ${taskSlug} ${status}.`, `Run ID: ${run.run.runId}`];
 
   const command = describeRunCommand(run.run);
   if (command) {
-    lines.push(`command=${command}`);
+    lines.push(`Command: ${command}`);
   }
 
-  lines.push('', 'Recent log tail:', logText, '', 'Use run get/logs if you need more detail. Then continue from this point.');
+  lines.push('', 'Continue from this result. Use background_command get/logs only if you need details.');
 
   return lines.join('\n');
 }
 
 function buildGenericBatchPrompt(runs: EligibleBackgroundRun[]): string {
   const orderedRuns = sortRuns(runs);
-  const lines = ['Background tasks have finished. Continue from this point.', '', 'Completed runs:'];
+  const lines = ['Background tasks finished.', '', 'Completed runs:'];
 
   for (const run of orderedRuns) {
-    // Support both old structure (spec.taskSlug) and new (spec.metadata.taskSlug)
-    const spec = run.run.manifest?.spec ?? {};
-    const taskSlug = readOptionalString(isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug) ?? 'unknown';
+    const taskSlug = readRunTaskSlug(run.run);
     const status = run.run.status?.status ?? 'unknown';
-    const logText = readRunLogTail(run.run.paths.outputLogPath, BATCH_RUN_LOG_TAIL_LINES) || '(empty log)';
 
-    lines.push('', `Run ${run.run.runId}`, `taskSlug=${taskSlug}`, `status=${status}`, `log=${run.run.paths.outputLogPath}`);
+    lines.push('', `- ${taskSlug}: ${status}`, `  Run ID: ${run.run.runId}`);
 
     const command = describeRunCommand(run.run);
     if (command) {
-      lines.push(`command=${command}`);
+      lines.push(`  Command: ${command}`);
     }
-
-    lines.push('', 'Recent log tail:', logText);
   }
 
-  lines.push('', 'Use run get/logs if you need more detail. Then continue from this point.');
+  lines.push('', 'Continue from these results. Use background_command get/logs only if you need details.');
 
   return lines.join('\n');
 }

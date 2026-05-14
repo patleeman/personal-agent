@@ -5,7 +5,6 @@ import {
   resolveDeferredResumeStateFile,
   saveDeferredResumeState,
 } from '@personal-agent/core';
-import { existsSync, readFileSync } from 'fs';
 
 import { surfaceReadyDeferredResume } from '../daemon/conversation-wakeups.js';
 import { markDeferredResumeConversationRunReady } from './deferred-resume-conversations.js';
@@ -97,36 +96,17 @@ function readTargetCommand(run: ScannedDurableRun): string | undefined {
   return undefined;
 }
 
-function readLogTail(path: string, maxLines: number): string {
-  if (!existsSync(path)) {
-    return '(log file missing)';
-  }
-
-  try {
-    return readFileSync(path, 'utf-8').replace(/\r\n/g, '\n').split('\n').slice(-maxLines).join('\n').trim() || '(empty log)';
-  } catch {
-    return '(log unavailable)';
-  }
-}
-
 function buildWakeupPrompt(run: ScannedDurableRun): string {
   const taskSlug = readTaskSlug(run);
   const status = run.status?.status ?? 'unknown';
-  const logPath = run.paths.outputLogPath;
-  const lines = [`Background task ${run.runId} has finished.`, `taskSlug=${taskSlug}`, `status=${status}`, `log=${logPath}`];
+  const lines = [`Background task ${taskSlug} ${status}.`, `Run ID: ${run.runId}`];
 
   const command = readTargetCommand(run);
   if (command) {
-    lines.push(`command=${command}`);
+    lines.push(`Command: ${command}`);
   }
 
-  lines.push(
-    '',
-    'Recent log tail:',
-    readLogTail(logPath, 60),
-    '',
-    'Use run get/logs if you need more detail. Then continue from this point.',
-  );
+  lines.push('', 'Continue from this result. Use background_command get/logs only if you need details.');
 
   return lines.join('\n');
 }

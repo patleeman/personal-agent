@@ -114,7 +114,9 @@ describe('background run callbacks', () => {
       }),
     );
     expect(wakeup?.prompt).toContain(run.runId);
-    expect(wakeup?.prompt).toContain('taskSlug=wiki-raw-activity-drain');
+    expect(wakeup?.prompt).toContain('Background task wiki-raw-activity-drain completed.');
+    expect(wakeup?.prompt).not.toContain('taskSlug=wiki-raw-activity-drain');
+    expect(wakeup?.prompt).not.toContain('Recent log tail:');
 
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
     expect(checkpoint?.payload?.backgroundRunCallback).toEqual({
