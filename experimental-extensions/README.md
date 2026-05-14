@@ -15,5 +15,7 @@ Current experiments:
 - `llama-cpp` — local GGUF model runner backed by bundled llama.cpp Metal binaries.
 - `doom` — Doom inside PA. Because obviously.
 - `slack-mcp-gateway` — Slack channel to PA conversation gateway via Slack MCP.
+- `system-codex` — Codex companion protocol server surface while the protocol is still baking.
+- `system-session-exchange` — import/export flow for conversation session handoff experiments.
 
-These are intentionally not bundled from `extensions/system-*`.
+Release builds package these under `Resources/experimental-extensions/extensions` and load them as experimental extensions, separate from bundled `extensions/system-*`.

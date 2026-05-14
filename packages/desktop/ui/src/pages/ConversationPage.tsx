@@ -2247,6 +2247,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [showNotice],
   );
   const branchLabel = draft ? (draftWorkspaceGit?.branch ?? null) : (liveSessionContext?.branch ?? null);
+  const extensionRegistry = useExtensionRegistry();
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -2277,7 +2278,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           // Suggested context is an enhancement. Never interrupt drafting or submit for cache misses.
         });
     }
-  }, [debouncedRelatedThreadsQuery, draft, draftCwdValue, id]);
+  }, [debouncedRelatedThreadsQuery, draft, draftCwdValue, extensionRegistry.extensions, id]);
 
   useEffect(() => {
     setSelectedRelatedThreadIds((current) => pruneRelatedThreadSelectionIds(current, relatedThreadCandidateById));
@@ -5259,7 +5260,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const renameConversationDisabled = conversationNeedsTakeover || conversationCwdEditorOpen || conversationCwdBusy;
-  const { composerShelves, conversationHeaderElements, newConversationPanels } = useExtensionRegistry();
+  const { composerShelves, conversationHeaderElements, newConversationPanels } = extensionRegistry;
   const composerShelvesTop = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'top'), [composerShelves]);
   const composerShelvesBottom = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'bottom'), [composerShelves]);
   const suggestedContextShelfState = useMemo(

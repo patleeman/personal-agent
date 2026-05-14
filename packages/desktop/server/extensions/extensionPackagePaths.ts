@@ -25,6 +25,7 @@ function candidateExperimentalExtensionRoots(): string[] {
   return [
     process.env.PERSONAL_AGENT_REPO_ROOT ? resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'experimental-extensions/extensions') : null,
     resolve(process.cwd(), 'experimental-extensions/extensions'),
+    typeof process.resourcesPath === 'string' ? resolve(process.resourcesPath, 'experimental-extensions/extensions') : null,
     resolve(currentDir, '../../../../experimental-extensions/extensions'),
     resolve(currentDir, '../../../../../experimental-extensions/extensions'),
   ].filter((value): value is string => Boolean(value));

@@ -278,8 +278,9 @@ function assertPackagedAgentReadableResources(appBundlePath) {
   const requiredResources = ['docs/index.md', 'extensions/system-settings/README.md', 'extensions/system-runs/skills/runs/SKILL.md'];
   const missing = requiredResources.filter((relativePath) => !existsSync(join(resourcesPath, relativePath)));
 
-  const extensionsRoot = join(resourcesPath, 'extensions');
-  if (existsSync(extensionsRoot)) {
+  for (const extensionRootRelativePath of ['extensions', 'experimental-extensions/extensions']) {
+    const extensionsRoot = join(resourcesPath, extensionRootRelativePath);
+    if (!existsSync(extensionsRoot)) continue;
     for (const entry of readdirSync(extensionsRoot, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const manifestPath = join(extensionsRoot, entry.name, 'extension.json');
@@ -287,7 +288,7 @@ function assertPackagedAgentReadableResources(appBundlePath) {
       const manifest = readJsonFile(manifestPath);
       for (const builtEntry of [manifest.frontend?.entry, ...(manifest.frontend?.styles ?? []), manifest.backend?.entry]) {
         if (typeof builtEntry === 'string' && builtEntry.trim().length > 0 && !existsSync(join(extensionsRoot, entry.name, builtEntry))) {
-          missing.push(`extensions/${entry.name}/${builtEntry}`);
+          missing.push(`${extensionRootRelativePath}/${entry.name}/${builtEntry}`);
         }
       }
     }

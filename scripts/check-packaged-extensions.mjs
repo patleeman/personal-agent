@@ -13,7 +13,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const inputRoot = process.argv[2] ? resolve(process.argv[2]) : repoRoot;
 const packagedAppResourcesRoot = inputRoot.endsWith('.app') ? join(inputRoot, 'Contents', 'Resources') : null;
 const extensionsRoot = packagedAppResourcesRoot ? join(packagedAppResourcesRoot, 'extensions') : join(inputRoot, 'extensions');
-const experimentalExtensionsRoot = packagedAppResourcesRoot ? null : join(inputRoot, 'experimental-extensions', 'extensions');
+const experimentalExtensionsRoot = packagedAppResourcesRoot
+  ? join(packagedAppResourcesRoot, 'experimental-extensions', 'extensions')
+  : join(inputRoot, 'experimental-extensions', 'extensions');
 
 if (packagedAppResourcesRoot) {
   Object.defineProperty(process, 'resourcesPath', {
