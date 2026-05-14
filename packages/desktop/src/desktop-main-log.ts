@@ -24,7 +24,27 @@ function getMainLogStream(): WriteStream | null {
   }
 }
 
+function writeLogLineToConsole(message: string): void {
+  try {
+    if (message.includes('[error]')) {
+      console.error(message);
+      return;
+    }
+
+    if (message.includes('[warn]')) {
+      console.warn(message);
+      return;
+    }
+
+    console.log(message);
+  } catch {
+    // Ignore console write failures; file logging should still proceed.
+  }
+}
+
 export function writeDesktopMainLogLine(message: string): void {
+  writeLogLineToConsole(message);
+
   const stream = getMainLogStream();
   if (!stream) {
     return;

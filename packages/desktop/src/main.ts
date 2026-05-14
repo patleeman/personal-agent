@@ -158,7 +158,6 @@ function logDesktopMainMessage(level: 'info' | 'error', message: string): void {
 function logBootstrapError(error: unknown): void {
   const rendered = error instanceof Error ? (error.stack ?? error.message) : String(error);
   logDesktopMainMessage('error', rendered);
-  console.error(rendered);
 }
 
 function showClipperNotification(input: { title: string; body: string }): void {

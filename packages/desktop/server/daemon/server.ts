@@ -1294,12 +1294,15 @@ export class PersonalAgentDaemon {
 
     const timestamp = new Date().toISOString();
     const line = `[${timestamp}] [${level}] ${message}`;
-    if (this.logSink) {
-      this.logSink(line);
-      return;
+    if (level === 'error') {
+      console.error(line);
+    } else if (level === 'warn') {
+      console.warn(line);
+    } else {
+      console.log(line);
     }
 
-    console.log(line);
+    this.logSink?.(line);
   }
 }
 
