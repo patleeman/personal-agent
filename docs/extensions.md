@@ -193,6 +193,45 @@ Backend handler receives:
 }
 ```
 
+### Slash Commands (`slashCommands`)
+
+Add `/command` entries to the conversation composer. Slash commands are listed in the composer slash menu and execute an extension backend action before the prompt is sent.
+
+```json
+{
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "actions": [{ "id": "createTask", "handler": "createTask" }]
+  },
+  "contributes": {
+    "slashCommands": [
+      {
+        "name": "task",
+        "description": "Create a task from composer input.",
+        "action": "createTask"
+      }
+    ]
+  }
+}
+```
+
+The backend action receives:
+
+```typescript
+{
+  commandName: string;
+  argument: string;
+  text: string;
+  conversationId: string | null;
+  cwd: string;
+  draft: boolean;
+}
+```
+
+The action can return a string, `{ prompt }`, or `{ text }` to send a generated prompt; `{ replaceComposerText }` or `{ appendComposerText }` to update the composer without sending; `{ notice: { text, tone } }` to show feedback; or any other object/empty result to mark the command handled.
+
+Use `slashCommands` for composer-triggered extension code. Use `pi.registerCommand(...)` inside `backend.agentExtension` only when the command must run inside the live agent session runtime; that does not automatically make the command appear in the composer slash menu.
+
 ### Quick-open surfaces (`quickOpen`)
 
 Add a top-level tab to the command palette. Each quick-open contribution registers one extension-owned surface.

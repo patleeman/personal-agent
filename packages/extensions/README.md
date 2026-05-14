@@ -306,6 +306,26 @@ Do not import backend handlers directly into frontend components. Browser/Node b
 
 Backend actions receive capability namespaces through `ctx`, including extension storage and backend-only capabilities such as workspace, git, shell, runs, and automations where available. Use those seams instead of importing app internals.
 
+## Composer slash commands
+
+Use `contributes.slashCommands` when an extension needs custom code behind a `/command` in the conversation composer. The command points at a backend action, so no frontend component is required.
+
+```json
+{
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "actions": [{ "id": "createTask", "handler": "createTask" }]
+  },
+  "contributes": {
+    "slashCommands": [{ "name": "task", "description": "Create a task", "action": "createTask" }]
+  }
+}
+```
+
+The backend action receives `{ commandName, argument, text, conversationId, cwd, draft }`. Return a string, `{ prompt }`, or `{ text }` to send a generated prompt; `{ replaceComposerText }` or `{ appendComposerText }` to edit the composer; `{ notice: { text, tone } }` to show feedback; or any other result to mark the command handled without sending.
+
+This is separate from `pi.registerCommand(...)` in an agent lifecycle extension. `registerCommand` runs inside a live agent session and does not automatically add a composer slash-menu item.
+
 ## Agent lifecycle hooks
 
 Backend-only extensions can contribute a pi agent extension factory for lifecycle-level behavior such as provider request rewriting, session compaction hooks, or other `pi.on(...)` event work that has no UI surface.
