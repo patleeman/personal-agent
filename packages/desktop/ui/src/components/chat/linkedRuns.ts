@@ -465,9 +465,22 @@ export function readMentionedLinkedRunsFromText(text: string): LinkedRunPresenta
   }).map((runId) => presentLinkedRun(runId));
 }
 
-export function collectTraceClusterLinkedRuns(blocks: MessageBlock[]): LinkedRunPresentation[] {
+export function collectTraceClusterLinkedRuns(
+  blocks: MessageBlock[],
+  options: { outputMentionRunIds?: ReadonlySet<string> } = {},
+): LinkedRunPresentation[] {
   const seen = new Set<string>();
   const next: LinkedRunPresentation[] = [];
+
+  const pushRun = (run: LinkedRunPresentation) => {
+    const runId = run.runId.trim();
+    if (!runId || seen.has(runId)) {
+      return;
+    }
+
+    seen.add(runId);
+    next.push(run);
+  };
 
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
@@ -476,18 +489,18 @@ export function collectTraceClusterLinkedRuns(blocks: MessageBlock[]): LinkedRun
     }
 
     const linkedRuns = readLinkedRuns(block);
-    if (linkedRuns.scope === 'listed') {
-      continue;
+    if (linkedRuns.scope !== 'listed') {
+      for (const run of linkedRuns.runs) {
+        pushRun(run);
+      }
     }
 
-    for (const run of linkedRuns.runs) {
-      const runId = run.runId.trim();
-      if (!runId || seen.has(runId)) {
-        continue;
+    if (block.output && options.outputMentionRunIds?.size) {
+      for (const run of readMentionedLinkedRunsFromText(block.output)) {
+        if (options.outputMentionRunIds.has(run.runId)) {
+          pushRun(run);
+        }
       }
-
-      seen.add(runId);
-      next.push(run);
     }
   }
 

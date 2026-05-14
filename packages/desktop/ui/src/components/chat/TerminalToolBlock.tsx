@@ -1,9 +1,13 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 
+import { useAppData } from '../../app/contexts';
 import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
 import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
+import { InlineTraceRunCard } from './InlineTraceRunCard.js';
+import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
+import { readMentionedLinkedRunsFromText } from './linkedRuns.js';
 import { MessageActions } from './MessageActions.js';
 
 const TerminalToolBlock = memo(function TerminalToolBlock({
@@ -28,6 +32,10 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
   const hasBody = isRunning || block.output || outputDeferred;
   const copyText = block.output ? `$ ${presentation.command}\n${block.output}` : `$ ${presentation.command}`;
   const footerBits: string[] = [];
+  const { runs } = useAppData();
+  const knownRunIds = new Set((runs?.runs ?? []).map((run) => run.runId));
+  const linkedRuns = block.output ? readMentionedLinkedRunsFromText(block.output).filter((run) => knownRunIds.has(run.runId)) : [];
+  const [expandedRunKeys, setExpandedRunKeys] = useState<Set<string>>(() => new Set());
 
   if (presentation.cancelled) {
     footerBits.push('cancelled');
@@ -103,6 +111,33 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
           <span className="ml-auto">{timeAgo(block.ts)}</span>
         </div>
       </div>
+
+      {linkedRuns.length > 0 && (
+        <div className="space-y-1.5">
+          {linkedRuns.map((run) => {
+            const inlineRunKey = buildInlineRunExpansionKey(0, `${blockId ?? 'terminal'}:${run.runId}`);
+            const expanded = expandedRunKeys.has(inlineRunKey);
+            return (
+              <InlineTraceRunCard
+                key={inlineRunKey}
+                run={run}
+                expanded={expanded}
+                onToggle={() =>
+                  setExpandedRunKeys((current) => {
+                    const next = new Set(current);
+                    if (next.has(inlineRunKey)) {
+                      next.delete(inlineRunKey);
+                    } else {
+                      next.add(inlineRunKey);
+                    }
+                    return next;
+                  })
+                }
+              />
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <span className="flex-1" />

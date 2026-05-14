@@ -4,7 +4,7 @@ import type { MessageBlock } from '../../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import { ImageBlock, type InspectableImage } from './ImageMessageBlocks.js';
-import { AssistantMessage, ContextMessage, SummaryMessage, UserMessage } from './MessageBlocks.js';
+import { AssistantMessage, SummaryMessage, SystemEventMessage, UserMessage } from './MessageBlocks.js';
 import type { ReplySelectionGestureHandler } from './replySelection.js';
 import { ToolBlock } from './ToolBlock.js';
 import { shouldAutoOpenConversationBlock } from './toolPresentation.js';
@@ -149,7 +149,7 @@ export function ChatRenderItemView({
         );
       case 'context':
         return (
-          <ContextMessage
+          <SystemEventMessage
             block={block}
             messageIndex={absoluteIndex}
             onOpenFilePath={onOpenFilePath}

@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAppData } from '../../app/contexts';
 import type { MessageBlock } from '../../shared/types';
 import { getStreamingThroughputLabel } from '../../transcript/streamingThroughput';
 import { cx, Pill, SurfacePanel } from '../ui';
@@ -188,7 +189,9 @@ export function TraceClusterBlock({
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const [showAllBlocks, setShowAllBlocks] = useState(false);
   const [showAllLinkedRuns, setShowAllLinkedRuns] = useState(false);
-  const linkedRuns = useMemo(() => collectTraceClusterLinkedRuns(blocks), [blocks]);
+  const { runs } = useAppData();
+  const outputMentionRunIds = useMemo(() => new Set((runs?.runs ?? []).map((run) => run.runId)), [runs?.runs]);
+  const linkedRuns = useMemo(() => collectTraceClusterLinkedRuns(blocks, { outputMentionRunIds }), [blocks, outputMentionRunIds]);
   const hiddenLinkedRunCount = Math.max(0, linkedRuns.length - TRACE_LINKED_RUN_VISIBLE_LIMIT);
   const visibleLinkedRuns =
     showAllLinkedRuns || hiddenLinkedRunCount === 0 ? linkedRuns : linkedRuns.slice(0, TRACE_LINKED_RUN_VISIBLE_LIMIT);

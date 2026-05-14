@@ -17,8 +17,6 @@ export interface PromptImageAttachment {
 export interface InternalQueuedAgentMessage {
   role?: string;
   content?: unknown;
-  display?: boolean;
-  customType?: string;
   __personalAgentQueuedPromptId?: string;
 }
 
@@ -135,8 +133,7 @@ export function readQueuedPromptPreviews(
   }
 
   const previewableInternalQueue = internalQueueMessages.filter(
-    (queuedMessage): queuedMessage is InternalQueuedAgentMessage =>
-      queuedMessage?.role === 'user' || isHiddenQueuedCustomMessage(queuedMessage),
+    (queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user',
   );
   if (previewableInternalQueue.length === 0) {
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
@@ -153,8 +150,6 @@ export function readQueuedPromptPreviews(
   for (let index = 0; index < visibleQueue.length; index += 1) {
     const visibleText = visibleQueue[index] ?? '';
     let matchedPreview: QueuedPromptPreview | null = null;
-    let matchedHidden = false;
-
     for (let searchIndex = searchStartIndex; searchIndex < alignedInternalQueue.length; searchIndex += 1) {
       const queuedMessage = alignedInternalQueue[searchIndex];
       const extracted = extractQueuedPromptContent(queuedMessage, visibleText);
@@ -163,11 +158,6 @@ export function readQueuedPromptPreviews(
       }
 
       searchStartIndex = searchIndex + 1;
-      if (isHiddenQueuedCustomMessage(queuedMessage)) {
-        matchedHidden = true;
-        break;
-      }
-
       matchedPreview = buildQueuedPromptPreview(
         ensureQueuedPromptPreviewId(queueType, queuedMessage),
         extracted.text,
@@ -178,16 +168,12 @@ export function readQueuedPromptPreviews(
 
     if (matchedPreview) {
       previews.push(matchedPreview);
-    } else if (!matchedHidden) {
+    } else {
       previews.push(createVisibleQueueFallbackPreview(queueType, index, visibleText));
     }
   }
 
   return previews;
-}
-
-function isHiddenQueuedCustomMessage(message: InternalQueuedAgentMessage | undefined): boolean {
-  return message?.role === 'custom' && message.display === false;
 }
 
 export function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {

@@ -42,14 +42,14 @@ describe('liveSessionQueue', () => {
     expect(Object.keys(imageMessage)).not.toContain('__personalAgentQueuedPromptId');
   });
 
-  it('hides queued custom messages that are marked display false', () => {
+  it('falls back to visible queued text when internal queue entries are not user prompts', () => {
     const session = {
       getSteeringMessages: () => [],
       getFollowUpMessages: () => ['Goal continuation.', 'Visible follow-up'],
       agent: {
         followUpQueue: {
           messages: [
-            { role: 'custom', customType: 'goal-continuation', display: false, content: [{ type: 'text', text: 'Goal continuation.' }] },
+            { role: 'custom', content: [{ type: 'text', text: 'Goal continuation.' }] },
             { role: 'user', content: [{ type: 'text', text: 'Visible follow-up' }] },
           ],
         },
@@ -58,7 +58,10 @@ describe('liveSessionQueue', () => {
 
     const state = readQueueState(session as never);
 
-    expect(state.followUp).toEqual([{ id: expect.stringMatching(/^followUp-queued-/), text: 'Visible follow-up', imageCount: 0 }]);
+    expect(state.followUp).toEqual([
+      { id: 'followUp-visible-0', text: 'Goal continuation.', imageCount: 0, restorable: true },
+      { id: expect.stringMatching(/^followUp-queued-/), text: 'Visible follow-up', imageCount: 0 },
+    ]);
   });
 
   it('removes queued user messages by preview id without counting assistant messages', () => {

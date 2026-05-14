@@ -14,7 +14,7 @@ import { MessageActions } from './MessageActions.js';
 import { buildReplySelectionScopeProps, type ReplySelectionGestureHandler } from './replySelection.js';
 import { buildSummaryPreview } from './summaryPreview.js';
 
-function formatInjectedContextLabel(customType?: string): string {
+function formatSystemEventLabel(customType?: string): string {
   switch (customType) {
     case 'goal-continuation':
       return 'Goal continuation';
@@ -41,7 +41,7 @@ function formatInjectedContextLabel(customType?: string): string {
   }
 }
 
-function summarizeContextText(text: string): string {
+function summarizeSystemEventText(text: string): string {
   const normalized = text
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -298,7 +298,7 @@ function RawRunCallbackCard({
   );
 }
 
-export const ContextMessage = memo(function ContextMessage({
+export const SystemEventMessage = memo(function SystemEventMessage({
   block,
   messageIndex,
   onOpenFilePath,
@@ -315,13 +315,13 @@ export const ContextMessage = memo(function ContextMessage({
   isInlineRunExpanded?: (inlineRunKey: string) => boolean;
   onToggleInlineRun?: (inlineRunKey: string) => void;
 }) {
-  const label = formatInjectedContextLabel(block.customType);
+  const label = formatSystemEventLabel(block.customType);
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
   const rawRunCallbackRuns = useMemo(() => readRawRunCallbackLinkedRuns(block.text), [block.text]);
   const showRawRunCallbackCard = rawRunCallbackRuns.length > 0;
 
-  const preview = summarizeContextText(block.text);
+  const preview = summarizeSystemEventText(block.text);
 
   return (
     <details className="group border-y border-border-subtle/40 py-2" data-context-type={block.customType ?? 'injected_context'}>
@@ -433,6 +433,24 @@ export const SummaryMessage = memo(function SummaryMessage({
   const [expanded, setExpanded] = useState(() => !summaryPresentation.shouldCollapse);
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
+
+  if (block.kind === 'related') {
+    return (
+      <details className="group border-y border-border-subtle/40 py-2" data-summary-kind={block.kind}>
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
+          <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
+            ›
+          </span>
+          <span className="font-medium text-primary/80">{summaryPresentation.label}</span>
+          <span className="min-w-0 flex-1 truncate text-dim">{summaryPresentation.detail}</span>
+          <span className="ui-message-meta shrink-0">{timeAgo(block.ts)}</span>
+        </summary>
+        <div {...replySelectionScopeProps} className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
+          {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
+        </div>
+      </details>
+    );
+  }
 
   return (
     <div className="group">

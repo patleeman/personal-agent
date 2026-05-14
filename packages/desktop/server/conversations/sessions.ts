@@ -1614,7 +1614,6 @@ export function appendConversationWorkspaceMetadata(input: {
       timestamp,
       customType: CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE,
       content: `Working directory changed from ${previousLabel} to ${nextLabel}.`,
-      display: true,
       details: {
         ...(input.previousCwd ? { previousCwd: input.previousCwd } : {}),
         ...(input.previousWorkspaceCwd !== undefined ? { previousWorkspaceCwd: input.previousWorkspaceCwd } : {}),

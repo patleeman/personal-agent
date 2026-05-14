@@ -1168,10 +1168,12 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('data-summary-kind="related"');
     expect(html).toContain('Reused thread summaries');
     expect(html).toContain('2 selected conversations were summarized and injected before this prompt');
-    expect(html).toContain('Show summary');
+    expect(html).toContain('<details');
+    expect(html).not.toContain('Show summary');
     expect(html).toContain('Conversation 1 — Release signing');
-    expect(html).toContain('Workspace: `/repo/a`');
-    expect(html).not.toContain('Conversation 2 — Auto mode wakeups');
+    expect(html).toContain('Workspace:');
+    expect(html).toContain('/repo/a');
+    expect(html).toContain('Conversation 2 — Auto mode wakeups');
   });
 
   it('renders terminal bash blocks without extension registration', () => {
