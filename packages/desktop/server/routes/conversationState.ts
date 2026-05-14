@@ -14,7 +14,6 @@ import {
   readConversationModelPreferenceStateById,
   resolveConversationSessionFile,
 } from '../conversations/conversationService.js';
-import { ensureHiddenTurnState } from '../conversations/liveSessionHiddenTurns.js';
 import {
   createSessionFromExisting,
   destroySession,
@@ -84,25 +83,15 @@ async function startLiveGoalContinuation(entry: LiveEntry, objective: string): P
     return;
   }
 
-  ensureHiddenTurnState(entry);
-  entry.pendingHiddenTurnCustomTypes.push(GOAL_CONTINUATION_CUSTOM_TYPE);
-  try {
-    await entry.session.sendCustomMessage(
-      {
-        customType: GOAL_CONTINUATION_CUSTOM_TYPE,
-        content: buildGoalContinuationPrompt(trimmed),
-        display: false,
-        details: { source: 'goal-mode', trigger: 'manual-enable' },
-      },
-      { triggerTurn: true, deliverAs: 'followUp' },
-    );
-  } catch (error) {
-    const index = entry.pendingHiddenTurnCustomTypes.lastIndexOf(GOAL_CONTINUATION_CUSTOM_TYPE);
-    if (index >= 0) {
-      entry.pendingHiddenTurnCustomTypes.splice(index, 1);
-    }
-    throw error;
-  }
+  await entry.session.sendCustomMessage(
+    {
+      customType: GOAL_CONTINUATION_CUSTOM_TYPE,
+      content: buildGoalContinuationPrompt(trimmed),
+      display: true,
+      details: { source: 'goal-mode', trigger: 'manual-enable' },
+    },
+    { triggerTurn: true, deliverAs: 'followUp' },
+  );
 }
 
 function resolveConversationSource(conversationId: string) {

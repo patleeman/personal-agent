@@ -653,13 +653,13 @@ describe('registerConversationStateRoutes', () => {
       expect(sendCustomMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           customType: 'goal-continuation',
-          display: false,
+          display: true,
           content: expect.stringContaining('Objective: keep looping'),
         }),
         { triggerTurn: true, deliverAs: 'followUp' },
       );
     });
-    expect((liveRegistry.get('conversation-live') as any)?.pendingHiddenTurnCustomTypes).toEqual(['goal-continuation']);
+    expect((liveRegistry.get('conversation-live') as any)?.pendingHiddenTurnCustomTypes).toEqual([]);
 
     isLocalLiveMock.mockReturnValueOnce(true);
     const clearRes = createResponse();

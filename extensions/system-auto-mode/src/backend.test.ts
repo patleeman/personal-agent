@@ -164,7 +164,7 @@ describe('system-goal-mode extension', () => {
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ customType: 'goal-continuation', display: false, content: expect.stringContaining('Objective: ship it') }),
+      expect.objectContaining({ customType: 'goal-continuation', display: true, content: expect.stringContaining('Objective: ship it') }),
       { deliverAs: 'followUp', triggerTurn: true },
     );
   });
@@ -245,7 +245,7 @@ describe('system-goal-mode extension', () => {
       expect(sendMessage).toHaveBeenLastCalledWith(
         expect.objectContaining({
           customType: 'goal-continuation',
-          display: false,
+          display: true,
           content: expect.stringContaining('Objective: ship the fix'),
         }),
         { deliverAs: 'followUp', triggerTurn: true },
