@@ -1709,9 +1709,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     }
 
     if (line.type === 'custom_message') {
-      if ((line as RawCustomMessage).display) {
-        messageCount += 1;
-      }
+      messageCount += 1;
       continue;
     }
 

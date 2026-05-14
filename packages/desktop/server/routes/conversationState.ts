@@ -86,7 +86,6 @@ async function startLiveGoalContinuation(entry: LiveEntry, objective: string): P
     {
       customType: GOAL_CONTINUATION_CUSTOM_TYPE,
       content: buildGoalContinuationPrompt(trimmed),
-      display: false,
       details: { source: 'goal-mode', trigger: 'manual-enable' },
     },
     { triggerTurn: true, deliverAs: 'followUp' },
