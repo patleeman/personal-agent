@@ -48,6 +48,7 @@ describe('extension doctor', () => {
     writeFileSync(join(root, 'src', 'backend.ts'), `export async function ping() { return { ok: true }; }\n`);
     writeFileSync(join(root, 'dist', 'frontend.js'), `export function DoctorPage() { return null; }\n`);
     writeFileSync(join(root, 'dist', 'backend.mjs'), `export async function ping() { return { ok: true }; }\n`);
+    writeFileSync(join(root, 'dist', 'build-manifest.json'), '{}\n');
 
     const report = await validateExtensionPackage({ packageRoot: root });
 
@@ -61,6 +62,7 @@ describe('extension doctor', () => {
     writeFileSync(join(root, 'src', 'backend.ts'), `import 'node:child_process';\nexport async function wrong() { return {}; }\n`);
     writeFileSync(join(root, 'dist', 'frontend.js'), `import '/tmp/release-only.js';\nexport function WrongPage() { return null; }\n`);
     writeFileSync(join(root, 'dist', 'backend.mjs'), `import '/tmp/release-only.js';\nexport async function wrong() { return {}; }\n`);
+    writeFileSync(join(root, 'dist', 'build-manifest.json'), '{}\n');
 
     const report = await validateExtensionPackage({ packageRoot: root });
     const codes = report.findings.map((finding) => finding.code);
@@ -96,6 +98,7 @@ describe('extension doctor', () => {
     writeFileSync(join(root, 'src', 'frontend.tsx'), `export function DoctorPage() { return null; }\n`);
     writeFileSync(join(root, 'src', 'backend.ts'), `export async function ping() { return { ok: true }; }\n`);
     writeFileSync(join(root, 'dist', 'frontend.js'), `export function DoctorPage() { return null; }\n`);
+    writeFileSync(join(root, 'dist', 'build-manifest.json'), '{}\n');
 
     const report = await validateExtensionPackage({ packageRoot: root });
 
@@ -127,6 +130,7 @@ describe('extension doctor', () => {
     writeFileSync(join(root, 'src', 'backend.ts'), `export async function ping() { return { ok: true }; }\n`);
     writeFileSync(join(root, 'dist', 'frontend.js'), `export function DoctorPage() { return null; }\n`);
     writeFileSync(join(root, 'dist', 'backend.mjs'), `export async function ping() { return { ok: true }; }\n`);
+    writeFileSync(join(root, 'dist', 'build-manifest.json'), '{}\n');
     const oldDate = new Date('2020-01-01T00:00:00.000Z');
     utimesSync(join(root, 'dist', 'frontend.js'), oldDate, oldDate);
     utimesSync(join(root, 'dist', 'backend.mjs'), oldDate, oldDate);

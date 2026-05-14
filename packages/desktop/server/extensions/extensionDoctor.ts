@@ -101,6 +101,24 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
   const frontendEntry = manifest.frontend?.entry ? resolve(packageRoot, manifest.frontend.entry) : undefined;
   const backendEntry = manifest.backend?.entry ? resolve(packageRoot, manifest.backend.entry) : undefined;
   const backendRuntimeEntry = resolveBackendRuntimeEntry(packageRoot, manifest);
+  const buildManifest = resolve(packageRoot, 'dist', 'build-manifest.json');
+
+  if (!existsSync(buildManifest)) {
+    add(findings, 'error', 'missing-build-manifest', 'dist/build-manifest.json is missing.', buildManifest, 'Rebuild the extension.');
+  } else if (
+    [resolve(packageRoot, 'extension.json'), frontendSource, backendSource].some(
+      (sourcePath) => existsSync(sourcePath) && statSync(sourcePath).mtimeMs > statSync(buildManifest).mtimeMs,
+    )
+  ) {
+    add(
+      findings,
+      'error',
+      'stale-build-manifest',
+      'dist/build-manifest.json is older than extension source or manifest.',
+      buildManifest,
+      'Rebuild the extension.',
+    );
+  }
 
   if (manifest.frontend?.entry) {
     if (!existsSync(frontendEntry!))
@@ -113,6 +131,7 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
         'Build the extension.',
       );
     if (!existsSync(frontendSource)) add(findings, 'warning', 'missing-frontend-source', 'src/frontend.tsx is missing.', frontendSource);
+    if (frontendEntry && existsSync(frontendEntry)) validateFrontendBundleRuntime(frontendEntry, findings);
   }
 
   if (manifest.backend?.entry) {
@@ -295,6 +314,32 @@ function validatePortableImports(filePath: string, findings: ExtensionDoctorFind
         );
       }
     }
+  }
+}
+
+function validateFrontendBundleRuntime(filePath: string, findings: ExtensionDoctorFinding[]) {
+  const source = readFileSync(filePath, 'utf8');
+  const forbiddenNeedles = ['ReactCurrentDispatcher', 'dispatcher.useState', 'function useState'];
+  const bundledReactNeedles = forbiddenNeedles.filter((needle) => source.includes(needle));
+  if (bundledReactNeedles.length > 0) {
+    add(
+      findings,
+      'error',
+      'bundled-react-runtime',
+      `Frontend bundle appears to include React runtime internals: ${bundledReactNeedles.join(', ')}.`,
+      filePath,
+      'Rebuild with the app extension builder so React is provided by the host runtime.',
+    );
+  }
+  if (source.includes('import.meta.glob')) {
+    add(
+      findings,
+      'error',
+      'uncompiled-vite-glob',
+      'Frontend bundle contains import.meta.glob, which will not run when served as an extension module.',
+      filePath,
+      'Rebuild with the app extension builder and avoid bundling host Vite-only modules.',
+    );
   }
 }
 
