@@ -105,7 +105,7 @@ Deferred resumes (`/resume`, `/defer`) also appear in the activity shelf above t
 
 ## Goal Mode
 
-Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. The continuation prompt tells the agent to call `update_goal` when the objective is achieved. If two continuation turns make no tool-driven progress, goal mode pauses the objective with a `no progress` stop reason instead of spinning forever. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.
+Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. The continuation prompt tells the agent to call `update_goal` when the objective is achieved. Continuations are scheduled only after `agent_end`, not after every tool turn, so a tool-heavy run cannot stack stale hidden turns before the goal completes. If two continuation turns make no tool-driven progress, goal mode pauses the objective with a `no progress` stop reason instead of spinning forever. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.
 
 Legacy conversation auto-mode state (`nudge`, `mission`, and `loop`) remains readable for older session files and compatibility APIs, but it no longer schedules hidden continuation turns. Autonomous continuation is owned by the goal-mode extension state (`conversation-goal`) so only one loop controller can drive a conversation.
 

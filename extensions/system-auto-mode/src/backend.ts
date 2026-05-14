@@ -253,7 +253,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       },
     });
 
-    // ── Turn end: schedule continuation if goal is active ──────────────
+    // ── Turn end: update progress state only ──────────────────────────
     pi.on('turn_end', async (event, ctx) => {
       const state = readGoalState(ctx.sessionManager);
       if (state.status !== 'active') {
@@ -278,10 +278,17 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
-      const continuationState: GoalState =
-        noProgressTurns === state.noProgressTurns ? state : { ...state, noProgressTurns, updatedAt: new Date().toISOString() };
-      if (continuationState !== state) {
-        writeGoalState(pi, continuationState);
+      if (noProgressTurns !== state.noProgressTurns) {
+        writeGoalState(pi, { ...state, noProgressTurns, updatedAt: new Date().toISOString() });
+      }
+    });
+
+    // ── Agent end: schedule one continuation if goal is still active ───
+    pi.on('agent_end', async (_event, ctx) => {
+      const state = readGoalState(ctx.sessionManager);
+      if (state.status !== 'active') {
+        clearPendingContinuation();
+        return;
       }
 
       // Check if model has pending messages (user or system input waiting)
@@ -293,10 +300,10 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
-      const prompt = buildContinuationPrompt(continuationState);
+      const prompt = buildContinuationPrompt(state);
       const continuationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const scheduledObjective = continuationState.objective;
-      const scheduledUpdatedAt = continuationState.updatedAt;
+      const scheduledObjective = state.objective;
+      const scheduledUpdatedAt = state.updatedAt;
 
       pendingContinuationTimer = setTimeout(() => {
         pendingContinuationTimer = null;

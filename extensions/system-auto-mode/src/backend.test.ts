@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createConversationAutoModeAgentExtension } from './backend.js';
 
 type RegisteredTool = { name: string; execute: (...args: any[]) => Promise<{ content?: Array<{ text?: string }>; details?: unknown }> };
-type TurnEndHandler = (event: unknown, ctx: TestContext) => void | Promise<void>;
+type AgentEventHandler = (event: unknown, ctx: TestContext) => void | Promise<void>;
 
 interface TestContext {
   sessionManager: { getEntries: () => unknown[] };
@@ -76,7 +76,8 @@ function createHarness(initialEntries: unknown[] = []) {
     registeredCommands,
     setGoal: registeredTools.find((tool) => tool.name === 'set_goal')!,
     updateGoal: registeredTools.find((tool) => tool.name === 'update_goal')!,
-    turnEnd: handlers.get('turn_end')?.[0] as TurnEndHandler,
+    turnEnd: handlers.get('turn_end')?.[0] as AgentEventHandler,
+    agentEnd: handlers.get('agent_end')?.[0] as AgentEventHandler,
     ctx,
   };
 }
@@ -141,10 +142,14 @@ describe('system-goal-mode extension', () => {
     expect(result.content?.[0]?.text).toBe('Goal complete!');
   });
 
-  it('turn_end is the only scheduler and queues one continuation while goal mode is active', async () => {
-    const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it')]);
+  it('agent_end is the only scheduler and queues one continuation while goal mode is active', async () => {
+    const { turnEnd, agentEnd, sendMessage, ctx } = createHarness([activeGoal('ship it')]);
 
     await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await flushTimers();
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    await agentEnd({}, ctx);
     await flushTimers();
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
@@ -155,10 +160,11 @@ describe('system-goal-mode extension', () => {
   });
 
   it('runs a realistic goal lifecycle: enable, continue, update, complete, then stop', async () => {
-    const { setGoal, updateGoal, turnEnd, sendMessage, appendEntry, ctx } = createHarness();
+    const { setGoal, updateGoal, turnEnd, agentEnd, sendMessage, appendEntry, ctx } = createHarness();
 
     await setGoal.execute('goal-1', { objective: 'audit the repo' }, new AbortController().signal, vi.fn(), ctx);
     await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await agentEnd({}, ctx);
     await flushTimers();
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenLastCalledWith(
@@ -168,6 +174,7 @@ describe('system-goal-mode extension', () => {
 
     await updateGoal.execute('goal-2', { objective: 'audit the repo deeply' }, new AbortController().signal, vi.fn(), ctx);
     await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'read' }] }, ctx);
+    await agentEnd({}, ctx);
     await flushTimers();
     expect(sendMessage).toHaveBeenCalledTimes(2);
     expect(sendMessage).toHaveBeenLastCalledWith(
@@ -177,6 +184,7 @@ describe('system-goal-mode extension', () => {
 
     await updateGoal.execute('goal-3', { status: 'complete' }, new AbortController().signal, vi.fn(), ctx);
     await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await agentEnd({}, ctx);
     await flushTimers();
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
@@ -186,15 +194,43 @@ describe('system-goal-mode extension', () => {
     );
   });
 
+  it('does not queue stale continuations from tool turn_end events before completion', async () => {
+    vi.useFakeTimers();
+    try {
+      const { updateGoal, turnEnd, agentEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship the fix')]);
+
+      await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'read' }] }, ctx);
+      await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'edit' }] }, ctx);
+      await vi.runOnlyPendingTimersAsync();
+      expect(sendMessage).not.toHaveBeenCalled();
+
+      await updateGoal.execute('goal-complete', { status: 'complete' }, new AbortController().signal, vi.fn(), ctx);
+      await agentEnd({}, ctx);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(appendEntry).toHaveBeenCalledWith(
+        'conversation-goal',
+        expect.objectContaining({ objective: '', status: 'complete', stopReason: 'goal achieved', noProgressTurns: 0 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('runs a live-streaming goal scenario from mid-turn enable through completion', async () => {
     vi.useFakeTimers();
     try {
-      const { setGoal, updateGoal, turnEnd, sendMessage, appendEntry, ctx } = createHarness();
+      const { setGoal, updateGoal, turnEnd, agentEnd, sendMessage, appendEntry, ctx } = createHarness();
 
       await setGoal.execute('goal-1', { objective: 'ship the fix' }, new AbortController().signal, vi.fn(), ctx);
       await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
 
       expect(sendMessage).not.toHaveBeenCalled();
+      await vi.runOnlyPendingTimersAsync();
+      expect(sendMessage).not.toHaveBeenCalled();
+
+      await agentEnd({}, ctx);
       await vi.runOnlyPendingTimersAsync();
 
       expect(sendMessage).toHaveBeenCalledTimes(1);
@@ -224,13 +260,17 @@ describe('system-goal-mode extension', () => {
   it('stops a realistic continuation loop after two no-tool turns', async () => {
     vi.useFakeTimers();
     try {
-      const { turnEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship the fix')]);
+      const { turnEnd, agentEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship the fix')]);
 
       await turnEnd({ toolResults: [] }, ctx);
       await vi.runOnlyPendingTimersAsync();
 
-      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage).not.toHaveBeenCalled();
       expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'active', noProgressTurns: 1 }));
+
+      await agentEnd({}, ctx);
+      await vi.runOnlyPendingTimersAsync();
+      expect(sendMessage).toHaveBeenCalledTimes(1);
 
       await turnEnd({ toolResults: [] }, ctx);
       await vi.runOnlyPendingTimersAsync();
@@ -245,19 +285,21 @@ describe('system-goal-mode extension', () => {
     }
   });
 
-  it('does not schedule a continuation when goal mode is disabled before turn_end', async () => {
-    const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it'), completeGoal('goal achieved')]);
+  it('does not schedule a continuation when goal mode is disabled before agent_end', async () => {
+    const { turnEnd, agentEnd, sendMessage, ctx } = createHarness([activeGoal('ship it'), completeGoal('goal achieved')]);
 
     await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await agentEnd({}, ctx);
     await flushTimers();
 
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('does not send a pending continuation if the user disables goal mode before the timer fires', async () => {
-    const { turnEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
+    const { turnEnd, agentEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
 
     await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, ctx);
+    await agentEnd({}, ctx);
     appendEntry('conversation-goal', {
       objective: '',
       status: 'complete',
@@ -272,21 +314,27 @@ describe('system-goal-mode extension', () => {
   });
 
   it('does not schedule a continuation when user input is pending', async () => {
-    const { turnEnd, sendMessage, ctx } = createHarness([activeGoal('ship it')]);
+    const { turnEnd, agentEnd, sendMessage, ctx } = createHarness([activeGoal('ship it')]);
+    const pendingCtx = { ...ctx, hasPendingMessages: () => true };
 
-    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, { ...ctx, hasPendingMessages: () => true });
+    await turnEnd({ toolResults: [{ type: 'tool_result', toolName: 'bash' }] }, pendingCtx);
+    await agentEnd({}, pendingCtx);
     await flushTimers();
 
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('disables goal mode after two consecutive active turns with no tool calls', async () => {
-    const { turnEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
+    const { turnEnd, agentEnd, sendMessage, appendEntry, ctx } = createHarness([activeGoal('ship it')]);
 
     await turnEnd({ toolResults: [] }, ctx);
     await flushTimers();
-    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).not.toHaveBeenCalled();
     expect(appendEntry).toHaveBeenCalledWith('conversation-goal', expect.objectContaining({ status: 'active', noProgressTurns: 1 }));
+
+    await agentEnd({}, ctx);
+    await flushTimers();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
 
     await turnEnd({ toolResults: [] }, ctx);
     await flushTimers();

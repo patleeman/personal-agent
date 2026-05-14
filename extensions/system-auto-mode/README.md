@@ -64,7 +64,8 @@ Simple delays are supported in the loop delay field: `immediate`, `After each tu
 
 The `set_goal` / `update_goal` tools are the legacy goal-mode path. They are hardened so a completed goal cannot keep speaking through stale queued continuations:
 
-- only one continuation timer can be pending at a time;
+- turn-end events update progress counters but never enqueue continuations;
+- only one continuation timer can be pending at a time, and it is scheduled from `agent_end` after the active run is fully done;
 - the timer re-reads the latest goal state before it sends;
 - changing, clearing, pausing, or completing the goal cancels any queued continuation;
 - repeated `update_goal { status: "complete" }` calls are idempotent no-ops.

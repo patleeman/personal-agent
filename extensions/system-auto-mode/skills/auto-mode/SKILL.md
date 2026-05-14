@@ -36,4 +36,4 @@ The system automatically schedules a continuation turn after each turn while the
 
 If goal-mode turns produce no tool calls for two consecutive turns, goal mode is disabled with `stopReason: "no progress"` so it cannot spin forever. Starting, updating, or completing a goal resets this.
 
-Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Completing a goal does not abort the current turn; it prevents the turn-end scheduler from queuing another continuation. Goal mode should end quietly once the objective is complete.
+Queued continuations are cancelled or ignored when the goal changes or completes, and duplicate completion calls are treated as no-ops. Completing a goal does not abort the current turn; it prevents the agent-end scheduler from queuing another continuation. Turn-end events only update progress counters, so tool-heavy runs cannot stack stale continuations before completion. Goal mode should end quietly once the objective is complete.
