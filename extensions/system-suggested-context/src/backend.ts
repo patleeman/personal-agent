@@ -1,14 +1,13 @@
-import { eng, removeStopwords } from 'stopword';
-
 import type { ExtensionBackendContext } from '@personal-agent/extensions/backend';
 import {
+  persistTraceSuggestedContext,
   readConversationSummary,
   readSessionBlocks,
   readSessionMeta,
   scheduleConversationSearchIndexing,
   searchIndexedConversationDocuments,
-  persistTraceSuggestedContext,
 } from '@personal-agent/extensions/backend/conversations';
+import { eng, removeStopwords } from 'stopword';
 
 interface IndexedConversationSearchCandidate {
   sessionId: string;
@@ -218,18 +217,22 @@ function scoreCandidate(input: {
   return { score, reasons };
 }
 
-function resolveSessionMetaWithRetry(sessionId: string): SessionMeta | null {
-  return readSessionMeta(sessionId) ?? readSessionMeta(sessionId);
+async function resolveSessionMetaWithRetry(sessionId: string): Promise<SessionMeta | null> {
+  return (
+    ((await readSessionMeta(sessionId)) as SessionMeta | undefined) ??
+    ((await readSessionMeta(sessionId)) as SessionMeta | undefined) ??
+    null
+  );
 }
 
-function buildPointer(input: {
+async function buildPointer(input: {
   meta: SessionMeta;
   promptTerms: string[];
   currentCwd?: string;
   source: 'manual' | 'auto';
   nowMs?: number;
-}): RelatedConversationPointer {
-  const summary = readConversationSummary(input.meta.id);
+}): Promise<RelatedConversationPointer> {
+  const summary = await readConversationSummary(input.meta.id);
   const preview = normalizePreview(summary?.displaySummary || summary?.promptSummary);
   const searchText = summary?.searchText;
   const scored = scoreCandidate({
@@ -313,11 +316,11 @@ function formatPointerContext(pointers: RelatedConversationPointer[]): string {
   return lines.join('\n');
 }
 
-function hasConversationTranscriptContent(conversationId: string): boolean {
-  return (readSessionBlocks(conversationId, { tailBlocks: 1 })?.totalBlocks ?? 0) > 0;
+async function hasConversationTranscriptContent(conversationId: string): Promise<boolean> {
+  return (((await readSessionBlocks(conversationId, { tailBlocks: 1 })) as { totalBlocks?: number } | undefined)?.totalBlocks ?? 0) > 0;
 }
 
-function buildRelatedConversationPointers(input: {
+async function buildRelatedConversationPointers(input: {
   prompt: string;
   currentConversationId?: string;
   currentCwd?: string;
@@ -325,7 +328,7 @@ function buildRelatedConversationPointers(input: {
   limit?: number;
   nowMs?: number;
   includeAuto?: boolean;
-}): RelatedConversationPointersResult {
+}): Promise<RelatedConversationPointersResult> {
   const prompt = input.prompt.trim();
   if (!prompt) {
     return { contextMessages: [], pointers: [], warnings: [] };
@@ -341,25 +344,27 @@ function buildRelatedConversationPointers(input: {
 
   for (const sessionId of selectedIds) {
     if (pointers.length >= limit) break;
-    const meta = resolveSessionMetaWithRetry(sessionId);
+    const meta = await resolveSessionMetaWithRetry(sessionId);
     if (!meta) {
       warnings.push(`Selected related conversation ${sessionId} could not be read and was omitted.`);
       continue;
     }
-    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', nowMs });
+    const pointer = await buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', nowMs });
     pointers.push(pointer);
     used.add(pointer.sessionId);
   }
 
   if (input.includeAuto !== false && pointers.length < limit) {
-    const indexedCandidates = searchIndexedConversationDocuments({
-      terms: promptTerms,
-      currentConversationId: input.currentConversationId,
-      currentCwd: input.currentCwd,
-      nowMs,
-      recentWindowMs: AUTO_POINTER_RECENT_WINDOW_MS,
-      limit: limit - pointers.length,
-    })
+    const indexedCandidates = (
+      await searchIndexedConversationDocuments({
+        terms: promptTerms,
+        currentConversationId: input.currentConversationId,
+        currentCwd: input.currentCwd,
+        nowMs,
+        recentWindowMs: AUTO_POINTER_RECENT_WINDOW_MS,
+        limit: limit - pointers.length,
+      })
+    )
       .map((candidate) => buildIndexedPointer({ candidate, promptTerms, currentCwd: input.currentCwd, nowMs }))
       .filter((pointer) => pointer.score >= AUTO_POINTER_MIN_SCORE)
       .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
@@ -403,14 +408,14 @@ function readCachedRelatedConversationPointers(input: {
   return cached.result;
 }
 
-function warmRelatedConversationPointerCache(input: {
+async function warmRelatedConversationPointerCache(input: {
   prompt: string;
   currentConversationId?: string;
   currentCwd?: string;
   limit?: number;
   nowMs?: number;
-}): RelatedConversationPointersResult {
-  scheduleConversationSearchIndexing();
+}): Promise<RelatedConversationPointersResult> {
+  void scheduleConversationSearchIndexing();
   const started = Date.now();
   const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
   const key = buildPointerCacheKey(input);
@@ -419,7 +424,7 @@ function warmRelatedConversationPointerCache(input: {
     pointerCache.set(key, { cachedAtMs: nowMs, result: empty });
     return empty;
   }
-  const result = buildRelatedConversationPointers({
+  const result = await buildRelatedConversationPointers({
     ...input,
     selectedSessionIds: [],
     includeAuto: true,
@@ -440,7 +445,7 @@ export async function warmPointers(
   input: { prompt: string; currentConversationId?: string; currentCwd?: string },
   _ctx: ExtensionBackendContext,
 ): Promise<{ ok: boolean; pointerCount: number }> {
-  const result = warmRelatedConversationPointerCache({
+  const result = await warmRelatedConversationPointerCache({
     prompt: input.prompt,
     currentConversationId: input.currentConversationId,
     currentCwd: input.currentCwd,
@@ -460,7 +465,7 @@ export async function providePromptContext(
   _ctx: ExtensionBackendContext,
 ): Promise<{ contextMessages: Array<{ customType: string; content: string }>; warnings?: string[] }> {
   // Only inject pointers for brand-new conversations with no existing content
-  if (hasConversationTranscriptContent(input.conversationId)) {
+  if (await hasConversationTranscriptContent(input.conversationId)) {
     return { contextMessages: [], warnings: [] };
   }
 
@@ -470,7 +475,7 @@ export async function providePromptContext(
 
   try {
     const pointers = hasSelectedIds
-      ? buildRelatedConversationPointers({
+      ? await buildRelatedConversationPointers({
           prompt: input.prompt,
           currentConversationId: input.conversationId,
           currentCwd: input.currentCwd,
@@ -486,7 +491,7 @@ export async function providePromptContext(
     if (pointers.pointers.length > 0) {
       // Fire-and-forget telemetry: persist which pointer IDs were used
       const pointerIds = pointers.pointers.map((p) => p.sessionId);
-      persistTraceSuggestedContext({ sessionId: input.conversationId, pointerIds });
+      void persistTraceSuggestedContext({ sessionId: input.conversationId, pointerIds });
     }
 
     return {

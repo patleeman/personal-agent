@@ -2,16 +2,16 @@ export const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 8 * 1024 * 1024;
 
 export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
   ['system-automations', 1 * 1024 * 1024],
-  ['system-conversation-tools', 26 * 1024 * 1024],
+  ['system-conversation-tools', 1 * 1024 * 1024],
   ['system-extension-manager', 24 * 1024 * 1024],
   ['system-images', 24 * 1024 * 1024],
   ['system-knowledge', 30 * 1024 * 1024],
   ['system-openai-native-compaction', 12 * 1024 * 1024],
   ['system-runs', 1 * 1024 * 1024],
-  ['system-suggested-context', 24 * 1024 * 1024],
+  ['system-suggested-context', 1 * 1024 * 1024],
   ['system-web-tools', 24 * 1024 * 1024],
   ['slack-mcp-gateway', 26 * 1024 * 1024],
-  ['system-session-exchange', 24 * 1024 * 1024],
+  ['system-session-exchange', 1 * 1024 * 1024],
 ]);
 
 export const FORBIDDEN_BUNDLED_PATH_FRAGMENTS = ['/node_modules/@personal-agent/daemon/', '/packages/daemon/'];
