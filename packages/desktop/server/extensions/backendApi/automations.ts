@@ -21,17 +21,17 @@ function resolveServerModuleSpecifier(relativeSpecifier: string): string {
   const candidates = [
     ...(process.env.PERSONAL_AGENT_REPO_ROOT
       ? [
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server', normalized),
           resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist', normalized),
+          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server', normalized),
         ]
       : []),
-    resolve(process.cwd(), 'packages/desktop/dist/server', normalized),
     resolve(process.cwd(), 'packages/desktop/server/dist', normalized),
+    resolve(process.cwd(), 'packages/desktop/dist/server', normalized),
     resolve(dirname(fileURLToPath(import.meta.url)), relativeSpecifier),
     ...(typeof process.resourcesPath === 'string'
       ? [
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
           resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/server/dist', normalized),
+          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
           resolve(process.resourcesPath, 'app.asar.unpacked/server/dist', normalized),
           resolve(process.resourcesPath, 'server/dist', normalized),
         ]

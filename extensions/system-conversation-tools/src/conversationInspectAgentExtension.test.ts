@@ -2,16 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createConversationInspectAgentExtension } from './conversationInspectAgentExtension.js';
 
-const { executeConversationInspectMock, readConversationSessionsCapabilityMock } = vi.hoisted(() => ({
+const {
+  executeConversationInspectMock,
+  persistTraceContextPointerInspectMock,
+  querySessionSuggestedPointerIdsMock,
+  readConversationSessionsCapabilityMock,
+} = vi.hoisted(() => ({
   executeConversationInspectMock: vi.fn(),
+  persistTraceContextPointerInspectMock: vi.fn(),
+  querySessionSuggestedPointerIdsMock: vi.fn(),
   readConversationSessionsCapabilityMock: vi.fn(),
 }));
 
-vi.mock('../../../packages/desktop/server/conversations/conversationInspectWorkerClient.js', () => ({
+vi.mock('@personal-agent/extensions/backend/conversations', () => ({
+  CONVERSATION_INSPECT_ACTION_VALUES: ['list', 'search', 'query', 'diff', 'outline', 'read_window'],
+  CONVERSATION_INSPECT_BLOCK_TYPE_VALUES: ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'],
+  CONVERSATION_INSPECT_ORDER_VALUES: ['asc', 'desc'],
+  CONVERSATION_INSPECT_ROLE_VALUES: ['user', 'assistant', 'tool', 'context', 'summary', 'image', 'error'],
+  CONVERSATION_INSPECT_SCOPE_VALUES: ['all', 'live', 'running', 'archived'],
+  CONVERSATION_INSPECT_SEARCH_MODE_VALUES: ['phrase', 'allTerms', 'anyTerm'],
   executeConversationInspect: executeConversationInspectMock,
-}));
-
-vi.mock('../../../packages/desktop/server/conversations/conversationSessionCapability.js', () => ({
+  persistTraceContextPointerInspect: persistTraceContextPointerInspectMock,
+  querySessionSuggestedPointerIds: querySessionSuggestedPointerIdsMock,
   readConversationSessionsCapability: readConversationSessionsCapabilityMock,
 }));
 
@@ -49,6 +61,9 @@ function createToolContext(conversationId = 'conv-self') {
 
 beforeEach(() => {
   executeConversationInspectMock.mockReset();
+  persistTraceContextPointerInspectMock.mockReset();
+  querySessionSuggestedPointerIdsMock.mockReset();
+  querySessionSuggestedPointerIdsMock.mockReturnValue(new Set<string>());
   readConversationSessionsCapabilityMock.mockReset();
   readConversationSessionsCapabilityMock.mockReturnValue([
     {

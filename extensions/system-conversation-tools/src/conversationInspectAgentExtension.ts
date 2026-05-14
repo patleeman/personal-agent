@@ -81,11 +81,12 @@ interface WorkerConversationInspectSessionSnapshotEntry {
   messageCount: number;
 }
 
-function buildWorkerConversationInspectSessionSnapshot(
+async function buildWorkerConversationInspectSessionSnapshot(
   conversationId?: string,
-): WorkerConversationInspectSessionSnapshotEntry[] | undefined {
+): Promise<WorkerConversationInspectSessionSnapshotEntry[] | undefined> {
   try {
-    return readConversationSessionsCapability()
+    const sessions = await readConversationSessionsCapability();
+    return sessions
       .filter((session) => !conversationId || session.id === conversationId)
       .map((session) => ({
         id: session.id,
@@ -127,12 +128,12 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
           // The worker thread cannot read the live in-memory session registry from the
           // main server process. Inject a minimal main-thread snapshot so scope=live and
           // scope=running stay accurate for other active conversations.
-          const sessionSnapshot = buildWorkerConversationInspectSessionSnapshot();
+          const sessionSnapshot = await buildWorkerConversationInspectSessionSnapshot();
           if (sessionSnapshot !== undefined) {
             workerParams.sessionSnapshot = sessionSnapshot;
           }
         } else if (targetConversationId) {
-          const sessionSnapshot = buildWorkerConversationInspectSessionSnapshot(targetConversationId);
+          const sessionSnapshot = await buildWorkerConversationInspectSessionSnapshot(targetConversationId);
           if (sessionSnapshot !== undefined) {
             workerParams.sessionSnapshot = sessionSnapshot;
           }

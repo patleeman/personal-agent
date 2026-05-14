@@ -61,7 +61,7 @@ function handleWorkerError(error: Error): void {
 
 function handleWorkerExit(code: number): void {
   if (code !== 0 && workerInstance) {
-    const error = new Error(`Conversation inspect worker exited unexpectedly (code ${code}).`);
+    const error = workerError ?? new Error(`Conversation inspect worker exited unexpectedly (code ${code}).`);
     workerError = error;
     for (const [, pending] of pendingRequests) {
       pending.reject(error);
@@ -81,9 +81,10 @@ export function resolveConversationInspectWorkerUrlFrom(importMetaUrl: string): 
   const isExtensionCacheClient = currentDir.includes(`${sep}extension-cache${sep}`);
   const isPackagedExtensionClient =
     typeof process.resourcesPath === 'string' && currentDir.includes(`${sep}extensions${sep}`) && currentDir.endsWith(`${sep}dist`);
+  const isTranspiledServerClient = currentDir.includes(`${sep}packages${sep}desktop${sep}dist${sep}server${sep}`);
   const relativeUrl = new URL('../conversations/conversationInspectWorker.js', importMetaUrl);
 
-  if (!isExtensionCacheClient && !isPackagedExtensionClient) {
+  if (!isExtensionCacheClient && !isPackagedExtensionClient && !isTranspiledServerClient) {
     try {
       if (existsSync(fileURLToPath(relativeUrl))) {
         return relativeUrl;
@@ -140,7 +141,7 @@ function getOrCreateWorker(): Worker {
 
   const workerUrl = resolveConversationInspectWorkerUrl();
 
-  const worker = new Worker(workerUrl);
+  const worker = new Worker(workerUrl, { execArgv: [] });
   worker.on('message', handleWorkerMessage);
   worker.on('error', handleWorkerError);
   worker.on('exit', handleWorkerExit);
@@ -152,7 +153,7 @@ export async function executeConversationInspect(
   action: string,
   params: Record<string, unknown>,
 ): Promise<{ action: string; result: unknown; text: string }> {
-  if (workerError) {
+  if (workerError && workerInstance) {
     throw new Error(`Conversation inspect worker is unavailable: ${workerError.message}`);
   }
 

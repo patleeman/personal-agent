@@ -46,6 +46,22 @@ describe('resolveConversationInspectWorkerUrlFrom', () => {
     expect(workerUrl.href).toBe(pathToFileURL(relativeWorkerPath).href);
   });
 
+  it('skips the transpiled tsc worker and uses the bundled repo worker', () => {
+    const root = makeTempRoot();
+    const repoRoot = makeTempRoot();
+    const clientPath = join(root, 'packages/desktop/dist/server/conversations/conversationInspectWorkerClient.js');
+    const tscWorkerPath = join(root, 'packages/desktop/dist/server/conversations/conversationInspectWorker.js');
+    const bundledWorkerPath = join(repoRoot, 'packages/desktop/server/dist/conversations/conversationInspectWorker.js');
+    touch(clientPath);
+    touch(tscWorkerPath);
+    touch(bundledWorkerPath);
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+
+    const workerUrl = resolveConversationInspectWorkerUrlFrom(pathToFileURL(clientPath).href);
+
+    expect(workerUrl.href).toBe(pathToFileURL(bundledWorkerPath).href);
+  });
+
   it('skips the extension-cache sibling worker and uses the bundled repo worker', () => {
     const cacheRoot = makeTempRoot();
     const repoRoot = makeTempRoot();
