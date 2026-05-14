@@ -5173,7 +5173,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      await submitComposerActionForModifiers(e.altKey, e.ctrlKey || e.metaKey);
+      const altKeyHeld = e.altKey || e.nativeEvent.getModifierState('Alt') || composerAltHeld;
+      const parallelKeyHeld =
+        e.ctrlKey ||
+        e.metaKey ||
+        e.nativeEvent.getModifierState('Control') ||
+        e.nativeEvent.getModifierState('Meta') ||
+        composerParallelHeld;
+      await submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);
     }
   }
 

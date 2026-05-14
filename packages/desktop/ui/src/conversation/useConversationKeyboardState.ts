@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
 
+type ComposerModifierEvent = Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'type'> & Partial<Pick<KeyboardEvent, 'key'>>;
+
+function readModifierState(event: ComposerModifierEvent): { altHeld: boolean; parallelHeld: boolean } {
+  return {
+    altHeld: event.altKey,
+    parallelHeld: event.ctrlKey || event.metaKey,
+  };
+}
+
 function resolveVisualViewportKeyboardInset(input: { innerHeight: number; viewportHeight: number; viewportOffsetTop: number }): number {
   const { innerHeight, viewportHeight, viewportOffsetTop } = input;
   if (![innerHeight, viewportHeight, viewportOffsetTop].every(Number.isSafeInteger)) {
@@ -43,18 +52,18 @@ export function useVisualViewportKeyboardInset(): number {
   return keyboardInset;
 }
 
-export function resolveComposerModifierKeyState(event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'key' | 'type'>): {
+export function resolveComposerModifierKeyState(event: ComposerModifierEvent): {
   altHeld: boolean;
   parallelHeld: boolean;
 } {
   const key = event.key;
   const isKeyDown = event.type === 'keydown';
   const isKeyUp = event.type === 'keyup';
+  const modifierState = readModifierState(event);
 
   return {
-    altHeld: key === 'Alt' ? isKeyDown || (!isKeyUp && event.altKey) : event.altKey,
-    parallelHeld:
-      key === 'Control' || key === 'Meta' ? isKeyDown || (!isKeyUp && (event.ctrlKey || event.metaKey)) : event.ctrlKey || event.metaKey,
+    altHeld: key === 'Alt' ? isKeyDown || (!isKeyUp && modifierState.altHeld) : modifierState.altHeld,
+    parallelHeld: key === 'Control' || key === 'Meta' ? isKeyDown || (!isKeyUp && modifierState.parallelHeld) : modifierState.parallelHeld,
   };
 }
 
@@ -63,25 +72,41 @@ export function useComposerModifierKeys(): { composerAltHeld: boolean; composerP
   const [composerParallelHeld, setComposerParallelHeld] = useState(false);
 
   useEffect(() => {
-    function handleModifierChange(event: KeyboardEvent) {
-      const nextState = resolveComposerModifierKeyState(event);
-      setComposerAltHeld(nextState.altHeld);
-      setComposerParallelHeld(nextState.parallelHeld);
+    function applyModifierState(nextState: { altHeld: boolean; parallelHeld: boolean }) {
+      setComposerAltHeld((current) => (current === nextState.altHeld ? current : nextState.altHeld));
+      setComposerParallelHeld((current) => (current === nextState.parallelHeld ? current : nextState.parallelHeld));
+    }
+
+    function handleKeyboardModifierChange(event: KeyboardEvent) {
+      applyModifierState(resolveComposerModifierKeyState(event));
+    }
+
+    function handlePointerModifierChange(event: MouseEvent | PointerEvent) {
+      applyModifierState(readModifierState(event));
     }
 
     function resetModifierState() {
-      setComposerAltHeld(false);
-      setComposerParallelHeld(false);
+      applyModifierState({ altHeld: false, parallelHeld: false });
     }
 
-    window.addEventListener('keydown', handleModifierChange);
-    window.addEventListener('keyup', handleModifierChange);
+    window.addEventListener('keydown', handleKeyboardModifierChange, true);
+    window.addEventListener('keyup', handleKeyboardModifierChange, true);
+    window.addEventListener('pointerdown', handlePointerModifierChange, true);
+    window.addEventListener('pointermove', handlePointerModifierChange, true);
+    window.addEventListener('mousedown', handlePointerModifierChange, true);
+    window.addEventListener('mousemove', handlePointerModifierChange, true);
     window.addEventListener('blur', resetModifierState);
+    document.addEventListener('visibilitychange', resetModifierState);
 
     return () => {
-      window.removeEventListener('keydown', handleModifierChange);
-      window.removeEventListener('keyup', handleModifierChange);
+      window.removeEventListener('keydown', handleKeyboardModifierChange, true);
+      window.removeEventListener('keyup', handleKeyboardModifierChange, true);
+      window.removeEventListener('pointerdown', handlePointerModifierChange, true);
+      window.removeEventListener('pointermove', handlePointerModifierChange, true);
+      window.removeEventListener('mousedown', handlePointerModifierChange, true);
+      window.removeEventListener('mousemove', handlePointerModifierChange, true);
       window.removeEventListener('blur', resetModifierState);
+      document.removeEventListener('visibilitychange', resetModifierState);
     };
   }, []);
 

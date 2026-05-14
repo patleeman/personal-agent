@@ -31,4 +31,15 @@ describe('resolveComposerModifierKeyState', () => {
       parallelHeld: false,
     });
   });
+
+  it('reads modifier state from pointer events so conversation clicks refresh the composer action', () => {
+    expect(resolveComposerModifierKeyState({ type: 'pointermove', altKey: true, ctrlKey: false, metaKey: false })).toEqual({
+      altHeld: true,
+      parallelHeld: false,
+    });
+    expect(resolveComposerModifierKeyState({ type: 'mousedown', altKey: false, ctrlKey: true, metaKey: false })).toEqual({
+      altHeld: false,
+      parallelHeld: true,
+    });
+  });
 });
