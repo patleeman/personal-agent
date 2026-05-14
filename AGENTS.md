@@ -29,7 +29,8 @@ pipeline.
 - After you complete a feature, make sure you actually inspect your work.
 - If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `pnpm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/browser.md` and the agent-browser skill for more information.
 - When launching the test desktop app for QA, pass `--no-quit-confirmation` (or `--skip-quit-confirmation`) so cleanup is non-interactive, e.g. `pnpm run desktop:dev -- --remote-debugging-port=9222 --no-quit-confirmation`.
-- After QA, close the test app and browser session before reporting done: quit `Personal Agent Testing.app` and run `pnpm run ab:cleanup -- --session <name>` if you used the wrapper.
+- Before launching or closing `Personal Agent Testing.app`, check whether an existing app/process is already running. Do not quit, kill, or recycle a Personal Agent Testing process you did not start; connect to it if appropriate, or use a separate debug port/session.
+- After QA, close only the test app process you started and the browser session before reporting done: quit that `Personal Agent Testing.app` instance and run `pnpm run ab:cleanup -- --session <name>` if you used the wrapper.
 - Make sure the work is complete, to spec, works without bugs, and looks good.
 
 ## UI Design Bans
