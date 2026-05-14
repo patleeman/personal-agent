@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.8.0-rc.7 — 2026-05-14
+
+- Add companion app group entitlement for shared container
+- fix: expose companion and codex APIs
+- chore: restore clean check formatting
+- test: lock goal mode loop scenarios
+- fix: harden goal mode integration edges
+- fix: resolve pnpm without sourcing shell rc files
+- test: cover realistic goal mode lifecycle
+- fix: avoid sourcing shell rc files in pre-commit hook
+- fix: harden goal mode state machine
+- fix: stop goal continuations after completion
+- Remove audit marker (work already documented in knowledge base)
+- Add audit completion marker
+- Restore systemKnowledgeExtensionSurface with toolSlot lookup; add toolSlot:knowledge to system-knowledge extension
+- Fix TypeScript errors: remove unused import, fix secrets.get generic type
+- Fix llama-cpp: use ctx.shell.exec instead of node:child_process.spawn (bypasses forbidden import)
+- Fix llama-cpp experimental extension: network permission format, rebuild extension dist bundles
+- Remove getPiAgentRuntimeDir from images backend API, add to runtime module as getRuntimeDir; add better-sqlite3 to forbidden imports
+- Enforce extension API boundary at build time: add @personal-agent/core and @personal-agent/daemon to forbidden backend imports
+- Decouple extension discovery: add extensionEntries/extensionDirs to ResolveResourceOptions, allow host to inject extension entries into resource resolution
+- Remove hardcoded extension IDs from desktop UI: add toolSlot to view contributions, use slot-based lookups in Layout/Sidebar/workbenchNav/ConversationPage
+- Fix settings page
+- Add llama cpp
+- Fix system-suggested-context violations: migrate to extension API, add conversation search/block/summary/trace APIs
+- Switch pre-commit hook from npx to pnpm
+- Fix extension API boundary violations: add secrets + setEnabled to ExtensionBackendContext, migrate 4 extensions from direct core/server imports
+- Add secrets capability to ExtensionBackendContext, fix system-web-tools server import violation
+- Fix pre-commit hook PATH resolution for non-interactive git env
+- Throttle streaming auto-scroll to fix scroll-up fighting during thinking
+- Add runtimeDir and profileSettingsFilePath to ExtensionBackendContext API
+- feat: configure additional extension search paths
+- fix: prefer checkout extension manifests in tests
+- refactor: load experimental extensions from experimental folder
+
 ## 0.8.0-rc.6 — 2026-05-13
 
 - docs: document extension authoring tool contracts
