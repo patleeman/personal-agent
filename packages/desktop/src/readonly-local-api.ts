@@ -1,6 +1,8 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 
-import type { DesktopLocalApiDispatchResult } from './local-api-module.js';
+import { type DesktopLocalApiDispatchResult, resolveLocalApiModuleUrl } from './local-api-module.js';
 
 const WORKER_SAFE_LOCAL_API_ROUTES: Array<{
   methods: ReadonlySet<string>;
@@ -99,8 +101,25 @@ function matchesWorkerSafeLocalApiRoute(input: { method: string; pathname: strin
   return WORKER_SAFE_LOCAL_API_ROUTES.some((route) => route.methods.has(input.method) && route.pattern.test(input.pathname));
 }
 
-export function shouldDispatchReadonlyLocalApiInWorker(input: { method: string; path: string; hostId?: string | null }): boolean {
+function canLoadReadonlyLocalApiWorkerModule(): boolean {
+  try {
+    return existsSync(fileURLToPath(resolveLocalApiModuleUrl()));
+  } catch {
+    return false;
+  }
+}
+
+export function shouldDispatchReadonlyLocalApiInWorker(input: {
+  method: string;
+  path: string;
+  hostId?: string | null;
+  readonlyLocalApiWorkerAvailable?: boolean;
+}): boolean {
   if (input.hostId && input.hostId !== 'local') {
+    return false;
+  }
+
+  if (!(input.readonlyLocalApiWorkerAvailable ?? canLoadReadonlyLocalApiWorkerModule())) {
     return false;
   }
 
