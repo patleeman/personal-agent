@@ -1,12 +1,14 @@
-export const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 8 * 1024 * 1024;
+export const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 2 * 1024 * 1024;
 
 export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
   ['system-automations', 1 * 1024 * 1024],
   ['system-conversation-tools', 1 * 1024 * 1024],
   ['system-extension-manager', 1 * 1024 * 1024],
   ['system-image-probe', 2 * 1024 * 1024],
+  ['system-diffs', 2 * 1024 * 1024],
   ['system-images', 2 * 1024 * 1024],
   ['system-knowledge', 1 * 1024 * 1024],
+  ['system-mcp', 2 * 1024 * 1024],
   ['system-openai-native-compaction', 1 * 1024 * 1024],
   ['system-runs', 1 * 1024 * 1024],
   ['system-suggested-context', 1 * 1024 * 1024],

@@ -111,12 +111,57 @@ function isForbiddenExtensionSourceImport(specifier) {
   );
 }
 
-function collectForbiddenExtensionSourceImports(extensionDir, manifest) {
-  const sourceBackendEntry = manifest.backend?.entry;
-  if (!sourceBackendEntry?.startsWith('src/')) return [];
-  const backendSourcePath = join(extensionDir, sourceBackendEntry);
-  if (!existsSync(backendSourcePath)) return [];
-  return collectImportSpecifiers(backendSourcePath).filter(isForbiddenExtensionSourceImport);
+function collectSourceFiles(dir) {
+  if (!existsSync(dir)) return [];
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...collectSourceFiles(path));
+    else if (/\.(?:ts|tsx|js|jsx|d\.ts)$/.test(entry.name)) files.push(path);
+  }
+  return files.sort();
+}
+
+function collectSourceImportStatements(source) {
+  const imports = [];
+  const importFromPattern = /(^|\n)\s*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
+  const sideEffectImportPattern = /(^|\n)\s*import\s+['"]([^'"]+)['"]/g;
+  for (const match of source.matchAll(importFromPattern)) imports.push({ statement: match[0], specifier: match[3] });
+  for (const match of source.matchAll(sideEffectImportPattern)) imports.push({ statement: match[0], specifier: match[2] });
+  return imports;
+}
+
+function isTypeOnlyImportStatement(statement) {
+  return /^\s*import\s+type\b/.test(statement.trim());
+}
+
+function collectForbiddenExtensionSourceImports(extensionDir) {
+  if (extensionDir.startsWith(experimentalExtensionsRoot)) return [];
+  const sourceRoot = join(extensionDir, 'src');
+  const failures = [];
+  for (const sourcePath of collectSourceFiles(sourceRoot)) {
+    if (/\.test\.[cm]?[jt]sx?$/.test(sourcePath)) continue;
+    if (sourcePath.endsWith('.d.ts')) {
+      failures.push(
+        `${sourcePath.slice(extensionDir.length + 1)} is a generated declaration file; keep extension src portable and source-only`,
+      );
+      continue;
+    }
+    const source = readFileSync(sourcePath, 'utf8');
+    const relative = sourcePath.slice(extensionDir.length + 1);
+    for (const importRecord of collectSourceImportStatements(source)) {
+      const specifier = importRecord.specifier;
+      if (!specifier) continue;
+      if (isForbiddenExtensionSourceImport(specifier)) failures.push(`${relative} imports ${specifier}`);
+      if (
+        (specifier === '@earendil-works/pi-coding-agent' || specifier.startsWith('@earendil-works/pi-coding-agent/')) &&
+        !isTypeOnlyImportStatement(importRecord.statement)
+      ) {
+        failures.push(`${relative} imports runtime value ${specifier}; use a focused @personal-agent/extensions/backend/* seam`);
+      }
+    }
+  }
+  return failures;
 }
 
 function collectForbiddenBundledPaths(filePath) {
@@ -221,7 +266,7 @@ for (const extensionDir of listPackagedExtensionDirs()) {
 
   if (hasBuildManifest) row.manifest = 'ok';
 
-  const forbiddenSourceImports = collectForbiddenExtensionSourceImports(extensionDir, manifest);
+  const forbiddenSourceImports = collectForbiddenExtensionSourceImports(extensionDir);
   if (forbiddenSourceImports.length > 0) {
     failures.push(`${id}: backend source imports forbidden host/runtime modules: ${forbiddenSourceImports.join(', ')}`);
   }
