@@ -1203,6 +1203,8 @@ describe('chat view streaming disclosure', () => {
     );
 
     expect(html).not.toContain('ui-terminal-block');
+    expect(html).not.toContain('background work');
+    expect(html).not.toContain('linked');
     expect(html).toContain('bash');
     expect(html).toContain('background task');
   });

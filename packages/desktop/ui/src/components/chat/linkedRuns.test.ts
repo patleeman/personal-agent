@@ -112,6 +112,29 @@ describe('linkedRuns', () => {
     });
   });
 
+  it('does not render linked run cards for background shell tool calls', () => {
+    const startBlock: Extract<MessageBlock, { type: 'tool_use' }> = {
+      type: 'tool_use',
+      ts: '2026-04-26T00:00:00.000Z',
+      tool: 'bash',
+      input: { command: 'npm run desktop:dev', background: true },
+      output: 'Started background command run-desktop-dev-abc123 for desktop-dev.',
+      details: { action: 'start', runId: 'run-desktop-dev-abc123' },
+    };
+    const inspectBlock: Extract<MessageBlock, { type: 'tool_use' }> = {
+      type: 'tool_use',
+      ts: '2026-04-26T00:00:00.000Z',
+      tool: 'background_command',
+      input: { action: 'logs', runId: 'run-desktop-dev-abc123' },
+      output: 'Run logs: run-desktop-dev-abc123',
+      details: { action: 'logs', runId: 'run-desktop-dev-abc123' },
+    };
+
+    expect(readLinkedRuns(startBlock)).toEqual({ scope: 'mentioned', runs: [] });
+    expect(readLinkedRuns(inspectBlock)).toEqual({ scope: 'mentioned', runs: [] });
+    expect(collectTraceClusterLinkedRuns([startBlock, inspectBlock])).toEqual([]);
+  });
+
   it('collects trace cluster linked runs from newest to oldest without duplicates', () => {
     const older = runToolBlock({ details: { action: 'logs', runId: 'run-old-cleanup-abc123' } });
     const newer = runToolBlock({ details: { action: 'logs', runId: 'run-new-cleanup-def456' } });

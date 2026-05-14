@@ -1,6 +1,7 @@
 import { extractDurableRunIdsFromBlock } from '../../conversation/conversationRuns';
 import type { MessageBlock } from '../../shared/types';
 import { buildSummaryPreview } from './summaryPreview.js';
+import { isBackgroundShellStart } from './toolPresentation.js';
 
 type LinkedRunDescriptor = {
   title: string;
@@ -430,6 +431,10 @@ export function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }
   scope: 'listed' | 'mentioned';
   runs: LinkedRunPresentation[];
 } {
+  if (block.tool === 'background_command' || isBackgroundShellStart(block)) {
+    return { scope: 'mentioned', runs: [] };
+  }
+
   const listedRuns = readListedRuns(block);
   if (listedRuns) {
     return {
