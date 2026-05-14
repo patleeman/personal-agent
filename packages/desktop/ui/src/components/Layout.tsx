@@ -113,7 +113,7 @@ function inferSurfaceToolSlot(
 function extensionToolPanelMode(
   surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
 ): WorkbenchRailMode {
-  const slot = getSurfaceToolSlot(surface);
+  const slot = inferSurfaceToolSlot(surface);
   return slot ?? `extension:${surface.extensionId}:${surface.id}`;
 }
 
@@ -172,6 +172,10 @@ export function resolveActiveExtensionWorkbenchSurface({
 
 export function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
   return mode === 'diffs' || mode.startsWith('extension:system-diffs:');
+}
+
+export function isArtifactsRailMode(mode: WorkbenchRailMode): boolean {
+  return mode === 'artifacts' || mode.startsWith('extension:system-artifacts:');
 }
 
 export function isRunsRailMode(mode: WorkbenchRailMode): boolean {
@@ -536,7 +540,7 @@ function WorkbenchDocumentPane({
   const location = useLocation();
   const { sessions, tasks } = useAppData();
 
-  if (activeTool === 'artifacts' && conversationId && artifactId) {
+  if (isArtifactsRailMode(activeTool) && conversationId && artifactId) {
     return (
       <Suspense fallback={<div className="px-4 py-3 text-[12px] text-dim">Loading artifact…</div>}>
         <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />
@@ -558,7 +562,7 @@ function WorkbenchDocumentPane({
     );
   }
 
-  if (activeTool === 'runs') {
+  if (isRunsRailMode(activeTool)) {
     return (
       <Suspense fallback={<div className="px-4 py-3 text-[12px] text-dim">Loading run…</div>}>
         <ConversationBackgroundWorkWorkbenchPane conversationId={conversationId} runId={runId} lookups={{ sessions, tasks }} />
@@ -624,9 +628,9 @@ function WorkbenchKnowledgeRail({
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
-  const artifactsEnabled = activeTool === 'artifacts' || activeArtifactId !== null;
+  const artifactsEnabled = isArtifactsRailMode(activeTool) || activeArtifactId !== null;
   const diffsEnabled = isDiffsRailMode(activeTool) || activeCheckpointId !== null;
-  const runsEnabled = activeTool === 'runs' || activeRunId !== null;
+  const runsEnabled = isRunsRailMode(activeTool) || activeRunId !== null;
   const {
     artifacts,
     loading: artifactsLoading,
@@ -825,7 +829,7 @@ function WorkbenchKnowledgeRail({
   }, [activeRunId, onActiveToolChange, onWorkspaceFileClear, systemRunsExtensionSurface]);
 
   useEffect(() => {
-    if (activeTool !== 'runs' || showRunsTab) {
+    if (!isRunsRailMode(activeTool) || showRunsTab) {
       return;
     }
 
@@ -848,7 +852,7 @@ function WorkbenchKnowledgeRail({
   }, [activeExtensionToolPanel, activeTool, onActiveToolChange]);
 
   useEffect(() => {
-    if (activeTool === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
+    if (isArtifactsRailMode(activeTool) && !artifactsLoading && artifacts.length === 0) {
       onActiveToolChange('files');
       setSearchParams(
         (current) => {
@@ -999,18 +1003,18 @@ function WorkbenchKnowledgeRail({
               className={cx(
                 'ui-sidebar-nav-item w-full text-left',
                 (activeTool === extensionToolPanelMode(surface) ||
-                  (getSurfaceToolSlot(surface) === 'runs' && activeTool === 'runs') ||
-                  (getSurfaceToolSlot(surface) === 'diffs' && activeTool === 'diffs') ||
-                  (getSurfaceToolSlot(surface) === 'artifacts' && activeTool === 'artifacts')) &&
+                  (inferSurfaceToolSlot(surface) === 'runs' && isRunsRailMode(activeTool)) ||
+                  (inferSurfaceToolSlot(surface) === 'diffs' && isDiffsRailMode(activeTool)) ||
+                  (inferSurfaceToolSlot(surface) === 'artifacts' && isArtifactsRailMode(activeTool))) &&
                   'ui-sidebar-nav-item-active',
               )}
               title={labelForExtensionToolPanel(surface)}
               onClick={() =>
-                getSurfaceToolSlot(surface) === 'diffs'
+                inferSurfaceToolSlot(surface) === 'diffs'
                   ? handleDiffsModeSelect()
-                  : getSurfaceToolSlot(surface) === 'artifacts'
+                  : inferSurfaceToolSlot(surface) === 'artifacts'
                     ? handleArtifactsModeSelect()
-                    : getSurfaceToolSlot(surface) === 'runs'
+                    : inferSurfaceToolSlot(surface) === 'runs'
                       ? handleRunsModeSelect()
                       : handleExtensionToolPanelSelect(surface)
               }
@@ -1039,7 +1043,7 @@ function WorkbenchKnowledgeRail({
             </Suspense>
           )}
         </div>
-      ) : activeTool === 'artifacts' ? (
+      ) : isArtifactsRailMode(activeTool) ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading artifacts…</div>}>
             <ConversationArtifactRailContent
@@ -1065,7 +1069,7 @@ function WorkbenchKnowledgeRail({
             />
           </Suspense>
         </div>
-      ) : activeTool === 'runs' ? (
+      ) : isRunsRailMode(activeTool) ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           {systemRunsExtensionSurface ? (
             <NativeExtensionSurfaceHost

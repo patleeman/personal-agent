@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
   clearWorkbenchOnlySearchParamsForCompact,
+  isArtifactsRailMode,
   isDiffsRailMode,
   isRunsRailMode,
   readStoredPanelWidth,
@@ -95,11 +96,10 @@ describe('Layout workbench rail state', () => {
     ).toBe(true);
   });
 
-  it('routes built-in rail actions through native extension surfaces when registered', () => {
+  it('normalizes system extension rail actions to stable built-in modes', () => {
     expect(resolveWorkbenchRailMode('runs', null)).toBe('runs');
-    expect(resolveWorkbenchRailMode('runs', { extensionId: 'system-runs', id: 'runs-tool' } as never)).toBe(
-      'extension:system-runs:runs-tool',
-    );
+    expect(resolveWorkbenchRailMode('runs', { extensionId: 'system-runs', id: 'runs-tool' } as never)).toBe('runs');
+    expect(resolveWorkbenchRailMode('artifacts', { extensionId: 'system-artifacts', id: 'artifacts-tool' } as never)).toBe('artifacts');
   });
 
   it('keeps system artifact panels in the workbench nav', () => {
@@ -131,6 +131,12 @@ describe('Layout workbench rail state', () => {
     expect(isDiffsRailMode('diffs')).toBe(true);
     expect(isDiffsRailMode('extension:system-diffs:conversation-diffs')).toBe(true);
     expect(isDiffsRailMode('extension:system-files:file-explorer')).toBe(false);
+  });
+
+  it('recognizes extension-backed artifacts as artifacts rail mode', () => {
+    expect(isArtifactsRailMode('artifacts')).toBe(true);
+    expect(isArtifactsRailMode('extension:system-artifacts:conversation-artifacts')).toBe(true);
+    expect(isArtifactsRailMode('extension:system-files:file-explorer')).toBe(false);
   });
 
   it('recognizes extension-backed runs as runs rail mode', () => {
