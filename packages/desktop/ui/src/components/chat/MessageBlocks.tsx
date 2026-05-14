@@ -56,6 +56,23 @@ function summarizeSystemEventText(text: string): string {
   return normalized.length > 140 ? `${normalized.slice(0, 137).trimEnd()}…` : normalized;
 }
 
+function estimateTextTokens(text: string): number {
+  const normalized = text.trim();
+  if (!normalized) {
+    return 0;
+  }
+
+  return Math.max(1, Math.ceil(normalized.length / 4));
+}
+
+function formatTokenCount(tokens: number | null | undefined): string | null {
+  if (!Number.isSafeInteger(tokens) || tokens <= 0) {
+    return null;
+  }
+
+  return `${tokens.toLocaleString()} token${tokens === 1 ? '' : 's'}`;
+}
+
 // ── UserMessage ───────────────────────────────────────────────────────────────
 
 export const UserMessage = memo(function UserMessage({
@@ -302,16 +319,20 @@ function RawRunCallbackCard({
 function SystemEventFrame({
   label,
   preview,
+  tokenCount,
   ts,
   dataAttributes,
   children,
 }: {
   label: string;
   preview: string;
+  tokenCount?: number;
   ts?: string;
   dataAttributes: Record<string, string>;
   children: ReactNode;
 }) {
+  const tokenLabel = formatTokenCount(tokenCount);
+
   return (
     <details className="group rounded-xl border border-border-subtle/60 bg-surface/25 px-3 py-2" {...dataAttributes}>
       <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
@@ -320,6 +341,7 @@ function SystemEventFrame({
         </span>
         <span className="shrink-0 font-medium text-primary/80">{label}</span>
         <span className="min-w-0 flex-1 truncate text-dim">{preview}</span>
+        {tokenLabel ? <span className="shrink-0 text-dim tabular-nums">~{tokenLabel}</span> : null}
         {ts ? <span className="ui-message-meta shrink-0">{timeAgo(ts)}</span> : null}
       </summary>
       {children}
@@ -337,6 +359,7 @@ export const SystemPromptMessage = memo(function SystemPromptMessage({ text }: {
     <SystemEventFrame
       label="System prompt"
       preview="Runtime instructions available for inspection."
+      tokenCount={estimateTextTokens(normalizedText)}
       dataAttributes={{ 'data-context-type': 'system_prompt' }}
     >
       <div className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">{renderText(normalizedText)}</div>
@@ -373,6 +396,7 @@ export const SystemEventMessage = memo(function SystemEventMessage({
     <SystemEventFrame
       label={label}
       preview={preview}
+      tokenCount={estimateTextTokens(block.text)}
       ts={block.ts}
       dataAttributes={{ 'data-context-type': block.customType ?? 'injected_context' }}
     >
@@ -460,6 +484,7 @@ export const SummaryMessage = memo(function SummaryMessage({
     <SystemEventFrame
       label={summaryPresentation.label}
       preview={summaryPresentation.detail}
+      tokenCount={estimateTextTokens(block.text)}
       ts={block.ts}
       dataAttributes={{ 'data-summary-kind': block.kind }}
     >

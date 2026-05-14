@@ -1005,6 +1005,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('System prompt');
     expect(html).toContain('Runtime instructions available for inspection.');
     expect(html).toContain('You are Patrick');
+    expect(html).toContain('~15 tokens');
     expect(html).toContain('rounded-xl');
     expect(html).not.toContain('Dec 31');
     expect(html).not.toContain('ui-message-card-assistant');
@@ -1036,6 +1037,8 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('data-context-type="system_prompt"');
     expect(html).toContain('data-summary-kind="related"');
     expect(html).toContain('Related conversation pointers');
+    expect(html).toContain('~6 tokens');
+    expect(html).toContain('~7 tokens');
   });
 
   it('renders context blocks as quiet expandable system events', () => {
@@ -1058,6 +1061,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('Context added');
     expect(html).toContain('data-context-type="referenced_context"');
     expect(html).toContain('Conversation automation context');
+    expect(html).toContain('tokens');
     expect(html).not.toContain('border-warning');
     expect(html).not.toContain('ui-chat-avatar-mark">pa<');
     expect(html).not.toContain('ui-message-card-assistant');
