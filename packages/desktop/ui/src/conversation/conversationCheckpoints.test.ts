@@ -123,6 +123,25 @@ describe('conversationCheckpoints', () => {
       expect(readCheckpointPresentation(block)).toBeNull();
     });
 
+    it('extracts presentation from saved checkpoint output when details are missing', () => {
+      const block = {
+        type: 'tool_use',
+        tool: 'checkpoint',
+        input: { action: 'save' },
+        output: 'Saved checkpoint ffc0787c fix: render checkpoint transcript fallback (3 files, +140 -7).',
+      } as unknown as Extract<MessageBlock, { type: 'tool_use' }>;
+
+      const result = readCheckpointPresentation(block);
+
+      expect(result).not.toBeNull();
+      expect(result!.action).toBe('save');
+      expect(result!.checkpointId).toBe('ffc0787c');
+      expect(result!.subject).toBe('fix: render checkpoint transcript fallback');
+      expect(result!.fileCount).toBe(3);
+      expect(result!.linesAdded).toBe(140);
+      expect(result!.linesDeleted).toBe(7);
+    });
+
     it('returns null when checkpointId is missing', () => {
       const block = {
         type: 'tool_use',

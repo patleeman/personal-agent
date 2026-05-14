@@ -34,6 +34,48 @@ function normalizeToolDetails(value: unknown): ConversationCheckpointToolDetails
   return candidate as ConversationCheckpointToolDetails;
 }
 
+function parseSavedCheckpointOutput(output: unknown): Partial<ConversationCheckpointPresentation> | null {
+  if (typeof output !== 'string') return null;
+
+  const match = /^Saved checkpoint\s+([a-f0-9]{7,40})\s+(.+?)\s+\((\d+) files?, \+(\d+) -(\d+)\)\.?/im.exec(output.trim());
+  if (!match) return null;
+
+  const [, shortSha, subject, fileCount, linesAdded, linesDeleted] = match;
+  return {
+    action: 'save',
+    checkpointId: shortSha,
+    commitSha: shortSha,
+    shortSha,
+    title: subject,
+    subject,
+    fileCount: Number(fileCount),
+    linesAdded: Number(linesAdded),
+    linesDeleted: Number(linesDeleted),
+  };
+}
+
+function parseLoadedCheckpointOutput(output: unknown): Partial<ConversationCheckpointPresentation> | null {
+  if (typeof output !== 'string') return null;
+
+  const [firstLine] = output.trim().split('\n');
+  const match = /^([a-f0-9]{7,40})\s+(.+)$/.exec(firstLine ?? '');
+  if (!match) return null;
+
+  const [, shortSha, subject] = match;
+  const filesMatch = /\nFiles:\s+(\d+)\s+\(\+(\d+)\s+-(\d+)\)/i.exec(output);
+  return {
+    action: 'get',
+    checkpointId: shortSha,
+    commitSha: shortSha,
+    shortSha,
+    title: subject,
+    subject,
+    fileCount: filesMatch ? Number(filesMatch[1]) : undefined,
+    linesAdded: filesMatch ? Number(filesMatch[2]) : undefined,
+    linesDeleted: filesMatch ? Number(filesMatch[3]) : undefined,
+  };
+}
+
 export function getConversationCheckpointIdFromSearch(search: string): string | null {
   const value = new URLSearchParams(search).get(CONVERSATION_CHECKPOINT_QUERY_PARAM)?.trim();
   return value ? value : null;
@@ -63,25 +105,32 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
     checkpointId?: unknown;
   };
 
-  const action = details?.action ?? (isCheckpointAction(input.action) ? input.action : undefined);
+  const outputPresentation = parseSavedCheckpointOutput(block.output) ?? parseLoadedCheckpointOutput(block.output);
+  const action = details?.action ?? (isCheckpointAction(input.action) ? input.action : undefined) ?? outputPresentation?.action;
   const checkpointId =
     typeof details?.checkpointId === 'string' && details.checkpointId.trim().length > 0
       ? details.checkpointId.trim()
       : typeof input.checkpointId === 'string' && input.checkpointId.trim().length > 0
         ? input.checkpointId.trim()
-        : null;
-  const commitSha = typeof details?.commitSha === 'string' && details.commitSha.trim().length > 0 ? details.commitSha.trim() : checkpointId;
+        : (outputPresentation?.checkpointId ?? null);
+  const commitSha =
+    typeof details?.commitSha === 'string' && details.commitSha.trim().length > 0
+      ? details.commitSha.trim()
+      : (outputPresentation?.commitSha ?? checkpointId);
   const shortSha =
     typeof details?.shortSha === 'string' && details.shortSha.trim().length > 0
       ? details.shortSha.trim()
-      : (commitSha?.slice(0, 7) ?? null);
+      : (outputPresentation?.shortSha ?? commitSha?.slice(0, 7) ?? null);
   const title =
     typeof details?.title === 'string' && details.title.trim().length > 0
       ? details.title.trim()
       : typeof details?.subject === 'string' && details.subject.trim().length > 0
         ? details.subject.trim()
-        : shortSha;
-  const subject = typeof details?.subject === 'string' && details.subject.trim().length > 0 ? details.subject.trim() : title;
+        : (outputPresentation?.title ?? shortSha);
+  const subject =
+    typeof details?.subject === 'string' && details.subject.trim().length > 0
+      ? details.subject.trim()
+      : (outputPresentation?.subject ?? title);
 
   if (!action || !checkpointId || !commitSha || !shortSha || !title || !subject) {
     return null;
@@ -96,9 +145,9 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
     shortSha,
     title,
     subject,
-    fileCount: typeof details?.fileCount === 'number' ? details.fileCount : undefined,
-    linesAdded: typeof details?.linesAdded === 'number' ? details.linesAdded : undefined,
-    linesDeleted: typeof details?.linesDeleted === 'number' ? details.linesDeleted : undefined,
+    fileCount: typeof details?.fileCount === 'number' ? details.fileCount : outputPresentation?.fileCount,
+    linesAdded: typeof details?.linesAdded === 'number' ? details.linesAdded : outputPresentation?.linesAdded,
+    linesDeleted: typeof details?.linesDeleted === 'number' ? details.linesDeleted : outputPresentation?.linesDeleted,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,
   };
 }
