@@ -243,8 +243,8 @@ description: Commit and push the agent's current work.
     expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
     expect(runtimePrompt).toContain('# Personal agent defaults');
-    expect(runtimePrompt).toContain(`Docs index: ${join(repo, 'docs', 'index.md')}`);
-    expect(runtimePrompt).toContain(`Extension authoring docs: ${join(repo, 'docs', 'extensions.md')}`);
+    expect(runtimePrompt).not.toContain(`Docs index: ${join(repo, 'docs', 'index.md')}`);
+    expect(runtimePrompt).not.toContain(`Extension authoring docs: ${join(repo, 'docs', 'extensions.md')}`);
     expect(runtimePrompt).toContain('shared append');
     expect(runtimePrompt).not.toContain('<available_skills>');
     expect(runtimePrompt).not.toContain(join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'));

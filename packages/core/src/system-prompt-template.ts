@@ -34,12 +34,6 @@ You are Patrick Lee's personal AI agent. Use the knowledge base, skills, notes, 
 - Load only relevant knowledge: AGENTS.md for standing context, skills for procedures, notes/projects for reference.
 - When a task matches an available skill, read that SKILL.md before using the workflow.
 
-## Repo context
-
-- Repo root: {{ repo_root }}
-- Docs: {{ docs_dir }}
-- Docs index: {{ docs_index }}
-- Extension authoring docs: {{ repo_root }}/docs/extensions.md and {{ repo_root }}/packages/extensions/README.md
 `;
 
 function normalizeVariables(variables: SystemPromptTemplateVariables): Record<string, string | number | boolean> {

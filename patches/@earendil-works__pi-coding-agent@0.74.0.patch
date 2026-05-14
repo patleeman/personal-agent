@@ -1,11 +1,23 @@
 diff --git a/dist/core/system-prompt.js b/dist/core/system-prompt.js
-index e53b46fe12d81e3d55ec628ae516695625b9f11e..e6cbf9893aadc9c0457d93b00b47fad856c61c54 100644
+index e53b46fe12d81e3d55ec628ae516695625b9f11e..ed6ec31e54e6a0dab2dd4cc56360c27da91ff821 100644
 --- a/dist/core/system-prompt.js
 +++ b/dist/core/system-prompt.js
-@@ -85,8 +85,6 @@ export function buildSystemPrompt(options) {
- Available tools:
- ${toolsList}
+@@ -46,8 +46,6 @@ export function buildSystemPrompt(options) {
+     // Build tools list based on selected tools.
+     // A tool appears in Available tools only when the caller provides a one-line snippet.
+     const tools = selectedTools || ["read", "bash", "edit", "write"];
+-    const visibleTools = tools.filter((name) => !!toolSnippets?.[name]);
+-    const toolsList = visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
+     // Build guidelines based on which tools are actually available
+     const guidelinesList = [];
+     const guidelinesSet = new Set();
+@@ -82,11 +80,6 @@ export function buildSystemPrompt(options) {
+     const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
+     let prompt = `You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
  
+-Available tools:
+-${toolsList}
+-
 -In addition to the tools above, you may have access to other custom tools depending on the project.
 -
  Guidelines:
