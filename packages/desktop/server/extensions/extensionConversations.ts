@@ -3,6 +3,7 @@ import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import { readConversationSessionsCapability } from '../conversations/conversationSessionCapability.js';
 import { broadcastTitle } from '../conversations/liveSessionBroadcasts.js';
 import {
+  abortSession as abortLiveSession,
   appendVisibleCustomMessage as appendVisibleLiveSessionCustomMessage,
   createSession,
   createSessionFromExisting,
@@ -178,6 +179,15 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
       } catch (error) {
         throw new Error(`Failed to send message: ${(error as Error).message}`);
       }
+    },
+
+    /**
+     * Abort a live conversation turn.
+     */
+    async abort(conversationId: string): Promise<{ ok: true }> {
+      await abortLiveSession(conversationId);
+      invalidateAppTopics('sessions');
+      return { ok: true };
     },
 
     /**

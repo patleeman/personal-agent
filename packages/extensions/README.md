@@ -247,7 +247,7 @@ const result = await runAgentTask({ prompt: 'Summarize this image', images, tool
 
 The host owns model lookup, auth storage, session creation, timeout cleanup, and runtime policy. Extension code owns only the workflow request and result handling. Extensions must declare `agent:run` before using this seam.
 
-For multi-turn hidden agent work, use extension-owned conversations:
+For multi-turn agent work, use extension-owned conversations:
 
 ```ts
 import {
@@ -260,9 +260,18 @@ import {
 const conversation = await createAgentConversation({ title: 'Research worker', tools: 'none' }, ctx);
 const reply = await sendAgentMessage({ conversationId: conversation.id, text: 'Inspect this state.' }, ctx);
 await disposeAgentConversation({ conversationId: conversation.id }, ctx);
+
+const visible = await createAgentConversation(
+  {
+    title: 'Saved research worker',
+    visibility: 'visible',
+    persistence: 'saved',
+  },
+  ctx,
+);
 ```
 
-Extension-owned conversations are hidden and ephemeral today. They are scoped to the owning extension id and require `agent:conversations`. Use `runAgentTask` when you only need create → send → dispose.
+Extension-owned conversations support two modes: hidden+ephemeral for private worker sessions, and visible+saved for host conversation sessions that appear in the normal conversation system. They are scoped to the owning extension id and require `agent:conversations`. Use `runAgentTask` when you only need create → send → dispose.
 
 Extensions can record fire-and-forget app telemetry through the dedicated telemetry seam:
 

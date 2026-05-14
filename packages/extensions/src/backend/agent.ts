@@ -26,8 +26,8 @@ export interface ExtensionAgentConversationCreateInput {
   cwd?: string;
   modelRef?: string;
   tools?: 'none' | 'default';
-  visibility?: 'hidden';
-  persistence?: 'ephemeral';
+  visibility?: 'hidden' | 'visible';
+  persistence?: 'ephemeral' | 'saved';
 }
 
 export interface ExtensionAgentConversationSendInput {
@@ -44,8 +44,8 @@ export interface ExtensionAgentConversationSummary {
   cwd: string;
   model?: string;
   provider?: string;
-  visibility: 'hidden';
-  persistence: 'ephemeral';
+  visibility: 'hidden' | 'visible';
+  persistence: 'ephemeral' | 'saved';
   tools: 'none' | 'default';
   createdAt: string;
   updatedAt: string;

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  abortAgentConversation,
   createAgentConversation,
   disposeAgentConversation,
   getAgentConversation,
@@ -118,6 +119,51 @@ describe('extension agent backend API', () => {
 
     await expect(getAgentConversation({ conversationId: created.id }, createCtx({ extensionId: 'other-extension' }))).rejects.toThrow(
       'not found',
+    );
+  });
+
+  it('delegates visible saved conversations to the host conversation capability', async () => {
+    installImporter();
+    const conversations = {
+      create: vi.fn(async () => ({ id: 'visible-conversation' })),
+      sendMessage: vi.fn(async () => ({ accepted: true })),
+      getMeta: vi.fn(async () => ({
+        id: 'visible-conversation',
+        title: 'Visible title',
+        cwd: '/visible-cwd',
+        running: false,
+        currentModel: 'gpt-vision',
+      })),
+      list: vi.fn(async () => []),
+      abort: vi.fn(async () => ({ ok: true as const })),
+    };
+    const ctx = createCtx({ conversations });
+
+    const created = await createAgentConversation(
+      { title: 'Visible thread', cwd: '/visible-cwd', modelRef: 'openai/gpt-vision', visibility: 'visible', persistence: 'saved' },
+      ctx,
+    );
+    const sent = await sendAgentMessage({ conversationId: created.id, text: 'keep going' }, ctx);
+    const fetched = await getAgentConversation({ conversationId: created.id }, ctx);
+    const aborted = await abortAgentConversation({ conversationId: created.id }, ctx);
+
+    expect(created).toMatchObject({ id: 'visible-conversation', visibility: 'visible', persistence: 'saved' });
+    expect(conversations.create).toHaveBeenCalledWith({ cwd: '/visible-cwd', model: 'openai/gpt-vision' });
+    expect(conversations.sendMessage).toHaveBeenCalledWith('visible-conversation', 'keep going');
+    expect(sent).toMatchObject({ id: 'visible-conversation', visibility: 'visible', persistence: 'saved' });
+    expect(fetched).toMatchObject({ title: 'Visible title', cwd: '/visible-cwd', model: 'gpt-vision' });
+    expect(conversations.abort).toHaveBeenCalledWith('visible-conversation');
+    expect(aborted).toMatchObject({ id: 'visible-conversation', isBusy: false });
+  });
+
+  it('rejects mixed visibility and persistence modes', async () => {
+    installImporter();
+
+    await expect(createAgentConversation({ visibility: 'visible', persistence: 'ephemeral' }, createCtx())).rejects.toThrow(
+      'hidden+ephemeral or visible+saved',
+    );
+    await expect(createAgentConversation({ visibility: 'hidden', persistence: 'saved' }, createCtx())).rejects.toThrow(
+      'hidden+ephemeral or visible+saved',
     );
   });
 

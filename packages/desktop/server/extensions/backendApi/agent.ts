@@ -29,8 +29,8 @@ export interface ExtensionAgentConversationCreateInput {
   cwd?: string;
   modelRef?: string;
   tools?: 'none' | 'default';
-  visibility?: 'hidden';
-  persistence?: 'ephemeral';
+  visibility?: 'hidden' | 'visible';
+  persistence?: 'ephemeral' | 'saved';
 }
 
 export interface ExtensionAgentConversationSendInput {
@@ -47,8 +47,8 @@ export interface ExtensionAgentConversationSummary {
   cwd: string;
   model?: string;
   provider?: string;
-  visibility: 'hidden';
-  persistence: 'ephemeral';
+  visibility: 'hidden' | 'visible';
+  persistence: 'ephemeral' | 'saved';
   tools: 'none' | 'default';
   createdAt: string;
   updatedAt: string;
@@ -66,6 +66,13 @@ interface ExtensionBackendContextLike {
   extensionId?: string;
   toolContext?: { cwd?: string };
   agentToolContext?: unknown;
+  conversations?: {
+    create(input?: { cwd?: string; model?: string | null }): Promise<{ id: string }>;
+    sendMessage(conversationId: string, text: string): Promise<{ accepted: boolean }>;
+    getMeta(conversationId: string): Promise<unknown>;
+    list(): Promise<unknown>;
+    abort?(conversationId: string): Promise<{ ok: true }>;
+  };
 }
 
 type PiModule = typeof import('@earendil-works/pi-coding-agent');
@@ -80,13 +87,13 @@ interface ExtensionAgentConversationRecord {
   title: string;
   cwd: string;
   model: unknown;
-  modelRegistry: unknown;
+  modelRegistry?: unknown;
   tools: 'none' | 'default';
-  visibility: 'hidden';
-  persistence: 'ephemeral';
+  visibility: 'hidden' | 'visible';
+  persistence: 'ephemeral' | 'saved';
   createdAt: string;
   updatedAt: string;
-  session: AgentSessionLike;
+  session?: AgentSessionLike;
   unsubscribe: () => void;
   isBusy: boolean;
   disposed: boolean;
@@ -200,17 +207,27 @@ async function runWithTimeout<T>(operation: Promise<T>, timeoutMs: number | unde
   }
 }
 
-function validateConversationMode(input: ExtensionAgentConversationCreateInput): void {
-  if (input.visibility && input.visibility !== 'hidden')
-    throw new Error('Extension agent conversations currently support visibility="hidden" only.');
-  if (input.persistence && input.persistence !== 'ephemeral')
-    throw new Error('Extension agent conversations currently support persistence="ephemeral" only.');
+function validateConversationMode(input: ExtensionAgentConversationCreateInput): {
+  visibility: 'hidden' | 'visible';
+  persistence: 'ephemeral' | 'saved';
+} {
+  const visibility = input.visibility ?? 'hidden';
+  const persistence = input.persistence ?? 'ephemeral';
+  if (visibility !== 'hidden' && visibility !== 'visible')
+    throw new Error('Extension agent conversations support hidden or visible visibility.');
+  if (persistence !== 'ephemeral' && persistence !== 'saved')
+    throw new Error('Extension agent conversations support ephemeral or saved persistence.');
+  if ((visibility === 'visible') !== (persistence === 'saved'))
+    throw new Error('Extension agent conversations support hidden+ephemeral or visible+saved modes.');
   if (input.tools && input.tools !== 'none' && input.tools !== 'default')
     throw new Error('Extension agent conversations support tools="none" or tools="default".');
+  return { visibility, persistence };
 }
 
 async function createSession(input: ExtensionAgentConversationCreateInput, ctx: ExtensionBackendContextLike) {
-  validateConversationMode(input);
+  const mode = validateConversationMode(input);
+  if (mode.visibility !== 'hidden' || mode.persistence !== 'ephemeral')
+    throw new Error('createSession only supports hidden+ephemeral mode.');
   const agentCtx = resolveAgentToolContext(ctx);
   const modelRegistry = agentCtx.modelRegistry as { getAvailable(): unknown[] } | undefined;
   if (!modelRegistry) throw new Error('Agent conversation requires a model registry in the active agent context.');
@@ -230,7 +247,8 @@ async function createSession(input: ExtensionAgentConversationCreateInput, ctx: 
 }
 
 function summarize(record: ExtensionAgentConversationRecord): ExtensionAgentConversationSummary {
-  const fallbackTexts = record.assistantTexts.length > 0 ? record.assistantTexts : collectAssistantTexts(record.session);
+  const fallbackTexts =
+    record.assistantTexts.length > 0 ? record.assistantTexts : record.session ? collectAssistantTexts(record.session) : [];
   const lastText = fallbackTexts.at(-1)?.trim();
   return {
     id: record.id,
@@ -246,7 +264,7 @@ function summarize(record: ExtensionAgentConversationRecord): ExtensionAgentConv
     updatedAt: record.updatedAt,
     isBusy: record.isBusy,
     disposed: record.disposed,
-    messageCount: Array.isArray(record.session.messages) ? record.session.messages.length : 0,
+    messageCount: record.session && Array.isArray(record.session.messages) ? record.session.messages.length : 0,
     ...(lastText ? { lastText } : {}),
   };
 }
@@ -264,7 +282,7 @@ function disposeRecord(record: ExtensionAgentConversationRecord): void {
   record.isBusy = false;
   record.pendingAbort?.abort();
   record.unsubscribe();
-  record.session.dispose();
+  record.session?.dispose();
 }
 
 export async function createAgentConversation(
@@ -273,9 +291,34 @@ export async function createAgentConversation(
 ): Promise<ExtensionAgentConversationSummary> {
   await assertPermission(ctx, 'agent:conversations');
   const owner = ownerExtensionId(ctx);
+  const mode = validateConversationMode(input);
+  const now = new Date().toISOString();
+  if (mode.visibility === 'visible') {
+    if (!ctx.conversations) throw new Error('Visible saved extension agent conversations require the host conversations capability.');
+    const cwd = input.cwd ?? ctx.toolContext?.cwd ?? process.cwd();
+    const created = await ctx.conversations.create({ cwd, model: input.modelRef ?? null });
+    const record: ExtensionAgentConversationRecord = {
+      id: created.id,
+      ownerExtensionId: owner,
+      title: input.title?.trim() || 'Extension agent conversation',
+      cwd,
+      model: input.modelRef ? { id: input.modelRef } : {},
+      tools: input.tools ?? 'default',
+      visibility: 'visible',
+      persistence: 'saved',
+      createdAt: now,
+      updatedAt: now,
+      unsubscribe: () => undefined,
+      isBusy: false,
+      disposed: false,
+      assistantTexts: [],
+    };
+    conversations.set(record.id, record);
+    return summarize(record);
+  }
+
   const created = await createSession(input, ctx);
   const id = `agent_${randomUUID()}`;
-  const now = new Date().toISOString();
   const record: ExtensionAgentConversationRecord = {
     id,
     ownerExtensionId: owner,
@@ -313,6 +356,24 @@ export async function sendAgentMessage(
   if (record.isBusy) throw new Error(`Agent conversation is already busy: ${input.conversationId}`);
   const text = typeof input.text === 'string' ? input.text.trim() : '';
   if (!text) throw new Error('Agent conversation message text is required.');
+  if (record.visibility === 'visible') {
+    if ((input.images?.length ?? 0) > 0)
+      throw new Error('Visible saved extension agent conversations do not support direct image payloads.');
+    if (!ctx.conversations) throw new Error('Visible saved extension agent conversations require the host conversations capability.');
+    record.isBusy = true;
+    try {
+      await runWithTimeout(ctx.conversations.sendMessage(record.id, text), input.timeoutMs, () => {
+        record.pendingAbort?.abort();
+        void ctx.conversations?.abort?.(record.id);
+      });
+      record.updatedAt = new Date().toISOString();
+      return { ...summarize(record), text: '' };
+    } finally {
+      record.isBusy = false;
+    }
+  }
+
+  if (!record.session) throw new Error(`Agent conversation session is not available: ${record.id}`);
   if ((input.images?.length ?? 0) > 0 && !modelAcceptsImages(record.model))
     throw new Error(`Agent conversation model does not accept images: ${record.id}`);
   record.isBusy = true;
@@ -320,7 +381,7 @@ export async function sendAgentMessage(
   try {
     await runWithTimeout(record.session.prompt(text, input.images?.length ? { images: input.images } : undefined), input.timeoutMs, () => {
       record.pendingAbort?.abort();
-      void record.session.abort?.();
+      void record.session?.abort?.();
     });
     const assistantError = getAssistantErrorMessage(record.session);
     if (assistantError) throw new Error(assistantError);
@@ -334,7 +395,17 @@ export async function sendAgentMessage(
 
 export async function getAgentConversation(input: { conversationId: string }, ctx: ExtensionBackendContextLike) {
   await assertPermission(ctx, 'agent:conversations');
-  return summarize(getOwnedRecord(input.conversationId, ctx));
+  const record = getOwnedRecord(input.conversationId, ctx);
+  if (record.visibility === 'visible' && ctx.conversations) {
+    const meta = await ctx.conversations.getMeta(record.id).catch(() => null);
+    if (isRecord(meta)) {
+      if (typeof meta.title === 'string') record.title = meta.title;
+      if (typeof meta.cwd === 'string') record.cwd = meta.cwd;
+      if (typeof meta.running === 'boolean') record.isBusy = meta.running;
+      if (typeof meta.currentModel === 'string') record.model = { id: meta.currentModel };
+    }
+  }
+  return summarize(record);
 }
 
 export async function listAgentConversations(_input: unknown, ctx: ExtensionBackendContextLike) {
@@ -348,7 +419,12 @@ export async function listAgentConversations(_input: unknown, ctx: ExtensionBack
 export async function abortAgentConversation(input: { conversationId: string }, ctx: ExtensionBackendContextLike) {
   await assertPermission(ctx, 'agent:conversations');
   const record = getOwnedRecord(input.conversationId, ctx);
-  await record.session.abort?.();
+  if (record.visibility === 'visible') {
+    if (!ctx.conversations?.abort) throw new Error('Visible saved extension agent conversations do not support abort in this host.');
+    await ctx.conversations.abort(record.id);
+  } else {
+    await record.session?.abort?.();
+  }
   record.isBusy = false;
   record.updatedAt = new Date().toISOString();
   return summarize(record);
