@@ -3,7 +3,7 @@ import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import type { ParallelPromptPreview } from './liveSessionParallelJobs.js';
 import type { LiveSessionPresenceState } from './liveSessionPresence.js';
 import type { QueuedPromptPreview } from './liveSessionQueue.js';
-import { buildDisplayBlocksFromEntries, type DisplayBlock, getAssistantErrorDisplayMessage } from './sessions.js';
+import { buildDisplayBlocksFromEntries, type DisplayBlock, getAssistantErrorDisplayMessage, type ThreadGoal } from './sessions.js';
 
 export interface LiveContextUsageSegment {
   key: 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
@@ -20,7 +20,14 @@ export interface LiveContextUsage {
 }
 
 export type SseEvent =
-  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; isStreaming: boolean }
+  | {
+      type: 'snapshot';
+      blocks: DisplayBlock[];
+      blockOffset: number;
+      totalBlocks: number;
+      isStreaming: boolean;
+      goalState?: ThreadGoal | null;
+    }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }

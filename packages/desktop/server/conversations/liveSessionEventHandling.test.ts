@@ -495,6 +495,26 @@ describe('legacy auto mode continuation quarantine', () => {
     });
   });
 
+  describe('hidden custom turns', () => {
+    it('treats hidden custom messages as active hidden turns before agent_start', () => {
+      const entry = makeEntry();
+      const cbs = makeCallbacks();
+
+      handleLiveSessionEvent(
+        entry,
+        {
+          type: 'message_start',
+          message: { role: 'custom', customType: 'goal-continuation', display: false, content: 'Goal continuation.' },
+        } as any,
+        cbs,
+      );
+      handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
+
+      expect(entry.activeHiddenTurnCustomType).toBe('goal-continuation');
+      expect(cbs.broadcast).not.toHaveBeenCalledWith(entry, { type: 'agent_start' });
+    });
+  });
+
   describe('auto mode continuation NOT triggered for non-review turns', () => {
     it('does NOT schedule continuation for a non-hidden turn when flag is set', async () => {
       // This tests the bug: non-hidden turns should NOT consume

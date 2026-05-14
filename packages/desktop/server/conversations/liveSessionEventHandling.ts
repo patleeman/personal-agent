@@ -143,12 +143,27 @@ export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> 
   tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
 }
 
+function readHiddenCustomMessageType(event: AgentSessionEvent): string | null {
+  if (event.type !== 'message_start') {
+    return null;
+  }
+  const message = event.message as unknown;
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+  const record = message as Record<string, unknown>;
+  return record.role === 'custom' && record.display === false && typeof record.customType === 'string' ? record.customType : null;
+}
+
 export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   entry: TEntry,
   event: AgentSessionEvent,
   callbacks: LiveSessionEventCallbacks<TEntry>,
 ): void {
-  const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event);
+  const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event) ?? readHiddenCustomMessageType(event);
+  if (activeHiddenTurnCustomType) {
+    entry.activeHiddenTurnCustomType = activeHiddenTurnCustomType;
+  }
   const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
 
   if (event.type === 'turn_end') {

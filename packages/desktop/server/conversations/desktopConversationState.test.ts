@@ -242,6 +242,33 @@ describe('desktopConversationState reducer', () => {
     expect(state.goalState).toBeNull();
   });
 
+  it('clears goal state when a snapshot explicitly reports no active goal', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'snapshot',
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      isStreaming: false,
+      goalState: { objective: 'Ship it', status: 'active', tasks: [], stopReason: null, updatedAt: '2026-05-11T12:00:00.000Z' },
+    } as never);
+    expect(state.goalState?.objective).toBe('Ship it');
+
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'snapshot',
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      isStreaming: false,
+      goalState: null,
+    } as never);
+
+    expect(state.goalState).toBeNull();
+  });
+
   it('preserves terminal-style metadata for direct bang bash runs', async () => {
     const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
       await import('./desktopConversationState.js');

@@ -139,7 +139,7 @@ describe('recoverConversationCapability', () => {
         cwd: '/repo/live',
         title: 'Live title',
         profile: 'assistant',
-        state: 'running',
+        state: 'waiting',
         pendingOperation: null,
       }),
     );
@@ -153,7 +153,55 @@ describe('recoverConversationCapability', () => {
     });
   });
 
-  it('replays pending operations after resuming a stored conversation', async () => {
+  it('does not replay pending operations while passively resuming a stored conversation', async () => {
+    isLiveSessionMock.mockReturnValueOnce(false);
+    createWebLiveConversationRunIdMock.mockReturnValueOnce('web-run:conversation-1');
+    getDurableRunMock.mockResolvedValueOnce({
+      run: {
+        checkpoint: {
+          payload: {
+            pendingOperation: { type: 'prompt', text: 'ignored' },
+            profile: ' reviewer ',
+          },
+        },
+        manifest: {
+          source: { filePath: ' /sessions/from-run.json ' },
+          spec: { cwd: ' /manifest-cwd ' },
+        },
+      },
+    });
+    readSessionBlocksMock.mockReturnValueOnce({
+      meta: {
+        file: '/sessions/stored.json',
+        cwd: '/repo/stored',
+        title: 'Stored title',
+      },
+      blocks: [],
+    });
+    existsSyncMock.mockReturnValueOnce(true);
+    resumeSessionMock.mockResolvedValueOnce({ id: 'conversation-1-live' });
+    liveRegistry.set('conversation-1-live', {
+      cwd: '/repo/resumed',
+      title: 'Stored title',
+      session: {},
+    });
+
+    const result = await recoverConversationCapability('conversation-1', createContext());
+
+    expect(parsePendingOperationMock).not.toHaveBeenCalled();
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-1-live',
+        state: 'waiting',
+        pendingOperation: null,
+      }),
+    );
+    expect(queuePromptContextMock).not.toHaveBeenCalled();
+    expect(promptSessionMock).not.toHaveBeenCalled();
+    expect(result.replayedPendingOperation).toBe(false);
+  });
+
+  it('replays pending operations after explicitly resuming a stored conversation', async () => {
     const pendingOperation = {
       type: 'prompt' as const,
       text: 'Continue the deployment review.',
@@ -201,7 +249,7 @@ describe('recoverConversationCapability', () => {
     });
 
     const context = createContext();
-    const result = await recoverConversationCapability('conversation-1', context);
+    const result = await recoverConversationCapability('conversation-1', context, { replayPendingOperation: true });
 
     expect(createWebLiveConversationRunIdMock).toHaveBeenCalledWith('conversation-1');
     expect(resumeSessionMock).toHaveBeenCalledWith('/sessions/stored.json', {

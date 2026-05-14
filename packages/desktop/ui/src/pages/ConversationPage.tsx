@@ -514,8 +514,13 @@ export async function applyGoalModeToggleAction(
   setPending: (pending: boolean) => void,
 ): Promise<void> {
   if (action.kind === 'enable-now') {
-    await updateGoal(action.conversationId, { objective: action.objective });
-    setPending(false);
+    setPending(true);
+    try {
+      await updateGoal(action.conversationId, { objective: action.objective });
+    } catch (error) {
+      setPending(false);
+      throw error;
+    }
     return;
   }
 
@@ -1485,6 +1490,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Goal mode
   const [composerGoalPending, setComposerGoalPending] = useState(false);
+  useEffect(() => {
+    if (composerGoalPending && stream.goalState?.status === 'active') {
+      setComposerGoalPending(false);
+    }
+  }, [composerGoalPending, stream.goalState?.status]);
   const goalEnabled = composerGoalPending || stream.goalState?.status === 'active';
   const toggleGoalMode = useCallback(async () => {
     const action = resolveGoalModeToggleAction({ conversationId: id, goalEnabled, composerText: input });

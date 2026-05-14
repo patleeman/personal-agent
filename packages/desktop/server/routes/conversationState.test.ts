@@ -628,10 +628,15 @@ describe('registerConversationStateRoutes', () => {
     const { patchHandler } = createHarness();
     const handler = patchHandler('/api/conversations/:id/goal');
     const appendCustomEntry = vi.fn();
+    const sendCustomMessage = vi.fn(async () => undefined);
     liveRegistry.set('conversation-live', {
       session: {
+        isStreaming: false,
+        sendCustomMessage,
         sessionManager: { appendCustomEntry },
       },
+      pendingHiddenTurnCustomTypes: [],
+      activeHiddenTurnCustomType: null,
     });
 
     isLocalLiveMock.mockReturnValueOnce(true);
@@ -644,6 +649,17 @@ describe('registerConversationStateRoutes', () => {
     expect(activeRes.json).toHaveBeenCalledWith(
       expect.objectContaining({ objective: 'keep looping', status: 'active', stopReason: null, noProgressTurns: 0 }),
     );
+    await vi.waitFor(() => {
+      expect(sendCustomMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customType: 'goal-continuation',
+          display: false,
+          content: expect.stringContaining('Objective: keep looping'),
+        }),
+        { triggerTurn: true, deliverAs: 'followUp' },
+      );
+    });
+    expect((liveRegistry.get('conversation-live') as any)?.pendingHiddenTurnCustomTypes).toEqual(['goal-continuation']);
 
     isLocalLiveMock.mockReturnValueOnce(true);
     const clearRes = createResponse();
@@ -826,6 +842,7 @@ describe('registerConversationStateRoutes', () => {
         buildLiveSessionExtensionFactories: expect.any(Function),
         flushLiveDeferredResumes: flushLiveDeferredResumesMock,
       }),
+      { replayPendingOperation: true },
     );
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-1-live',

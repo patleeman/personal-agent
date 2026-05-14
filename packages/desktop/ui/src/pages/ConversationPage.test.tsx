@@ -120,7 +120,20 @@ describe('desktop conversation state fallback', () => {
     await applyGoalModeToggleAction(action, updateGoal, setPending);
 
     expect(updateGoal).toHaveBeenCalledWith('conv-1', { objective: 'ship it' });
-    expect(setPending).toHaveBeenCalledWith(false);
+    expect(setPending).toHaveBeenCalledWith(true);
+  });
+
+  it('clears optimistic goal mode state if enabling a saved conversation fails', async () => {
+    const updateGoal = vi.fn(async () => {
+      throw new Error('nope');
+    });
+    const setPending = vi.fn();
+    const action = resolveGoalModeToggleAction({ conversationId: 'conv-1', goalEnabled: false, composerText: 'ship it' });
+
+    await expect(applyGoalModeToggleAction(action, updateGoal, setPending)).rejects.toThrow('nope');
+
+    expect(setPending).toHaveBeenNthCalledWith(1, true);
+    expect(setPending).toHaveBeenNthCalledWith(2, false);
   });
 
   it('disables goal mode immediately for saved conversations', async () => {

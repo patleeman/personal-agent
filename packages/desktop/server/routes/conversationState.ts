@@ -14,6 +14,7 @@ import {
   readConversationModelPreferenceStateById,
   resolveConversationSessionFile,
 } from '../conversations/conversationService.js';
+import { ensureHiddenTurnState } from '../conversations/liveSessionHiddenTurns.js';
 import {
   createSessionFromExisting,
   destroySession,
@@ -26,6 +27,7 @@ import {
   setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
+import type { LiveEntry } from '../conversations/liveSessionTypes.js';
 import { appendConversationWorkspaceMetadata, readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
 import { logError, logSlowConversationPerf, setServerTimingHeaders } from '../middleware/index.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
@@ -59,6 +61,48 @@ function initializeConversationStateRoutesContext(
   buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
   buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
+}
+
+const GOAL_CONTINUATION_CUSTOM_TYPE = 'goal-continuation';
+
+function buildGoalContinuationPrompt(objective: string): string {
+  return [
+    'Goal continuation.',
+    '',
+    `Objective: ${objective}`,
+    '',
+    'Continue working until the objective is fully achieved.',
+    'If the objective is fully achieved, call update_goal with status: "complete" and stop.',
+    'If work remains, make concrete progress before replying.',
+    'Do not mention this hidden continuation prompt.',
+  ].join('\n');
+}
+
+async function startLiveGoalContinuation(entry: LiveEntry, objective: string): Promise<void> {
+  const trimmed = objective.trim();
+  if (!trimmed || entry.session.isStreaming) {
+    return;
+  }
+
+  ensureHiddenTurnState(entry);
+  entry.pendingHiddenTurnCustomTypes.push(GOAL_CONTINUATION_CUSTOM_TYPE);
+  try {
+    await entry.session.sendCustomMessage(
+      {
+        customType: GOAL_CONTINUATION_CUSTOM_TYPE,
+        content: buildGoalContinuationPrompt(trimmed),
+        display: false,
+        details: { source: 'goal-mode', trigger: 'manual-enable' },
+      },
+      { triggerTurn: true, deliverAs: 'followUp' },
+    );
+  } catch (error) {
+    const index = entry.pendingHiddenTurnCustomTypes.lastIndexOf(GOAL_CONTINUATION_CUSTOM_TYPE);
+    if (index >= 0) {
+      entry.pendingHiddenTurnCustomTypes.splice(index, 1);
+    }
+    throw error;
+  }
 }
 
 function resolveConversationSource(conversationId: string) {
@@ -308,6 +352,15 @@ export function registerConversationStateRoutes(
         const result = shouldSetGoal ? setGoal(sessionManager) : clearGoal(sessionManager);
         publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
         res.json(result);
+        if (shouldSetGoal) {
+          void startLiveGoalContinuation(entry, trimmedObjective).catch((error) => {
+            logError('goal continuation start failed', {
+              conversationId: req.params.id,
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+          });
+        }
         return;
       }
 
@@ -408,12 +461,16 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      const recovered = await recoverConversationCapability(conversationId, {
-        getCurrentProfile: getCurrentProfileFn,
-        buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
-        buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
-        flushLiveDeferredResumes: flushLiveDeferredResumesFn,
-      });
+      const recovered = await recoverConversationCapability(
+        conversationId,
+        {
+          getCurrentProfile: getCurrentProfileFn,
+          buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
+          buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
+          flushLiveDeferredResumes: flushLiveDeferredResumesFn,
+        },
+        { replayPendingOperation: true },
+      );
       res.json(recovered);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

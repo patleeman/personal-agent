@@ -39,7 +39,7 @@ export function broadcastSnapshot(
   for (const listener of entry.listeners) {
     listener.send({
       type: 'snapshot',
-      ...(goalState ? { goalState } : {}),
+      goalState,
       ...callbacks.buildLiveSessionSnapshot(entry, listener.tailBlocks),
     } as SseEvent);
   }

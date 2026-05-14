@@ -112,7 +112,7 @@ async function continueRecoveredConversation(input: {
       cwd: input.cwd,
       title: input.title,
       profile: input.profile,
-      state: 'running',
+      state: promptOperation ? 'running' : 'waiting',
       pendingOperation: promptOperation,
     });
   }
@@ -152,6 +152,7 @@ async function continueRecoveredConversation(input: {
 export async function recoverConversationCapability(
   conversationIdInput: string,
   context: RecoverConversationCapabilityContext,
+  options: { replayPendingOperation?: boolean } = {},
 ): Promise<RecoverConversationResult> {
   const conversationId = conversationIdInput.trim();
   if (!conversationId) {
@@ -182,7 +183,7 @@ export async function recoverConversationCapability(
   const payload = runDetail?.run.checkpoint?.payload;
   const checkpointPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
 
-  const pendingOperation = parsePendingOperation(checkpointPayload.pendingOperation);
+  const pendingOperation = options.replayPendingOperation ? parsePendingOperation(checkpointPayload.pendingOperation) : undefined;
   const sessionDetail = readSessionBlocks(conversationId);
   const sessionFile =
     sessionDetail?.meta.file ?? readCheckpointString(checkpointPayload, 'sessionFile') ?? runDetail?.run.manifest?.source?.filePath?.trim();
@@ -241,36 +242,28 @@ export async function recoverDurableLiveConversations(
       const pendingOperation = isLegacySyntheticResumeFallbackOperation(run.pendingOperation) ? null : run.pendingOperation;
 
       if (!pendingOperation) {
+        await syncWebLiveConversationRun({
+          conversationId: run.conversationId,
+          sessionFile: run.sessionFile,
+          cwd: run.cwd,
+          title: run.title,
+          profile: run.profile,
+          state: 'waiting',
+          pendingOperation: null,
+        });
         continue;
       }
 
-      const resumed = await dependencies.resumeSession(run.sessionFile, {
-        ...(dependencies.loaderOptions ?? {}),
-        cwdOverride: run.cwd,
-      });
-
       await syncWebLiveConversationRun({
-        conversationId: resumed.id,
+        conversationId: run.conversationId,
         sessionFile: run.sessionFile,
         cwd: run.cwd,
         title: run.title,
         profile: run.profile,
-        state: 'running',
-        pendingOperation,
+        state: 'waiting',
+        pendingOperation: null,
       });
-
-      for (const message of pendingOperation.contextMessages ?? []) {
-        await dependencies.queuePromptContext(resumed.id, message.customType, message.content);
-      }
-
-      await dependencies.promptSession(resumed.id, pendingOperation.text, pendingOperation.behavior, pendingOperation.images);
-
-      recovered.push({
-        runId: run.runId,
-        conversationId: resumed.id,
-        replayedPendingOperation: true,
-      });
-      dependencies.logger?.info(`recovered conversation run=${run.runId} conversation=${resumed.id} replayed=true`);
+      dependencies.logger?.info(`cleared pending conversation replay run=${run.runId} conversation=${run.conversationId}`);
     } catch (error) {
       dependencies.logger?.warn(`failed to recover conversation run=${run.runId}: ${(error as Error).message}`);
     }

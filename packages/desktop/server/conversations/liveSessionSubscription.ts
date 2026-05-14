@@ -76,7 +76,7 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
   subscription.send({
     type: 'snapshot',
-    ...(goalState ? { goalState } : {}),
+    goalState,
     ...buildLiveSessionSnapshot(entry, options?.tailBlocks),
   });
   const title = resolveTitle(entry);

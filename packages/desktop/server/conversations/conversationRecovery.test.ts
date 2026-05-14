@@ -28,7 +28,7 @@ describe('conversation recovery', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it('resumes interrupted conversations and replays pending prompt operations', async () => {
+  it('clears interrupted pending prompt operations instead of replaying them on startup', async () => {
     const stateRoot = createTempDir('pa-web-conversation-recovery-state-');
     const daemonSocketDir = createTempDir('pa-web-conversation-recovery-sock-');
     const sessionDir = join(stateRoot, 'sessions');
@@ -83,18 +83,10 @@ describe('conversation recovery', () => {
       },
     });
 
-    expect(resumeSession).toHaveBeenCalledWith(sessionFile, { cwdOverride: '/tmp/workspace' });
-    expect(queuePromptContext).toHaveBeenCalledWith('conv-123', 'referenced_context', 'Referenced projects: @foo');
-    expect(promptSession).toHaveBeenCalledWith('conv-123', 'continue working', 'followUp', undefined);
-    expect(recovered).toEqual({
-      recovered: [
-        {
-          runId: 'conversation-live-conv-123',
-          conversationId: 'conv-123',
-          replayedPendingOperation: true,
-        },
-      ],
-    });
+    expect(resumeSession).not.toHaveBeenCalled();
+    expect(queuePromptContext).not.toHaveBeenCalled();
+    expect(promptSession).not.toHaveBeenCalled();
+    expect(recovered).toEqual({ recovered: [] });
   });
 
   it('does not auto-recover conversations that only have the synthetic resume fallback prompt', async () => {
