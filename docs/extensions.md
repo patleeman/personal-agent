@@ -572,7 +572,7 @@ agent sees intermediate progress instead of waiting silently.```
 
 ## Frontend (UI)
 
-Your `src/frontend.tsx` exports React components referenced in the manifest.
+Your `src/frontend.tsx` exports React components referenced in the manifest. The desktop app loads the extension registry once at the app shell and shares it through context; do not add per-message or per-tool registry fetches in frontend hosts.
 
 ```tsx
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppEventsContext, INITIAL_APP_EVENT_VERSIONS } from '../app/contexts';
 import { api } from '../client/api';
 import { INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../conversation/conversationEventVersions';
-import { useExtensionRegistry } from './useExtensionRegistry';
+import { ExtensionRegistryProvider, useExtensionRegistry } from './useExtensionRegistry';
 
 vi.mock('../client/api', () => ({
   api: {
@@ -15,6 +15,10 @@ vi.mock('../client/api', () => ({
     extensionSurfaces: vi.fn(),
   },
 }));
+
+const extensionRegistryWrapper = ({ children }: { children: ReactNode }) => (
+  <ExtensionRegistryProvider>{children}</ExtensionRegistryProvider>
+);
 
 describe('useExtensionRegistry', () => {
   afterEach(() => {
@@ -90,7 +94,7 @@ describe('useExtensionRegistry', () => {
     vi.mocked(api.extensionRoutes).mockResolvedValue([]);
     vi.mocked(api.extensionSurfaces).mockResolvedValue([]);
 
-    const { result } = renderHook(() => useExtensionRegistry());
+    const { result } = renderHook(() => useExtensionRegistry(), { wrapper: extensionRegistryWrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.extensions).toEqual([
@@ -162,6 +166,35 @@ describe('useExtensionRegistry', () => {
     ]);
   });
 
+  it('shares one registry load across multiple consumers under the provider', async () => {
+    vi.mocked(api.extensionInstallations).mockResolvedValue([
+      {
+        id: 'shared-extension',
+        name: 'Shared Extension',
+        enabled: true,
+        status: 'enabled',
+        manifest: { schemaVersion: 2, id: 'shared-extension', name: 'Shared Extension' },
+      },
+    ] as never);
+    vi.mocked(api.extensionRoutes).mockResolvedValue([]);
+    vi.mocked(api.extensionSurfaces).mockResolvedValue([]);
+
+    const useTwoRegistryConsumers = () => {
+      const first = useExtensionRegistry();
+      const second = useExtensionRegistry();
+      return { first, second };
+    };
+
+    const { result } = renderHook(() => useTwoRegistryConsumers(), { wrapper: extensionRegistryWrapper });
+
+    await waitFor(() => expect(result.current.first.loading).toBe(false));
+    expect(result.current.first.extensions.map((entry) => entry.id)).toEqual(['shared-extension']);
+    expect(result.current.second.extensions.map((entry) => entry.id)).toEqual(['shared-extension']);
+    expect(api.extensionInstallations).toHaveBeenCalledTimes(1);
+    expect(api.extensionRoutes).toHaveBeenCalledTimes(1);
+    expect(api.extensionSurfaces).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps disabled extensions visible but removes their active contributions', async () => {
     vi.mocked(api.extensionInstallations).mockResolvedValue([
       {
@@ -184,7 +217,7 @@ describe('useExtensionRegistry', () => {
     vi.mocked(api.extensionRoutes).mockResolvedValue([]);
     vi.mocked(api.extensionSurfaces).mockResolvedValue([]);
 
-    const { result } = renderHook(() => useExtensionRegistry());
+    const { result } = renderHook(() => useExtensionRegistry(), { wrapper: extensionRegistryWrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.extensions.map((entry) => entry.id)).toEqual(['disabled-extension']);
@@ -201,7 +234,7 @@ describe('useExtensionRegistry', () => {
           conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
         }}
       >
-        {children}
+        <ExtensionRegistryProvider>{children}</ExtensionRegistryProvider>
       </AppEventsContext.Provider>
     );
 
@@ -244,7 +277,7 @@ describe('useExtensionRegistry', () => {
     (api as unknown as { extensionInstallations?: unknown }).extensionInstallations = undefined;
 
     try {
-      const { result } = renderHook(() => useExtensionRegistry());
+      const { result } = renderHook(() => useExtensionRegistry(), { wrapper: extensionRegistryWrapper });
 
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.conversationHeaderElements).toEqual([]);

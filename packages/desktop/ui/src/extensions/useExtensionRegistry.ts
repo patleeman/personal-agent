@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createContext, createElement, type ReactNode, useContext, useEffect, useState } from 'react';
 
 import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
@@ -153,6 +153,37 @@ function normalizeRegistryExtensions(extensions: ExtensionInstallSummary[]): Ext
     ...extension,
   }));
 }
+
+const EMPTY_EXTENSION_REGISTRY_STATE: ExtensionRegistryState = {
+  extensions: [],
+  routes: [],
+  surfaces: [],
+  topBarElements: [],
+  messageActions: [],
+  composerShelves: [],
+  newConversationPanels: [],
+  settingsComponent: null,
+  settingsComponents: [],
+  composerButtons: [],
+  composerInputTools: [],
+  toolbarActions: [],
+  contextMenus: [],
+  threadHeaderActions: [],
+  statusBarItems: [],
+  conversationHeaderElements: [],
+  conversationDecorators: [],
+  activityTreeItemElements: [],
+  activityTreeItemStyles: [],
+  loading: false,
+  error: null,
+};
+
+const INITIAL_EXTENSION_REGISTRY_STATE: ExtensionRegistryState = {
+  ...EMPTY_EXTENSION_REGISTRY_STATE,
+  loading: true,
+};
+
+const ExtensionRegistryContext = createContext<ExtensionRegistryState>(EMPTY_EXTENSION_REGISTRY_STATE);
 
 export interface ExtensionRegistryState {
   extensions: ExtensionRegistryEntry[];
@@ -477,31 +508,9 @@ function normalizeStatusBarItems(extensions: ExtensionManifest[]): ExtensionStat
   return result;
 }
 
-export function useExtensionRegistry(): ExtensionRegistryState {
+function useExtensionRegistryLoader(): ExtensionRegistryState {
   const { versions } = useAppEvents();
-  const [state, setState] = useState<ExtensionRegistryState>({
-    extensions: [],
-    routes: [],
-    surfaces: [],
-    topBarElements: [],
-    messageActions: [],
-    composerShelves: [],
-    newConversationPanels: [],
-    settingsComponent: null,
-    settingsComponents: [],
-    composerButtons: [],
-    composerInputTools: [],
-    toolbarActions: [],
-    contextMenus: [],
-    threadHeaderActions: [],
-    statusBarItems: [],
-    conversationHeaderElements: [],
-    conversationDecorators: [],
-    activityTreeItemElements: [],
-    activityTreeItemStyles: [],
-    loading: true,
-    error: null,
-  });
+  const [state, setState] = useState<ExtensionRegistryState>(INITIAL_EXTENSION_REGISTRY_STATE);
 
   useEffect(() => {
     let cancelled = false;
@@ -515,29 +524,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         typeof api.extensionSurfaces !== 'function'
       ) {
         if (cancelled) return;
-        setState({
-          extensions: [],
-          routes: [],
-          surfaces: [],
-          topBarElements: [],
-          messageActions: [],
-          composerShelves: [],
-          newConversationPanels: [],
-          settingsComponent: null,
-          settingsComponents: [],
-          composerButtons: [],
-          composerInputTools: [],
-          toolbarActions: [],
-          contextMenus: [],
-          threadHeaderActions: [],
-          statusBarItems: [],
-          conversationHeaderElements: [],
-          conversationDecorators: [],
-          activityTreeItemElements: [],
-          activityTreeItemStyles: [],
-          loading: false,
-          error: null,
-        });
+        setState(EMPTY_EXTENSION_REGISTRY_STATE);
         return;
       }
 
@@ -574,26 +561,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         .catch((error: Error) => {
           if (cancelled) return;
           setState({
-            extensions: [],
-            routes: [],
-            surfaces: [],
-            topBarElements: [],
-            messageActions: [],
-            composerShelves: [],
-            newConversationPanels: [],
-            settingsComponent: null,
-            settingsComponents: [],
-            composerButtons: [],
-            composerInputTools: [],
-            toolbarActions: [],
-            contextMenus: [],
-            threadHeaderActions: [],
-            statusBarItems: [],
-            conversationHeaderElements: [],
-            conversationDecorators: [],
-            activityTreeItemElements: [],
-            activityTreeItemStyles: [],
-            loading: false,
+            ...EMPTY_EXTENSION_REGISTRY_STATE,
             error: error.message,
           });
         });
@@ -609,4 +577,13 @@ export function useExtensionRegistry(): ExtensionRegistryState {
   }, [versions.extensions]);
 
   return state;
+}
+
+export function ExtensionRegistryProvider({ children }: { children: ReactNode }) {
+  const state = useExtensionRegistryLoader();
+  return createElement(ExtensionRegistryContext.Provider, { value: state }, children);
+}
+
+export function useExtensionRegistry(): ExtensionRegistryState {
+  return useContext(ExtensionRegistryContext);
 }

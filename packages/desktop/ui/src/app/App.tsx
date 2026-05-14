@@ -13,6 +13,7 @@ import {
 } from '../conversation/draftConversation';
 import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
 import { ExtensionPage } from '../extensions/ExtensionPage';
+import { ExtensionRegistryProvider } from '../extensions/useExtensionRegistry';
 import { useConversations } from '../hooks/useConversations';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import {
@@ -463,17 +464,19 @@ export function App() {
             <SystemStatusContext.Provider value={{ daemon, setDaemon }}>
               <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
                 <ThemeProvider>
-                  <BrowserRouter>
-                    <Routes>
-                      <Route path="/" element={<Layout />}>
-                        <Route index element={<Navigate to="/conversations/new" replace />} />
-                        <Route path="conversations" element={<ConversationsRouteRedirect />} />
-                        <Route path="conversations/new" element={<DraftConversationRoute />} />
-                        <Route path="conversations/:id" element={<SavedConversationRoute />} />
-                        <Route path="*" element={suspendRoute(<ExtensionPage />)} />
-                      </Route>
-                    </Routes>
-                  </BrowserRouter>
+                  <ExtensionRegistryProvider>
+                    <BrowserRouter>
+                      <Routes>
+                        <Route path="/" element={<Layout />}>
+                          <Route index element={<Navigate to="/conversations/new" replace />} />
+                          <Route path="conversations" element={<ConversationsRouteRedirect />} />
+                          <Route path="conversations/new" element={<DraftConversationRoute />} />
+                          <Route path="conversations/:id" element={<SavedConversationRoute />} />
+                          <Route path="*" element={suspendRoute(<ExtensionPage />)} />
+                        </Route>
+                      </Routes>
+                    </BrowserRouter>
+                  </ExtensionRegistryProvider>
                 </ThemeProvider>
               </LiveTitlesContext.Provider>
             </SystemStatusContext.Provider>
