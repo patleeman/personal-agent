@@ -25,8 +25,14 @@ describe('desktop main log', () => {
     vi.restoreAllMocks();
   });
 
-  it('writes log lines to the console and main log file', async () => {
-    const { closeDesktopMainLog, writeDesktopMainLogLine } = await import('./desktop-main-log.js');
+  it('writes log lines to the node console, Electron browser console, and main log file', async () => {
+    const { closeDesktopMainLog, registerDesktopLogConsoleTarget, writeDesktopMainLogLine } = await import('./desktop-main-log.js');
+    const browserConsoleTarget = {
+      executeJavaScript: vi.fn(() => Promise.resolve(undefined)),
+      isDestroyed: vi.fn(() => false),
+      once: vi.fn(),
+    };
+    registerDesktopLogConsoleTarget(browserConsoleTarget as never);
 
     writeDesktopMainLogLine('[2026-05-14T00:00:00.000Z] [info] hello');
     writeDesktopMainLogLine('[2026-05-14T00:00:00.001Z] [warn] careful');
@@ -36,6 +42,9 @@ describe('desktop main log', () => {
     expect(console.log).toHaveBeenCalledWith('[2026-05-14T00:00:00.000Z] [info] hello');
     expect(console.warn).toHaveBeenCalledWith('[2026-05-14T00:00:00.001Z] [warn] careful');
     expect(console.error).toHaveBeenCalledWith('[2026-05-14T00:00:00.002Z] [error] boom');
+    expect(browserConsoleTarget.executeJavaScript).toHaveBeenCalledWith('console.log("[2026-05-14T00:00:00.000Z] [info] hello")', true);
+    expect(browserConsoleTarget.executeJavaScript).toHaveBeenCalledWith('console.warn("[2026-05-14T00:00:00.001Z] [warn] careful")', true);
+    expect(browserConsoleTarget.executeJavaScript).toHaveBeenCalledWith('console.error("[2026-05-14T00:00:00.002Z] [error] boom")', true);
 
     const logPath = join(mocks.resolveDesktopRuntimePaths.mock.results[0]?.value.desktopLogsDir, 'main.log');
     expect(readFileSync(logPath, 'utf-8')).toBe(

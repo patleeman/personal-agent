@@ -1,9 +1,12 @@
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { join } from 'node:path';
 
+import type { WebContents } from 'electron';
+
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 
 let mainLogStream: WriteStream | null = null;
+const browserConsoleTargets = new Set<WebContents>();
 
 function getMainLogStream(): WriteStream | null {
   if (mainLogStream) {
@@ -24,26 +27,56 @@ function getMainLogStream(): WriteStream | null {
   }
 }
 
-function writeLogLineToConsole(message: string): void {
+type DesktopLogLevel = 'log' | 'warn' | 'error';
+
+function getLogLevel(message: string): DesktopLogLevel {
+  if (message.includes('[error]')) {
+    return 'error';
+  }
+
+  if (message.includes('[warn]')) {
+    return 'warn';
+  }
+
+  return 'log';
+}
+
+function writeLogLineToConsole(message: string, level: DesktopLogLevel): void {
   try {
-    if (message.includes('[error]')) {
-      console.error(message);
-      return;
-    }
-
-    if (message.includes('[warn]')) {
-      console.warn(message);
-      return;
-    }
-
-    console.log(message);
+    console[level](message);
   } catch {
     // Ignore console write failures; file logging should still proceed.
   }
 }
 
+function writeLogLineToBrowserConsoles(message: string, level: DesktopLogLevel): void {
+  const expression = `console.${level}(${JSON.stringify(message)})`;
+
+  for (const target of browserConsoleTargets) {
+    if (target.isDestroyed()) {
+      browserConsoleTargets.delete(target);
+      continue;
+    }
+
+    void target.executeJavaScript(expression, true).catch(() => undefined);
+  }
+}
+
+export function registerDesktopLogConsoleTarget(webContents: WebContents): () => void {
+  browserConsoleTargets.add(webContents);
+
+  const unregister = (): void => {
+    browserConsoleTargets.delete(webContents);
+  };
+  webContents.once('destroyed', unregister);
+
+  return unregister;
+}
+
 export function writeDesktopMainLogLine(message: string): void {
-  writeLogLineToConsole(message);
+  const level = getLogLevel(message);
+  writeLogLineToConsole(message, level);
+  writeLogLineToBrowserConsoles(message, level);
 
   const stream = getMainLogStream();
   if (!stream) {

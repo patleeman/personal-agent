@@ -7,7 +7,7 @@ import { app, BrowserWindow, screen, type Session, session, shell, type WebConte
 import { syncDesktopShellAppModeForWindows } from './app-mode.js';
 import { ensureDesktopAppProtocolForHost } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
-import { writeDesktopMainLogLine } from './desktop-main-log.js';
+import { registerDesktopLogConsoleTarget, writeDesktopMainLogLine } from './desktop-main-log.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopHostRecord } from './hosts/types.js';
 import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
@@ -729,6 +729,8 @@ export class DesktopWindowController {
 
     this.configureExternalNavigation(window);
     this.configureRendererRecovery(window, role);
+    const unregisterLogConsoleTarget = registerDesktopLogConsoleTarget(window.webContents);
+    window.once('closed', unregisterLogConsoleTarget);
 
     if (role === 'main') {
       window.on('close', (event) => {
