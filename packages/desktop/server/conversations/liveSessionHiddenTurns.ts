@@ -52,12 +52,27 @@ export function shouldSuppressLiveEventForHiddenTurn(entry: Partial<LiveSessionH
   );
 }
 
-export function clearActiveHiddenTurnAfterTerminalEvent(
-  entry: Partial<LiveSessionHiddenTurnState>,
-  event: Pick<AgentSessionEvent, 'type'>,
-): boolean {
+function readHiddenCustomMessageType(event: AgentSessionEvent): string | null {
+  if (event.type !== 'message_start' && event.type !== 'message_end') {
+    return null;
+  }
+  const message = event.message as unknown;
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+  const record = message as Record<string, unknown>;
+  return record.role === 'custom' && record.display === false && typeof record.customType === 'string' ? record.customType : null;
+}
+
+export function clearActiveHiddenTurnAfterTerminalEvent(entry: Partial<LiveSessionHiddenTurnState>, event: AgentSessionEvent): boolean {
   ensureHiddenTurnState(entry);
   if ((event.type === 'turn_end' || event.type === 'agent_end') && entry.activeHiddenTurnCustomType) {
+    entry.activeHiddenTurnCustomType = null;
+    return true;
+  }
+
+  const endedHiddenCustomType = readHiddenCustomMessageType(event);
+  if (event.type === 'message_end' && endedHiddenCustomType && endedHiddenCustomType === entry.activeHiddenTurnCustomType) {
     entry.activeHiddenTurnCustomType = null;
     return true;
   }
