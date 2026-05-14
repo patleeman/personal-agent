@@ -237,6 +237,16 @@ Prefer focused backend subpaths for narrow primitives so extension bundles do no
 import { saveConversationCommitCheckpoint } from '@personal-agent/extensions/backend/checkpoints';
 ```
 
+Extensions that need a host-owned one-shot agent can use the agent seam instead of importing Pi directly:
+
+```ts
+import { runAgentTask } from '@personal-agent/extensions/backend/agent';
+
+const result = await runAgentTask({ prompt: 'Summarize this image', images, tools: 'none' }, ctx);
+```
+
+The host owns model lookup, auth storage, session creation, and runtime policy. Extension code owns only the workflow request and result handling.
+
 Extensions can record fire-and-forget app telemetry through the dedicated telemetry seam:
 
 ```ts

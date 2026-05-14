@@ -43,6 +43,10 @@
       "types": "./dist/backend.d.ts",
       "default": "./dist/backend.js"
     },
+    "./backend/agent": {
+      "types": "./dist/backend/agent.d.ts",
+      "default": "./dist/backend/agent.js"
+    },
     "./backend/automations": {
       "types": "./dist/backend/automations.d.ts",
       "default": "./dist/backend/automations.js"

@@ -607,6 +607,8 @@ Backend-only host APIs that should stay narrow can also be exposed through focus
 
 The backend API is deliberately two-layered: public stubs under `packages/extensions/src/backend/*.ts`, and host implementations under `packages/desktop/server/extensions/backendApi/*.ts`. Extension source imports only `@personal-agent/extensions/backend/{name}`. It must not import desktop server files, `@personal-agent/core`, `@personal-agent/daemon`, or agent-runtime internals directly. Host backend API modules should be thin adapters; lazy-load heavy desktop/runtime modules inside functions so packaged extension bundles do not accidentally drag in half the app. `pnpm run check:extensions:quick` enforces this with `scripts/check-extension-backend-api.mjs` before packaged bundle checks run.
 
+For model-backed extension workflows, use `@personal-agent/extensions/backend/agent` instead of importing Pi directly. The initial `runAgentTask` API runs a host-owned one-shot hidden agent task with optional image inputs and `tools: 'none'`; the host owns model lookup, auth storage, session creation, cancellation boundaries, and runtime policy.
+
 Backend extensions can record fire-and-forget app telemetry through the dedicated telemetry seam:
 
 ```ts

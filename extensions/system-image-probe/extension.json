@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 2,
+  "id": "system-image-probe",
+  "name": "Image Probe",
+  "packageType": "system",
+  "description": "Inspect image attachments with a host-owned vision agent.",
+  "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      {
+        "id": "probeImage",
+        "handler": "probeImage",
+        "title": "Probe image"
+      }
+    ]
+  },
+  "contributes": {
+    "tools": [
+      {
+        "id": "probe-image",
+        "name": "probe_image",
+        "title": "Probe image",
+        "description": "Ask the configured vision subagent about selected image attachments when the current model cannot see images.",
+        "action": "probeImage",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "imageIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^img_[a-f0-9]{12}$"
+              },
+              "minItems": 1,
+              "maxItems": 8
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            }
+          },
+          "required": ["imageIds", "question"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "permissions": ["images:read", "agent:run"]
+}

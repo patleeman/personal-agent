@@ -12,6 +12,7 @@ export default defineConfig({
       '@personal-agent/extensions/data': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/data.ts'),
       '@personal-agent/extensions/settings': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/settings.ts'),
       '@personal-agent/extensions/excalidraw': resolve(process.cwd(), 'packages/extensions/src/excalidraw.ts'),
+      '@personal-agent/extensions/backend/agent': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/agent.ts'),
       '@personal-agent/extensions/backend/artifacts': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/artifacts.ts'),
       '@personal-agent/extensions/backend/automations': resolve(
         process.cwd(),
@@ -36,6 +37,10 @@ export default defineConfig({
       '@personal-agent/extensions/backend/mcp': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/mcp.ts'),
       '@personal-agent/extensions/backend/runs': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/runs.ts'),
       '@personal-agent/extensions/backend/runtime': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/runtime.ts'),
+      '@personal-agent/extensions/backend/slackMcpGateway': resolve(
+        process.cwd(),
+        'packages/desktop/server/extensions/backendApi/slackMcpGateway.ts',
+      ),
       '@personal-agent/extensions/backend': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/index.ts'),
     },
   },

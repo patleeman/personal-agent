@@ -1,6 +1,5 @@
 interface ImageBackendContext {
   agentToolContext?: unknown;
-  toolContext?: { preferredVisionModel?: string };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,25 +55,6 @@ async function executeRegisteredTool(factory: (pi: RegisterToolApi) => void, inp
 export async function image(input: unknown, ctx: ImageBackendContext) {
   const module = await import('./imageTool.js');
   const result = (await executeRegisteredTool(module.createImageAgentExtension(), input, ctx)) as ToolExecutionResult;
-  return {
-    text: extractToolText(result),
-    ...(result.content ? { content: result.content } : {}),
-    ...(result.details ? { details: result.details } : {}),
-    ...(result.isError ? { isError: result.isError } : {}),
-  };
-}
-
-export async function probeImage(input: unknown, ctx: ImageBackendContext) {
-  const preferredVisionModel = ctx.toolContext?.preferredVisionModel?.trim();
-  if (!preferredVisionModel) {
-    throw new Error('Probe image requires a configured preferred vision model.');
-  }
-  const module = await import('./probeImageTool.js');
-  const result = (await executeRegisteredTool(
-    module.createImageProbeAgentExtension({ getPreferredVisionModel: () => preferredVisionModel }),
-    input,
-    ctx,
-  )) as ToolExecutionResult;
   return {
     text: extractToolText(result),
     ...(result.content ? { content: result.content } : {}),
