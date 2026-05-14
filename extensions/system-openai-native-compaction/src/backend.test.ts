@@ -4,8 +4,8 @@ const { compactMock } = vi.hoisted(() => ({
   compactMock: vi.fn(),
 }));
 
-vi.mock('@earendil-works/pi-coding-agent', () => ({
-  compact: compactMock,
+vi.mock('@personal-agent/extensions/backend/compaction', () => ({
+  compactConversation: compactMock,
 }));
 
 import openaiNativeCompactionExtension, {

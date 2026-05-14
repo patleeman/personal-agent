@@ -23,6 +23,10 @@ export default defineConfig({
         process.cwd(),
         'packages/desktop/server/extensions/backendApi/checkpoints.ts',
       ),
+      '@personal-agent/extensions/backend/compaction': resolve(
+        process.cwd(),
+        'packages/desktop/server/extensions/backendApi/compaction.ts',
+      ),
       '@personal-agent/extensions/backend/conversations': resolve(
         process.cwd(),
         'packages/desktop/server/extensions/backendApi/conversations.ts',

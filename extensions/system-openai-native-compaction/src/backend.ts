@@ -1,7 +1,8 @@
 import { arch, platform } from 'node:os';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { compact, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { compactConversation } from '@personal-agent/extensions/backend/compaction';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonRecord = { [key: string]: unknown };
@@ -611,7 +612,17 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
     const shape = requestShapeBySession.get(sessionId);
 
     const [localSummary, remoteCompaction] = await Promise.allSettled([
-      compact(event.preparation, model as never, auth.apiKey, auth.headers, event.customInstructions, event.signal),
+      compactConversation(
+        {
+          preparation: event.preparation,
+          model,
+          apiKey: auth.apiKey,
+          headers: auth.headers,
+          customInstructions: event.customInstructions,
+          signal: event.signal,
+        },
+        ctx as never,
+      ),
       callNativeCompaction({
         model,
         apiKey: auth.apiKey,

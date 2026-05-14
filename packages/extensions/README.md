@@ -235,6 +235,7 @@ Prefer focused backend subpaths for narrow primitives so extension bundles do no
 
 ```ts
 import { saveConversationCommitCheckpoint } from '@personal-agent/extensions/backend/checkpoints';
+import { compactConversation } from '@personal-agent/extensions/backend/compaction';
 ```
 
 Extensions that need a host-owned one-shot agent can use the agent seam instead of importing Pi directly:
