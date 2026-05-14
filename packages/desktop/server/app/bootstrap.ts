@@ -5,8 +5,6 @@ import { join } from 'node:path';
 
 import express, { type Express } from 'express';
 
-import type { RecoverDurableLiveConversationsDependencies } from '../conversations/conversationRecovery.js';
-import { recoverDurableLiveConversations } from '../conversations/conversationRecovery.js';
 import {
   applyWebSecurityHeaders,
   enforceSameOriginUnsafeRequests,
@@ -107,55 +105,6 @@ export function startDeferredResumeLoop(options: { flushLiveDeferredResumes: () 
 
 export function normalizeDeferredResumePollMs(value: number): number {
   return Number.isSafeInteger(value) && value > 0 ? Math.min(60_000, value) : 5_000;
-}
-
-export function startConversationRecovery(options: {
-  flushLiveDeferredResumes: () => Promise<void>;
-  buildLiveSessionResourceOptions: () => RecoverDurableLiveConversationsDependencies['loaderOptions'];
-  buildLiveSessionExtensionFactories: () => NonNullable<RecoverDurableLiveConversationsDependencies['loaderOptions']>['extensionFactories'];
-  isLive: RecoverDurableLiveConversationsDependencies['isLive'];
-  resumeSession: RecoverDurableLiveConversationsDependencies['resumeSession'];
-  queuePromptContext: RecoverDurableLiveConversationsDependencies['queuePromptContext'];
-  promptSession: RecoverDurableLiveConversationsDependencies['promptSession'];
-}): void {
-  const startedAt = process.hrtime.bigint();
-  void recoverDurableLiveConversations({
-    isLive: options.isLive,
-    resumeSession: options.resumeSession,
-    queuePromptContext: options.queuePromptContext,
-    promptSession: options.promptSession,
-    loaderOptions: {
-      ...options.buildLiveSessionResourceOptions(),
-      extensionFactories: options.buildLiveSessionExtensionFactories(),
-    },
-    logger: {
-      info: (message) => logInfo(message),
-      warn: (message) => logWarn(message),
-    },
-  })
-    .then(async (result) => {
-      persistAppTelemetryEvent({
-        source: 'system',
-        category: 'system_health',
-        name: 'conversation_recovery_completed',
-        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
-        count: result.recovered.length,
-      });
-      if (result.recovered.length > 0) {
-        logInfo(`Recovered ${String(result.recovered.length)} live conversation runs from durable state.`);
-        await options.flushLiveDeferredResumes();
-      }
-    })
-    .catch((error) => {
-      persistAppTelemetryEvent({
-        source: 'system',
-        category: 'system_health',
-        name: 'conversation_recovery_failed',
-        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
-        metadata: { message: (error as Error).message },
-      });
-      logWarn(`Conversation recovery failed: ${(error as Error).message}`);
-    });
 }
 
 export function mountStaticServerApps(options: { app: Express; distDir: string }): void {

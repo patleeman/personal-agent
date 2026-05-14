@@ -20,7 +20,6 @@ vi.mock('./bootstrap.js', async () => {
   const actual = await vi.importActual<typeof import('./bootstrap.js')>('./bootstrap.js');
   return {
     ...actual,
-    startConversationRecovery: vi.fn(),
     startDeferredResumeLoop: vi.fn(),
   };
 });

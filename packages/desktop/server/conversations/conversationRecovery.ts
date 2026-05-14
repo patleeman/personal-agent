@@ -7,10 +7,8 @@ import { getDurableRun } from '../automation/durableRuns.js';
 import { logError } from '../middleware/index.js';
 import {
   createWebLiveConversationRunId,
-  listRecoverableWebLiveConversationRuns,
   syncWebLiveConversationRun,
   type WebLiveConversationPendingOperation,
-  type WebLiveConversationPromptImage,
 } from './conversationRuns.js';
 import {
   isLive as isLiveSession,
@@ -44,31 +42,6 @@ export interface RecoverConversationResult {
   usedFallbackPrompt: boolean;
 }
 
-export interface RecoverDurableLiveConversationsDependencies {
-  isLive: (conversationId: string) => boolean;
-  resumeSession: (sessionFile: string, options?: RecoveryLoaderOptions & { cwdOverride?: string }) => Promise<{ id: string }>;
-  queuePromptContext: (conversationId: string, customType: string, content: string) => Promise<void>;
-  promptSession: (
-    conversationId: string,
-    text: string,
-    behavior?: 'steer' | 'followUp',
-    images?: WebLiveConversationPromptImage[],
-  ) => Promise<void>;
-  loaderOptions?: RecoveryLoaderOptions;
-  logger?: {
-    info: (message: string) => void;
-    warn: (message: string) => void;
-  };
-}
-
-export interface RecoverDurableLiveConversationsResult {
-  recovered: Array<{
-    runId: string;
-    conversationId: string;
-    replayedPendingOperation: boolean;
-  }>;
-}
-
 function buildRecoveryLoaderOptions(context: RecoverConversationCapabilityContext, profile: string): RecoveryLoaderOptions {
   return {
     ...context.buildLiveSessionResourceOptions(profile),
@@ -79,18 +52,6 @@ function buildRecoveryLoaderOptions(context: RecoverConversationCapabilityContex
 function readCheckpointString(payload: Record<string, unknown>, key: string): string | undefined {
   const value = payload[key];
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-}
-
-function isLegacySyntheticResumeFallbackOperation(operation: WebLiveConversationPendingOperation | null | undefined): boolean {
-  if (!operation || operation.type !== 'prompt') {
-    return false;
-  }
-
-  const hasImages = Array.isArray(operation.images) && operation.images.length > 0;
-  const hasContextMessages = Array.isArray(operation.contextMessages) && operation.contextMessages.length > 0;
-  return (
-    operation.text.trim() === 'Continue from where you left off.' && operation.behavior === undefined && !hasImages && !hasContextMessages
-  );
 }
 
 async function continueRecoveredConversation(input: {
@@ -226,48 +187,4 @@ export async function recoverConversationCapability(
     recovered: true,
     ...continuation,
   };
-}
-
-export async function recoverDurableLiveConversations(
-  dependencies: RecoverDurableLiveConversationsDependencies,
-): Promise<RecoverDurableLiveConversationsResult> {
-  const recovered: RecoverDurableLiveConversationsResult['recovered'] = [];
-  const runs = await listRecoverableWebLiveConversationRuns();
-  for (const run of runs) {
-    if (dependencies.isLive(run.conversationId)) {
-      continue;
-    }
-
-    try {
-      const pendingOperation = isLegacySyntheticResumeFallbackOperation(run.pendingOperation) ? null : run.pendingOperation;
-
-      if (!pendingOperation) {
-        await syncWebLiveConversationRun({
-          conversationId: run.conversationId,
-          sessionFile: run.sessionFile,
-          cwd: run.cwd,
-          title: run.title,
-          profile: run.profile,
-          state: 'waiting',
-          pendingOperation: null,
-        });
-        continue;
-      }
-
-      await syncWebLiveConversationRun({
-        conversationId: run.conversationId,
-        sessionFile: run.sessionFile,
-        cwd: run.cwd,
-        title: run.title,
-        profile: run.profile,
-        state: 'waiting',
-        pendingOperation: null,
-      });
-      dependencies.logger?.info(`cleared pending conversation replay run=${run.runId} conversation=${run.conversationId}`);
-    } catch (error) {
-      dependencies.logger?.warn(`failed to recover conversation run=${run.runId}: ${(error as Error).message}`);
-    }
-  }
-
-  return { recovered };
 }

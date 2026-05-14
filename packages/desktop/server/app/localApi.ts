@@ -114,11 +114,8 @@ import {
   getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
   isLive as isLiveSession,
-  promptSession,
-  queuePromptContext,
   registry as liveRegistry,
   renameSession,
-  resumeSession,
   subscribe as subscribeLiveSession,
 } from '../conversations/liveSessions.js';
 import {
@@ -166,7 +163,7 @@ import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/setti
 import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { pickFolderCapability, readVaultFilesCapability } from '../workspace/workspaceDesktopCapability.js';
-import { startConversationRecovery, startDeferredResumeLoop } from './bootstrap.js';
+import { startDeferredResumeLoop } from './bootstrap.js';
 import { type DesktopLocalApiStreamEvent, subscribeDesktopLocalApiStreamByUrl } from './localApiStreams.js';
 import { createServerRouteContext } from './routeContext.js';
 import { createRuntimeState } from './runtimeState.js';
@@ -525,18 +522,6 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     withTemporaryProfileAgentDir: (_profile, run) => runtimeState.withTemporaryRuntimeAgentDir(run),
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   });
-
-  if (isMainThread) {
-    startConversationRecovery({
-      flushLiveDeferredResumes,
-      buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
-      buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
-      isLive: isLiveSession,
-      resumeSession,
-      queuePromptContext,
-      promptSession,
-    });
-  }
 
   localServerRouteContext = context;
 

@@ -1,16 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const recoverDurableLiveConversationsMock = vi.hoisted(() => vi.fn());
 const logInfoMock = vi.hoisted(() => vi.fn());
 const logWarnMock = vi.hoisted(() => vi.fn());
 const reloadAllLiveSessionAuthMock = vi.hoisted(() => vi.fn());
 const subscribeProviderOAuthLoginsMock = vi.hoisted(() => vi.fn());
 const createServiceAttentionMonitorMock = vi.hoisted(() => vi.fn());
 const startAppEventMonitorMock = vi.hoisted(() => vi.fn());
-
-vi.mock('../conversations/conversationRecovery.js', () => ({
-  recoverDurableLiveConversations: recoverDurableLiveConversationsMock,
-}));
 
 vi.mock('../middleware/index.js', () => ({
   applyWebSecurityHeaders: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -33,17 +28,10 @@ vi.mock('../shared/appEvents.js', () => ({
   startAppEventMonitor: startAppEventMonitorMock,
 }));
 
-import {
-  normalizeDeferredResumePollMs,
-  startBootstrapMonitors,
-  startConversationRecovery,
-  startDeferredResumeLoop,
-  startServerListeners,
-} from './bootstrap.js';
+import { normalizeDeferredResumePollMs, startBootstrapMonitors, startDeferredResumeLoop, startServerListeners } from './bootstrap.js';
 
 describe('bootstrap monitor helpers', () => {
   beforeEach(() => {
-    recoverDurableLiveConversationsMock.mockReset();
     logInfoMock.mockReset();
     logWarnMock.mockReset();
     reloadAllLiveSessionAuthMock.mockReset();
@@ -124,65 +112,6 @@ describe('bootstrap monitor helpers', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     expect(flushLiveDeferredResumes).toHaveBeenCalledTimes(2);
     expect(logWarnMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('flushes deferred resumes after successful conversation recovery', async () => {
-    const flushLiveDeferredResumes = vi.fn().mockResolvedValue(undefined);
-    recoverDurableLiveConversationsMock.mockImplementation(
-      async (options: { logger: { info: (message: string) => void; warn: (message: string) => void } }) => {
-        options.logger.info('recovery detail');
-        options.logger.warn('recovery warning');
-        return { recovered: [{ id: 'run-1' }] };
-      },
-    );
-
-    startConversationRecovery({
-      flushLiveDeferredResumes,
-      buildLiveSessionResourceOptions: () => ({ cwd: '/repo' }) as never,
-      buildLiveSessionExtensionFactories: () => [] as never,
-      isLive: () => true,
-      resumeSession: async () => undefined,
-      queuePromptContext: async () => undefined,
-      promptSession: async () => undefined,
-    });
-
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(recoverDurableLiveConversationsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        loaderOptions: {
-          cwd: '/repo',
-          extensionFactories: [],
-        },
-        logger: {
-          info: expect.any(Function),
-          warn: expect.any(Function),
-        },
-      }),
-    );
-    expect(logInfoMock).toHaveBeenCalledWith('recovery detail');
-    expect(logWarnMock).toHaveBeenCalledWith('recovery warning');
-    expect(logInfoMock).toHaveBeenCalledWith('Recovered 1 live conversation runs from durable state.');
-    expect(flushLiveDeferredResumes).toHaveBeenCalledTimes(1);
-  });
-
-  it('logs conversation recovery failures', async () => {
-    recoverDurableLiveConversationsMock.mockRejectedValue(new Error('recovery exploded'));
-
-    startConversationRecovery({
-      flushLiveDeferredResumes: async () => undefined,
-      buildLiveSessionResourceOptions: () => ({}) as never,
-      buildLiveSessionExtensionFactories: () => [] as never,
-      isLive: () => false,
-      resumeSession: async () => undefined,
-      queuePromptContext: async () => undefined,
-      promptSession: async () => undefined,
-    });
-
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(logWarnMock).toHaveBeenCalledWith('Conversation recovery failed: recovery exploded');
   });
 });
 

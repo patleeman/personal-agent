@@ -8,7 +8,6 @@ vi.mock('./bootstrap.js', async () => {
   const actual = await vi.importActual<typeof import('./bootstrap.js')>('./bootstrap.js');
   return {
     ...actual,
-    startConversationRecovery: vi.fn(),
     startDeferredResumeLoop: vi.fn(),
   };
 });
@@ -22,7 +21,6 @@ vi.mock('@personal-agent/core', async () => {
   };
 });
 
-import { startConversationRecovery } from './bootstrap.js';
 import { dispatchDesktopLocalApiRequest, normalizeDesktopLocalApiTailBlocks, rollbackDesktopConversation } from './localApi.js';
 
 function readJsonBody(response: Awaited<ReturnType<typeof dispatchDesktopLocalApiRequest>>) {
@@ -112,14 +110,6 @@ describe('desktop local API vault routes', () => {
       path: '/api/vault/tree',
     });
 
-    expect(startConversationRecovery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isLive: expect.any(Function),
-        resumeSession: expect.any(Function),
-        queuePromptContext: expect.any(Function),
-        promptSession: expect.any(Function),
-      }),
-    );
     expect(treeResponse.statusCode).toBe(200);
     expect(readJsonBody(treeResponse)).toEqual(
       expect.objectContaining({
