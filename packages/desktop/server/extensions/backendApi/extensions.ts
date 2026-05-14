@@ -1,6 +1,4 @@
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { importServerExtensionModule } from './serverModuleResolver.js';
 
 type ExtensionLifecycleModule = typeof import('../extensionLifecycle.js');
 type ExtensionBackendModule = typeof import('../extensionBackend.js');
@@ -10,47 +8,20 @@ type ExtensionRegistryModule = typeof import('../extensionRegistry.js');
 type RuntimeExtensionCreateOptions = Parameters<ExtensionLifecycleModule['createRuntimeExtension']>[0];
 type ValidateExtensionPackageOptions = Parameters<ExtensionDoctorModule['validateExtensionPackage']>[0];
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
-
-function resolveServerExtensionModuleSpecifier(relativeSpecifier: string): string {
-  const normalized = relativeSpecifier.replace(/^\.\.\//, 'extensions/').replace(/^\/+/, '');
-  const candidates = [
-    ...(process.env.PERSONAL_AGENT_REPO_ROOT
-      ? [
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist', normalized),
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server', normalized),
-        ]
-      : []),
-    resolve(process.cwd(), 'packages/desktop/server/dist', normalized),
-    resolve(process.cwd(), 'packages/desktop/dist/server', normalized),
-    resolve(dirname(fileURLToPath(import.meta.url)), relativeSpecifier),
-    ...(typeof process.resourcesPath === 'string'
-      ? [
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/server/dist', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/server/dist', normalized),
-          resolve(process.resourcesPath, 'server/dist', normalized),
-        ]
-      : []),
-  ];
-  const found = candidates.find((candidate) => existsSync(candidate));
-  return found ? pathToFileURL(found).href : relativeSpecifier;
-}
-
 async function importExtensionLifecycle(): Promise<ExtensionLifecycleModule> {
-  return dynamicImport<ExtensionLifecycleModule>(resolveServerExtensionModuleSpecifier('../extensionLifecycle.js'));
+  return importServerExtensionModule<ExtensionLifecycleModule>('../extensionLifecycle.js');
 }
 
 async function importExtensionBackend(): Promise<ExtensionBackendModule> {
-  return dynamicImport<ExtensionBackendModule>(resolveServerExtensionModuleSpecifier('../extensionBackend.js'));
+  return importServerExtensionModule<ExtensionBackendModule>('../extensionBackend.js');
 }
 
 async function importExtensionDoctor(): Promise<ExtensionDoctorModule> {
-  return dynamicImport<ExtensionDoctorModule>(resolveServerExtensionModuleSpecifier('../extensionDoctor.js'));
+  return importServerExtensionModule<ExtensionDoctorModule>('../extensionDoctor.js');
 }
 
 async function importExtensionRegistry(): Promise<ExtensionRegistryModule> {
-  return dynamicImport<ExtensionRegistryModule>(resolveServerExtensionModuleSpecifier('../extensionRegistry.js'));
+  return importServerExtensionModule<ExtensionRegistryModule>('../extensionRegistry.js');
 }
 
 export async function buildRuntimeExtension(extensionId: string) {

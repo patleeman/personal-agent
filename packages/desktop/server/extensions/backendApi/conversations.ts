@@ -1,6 +1,4 @@
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { callServerModuleExport } from './serverModuleResolver.js';
 
 export const CONVERSATION_INSPECT_SCOPE_VALUES = ['all', 'live', 'running', 'archived'] as const;
 export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'search', 'query', 'diff', 'outline', 'read_window'] as const;
@@ -8,33 +6,6 @@ export const CONVERSATION_INSPECT_ORDER_VALUES = ['asc', 'desc'] as const;
 export const CONVERSATION_INSPECT_BLOCK_TYPE_VALUES = ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'] as const;
 export const CONVERSATION_INSPECT_ROLE_VALUES = ['user', 'assistant', 'tool', 'context', 'summary', 'image', 'error'] as const;
 export const CONVERSATION_INSPECT_SEARCH_MODE_VALUES = ['phrase', 'allTerms', 'anyTerm'] as const;
-
-const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
-
-function resolveServerModuleSpecifier(relativeSpecifier: string): string {
-  const normalized = relativeSpecifier.replace(/^\.\.\/\.\.\//, '').replace(/^\/+/, '');
-  const candidates = [
-    ...(process.env.PERSONAL_AGENT_REPO_ROOT
-      ? [
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist', normalized),
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server', normalized),
-        ]
-      : []),
-    resolve(process.cwd(), 'packages/desktop/server/dist', normalized),
-    resolve(process.cwd(), 'packages/desktop/dist/server', normalized),
-    resolve(dirname(fileURLToPath(import.meta.url)), relativeSpecifier),
-    ...(typeof process.resourcesPath === 'string'
-      ? [
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/server/dist', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/server/dist', normalized),
-          resolve(process.resourcesPath, 'server/dist', normalized),
-        ]
-      : []),
-  ];
-  const found = candidates.find((candidate) => existsSync(candidate));
-  return found ? pathToFileURL(found).href : relativeSpecifier;
-}
 
 export async function normalizeGeneratedConversationTitle(...args: unknown[]) {
   return callModuleExport('../../conversations/conversationAutoTitle.js', 'normalizeGeneratedConversationTitle', ...args);
@@ -49,10 +20,14 @@ export async function querySessionSuggestedPointerIds(...args: unknown[]) {
 }
 
 async function callModuleExport<T>(specifier: string, name: string, ...args: unknown[]): Promise<T> {
-  const module = await dynamicImport(resolveServerModuleSpecifier(specifier));
-  const fn = module[name];
-  if (typeof fn !== 'function') throw new Error(`Conversation backend API export ${name} is unavailable.`);
-  return (fn as (...callArgs: unknown[]) => Promise<T> | T)(...args);
+  try {
+    return await callServerModuleExport<T>(specifier, name, ...args);
+  } catch (error) {
+    if (error instanceof Error && error.message === `Backend API export ${name} is unavailable.`) {
+      throw new Error(`Conversation backend API export ${name} is unavailable.`);
+    }
+    throw error;
+  }
 }
 
 export async function executeConversationInspect(...args: unknown[]) {

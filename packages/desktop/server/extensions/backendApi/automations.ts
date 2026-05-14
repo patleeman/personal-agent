@@ -1,7 +1,3 @@
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-
 export const DEFAULT_DEFERRED_RESUME_PROMPT = 'Continue when ready.';
 
 export type LoadedScheduledTasksForProfile = { tasks: Array<Record<string, any>>; parseErrors: Array<Record<string, any>> };
@@ -11,41 +7,10 @@ export type StoredAutomation = Record<string, any>;
 export type QueuedPromptPreview = Record<string, any>;
 
 import { callDaemonExport } from './daemonBridge.js';
-
-const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
-
-function resolveServerModuleSpecifier(relativeSpecifier: string): string {
-  if (!relativeSpecifier.startsWith('.')) return relativeSpecifier;
-
-  const normalized = relativeSpecifier.replace(/^\.\.\/\.\.\//, '').replace(/^\/+/, '');
-  const candidates = [
-    ...(process.env.PERSONAL_AGENT_REPO_ROOT
-      ? [
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/dist', normalized),
-          resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server', normalized),
-        ]
-      : []),
-    resolve(process.cwd(), 'packages/desktop/server/dist', normalized),
-    resolve(process.cwd(), 'packages/desktop/dist/server', normalized),
-    resolve(dirname(fileURLToPath(import.meta.url)), relativeSpecifier),
-    ...(typeof process.resourcesPath === 'string'
-      ? [
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/server/dist', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/packages/desktop/dist/server', normalized),
-          resolve(process.resourcesPath, 'app.asar.unpacked/server/dist', normalized),
-          resolve(process.resourcesPath, 'server/dist', normalized),
-        ]
-      : []),
-  ];
-  const found = candidates.find((candidate) => existsSync(candidate));
-  return found ? pathToFileURL(found).href : relativeSpecifier;
-}
+import { callServerModuleExport } from './serverModuleResolver.js';
 
 async function callModuleExport<T>(specifier: string, name: string, ...args: unknown[]): Promise<T> {
-  const module = await dynamicImport(resolveServerModuleSpecifier(specifier));
-  const fn = module[name];
-  if (typeof fn !== 'function') throw new Error(`Backend API export ${name} is unavailable.`);
-  return (fn as (...callArgs: unknown[]) => Promise<T> | T)(...args);
+  return callServerModuleExport<T>(specifier, name, ...args);
 }
 
 export async function parseFutureHumanDateTime(input: string) {
