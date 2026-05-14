@@ -63,7 +63,10 @@ export async function installModel(input: { model?: unknown }, ctx: ExtensionBac
   return createProvider(model, ctx.runtimeDir).installModel();
 }
 
-export async function transcribeFile(input: { dataBase64?: unknown; mimeType?: unknown; fileName?: unknown; language?: unknown }, ctx: ExtensionBackendContext) {
+export async function transcribeFile(
+  input: { dataBase64?: unknown; mimeType?: unknown; fileName?: unknown; language?: unknown },
+  ctx: ExtensionBackendContext,
+) {
   const settings = readDictationSettings(settingsFile(ctx.runtimeDir));
   if (!settings.enabled) throw new Error('Enable dictation in Settings before using it.');
   const provider = createProvider(settings.model, ctx.runtimeDir);

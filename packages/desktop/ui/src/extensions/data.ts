@@ -1,6 +1,8 @@
 export { useAppData } from '../app/contexts';
 export { api } from '../client/api';
+export { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
 export type { MentionItem } from '../conversation/conversationMentions';
+export type { RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 export {
   EXTENSION_REGISTRY_CHANGED_EVENT,
   getExtensionRegistryRevision,
@@ -43,8 +45,6 @@ export type {
   VaultTreeResult,
 } from '../shared/types';
 export { timeAgo, timeAgoCompact } from '../shared/utils';
-export { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
-export type { RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 export type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../transcript/askUserQuestions';
 export {
   isAskUserQuestionComplete,

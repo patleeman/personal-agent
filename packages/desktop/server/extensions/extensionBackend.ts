@@ -9,10 +9,10 @@ import { getPiAgentRuntimeDir, getStateRoot, resolveLocalProfileSettingsFilePath
 import type { Plugin } from 'esbuild';
 
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
+import { resolveSecret } from '../secrets/secretStore.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { logError, logInfo, logWarn } from '../shared/logging.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
-import { resolveSecret } from '../secrets/secretStore.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import {
   isPrebuiltOnlyExtensionRuntime,

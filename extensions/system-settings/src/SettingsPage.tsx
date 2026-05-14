@@ -738,91 +738,91 @@ export function DesktopKeyboardShortcutsSettingsSection() {
       {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
       {preferencesState ? (
         <div className="space-y-4">
-            <div className="divide-y divide-border-subtle/70">
-              {shortcutItems.map((item) => {
-                const editableId = item.extensionId ? null : item.editable ? (item.id as DesktopKeyboardShortcutId) : null;
-                const shortcutValue = item.extensionId
-                  ? (item.shortcuts[0] ?? item.defaultShortcuts?.[0] ?? '')
-                  : editableId
-                    ? draft[editableId]
-                    : '';
-                return (
-                  <div key={item.id} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center">
-                    <span className="min-w-0 space-y-1">
-                      <span className="block text-[13px] font-medium text-primary">{item.label}</span>
-                      <span className="block text-[12px] leading-5 text-secondary">
-                        {item.owner}
-                        {item.description ? ` · ${item.description}` : ''}
-                      </span>
+          <div className="divide-y divide-border-subtle/70">
+            {shortcutItems.map((item) => {
+              const editableId = item.extensionId ? null : item.editable ? (item.id as DesktopKeyboardShortcutId) : null;
+              const shortcutValue = item.extensionId
+                ? (item.shortcuts[0] ?? item.defaultShortcuts?.[0] ?? '')
+                : editableId
+                  ? draft[editableId]
+                  : '';
+              return (
+                <div key={item.id} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center">
+                  <span className="min-w-0 space-y-1">
+                    <span className="block text-[13px] font-medium text-primary">{item.label}</span>
+                    <span className="block text-[12px] leading-5 text-secondary">
+                      {item.owner}
+                      {item.description ? ` · ${item.description}` : ''}
                     </span>
-                    {editableId || item.extensionId ? (
-                      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-                        <KeyboardShortcutCaptureInput
-                          id={`settings-keyboard-${item.id}`}
-                          value={item.enabled === false ? 'Disabled' : shortcutValue}
-                          onChange={(shortcut) => {
-                            if (editableId) {
-                              const nextDraft = { ...draft, [editableId]: shortcut };
-                              setDraft(nextDraft);
-                              setError(null);
-                              setNotice(null);
-                              void saveKeyboardShortcuts(nextDraft);
-                              return;
-                            }
-                            void saveExtensionKeybinding(item, { keys: [shortcut], enabled: true });
-                          }}
-                          disabled={saving || item.enabled === false}
-                        />
-                        {item.extensionId ? (
-                          <>
-                            <button
-                              type="button"
-                              className={ACTION_BUTTON_CLASS}
-                              disabled={saving}
-                              onClick={() => void saveExtensionKeybinding(item, { enabled: item.enabled === false })}
-                            >
-                              {item.enabled === false ? 'Enable' : 'Disable'}
-                            </button>
-                            <button
-                              type="button"
-                              className={ACTION_BUTTON_CLASS}
-                              disabled={saving}
-                              onClick={() => void saveExtensionKeybinding(item, { reset: true })}
-                            >
-                              Reset
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+                  </span>
+                  {editableId || item.extensionId ? (
+                    <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                      <KeyboardShortcutCaptureInput
+                        id={`settings-keyboard-${item.id}`}
+                        value={item.enabled === false ? 'Disabled' : shortcutValue}
+                        onChange={(shortcut) => {
+                          if (editableId) {
+                            const nextDraft = { ...draft, [editableId]: shortcut };
+                            setDraft(nextDraft);
+                            setError(null);
+                            setNotice(null);
+                            void saveKeyboardShortcuts(nextDraft);
+                            return;
+                          }
+                          void saveExtensionKeybinding(item, { keys: [shortcut], enabled: true });
+                        }}
+                        disabled={saving || item.enabled === false}
+                      />
+                      {item.extensionId ? (
+                        <>
+                          <button
+                            type="button"
+                            className={ACTION_BUTTON_CLASS}
+                            disabled={saving}
+                            onClick={() => void saveExtensionKeybinding(item, { enabled: item.enabled === false })}
+                          >
+                            {item.enabled === false ? 'Enable' : 'Disable'}
+                          </button>
+                          <button
+                            type="button"
+                            className={ACTION_BUTTON_CLASS}
+                            disabled={saving}
+                            onClick={() => void saveExtensionKeybinding(item, { reset: true })}
+                          >
+                            Reset
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
 
-            {duplicateShortcut ? (
-              <p className="text-[12px] text-danger">
-                {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both {duplicateShortcut.first.label} and{' '}
-                {duplicateShortcut.second.label}.
-              </p>
-            ) : null}
-            {error ? <p className="text-[12px] text-danger">{error}</p> : null}
-            {notice ? <p className="text-[12px] text-success">{notice}</p> : null}
+          {duplicateShortcut ? (
+            <p className="text-[12px] text-danger">
+              {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both {duplicateShortcut.first.label} and{' '}
+              {duplicateShortcut.second.label}.
+            </p>
+          ) : null}
+          {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+          {notice ? <p className="text-[12px] text-success">{notice}</p> : null}
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="ui-card-meta">{saving ? 'Saving…' : dirty ? 'Unsaved change pending…' : 'Auto-saved'}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
-                  void saveKeyboardShortcuts(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
-                }}
-                disabled={saving || duplicateShortcut !== null}
-                className={ACTION_BUTTON_CLASS}
-              >
-                Reset to defaults
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="ui-card-meta">{saving ? 'Saving…' : dirty ? 'Unsaved change pending…' : 'Auto-saved'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
+                void saveKeyboardShortcuts(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
+              }}
+              disabled={saving || duplicateShortcut !== null}
+              className={ACTION_BUTTON_CLASS}
+            >
+              Reset to defaults
+            </button>
+          </div>
         </div>
       ) : null}
     </SettingsPanel>

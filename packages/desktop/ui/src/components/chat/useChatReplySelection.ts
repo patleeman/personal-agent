@@ -1,7 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { writeClipboardText } from '../../desktop/clipboard';
-
 import { findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement } from './replySelection.js';
 
 interface ReplySelectionState {

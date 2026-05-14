@@ -206,11 +206,7 @@ export function WorkbenchBrowserTab({
       .extensionKeybindings()
       .then((keybindings) => {
         if (!cancelled) {
-          setSurfaceKeybindings(
-            keybindings.filter(
-              (keybinding) => keybinding.enabled && keybinding.scope === 'surface',
-            ),
-          );
+          setSurfaceKeybindings(keybindings.filter((keybinding) => keybinding.enabled && keybinding.scope === 'surface'));
         }
       })
       .catch(() => {

@@ -1717,7 +1717,7 @@ async function pickExtensionFolder(cwd?: string): Promise<string | null> {
   });
   if (!response.ok) throw new Error(await response.text());
   const result = (await response.json()) as { cancelled?: boolean; path?: string };
-  return result.cancelled ? null : result.path ?? null;
+  return result.cancelled ? null : (result.path ?? null);
 }
 
 function ReadOnlyPathRow({ label, path, detail }: { label: string; path: string; detail?: string }) {
@@ -1844,7 +1844,12 @@ export function ExtensionManagerSettingsPanel({ pa }: { pa: NativeExtensionClien
                 placeholder="/Users/patrick/path/to/extensions"
                 className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-base px-3 py-2 font-mono text-[12px] text-primary outline-none transition-colors placeholder:text-dim focus:border-accent/60"
               />
-              <button type="button" className="ui-toolbar-button rounded-lg px-3 py-2 text-[12px]" disabled={Boolean(busy)} onClick={() => choosePath(index)}>
+              <button
+                type="button"
+                className="ui-toolbar-button rounded-lg px-3 py-2 text-[12px]"
+                disabled={Boolean(busy)}
+                onClick={() => choosePath(index)}
+              >
                 Choose…
               </button>
               <button
@@ -1864,13 +1869,27 @@ export function ExtensionManagerSettingsPanel({ pa }: { pa: NativeExtensionClien
       </div>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-border-subtle pt-4">
-        <button type="button" className="ui-toolbar-button rounded-lg px-4 py-2 text-[12px]" disabled={Boolean(busy) || !hasChanges} onClick={save}>
+        <button
+          type="button"
+          className="ui-toolbar-button rounded-lg px-4 py-2 text-[12px]"
+          disabled={Boolean(busy) || !hasChanges}
+          onClick={save}
+        >
           {busy === 'Saving…' ? 'Saving…' : 'Save paths'}
         </button>
-        <button type="button" className="rounded-lg px-4 py-2 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-50" disabled={Boolean(busy)} onClick={reloadExtensions}>
+        <button
+          type="button"
+          className="rounded-lg px-4 py-2 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-50"
+          disabled={Boolean(busy)}
+          onClick={reloadExtensions}
+        >
           Reload extensions
         </button>
-        {message ? <span className="text-[12px] text-secondary">{message}</span> : busy ? <span className="text-[12px] text-secondary">{busy}</span> : null}
+        {message ? (
+          <span className="text-[12px] text-secondary">{message}</span>
+        ) : busy ? (
+          <span className="text-[12px] text-secondary">{busy}</span>
+        ) : null}
       </div>
     </div>
   );

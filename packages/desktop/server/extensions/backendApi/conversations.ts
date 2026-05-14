@@ -9,12 +9,14 @@ export {
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
 } from '../../conversations/conversationInspectCapability.js';
 export { executeConversationInspect } from '../../conversations/conversationInspectWorkerClient.js';
+export { scheduleConversationSearchIndexing, searchIndexedConversationDocuments } from '../../conversations/conversationSearchIndex.js';
 export { readSessionDetailForRoute } from '../../conversations/conversationService.js';
 export {
   readConversationSessionMetaCapability,
   readConversationSessionsCapability,
   readConversationSessionSearchIndexCapability,
 } from '../../conversations/conversationSessionCapability.js';
+export { readConversationSummary } from '../../conversations/conversationSummaries.js';
 export {
   createSession,
   renameSession,
@@ -23,13 +25,8 @@ export {
   subscribe as subscribeLiveSession,
 } from '../../conversations/liveSessions.js';
 export { exportConversationSession, importConversationSession } from '../../conversations/sessionExchange.js';
+export { readSessionBlocks, readSessionMeta } from '../../conversations/sessions.js';
 export { persistTraceContextPointerInspect } from '../../traces/tracePersistence.js';
+export { persistTraceSuggestedContext } from '../../traces/tracePersistence.js';
 export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from '../runtimeAgentHooks.js';
 export { querySessionSuggestedPointerIds } from '@personal-agent/core';
-export { readConversationSummary } from '../../conversations/conversationSummaries.js';
-export { readSessionBlocks, readSessionMeta } from '../../conversations/sessions.js';
-export {
-  scheduleConversationSearchIndexing,
-  searchIndexedConversationDocuments,
-} from '../../conversations/conversationSearchIndex.js';
-export { persistTraceSuggestedContext } from '../../traces/tracePersistence.js';

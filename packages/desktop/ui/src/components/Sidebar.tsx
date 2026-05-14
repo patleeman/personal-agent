@@ -16,7 +16,6 @@ import { ActivityTreeView } from '../activity/ActivityTreeView';
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
-import { writeClipboardText } from '../desktop/clipboard';
 import {
   buildConversationGroupLabels,
   getConversationGroupLabel,
@@ -41,6 +40,7 @@ import {
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
+import { writeClipboardText } from '../desktop/clipboard';
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';
 import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
 import { createNativeExtensionClient } from '../extensions/nativePaClient';

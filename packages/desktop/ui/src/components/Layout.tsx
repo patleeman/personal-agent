@@ -94,7 +94,7 @@ type WorkbenchRailMode = BuiltInWorkbenchRailMode | ExtensionWorkbenchRailMode;
 function getSurfaceToolSlot(
   surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
 ): string | undefined {
-  return 'toolSlot' in surface ? (surface as Record<string, unknown>).toolSlot as string | undefined : undefined;
+  return 'toolSlot' in surface ? ((surface as Record<string, unknown>).toolSlot as string | undefined) : undefined;
 }
 
 function extensionToolPanelMode(

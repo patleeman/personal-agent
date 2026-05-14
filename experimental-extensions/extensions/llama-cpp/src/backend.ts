@@ -141,16 +141,7 @@ export async function runPrompt(input: RunPromptInput, _ctx: ExtensionBackendCon
 
   await chmod(bundledCli, 0o755).catch(() => undefined);
 
-  const args = [
-    '-m',
-    modelPath,
-    '-p',
-    prompt,
-    '-ngl',
-    String(input.gpuLayers ?? 999),
-    '-c',
-    String(input.contextSize ?? 8192),
-  ];
+  const args = ['-m', modelPath, '-p', prompt, '-ngl', String(input.gpuLayers ?? 999), '-c', String(input.contextSize ?? 8192)];
 
   const result = await runProcess(ctx, bundledCli, args, { timeoutMs: 120_000, maxBuffer: 8 * 1024 * 1024 });
   if (result.exitCode !== 0) {

@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import { AppPageIntro, AppPageLayout, ToolbarButton } from '@personal-agent/extensions/ui';
+import { useEffect, useState } from 'react';
 
 type RuntimeStatus = {
   available: boolean;
@@ -74,8 +73,12 @@ export function LlamaCppPage({ pa }: ExtensionSurfaceProps) {
           </div>
           <div className="space-y-1 text-sm text-secondary">
             <div>Status: {status?.available ? 'available' : 'missing'}</div>
-            <div>Binary: <code className="text-dim">{status?.cliPath ?? 'checking…'}</code></div>
-            <div>Model cache: <code className="text-dim">{status?.modelCacheRoot ?? 'checking…'}</code></div>
+            <div>
+              Binary: <code className="text-dim">{status?.cliPath ?? 'checking…'}</code>
+            </div>
+            <div>
+              Model cache: <code className="text-dim">{status?.modelCacheRoot ?? 'checking…'}</code>
+            </div>
             {status?.version ? <pre className="whitespace-pre-wrap text-dim">{status.version}</pre> : null}
             {status?.message ? <p className="text-warning">{status.message}</p> : null}
           </div>

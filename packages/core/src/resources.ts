@@ -631,9 +631,7 @@ export function resolveRuntimeResources(name: string, options: ResolveResourceOp
 
   // Extensions: use host-provided entries if supplied, otherwise auto-discover from layers
   const extensionDirs =
-    options.extensionDirs !== undefined
-      ? options.extensionDirs
-      : dedupe([...collectLayerDirs(localLayers, 'extensions')]);
+    options.extensionDirs !== undefined ? options.extensionDirs : dedupe([...collectLayerDirs(localLayers, 'extensions')]);
   const extensionEntries =
     options.extensionEntries !== undefined
       ? options.extensionEntries
