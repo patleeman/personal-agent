@@ -341,11 +341,11 @@
   }
 
   .ui-message-card-user {
-    @apply rounded-2xl rounded-br-sm border border-accent/15 bg-accent/10 p-2.5;
+    @apply min-w-0 max-w-full overflow-hidden rounded-2xl rounded-br-sm border border-accent/15 bg-accent/10 p-2.5;
   }
 
   .ui-message-card-assistant {
-    @apply rounded-2xl border border-steel/20 bg-surface/60 px-3.5 py-3;
+    @apply min-w-0 max-w-full overflow-hidden rounded-2xl border border-steel/20 bg-surface/60 px-3.5 py-3;
   }
 
   .ui-terminal-block {
@@ -1127,7 +1127,8 @@
   }
 
   .ui-markdown {
-    @apply text-sm leading-relaxed text-primary;
+    @apply min-w-0 max-w-full text-sm leading-relaxed text-primary;
+    overflow-wrap: anywhere;
   }
 
   .ui-markdown > *:first-child {
@@ -1198,7 +1199,7 @@
   }
 
   .ui-markdown pre {
-    @apply my-3 overflow-x-auto rounded-xl bg-elevated px-3 py-2.5;
+    @apply my-3 max-w-full overflow-x-auto rounded-xl bg-elevated px-3 py-2.5;
   }
 
   .ui-markdown-code-block {
@@ -1219,7 +1220,7 @@
   }
 
   .ui-markdown table {
-    @apply w-full border-collapse text-left;
+    @apply min-w-full border-collapse text-left;
   }
 
   .ui-markdown thead tr {

@@ -216,6 +216,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<ul');
     expect(html).toContain('<blockquote');
     expect(html).toContain('<table');
+    expect(html).toContain('my-3 min-w-0 max-w-full overflow-x-auto');
     expect(html).toContain('<pre');
     expect(html).toContain('href="https://example.com"');
     expect(html).not.toContain('Copy code block');

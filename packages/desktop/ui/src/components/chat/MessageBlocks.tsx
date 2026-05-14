@@ -124,7 +124,7 @@ export const UserMessage = memo(function UserMessage({
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <div className={layout === 'compact' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
+      <div className={layout === 'compact' ? 'min-w-0 max-w-[92%] sm:max-w-[88%]' : 'min-w-0 max-w-[86%]'}>
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
             <div className="space-y-2">
@@ -238,8 +238,8 @@ export const AssistantMessage = memo(function AssistantMessage({
       <div className="ui-chat-avatar mt-0.5">
         <span className="ui-chat-avatar-mark">pa</span>
       </div>
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <div {...replySelectionScopeProps} className="ui-message-card-assistant text-primary space-y-1">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div {...replySelectionScopeProps} className="ui-message-card-assistant space-y-1 text-primary">
           {showRawRunCallbackCard ? (
             <RawRunCallbackCard
               runs={rawRunCallbackRuns}

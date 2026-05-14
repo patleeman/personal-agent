@@ -388,7 +388,7 @@ const MarkdownText = memo(function MarkdownText({
             );
           },
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto">
+            <div className="my-3 min-w-0 max-w-full overflow-x-auto">
               <table>{children}</table>
             </div>
           ),
