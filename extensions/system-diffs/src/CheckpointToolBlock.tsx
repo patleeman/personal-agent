@@ -75,7 +75,7 @@ const CheckpointToolBlock = memo(function CheckpointToolBlock({
                 onClick={() => onOpenCheckpoint(checkpoint.checkpointId)}
                 className={cx('ui-action-button text-[11px]', isActive ? 'text-secondary' : 'text-accent')}
               >
-                {isActive ? 'Modal open' : 'Open modal'}
+                {isActive ? 'Showing diff' : 'Show diff'}
               </button>
             </div>
           ) : null}
