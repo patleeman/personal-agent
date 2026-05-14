@@ -3231,17 +3231,8 @@ describe('conversation auto mode', () => {
     expect(appendCustomEntry).toHaveBeenCalledWith('conversation-auto-mode', state);
     expect(sendCustomMessage).not.toHaveBeenCalled();
 
-    await expect(requestConversationAutoModeTurn('session-auto-mode')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customType: 'conversation_automation_post_turn_review',
-        display: false,
-      }),
-      {
-        deliverAs: 'followUp',
-        triggerTurn: true,
-      },
-    );
+    await expect(requestConversationAutoModeTurn('session-auto-mode')).resolves.toBe(false);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
   it('does not queue an auto review turn on a brand new conversation with no assistant history yet', async () => {
@@ -3314,7 +3305,7 @@ describe('conversation auto mode', () => {
     await expect(requestConversationAutoModeTurn('session-auto-mode-busy')).resolves.toBe(false);
   });
 
-  it('stores continuation intent and requests a hidden continuation turn when auto mode continues', async () => {
+  it('ignores legacy continuation intent because goal mode owns continuations', async () => {
     const sendCustomMessage = vi.fn(async () => undefined);
 
     setLiveEntry('session-auto-continue', {
@@ -3349,20 +3340,10 @@ describe('conversation auto mode', () => {
     });
 
     markConversationAutoModeContinueRequested('session-auto-continue');
-    expect(registry.get('session-auto-continue')?.pendingAutoModeContinuation).toBe(true);
+    expect(registry.get('session-auto-continue')?.pendingAutoModeContinuation).toBeUndefined();
 
-    await expect(requestConversationAutoModeContinuationTurn('session-auto-continue')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customType: 'conversation_automation_auto_continue',
-        display: false,
-        details: expect.objectContaining({ source: 'conversation-auto-mode' }),
-      }),
-      {
-        deliverAs: 'followUp',
-        triggerTurn: true,
-      },
-    );
+    await expect(requestConversationAutoModeContinuationTurn('session-auto-continue')).resolves.toBe(false);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
     expect(registry.get('session-auto-continue')?.pendingHiddenTurnCustomTypes ?? []).toEqual([]);
   });
 
@@ -3468,7 +3449,7 @@ describe('conversation auto mode', () => {
   });
 });
 
-describe('auto mode continuation message content', () => {
+describe('legacy auto mode continuation quarantine', () => {
   it('sends a mode-specific continuation message for nudge mode', async () => {
     const sendCustomMessage = vi.fn(async () => undefined);
 
@@ -3501,18 +3482,8 @@ describe('auto mode continuation message content', () => {
       },
     });
 
-    await expect(requestConversationAutoModeContinuationTurn('session-msg-nudge')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customType: 'conversation_automation_auto_continue',
-        details: expect.objectContaining({ mode: 'nudge' }),
-      }),
-      expect.objectContaining({ deliverAs: 'followUp', triggerTurn: true }),
-    );
-
-    // Verify it contains the nudge continuation prompt (not mission-specific)
-    const callArg = sendCustomMessage.mock.calls[0][0] as { content: string };
-    expect(callArg.content).toContain('Continue working on the current user request');
+    await expect(requestConversationAutoModeContinuationTurn('session-msg-nudge')).resolves.toBe(false);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
   it('sends a mode-specific continuation message for mission mode', async () => {
@@ -3558,21 +3529,8 @@ describe('auto mode continuation message content', () => {
       },
     });
 
-    await expect(requestConversationAutoModeContinuationTurn('session-msg-mission')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customType: 'conversation_automation_auto_continue',
-        details: expect.objectContaining({ mode: 'mission' }),
-      }),
-      expect.objectContaining({ deliverAs: 'followUp', triggerTurn: true }),
-    );
-
-    // Verify it contains the mission-specific continuation prompt
-    const callArg = sendCustomMessage.mock.calls[0][0] as { content: string };
-    expect(callArg.content).toContain('Mission');
-    expect(callArg.content).toContain('Fix the page');
-    expect(callArg.content).toContain('Task 2');
-    expect(callArg.content).toContain('run_state');
+    await expect(requestConversationAutoModeContinuationTurn('session-msg-mission')).resolves.toBe(false);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
   it('sends a mode-specific continuation message for loop mode', async () => {
@@ -3617,20 +3575,8 @@ describe('auto mode continuation message content', () => {
       },
     });
 
-    await expect(requestConversationAutoModeContinuationTurn('session-msg-loop')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customType: 'conversation_automation_auto_continue',
-        details: expect.objectContaining({ mode: 'loop' }),
-      }),
-      expect.objectContaining({ deliverAs: 'followUp', triggerTurn: true }),
-    );
-
-    // Verify it contains the loop-specific continuation prompt
-    const callArg = sendCustomMessage.mock.calls[0][0] as { content: string };
-    expect(callArg.content).toContain('Loop continuation');
-    expect(callArg.content).toContain('Find and fix a bug');
-    expect(callArg.content).toContain('2/5');
+    await expect(requestConversationAutoModeContinuationTurn('session-msg-loop')).resolves.toBe(false);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 });
 

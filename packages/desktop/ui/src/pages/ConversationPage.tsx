@@ -484,6 +484,51 @@ export function buildMissionAutoModeInputFromDraft(
   return { mode: 'mission' as const, enabled: true, mission: { goal: draftMission.goal ?? '', tasks: currentState.mission?.tasks ?? [] } };
 }
 
+export type GoalModeToggleAction =
+  | { kind: 'enable-now'; conversationId: string; objective: string }
+  | { kind: 'enable-pending' }
+  | { kind: 'disable-now'; conversationId: string }
+  | { kind: 'disable-pending' };
+
+export function resolveGoalModeToggleAction(input: {
+  conversationId?: string;
+  goalEnabled: boolean;
+  composerText: string;
+}): GoalModeToggleAction {
+  if (input.goalEnabled) {
+    return input.conversationId ? { kind: 'disable-now', conversationId: input.conversationId } : { kind: 'disable-pending' };
+  }
+
+  const objective = input.composerText.trim();
+  if (input.conversationId && objective) {
+    return { kind: 'enable-now', conversationId: input.conversationId, objective };
+  }
+
+  return { kind: 'enable-pending' };
+}
+
+export async function applyGoalModeToggleAction(
+  action: GoalModeToggleAction,
+  updateGoal: (conversationId: string, input: { objective?: string }) => Promise<unknown>,
+  setPending: (pending: boolean) => void,
+): Promise<void> {
+  if (action.kind === 'enable-now') {
+    await updateGoal(action.conversationId, { objective: action.objective });
+    setPending(false);
+    return;
+  }
+
+  if (action.kind === 'enable-pending') {
+    setPending(true);
+    return;
+  }
+
+  setPending(false);
+  if (action.kind === 'disable-now') {
+    await updateGoal(action.conversationId, {});
+  }
+}
+
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { id: routeId } = useParams<{ id?: string }>();
   const id = draft ? undefined : routeId;
@@ -1441,22 +1486,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerGoalPending, setComposerGoalPending] = useState(false);
   const goalEnabled = composerGoalPending || stream.goalState?.status === 'active';
   const toggleGoalMode = useCallback(async () => {
-    const isEnabled = !goalEnabled;
-    if (isEnabled) {
-      const objective = input.trim();
-      if (id && objective) {
-        await api.updateGoal(id, { objective });
-        setComposerGoalPending(false);
-        return;
-      }
-      setComposerGoalPending(true);
-      return;
-    }
-
-    setComposerGoalPending(false);
-    if (id) {
-      await api.updateGoal(id, {});
-    }
+    const action = resolveGoalModeToggleAction({ conversationId: id, goalEnabled, composerText: input });
+    await applyGoalModeToggleAction(action, api.updateGoal, setComposerGoalPending);
   }, [id, goalEnabled, input]);
   const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
   const [extensionMentionRegistrations, setExtensionMentionRegistrations] = useState<ExtensionMentionRegistration[]>([]);
@@ -2234,9 +2265,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     // Find the extension that provides the warmPointers action (system-suggested-context)
     // instead of hardcoding its id.
-    const suggestedCtxExtension = extensionRegistry.extensions.find((e) =>
-      e.backendActions?.some((a) => a.id === 'warmPointers'),
-    );
+    const suggestedCtxExtension = extensionRegistry.extensions.find((e) => e.backendActions?.some((a) => a.id === 'warmPointers'));
     if (suggestedCtxExtension) {
       api
         .invokeExtensionAction(suggestedCtxExtension.id, 'warmPointers', {
@@ -3812,9 +3841,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const drawing = drawingAttachments.find((attachment) => attachment.localId === localId);
     if (!drawing) return;
 
-    const excalidrawExtension = extensionRegistry.extensions.find((e) =>
-      e.backendActions?.some((a) => a.id === 'image'),
-    );
+    const excalidrawExtension = extensionRegistry.extensions.find((e) => e.backendActions?.some((a) => a.id === 'image'));
     const excalidrawInputClient = createNativeExtensionClient(excalidrawExtension?.id ?? 'system-excalidraw-input');
     const result = await excalidrawInputClient.ui.openModal({
       component: 'ExcalidrawEditorModal',

@@ -589,45 +589,20 @@ export async function setLiveSessionAutoModeState(
   return state;
 }
 
-export function markConversationAutoModeContinueRequested(sessionId: string): void {
-  const entry = registry.get(sessionId);
-  if (entry) entry.pendingAutoModeContinuation = true;
+export function markConversationAutoModeContinueRequested(_sessionId: string): void {
+  // Legacy auto-mode continuation is intentionally disabled. Goal-mode owns autonomous continuation now.
 }
 
-export async function requestConversationAutoModeTurn(sessionId: string): Promise<boolean> {
-  const entry = registry.get(sessionId);
-  if (!entry || entry.running || entry.session.isStreaming) return false;
-  if (!readLiveSessionAutoModeState(sessionId).enabled) return false;
-  const messages = Array.isArray(entry.session.state?.messages) ? entry.session.state.messages : [];
-  if (!messages.some((message) => message?.role === 'assistant')) return false;
-  await entry.session.sendCustomMessage?.(
-    { customType: 'conversation_automation_post_turn_review', content: 'Review whether to continue working in auto mode.', display: false },
-    { deliverAs: 'followUp', triggerTurn: true },
-  );
-  return true;
+export async function requestConversationAutoModeTurn(_sessionId: string): Promise<boolean> {
+  // Legacy auto-mode continuation is intentionally disabled. Goal-mode owns autonomous continuation now.
+  return false;
 }
 
 export async function requestConversationAutoModeContinuationTurn(sessionId: string): Promise<boolean> {
   const entry = registry.get(sessionId);
-  if (!entry || entry.running || entry.session.isStreaming) return false;
-  entry.pendingAutoModeContinuation = false;
-  const state = readLiveSessionAutoModeState(sessionId);
-  const content =
-    state.mode === 'mission'
-      ? `Mission continuation: ${state.mission?.goal ?? ''}\n${(state.mission?.tasks ?? []).map((task) => task.description).join('\n')}\nUse run_state to update task progress.`
-      : state.mode === 'loop'
-        ? `Loop continuation: ${state.loop?.prompt ?? ''}\n${state.loop?.iterationsUsed ?? 0}/${state.loop?.maxIterations ?? 0}`
-        : 'Continue working on the current user request.';
-  await entry.session.sendCustomMessage?.(
-    {
-      customType: 'conversation_automation_auto_continue',
-      content,
-      display: false,
-      details: { source: 'conversation-auto-mode', mode: state.mode },
-    },
-    { deliverAs: 'followUp', triggerTurn: true },
-  );
-  return true;
+  if (entry) entry.pendingAutoModeContinuation = false;
+  // Legacy auto-mode continuation is intentionally disabled. Goal-mode owns autonomous continuation now.
+  return false;
 }
 
 export async function appendDetachedUserMessage(sessionId: string, text: string): Promise<void> {

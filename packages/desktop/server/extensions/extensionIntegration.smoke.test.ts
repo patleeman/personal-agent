@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -1093,14 +1094,21 @@ describe('extension backends - file existence and structural checks', () => {
       if (!existsSync(backendPath)) continue;
 
       // Dynamic import executes module-scope code and catches runtime errors
-      // that node --check cannot detect (e.g. undefined env vars, top-level rejects)
-      try {
-        const mod = await import(/* @vite-ignore */ backendPath);
-        expect(mod).toBeDefined();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        expect(null, `${s.id}: dist/backend.mjs failed to import at module scope: ${msg}`).not.toBeNull();
-      }
+      // that node --check cannot detect. Run each backend in a fresh process so
+      // large bundled modules and sourcemaps do not accumulate in the Vitest worker heap.
+      expect(
+        () =>
+          execFileSync(
+            process.execPath,
+            ['--input-type=module', '--eval', `await import(${JSON.stringify(pathToFileURL(backendPath).href)});`],
+            {
+              encoding: 'utf-8',
+              timeout: 30000,
+              env: { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=1024`.trim() },
+            },
+          ),
+        `${s.id}: dist/backend.mjs failed to import at module scope`,
+      ).not.toThrow();
     }
   }, 60000);
 });

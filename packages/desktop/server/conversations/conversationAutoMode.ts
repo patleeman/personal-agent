@@ -1,3 +1,9 @@
+/**
+ * @deprecated Legacy pre-extension auto-mode state. New autonomous looping is
+ * owned by the system-auto-mode goal-mode extension (`conversation-goal`). Keep
+ * this module only for old session files and companion API compatibility; do
+ * not add new callers or scheduler behavior here.
+ */
 export type ConversationRunMode = 'manual' | 'nudge' | 'mission' | 'loop';
 export type ConversationTaskStatus = 'pending' | 'in_progress' | 'done' | 'blocked';
 
