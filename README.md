@@ -94,7 +94,7 @@ pnpm test
 pnpm run lint
 ```
 
-This repo intentionally has no first-party `postinstall`. Third-party build scripts are allowlisted in `pnpm-workspace.yaml`; review anything newly blocked with `pnpm ignored-builds`.
+This repo intentionally has no first-party `postinstall`. Third-party build scripts are allowlisted in `pnpm-workspace.yaml`; review anything newly blocked with `pnpm ignored-builds`. ESLint is configured for actionable errors; dynamic extension/API boundary code may use `any` where stricter typing would add noise.
 
 Useful dev commands:
 

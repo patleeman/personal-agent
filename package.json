@@ -44,7 +44,7 @@
     "check:types": "tsc --noEmit",
     "check:dead": "knip --no-config-hints",
     "check:coverage": "vitest run --coverage --reporter=verbose || echo '⚠ Coverage check complete — review numbers above'",
-    "check": "pnpm run check:types && pnpm run lint && pnpm run fmt && pnpm run check:extensions:quick; pnpm run check:dead || true",
+    "check": "pnpm run check:types && pnpm run lint && pnpm run fmt && pnpm run check:extensions:quick; knip --no-config-hints || true",
     "check:extensions": "vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts && node scripts/check-packaged-extensions.mjs",
     "check:extensions:quick": "QUICK_EXTENSION_CHECK=1 vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts && node scripts/check-packaged-extensions.mjs",
     "fix": "pnpm run fmt:fix && pnpm run lint:fix",
