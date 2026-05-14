@@ -40,10 +40,9 @@ describe('workbench browser agent extension', () => {
       .join('\n\n');
 
     expect(promptText).toContain('shared Workbench Browser');
-    expect(promptText).toContain('communication');
-    expect(promptText).toContain('development validation');
-    expect(promptText).toContain('agent-browser skill');
-    expect(promptText).toContain('through bash');
+    expect(promptText).toContain('user-facing visual context');
+    expect(promptText).toContain('dev/QA');
+    expect(promptText).toContain('agent-browser CLI');
   });
 
   it('routes tools through the desktop host', async () => {

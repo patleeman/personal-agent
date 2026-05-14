@@ -15,17 +15,10 @@ export function createConversationTitleAgentExtension(_options?: {
       label: 'Set conversation title',
       description: 'Set or update the current conversation title shown in the app sidebar and conversation header.',
       promptSnippet: 'Set a short, specific conversation title once the user intent is clear.',
-      promptGuidelines: [
-        'Use this tool when the conversation’s concrete task or topic is clear. Pick a short, specific title that helps the user recognize the thread later.',
-        'Good titles are 3-7 words, sentence case, and name the actual work. Prefer concrete nouns and verbs. Do not use quotes, emojis, prefixes, dates, or generic labels.',
-        'Set the title once early in the conversation, usually after the user’s first real request. Update it only if the conversation clearly pivots to a different task.',
-        'Examples: "Fix diff screen layout", "Debug browser screenshot tools", "Design title-setting tool", "Backfill question submit tests", "Investigate GitLab CI failure".',
-        'Bad titles: "Conversation about UI", "Help with coding", "Potential feature idea", "Fix issue", "User asks about titles".',
-        'Do not mention that you set the title. It is ambient UI state, not conversation content.',
-      ],
+      promptGuidelines: ['Set one short, concrete 3-7 word title early when intent is clear; do not mention the title update in chat.'],
       parameters: ConversationTitleToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        const title = normalizeGeneratedConversationTitle(params.title, 80);
+        const title = await normalizeGeneratedConversationTitle(params.title, 80);
         if (!title) {
           throw new Error('Conversation title must not be empty.');
         }

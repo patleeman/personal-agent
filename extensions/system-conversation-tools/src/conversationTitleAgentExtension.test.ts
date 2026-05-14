@@ -37,9 +37,9 @@ describe('conversation title agent extension', () => {
     const guidelines = registeredTool.promptGuidelines?.join('\n') ?? '';
 
     expect(registeredTool.name).toBe('set_conversation_title');
-    expect(guidelines).toContain('3-7 words');
-    expect(guidelines).toContain('Do not mention that you set the title');
-    expect(guidelines).toContain('Fix diff screen layout');
+    expect(guidelines).toContain('3-7 word title');
+    expect(guidelines).toContain('do not mention the title update');
+    expect(guidelines).not.toContain('Fix diff screen layout');
   });
 
   it('sets the normalized current conversation title', async () => {

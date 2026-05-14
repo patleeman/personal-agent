@@ -50,12 +50,7 @@ export function createChangeWorkingDirectoryAgentExtension(options: {
         'Change the current conversation working directory. The switch happens after the current turn and keeps the same conversation attached to the requested directory.',
       promptSnippet: 'Change the current conversation working directory to target a different repo or folder.',
       promptGuidelines: [
-        "change_working_directory: Before modifying code in a repo, switch CWD to that repo's root so its AGENTS.md rules are loaded.",
-        'change_working_directory: When a task targets a specific project or repo, switch CWD to it before starting work.',
-        "change_working_directory: If the task spans multiple repos or you're uncertain, stay in the current directory.",
-        'change_working_directory: The switch happens after the current turn. Do not claim you already inspected the new directory until the switch is active.',
-        'change_working_directory: To continue working automatically after the switch, provide continuePrompt and then stop so the conversation can continue there.',
-        'change_working_directory: If no automatic continuation is needed, end the turn after telling the user the conversation moved.',
+        'Switch to a target repo root before modifying it so its AGENTS.md loads; the change applies after this turn, so stop or use continuePrompt to resume there.',
       ],
       parameters: ChangeWorkingDirectoryToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

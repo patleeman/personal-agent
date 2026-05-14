@@ -708,11 +708,7 @@ export function createRunAgentExtension(options: {
       label: 'Background Command',
       description: 'Start, inspect, log, rerun, or cancel daemon-backed shell commands.',
       promptSnippet: 'Use background_command for shell commands that should run durably outside the current turn.',
-      promptGuidelines: [
-        'Use start for shell commands that should continue outside the current turn.',
-        'Use get/logs/rerun/cancel for background command lifecycle management.',
-        'Use subagent for delegated agent work instead of shell commands.',
-      ],
+      promptGuidelines: ['Use background_command for durable shell work; use subagent for delegated agent work.'],
       parameters: Type.Object({
         action: Type.Union(['list', 'get', 'logs', 'start', 'rerun', 'cancel'].map((value) => Type.Literal(value))),
         runId: Type.Optional(Type.String({ description: 'Background command id for get/logs/rerun/cancel actions.' })),
@@ -733,10 +729,7 @@ export function createRunAgentExtension(options: {
       description: 'Start, inspect, follow up, rerun, or cancel daemon-backed subagent tasks.',
       promptSnippet: 'Use subagent for delegated agent work that should run durably outside the current turn.',
       promptGuidelines: [
-        'Use start for detached agent delegation.',
-        'Use follow_up to continue a previous subagent.',
-        'Use scheduled_task for persistent recurring automations instead of cron/defer here.',
-        'Use background_command for shell commands instead of subagent.',
+        'Use subagent for durable delegated agent work; use background_command for shell and scheduled_task for recurring automation.',
       ],
       parameters: Type.Object({
         action: Type.Union(['list', 'get', 'logs', 'start', 'rerun', 'follow_up', 'cancel'].map((value) => Type.Literal(value))),

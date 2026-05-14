@@ -111,12 +111,7 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
       description: 'List other conversations and query their visible transcript blocks.',
       promptSnippet: 'Inspect other conversations through read-only transcript queries.',
       promptGuidelines: [
-        'Use this tool when you need visibility into other active conversations or saved threads.',
-        'Prefer list first to find the target conversation, then use search, query, or diff to inspect the transcript.',
-        'Use outline for a compact map of a pointed conversation, then read_window around relevant block ids.',
-        'This tool is read-only. It does not message, steer, or modify other conversations.',
-        'Cross-thread hidden reasoning is intentionally unavailable; query visible transcript blocks instead.',
-        'Use diff with afterBlockId or knownSignature when you need a cheap follow-up read on a live thread.',
+        'read-only cross-conversation inspection: list first, then query/outline/read_window/diff; hidden reasoning is not available.',
       ],
       parameters: ConversationInspectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

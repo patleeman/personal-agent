@@ -304,12 +304,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
       label: 'Scheduled Task',
       description: 'Create, inspect, validate, run, and delete daemon-managed scheduled tasks.',
       promptSnippet: 'Use the scheduled_task tool for daemon-managed recurring or one-time automation.',
-      promptGuidelines: [
-        'Use this tool when the user wants recurring automation, one-time scheduled prompts, or task inspection.',
-        'Use save to create or update a task definition, validate to check definitions, and run to trigger one immediately.',
-        'Use targetType="conversation" when the scheduled prompt should wake or continue a thread instead of starting a background job.',
-        'Keep tasks high-signal: clear schedule and a concise prompt body.',
-      ],
+      promptGuidelines: ['Use scheduled_task for persistent one-time/recurring automations; keep schedules and prompts concise.'],
       parameters: ScheduledTaskToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         try {

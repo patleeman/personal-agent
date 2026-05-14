@@ -130,12 +130,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       promptSnippet:
         'Use browser_snapshot to understand the shared Workbench Browser. It returns the active tab snapshot plus a list of all open tabs with their tabId values. Pass tabId to target any tab. For development validation, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
-        "Targets the user's visible built-in Workbench Browser for this conversation, not agent-browser, Chrome, or an independent automation session.",
-        'The snapshot includes an "Open tabs" section listing all browser tabs with their tabId. Use these tabId values with any browser tool to target a specific tab.',
-        'Treat the Workbench Browser as shared conversation context: use it when the user is showing you a page, commenting on page elements, or wants you to inspect/control the same visible page.',
-        'Do not use Workbench Browser tools for autonomous app-development validation, CI-style checks, or black-box UI testing; load the agent-browser skill and use its CLI/wrapper from bash for that.',
-        'Prefer browser_snapshot before navigating or acting because it is efficient, structured, and gives refs/selectors.',
-        'Refs are snapshot-scoped; refresh the snapshot after navigation or major page changes.',
+        "Use Workbench Browser tools only for the user's visible shared browser; start with browser_snapshot and use agent-browser CLI for autonomous dev/QA.",
       ],
       parameters: SnapshotParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -167,14 +162,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       promptSnippet:
         'Use browser_cdp to act on the shared Workbench Browser. Pass tabId to target a specific tab (get tab IDs from browser_snapshot). For dev automation/testing, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
-        "Targets the user's visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.",
-        'Use the tabId parameter to target a specific tab listed in browser_snapshot output. If omitted, targets the active tab.',
-        "Treat this as operating on shared user/agent context; avoid changing the user's visible page for unrelated development validation.",
-        'For autonomous UI testing, local app validation, screenshots of the product under test, or repeatable browser automation, load the agent-browser skill and use its CLI/wrapper from bash.',
-        'This is a thin CDP command surface; provide raw command objects exactly as Chrome DevTools Protocol expects, for example: {"method":"Runtime.evaluate","params":{"expression":"document.title","returnByValue":true}}.',
-        'When doing more than one action, send one browser_cdp call with command set to an array of command objects instead of multiple tool calls.',
-        'Prefer browser_snapshot for observation and browser_screenshot for visual checks; use browser_cdp when you need direct browser control.',
-        'For page JS, use Runtime.evaluate with returnByValue=true when you need JSON-like results.',
+        'browser_cdp controls the shared Workbench Browser; get tabId from browser_snapshot, batch multiple CDP commands in one call, and use agent-browser CLI for dev/QA automation.',
       ],
       parameters: CdpParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -213,12 +201,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       promptSnippet:
         'Use browser_screenshot for the shared Workbench Browser when visual communication matters. Pass tabId to target a specific tab (get tab IDs from browser_snapshot). For dev validation screenshots, use the agent-browser skill/CLI through bash.',
       promptGuidelines: [
-        "Targets the user's visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.",
-        'Use the tabId parameter to target a specific tab listed in browser_snapshot output. If omitted, targets the active tab.',
-        'Treat screenshots as shared conversation context: use them when the user wants visual inspection of the page currently open in the Workbench Browser.',
-        'For autonomous visual checks of the app you are developing, load the agent-browser skill and use its CLI/wrapper from bash.',
-        'browser_screenshot is useful for visual appearance and image-heavy content.',
-        'Prefer browser_snapshot when navigating or when you need efficient text, selectors, refs, or page state.',
+        'browser_screenshot captures the shared Workbench Browser for user-facing visual context; use agent-browser CLI for product-under-test screenshots.',
       ],
       parameters: ScreenshotParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

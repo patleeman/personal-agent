@@ -139,9 +139,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       description: 'Enable goal mode with a concrete objective, or replace the active objective.',
       promptSnippet: 'Set a concrete objective to work toward.',
       promptGuidelines: [
-        'Use this tool only when the user explicitly asks you to start goal mode or when sustained autonomous work is required.',
-        'If goal mode is already active, this tool replaces the objective and keeps the loop running.',
-        'Do not create a goal for every ordinary request — only for sustained multi-turn tasks.',
+        'Use goal mode only for explicit requests or sustained autonomous work; ordinary one-shot tasks do not need a goal.',
       ],
       parameters: SetGoalParams,
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
@@ -172,11 +170,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       label: 'Update goal',
       description: 'Update the current goal objective or mark it complete.',
       promptSnippet: 'Enable or update the goal when the objective changes, or mark it achieved when done.',
-      promptGuidelines: [
-        'Use objective to replace the active goal text when the target changes.',
-        'Use status: "complete" only when the objective is actually achieved.',
-        'Do not mark it complete just because you are stopping work.',
-      ],
+      promptGuidelines: ['Update the objective when the goal changes; use status="complete" only when the objective is actually achieved.'],
       parameters: UpdateGoalParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const state = readGoalState(ctx.sessionManager);

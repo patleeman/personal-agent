@@ -1,5 +1,5 @@
 diff --git a/dist/core/system-prompt.js b/dist/core/system-prompt.js
-index e53b46fe12d81e3d55ec628ae516695625b9f11e..ed6ec31e54e6a0dab2dd4cc56360c27da91ff821 100644
+index e53b46fe12d81e3d55ec628ae516695625b9f11e..079613a769b8b975b19a1362dc3b6ac3c51799c5 100644
 --- a/dist/core/system-prompt.js
 +++ b/dist/core/system-prompt.js
 @@ -46,8 +46,6 @@ export function buildSystemPrompt(options) {
@@ -11,7 +11,7 @@ index e53b46fe12d81e3d55ec628ae516695625b9f11e..ed6ec31e54e6a0dab2dd4cc56360c27d
      // Build guidelines based on which tools are actually available
      const guidelinesList = [];
      const guidelinesSet = new Set();
-@@ -82,11 +80,6 @@ export function buildSystemPrompt(options) {
+@@ -82,21 +80,10 @@ export function buildSystemPrompt(options) {
      const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
      let prompt = `You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
  
@@ -23,3 +23,30 @@ index e53b46fe12d81e3d55ec628ae516695625b9f11e..ed6ec31e54e6a0dab2dd4cc56360c27d
  Guidelines:
  ${guidelines}
  
+-Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):
+-- Main documentation: ${readmePath}
+-- Additional docs: ${docsPath}
+-- Examples: ${examplesPath} (extensions, custom tools, SDK)
+-- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md)
+-- When working on pi topics, read the docs and examples, and follow .md cross-references before implementing
+-- Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
++Pi topics only: read ${readmePath}, then relevant docs in ${docsPath} or examples in ${examplesPath}.`;
+     if (appendSection) {
+         prompt += appendSection;
+     }
+diff --git a/dist/core/tools/edit.js b/dist/core/tools/edit.js
+index 62002dd1fa751ac168165a26b68561c2e95f6637..f753522043bd15fa33b68636ea80ef82b50a76ab 100644
+--- a/dist/core/tools/edit.js
++++ b/dist/core/tools/edit.js
+@@ -166,10 +166,7 @@ export function createEditToolDefinition(cwd, options) {
+         description: "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
+         promptSnippet: "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
+         promptGuidelines: [
+-            "Use edit for precise changes (edits[].oldText must match exactly)",
+-            "When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls",
+-            "Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.",
+-            "Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.",
++            "Use edit for precise file changes: oldText must match unique original text, and multiple edits in one file belong in one call.",
+         ],
+         parameters: editSchema,
+         renderShell: "self",
