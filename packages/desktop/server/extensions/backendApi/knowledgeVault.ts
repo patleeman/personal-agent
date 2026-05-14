@@ -45,8 +45,19 @@ async function resolveRepoRoot(): Promise<string> {
 
 async function serverModule(specifier: string): Promise<string> {
   if (!specifier.startsWith('.')) return specifier;
-  const sourcePath = resolve(await resolveRepoRoot(), 'packages/desktop/server/extensions/backendApi', specifier);
-  return pathToFileURL(sourcePath.endsWith('.js') ? sourcePath.slice(0, -3) + '.ts' : sourcePath).href;
+
+  const repoRoot = await resolveRepoRoot();
+  const compiledPath = resolve(repoRoot, 'packages/desktop/dist/server/extensions/backendApi', specifier);
+  const sourcePath = resolve(repoRoot, 'packages/desktop/server/extensions/backendApi', specifier);
+  const candidates = [compiledPath, sourcePath, sourcePath.endsWith('.js') ? sourcePath.slice(0, -3) + '.ts' : sourcePath];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return pathToFileURL(candidate).href;
+    }
+  }
+
+  return pathToFileURL(compiledPath).href;
 }
 
 async function callModuleExport<T>(specifier: string, name: string, ...args: unknown[]): Promise<T> {
