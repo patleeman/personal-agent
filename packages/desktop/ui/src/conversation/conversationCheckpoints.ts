@@ -76,6 +76,18 @@ function parseLoadedCheckpointOutput(output: unknown): Partial<ConversationCheck
   };
 }
 
+function readCheckpointInputSubject(message: unknown): string | null {
+  if (typeof message !== 'string') return null;
+  const [subject] = message.trim().split('\n');
+  return subject?.trim() || null;
+}
+
+function readCheckpointInputFileCount(paths: unknown): number | undefined {
+  if (!Array.isArray(paths)) return undefined;
+  const fileCount = paths.filter((path) => typeof path === 'string' && path.trim().length > 0).length;
+  return fileCount > 0 ? fileCount : undefined;
+}
+
 export function getConversationCheckpointIdFromSearch(search: string): string | null {
   const value = new URLSearchParams(search).get(CONVERSATION_CHECKPOINT_QUERY_PARAM)?.trim();
   return value ? value : null;
@@ -103,9 +115,13 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
   const input = block.input as {
     action?: unknown;
     checkpointId?: unknown;
+    message?: unknown;
+    paths?: unknown;
   };
 
   const outputPresentation = parseSavedCheckpointOutput(block.output) ?? parseLoadedCheckpointOutput(block.output);
+  const inputSubject = readCheckpointInputSubject(input.message);
+  const inputFileCount = readCheckpointInputFileCount(input.paths);
   const action = details?.action ?? (isCheckpointAction(input.action) ? input.action : undefined) ?? outputPresentation?.action;
   const checkpointId =
     typeof details?.checkpointId === 'string' && details.checkpointId.trim().length > 0
@@ -126,11 +142,11 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
       ? details.title.trim()
       : typeof details?.subject === 'string' && details.subject.trim().length > 0
         ? details.subject.trim()
-        : (outputPresentation?.title ?? shortSha);
+        : (outputPresentation?.title ?? inputSubject ?? shortSha);
   const subject =
     typeof details?.subject === 'string' && details.subject.trim().length > 0
       ? details.subject.trim()
-      : (outputPresentation?.subject ?? title);
+      : (outputPresentation?.subject ?? inputSubject ?? title);
 
   if (!action || !checkpointId || !commitSha || !shortSha || !title || !subject) {
     return null;
@@ -145,7 +161,7 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
     shortSha,
     title,
     subject,
-    fileCount: typeof details?.fileCount === 'number' ? details.fileCount : outputPresentation?.fileCount,
+    fileCount: typeof details?.fileCount === 'number' ? details.fileCount : (outputPresentation?.fileCount ?? inputFileCount),
     linesAdded: typeof details?.linesAdded === 'number' ? details.linesAdded : outputPresentation?.linesAdded,
     linesDeleted: typeof details?.linesDeleted === 'number' ? details.linesDeleted : outputPresentation?.linesDeleted,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,

@@ -142,6 +142,26 @@ describe('conversationCheckpoints', () => {
       expect(result!.linesDeleted).toBe(7);
     });
 
+    it('uses input message and paths before output details are available', () => {
+      const block = {
+        type: 'tool_use',
+        tool: 'checkpoint',
+        input: {
+          action: 'save',
+          checkpointId: 'de89a9a',
+          message: 'fix: restore checkpoint label\n\nUse friendlier text.',
+          paths: ['extensions/system-diffs/src/CheckpointToolBlock.tsx'],
+        },
+      } as unknown as Extract<MessageBlock, { type: 'tool_use' }>;
+
+      const result = readCheckpointPresentation(block);
+
+      expect(result).not.toBeNull();
+      expect(result!.checkpointId).toBe('de89a9a');
+      expect(result!.subject).toBe('fix: restore checkpoint label');
+      expect(result!.fileCount).toBe(1);
+    });
+
     it('returns null when checkpointId is missing', () => {
       const block = {
         type: 'tool_use',
