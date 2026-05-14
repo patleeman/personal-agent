@@ -19,17 +19,47 @@ export function normalizeServerExtensionModuleSpecifier(relativeSpecifier: strin
   return relativeSpecifier.replace(/^\.\.\//, 'extensions/').replace(/^\/+/, '');
 }
 
+function packageEntryCandidates(specifier: string, resourcesPath: string | undefined): string[] {
+  const repoRoots = [process.env.PERSONAL_AGENT_REPO_ROOT, process.cwd()].filter((value): value is string => Boolean(value));
+  const candidates: string[] = [];
+  const pushRepoPath = (relativePath: string) => {
+    for (const repoRoot of repoRoots) candidates.push(resolve(repoRoot, relativePath));
+  };
+  const pushResourcePath = (relativePath: string) => {
+    if (typeof resourcesPath !== 'string') return;
+    candidates.push(resolve(resourcesPath, 'app.asar', relativePath));
+    candidates.push(resolve(resourcesPath, 'app.asar.unpacked', relativePath));
+  };
+
+  if (specifier === '@personal-agent/core') {
+    pushRepoPath('packages/core/dist/index.js');
+    pushResourcePath('packages/core/dist/index.js');
+  } else if (specifier === '@personal-agent/daemon') {
+    pushRepoPath('packages/desktop/server/dist/daemon/index.js');
+    pushResourcePath('packages/desktop/server/dist/daemon/index.js');
+    pushResourcePath('server/dist/daemon/index.js');
+  } else if (specifier === '@earendil-works/pi-coding-agent') {
+    pushRepoPath('node_modules/@earendil-works/pi-coding-agent/dist/index.js');
+    pushResourcePath('node_modules/@earendil-works/pi-coding-agent/dist/index.js');
+  }
+
+  return candidates;
+}
+
 export function resolveServerModuleSpecifierFrom({
   importMetaUrl,
   relativeSpecifier,
   normalize = normalizeServerModuleSpecifier,
   resourcesPath: providedResourcesPath,
 }: ResolveServerModuleSpecifierOptions): string {
-  if (!relativeSpecifier.startsWith('.')) return relativeSpecifier;
+  const resourcesPath = providedResourcesPath ?? process.resourcesPath;
+  if (!relativeSpecifier.startsWith('.')) {
+    const foundPackageEntry = packageEntryCandidates(relativeSpecifier, resourcesPath).find((candidate) => existsSync(candidate));
+    return foundPackageEntry ? pathToFileURL(foundPackageEntry).href : relativeSpecifier;
+  }
 
   const normalized = normalize(relativeSpecifier);
   const currentDir = dirname(fileURLToPath(importMetaUrl));
-  const resourcesPath = providedResourcesPath ?? process.resourcesPath;
   const candidates = [
     ...(process.env.PERSONAL_AGENT_REPO_ROOT
       ? [

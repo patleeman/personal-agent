@@ -1,4 +1,4 @@
-import { getStateRoot } from '@personal-agent/core';
+import { callServerModuleExport, importServerModule } from './serverModuleResolver.js';
 
 interface ExtensionBackendContext {
   profile: string;
@@ -21,14 +21,15 @@ interface SlackGatewayRuntime {
   handleTurnEnd(conversationId: string, text: string | null): Promise<boolean>;
 }
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+const dynamicImport = importServerModule;
+const PERSONAL_AGENT_CORE_PACKAGE = '@personal-agent/core';
 
 let runtime: SlackGatewayRuntime | null = null;
 let lifecycleRegistered = false;
 const lastDeliveryByConversation = new Map<string, string>();
 
-function gatewayContext(ctx: ExtensionBackendContext): { stateRoot: string; profile: string } {
-  return { stateRoot: getStateRoot(), profile: ctx.profile };
+async function gatewayContext(ctx: ExtensionBackendContext): Promise<{ stateRoot: string; profile: string }> {
+  return { stateRoot: await callServerModuleExport<string>(PERSONAL_AGENT_CORE_PACKAGE, 'getStateRoot'), profile: ctx.profile };
 }
 
 function liveSessionContext(ctx: ExtensionBackendContext) {
@@ -60,7 +61,7 @@ async function ensureRuntime(ctx: ExtensionBackendContext): Promise<SlackGateway
     dynamicImport<typeof import('../../gateways/slackMcpGateway.js')>('../../gateways/slackMcpGateway.js'),
   ]);
   runtime = new gateway.SlackMcpGatewayRuntime({
-    ...gatewayContext(ctx),
+    ...(await gatewayContext(ctx)),
     createConversation: async (input) => {
       const created = await capabilities.createLiveSessionCapability({}, liveSessionContext(ctx));
       liveSessions.renameSession(created.id, input.title);
@@ -116,7 +117,9 @@ async function slackConfig() {
 export async function startSlackMcpGateway(ctx: ExtensionBackendContext) {
   await registerLifecycle(ctx);
   const gatewayState = await gatewayStateModule();
-  const connection = gatewayState.readGatewayState(gatewayContext(ctx)).connections.find((candidate) => candidate.provider === 'slack_mcp');
+  const connection = gatewayState
+    .readGatewayState(await gatewayContext(ctx))
+    .connections.find((candidate) => candidate.provider === 'slack_mcp');
   if (connection?.enabled) (await ensureRuntime(ctx)).start();
   return { ok: true };
 }
@@ -127,25 +130,26 @@ export async function stopSlackMcpGateway(ctx: ExtensionBackendContext) {
 }
 
 export async function readSlackMcpGatewayState(ctx: ExtensionBackendContext) {
-  return (await gatewayStateModule()).readGatewayState(gatewayContext(ctx));
+  return (await gatewayStateModule()).readGatewayState(await gatewayContext(ctx));
 }
 
 export async function readSlackMcpGatewayAuthState() {
-  const core = await dynamicImport<typeof import('@personal-agent/core')>('@personal-agent/core');
+  const core = await dynamicImport<typeof import('@personal-agent/core')>(PERSONAL_AGENT_CORE_PACKAGE);
   return { authenticated: core.hasStoredMcpServerTokens(await slackConfig()) };
 }
 
 export async function connectSlackMcpGateway(ctx: ExtensionBackendContext) {
   const [core, gatewayState, config] = await Promise.all([
-    dynamicImport<typeof import('@personal-agent/core')>('@personal-agent/core'),
+    dynamicImport<typeof import('@personal-agent/core')>(PERSONAL_AGENT_CORE_PACKAGE),
     gatewayStateModule(),
     slackConfig(),
   ]);
   const result = await core.authenticateMcpServerDirect(config, { timeoutMs: 120_000 });
   if (result.error) throw new Error(result.error);
-  gatewayState.ensureGatewayConnection({ ...gatewayContext(ctx), provider: 'slack_mcp' });
+  const context = await gatewayContext(ctx);
+  gatewayState.ensureGatewayConnection({ ...context, provider: 'slack_mcp' });
   const nextState = gatewayState.updateGatewayConnectionStatus({
-    ...gatewayContext(ctx),
+    ...context,
     provider: 'slack_mcp',
     status: 'connected',
     enabled: true,
@@ -156,14 +160,15 @@ export async function connectSlackMcpGateway(ctx: ExtensionBackendContext) {
 
 export async function disconnectSlackMcpGateway(ctx: ExtensionBackendContext) {
   const [core, gatewayState, config] = await Promise.all([
-    dynamicImport<typeof import('@personal-agent/core')>('@personal-agent/core'),
+    dynamicImport<typeof import('@personal-agent/core')>(PERSONAL_AGENT_CORE_PACKAGE),
     gatewayStateModule(),
     slackConfig(),
   ]);
   await core.clearMcpServerAuthDirect(config);
   (await ensureRuntime(ctx)).stop();
+  const context = await gatewayContext(ctx);
   const nextState = gatewayState.updateGatewayConnectionStatus({
-    ...gatewayContext(ctx),
+    ...context,
     provider: 'slack_mcp',
     status: 'needs_config',
     enabled: false,
@@ -174,9 +179,10 @@ export async function disconnectSlackMcpGateway(ctx: ExtensionBackendContext) {
 
 export async function saveSlackMcpGatewayChannel(input: { channelId: string; channelLabel?: string }, ctx: ExtensionBackendContext) {
   const gatewayState = await gatewayStateModule();
-  gatewayState.ensureGatewayConnection({ ...gatewayContext(ctx), provider: 'slack_mcp' });
+  const context = await gatewayContext(ctx);
+  gatewayState.ensureGatewayConnection({ ...context, provider: 'slack_mcp' });
   (await ensureRuntime(ctx)).saveChannel(input);
-  return gatewayState.readGatewayState(gatewayContext(ctx));
+  return gatewayState.readGatewayState(context);
 }
 
 export async function attachSlackMcpGateway(
@@ -190,5 +196,5 @@ export async function attachSlackMcpGateway(
 ) {
   await (await ensureRuntime(ctx)).attachChannelToConversation(input);
   (await dynamicImport<typeof import('../../shared/appEvents.js')>('../../shared/appEvents.js')).invalidateAppTopics('sessions');
-  return (await gatewayStateModule()).readGatewayState(gatewayContext(ctx));
+  return (await gatewayStateModule()).readGatewayState(await gatewayContext(ctx));
 }

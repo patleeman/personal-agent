@@ -169,6 +169,17 @@ function collectForbiddenBundledPaths(filePath) {
   return FORBIDDEN_BUNDLED_PATH_FRAGMENTS.filter((fragment) => source.includes(fragment));
 }
 
+function collectForbiddenDynamicRuntimeImports(filePath) {
+  const source = readFileSync(filePath, 'utf8');
+  return forbiddenBackendPrefixes.filter(
+    (specifier) =>
+      specifier.startsWith('@') &&
+      [`dynamicImport(\"${specifier}\")`, `dynamicImport('${specifier}')`, `import(\"${specifier}\")`, `import('${specifier}')`].some(
+        (needle) => source.includes(needle),
+      ),
+  );
+}
+
 function isAllowedBackendImport(specifier) {
   if (allowedBackendBareImports.has(specifier)) return true;
   const packageName = packageNameFor(specifier);
@@ -279,9 +290,14 @@ for (const extensionDir of listPackagedExtensionDirs()) {
       const backendSize = statSync(backendPath).size;
       const backendLimit = backendBundleByteLimit(id);
       const forbiddenBundledPaths = collectForbiddenBundledPaths(backendPath);
+      const forbiddenDynamicRuntimeImports = collectForbiddenDynamicRuntimeImports(backendPath);
       if (backendSize > backendLimit) failures.push(`${id}: backend bundle is ${backendSize} bytes, above limit ${backendLimit} bytes`);
       if (forbiddenBundledPaths.length > 0)
         failures.push(`${id}: backend bundle contains forbidden bundled runtime paths: ${forbiddenBundledPaths.join(', ')}`);
+      if (forbiddenDynamicRuntimeImports.length > 0)
+        failures.push(
+          `${id}: backend bundle contains forbidden dynamic packaged-runtime imports: ${forbiddenDynamicRuntimeImports.join(', ')}`,
+        );
       const bareImports = collectBareImports(backendPath);
       const nonPortableImports = collectNonPortableImports(backendPath);
       const forbidden = bareImports.filter(isForbiddenBackendImport);

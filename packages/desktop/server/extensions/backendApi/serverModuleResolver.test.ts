@@ -37,13 +37,30 @@ afterEach(() => {
 });
 
 describe('resolveServerModuleSpecifierFrom', () => {
-  it('returns package specifiers unchanged', () => {
+  it('resolves known backend package specifiers to packaged entries when present', () => {
+    const resourcesRoot = makeTempRoot();
+    const cwdRoot = makeTempRoot();
+    const corePath = join(resourcesRoot, 'app.asar/packages/core/dist/index.js');
+    touch(corePath);
+    delete process.env.PERSONAL_AGENT_REPO_ROOT;
+    process.chdir(cwdRoot);
+
     expect(
       resolveServerModuleSpecifierFrom({
         importMetaUrl: import.meta.url,
         relativeSpecifier: '@personal-agent/core',
+        resourcesPath: resourcesRoot,
       }),
-    ).toBe('@personal-agent/core');
+    ).toBe(pathToFileURL(corePath).href);
+  });
+
+  it('returns unknown package specifiers unchanged', () => {
+    expect(
+      resolveServerModuleSpecifierFrom({
+        importMetaUrl: import.meta.url,
+        relativeSpecifier: 'left-pad',
+      }),
+    ).toBe('left-pad');
   });
 
   it('prefers bundled server/dist over tsc dist/server when both exist', () => {

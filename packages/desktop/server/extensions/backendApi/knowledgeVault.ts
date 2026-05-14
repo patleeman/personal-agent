@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
+import { callServerModuleExport } from './serverModuleResolver.js';
 const SKIPPED_DIRS = new Set(['.git', 'node_modules', '.DS_Store']);
 const IMAGE_FILE_EXTENSIONS = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
 const MIME_EXTENSIONS = new Map([
@@ -26,49 +25,8 @@ interface VaultEntry {
   updatedAt: string;
 }
 
-async function resolveRepoRoot(): Promise<string> {
-  if (process.env.PERSONAL_AGENT_REPO_ROOT) {
-    return process.env.PERSONAL_AGENT_REPO_ROOT;
-  }
-
-  try {
-    const core = await dynamicImport('@personal-agent/core');
-    if (typeof core.getRepoRoot === 'function') {
-      return core.getRepoRoot() as string;
-    }
-  } catch {
-    // Fall through to process.cwd() for tests and unusual embedders.
-  }
-
-  return process.cwd();
-}
-
-async function serverModule(specifier: string): Promise<string> {
-  if (!specifier.startsWith('.')) return specifier;
-
-  const repoRoot = await resolveRepoRoot();
-  const compiledPath = resolve(repoRoot, 'packages/desktop/dist/server/extensions/backendApi', specifier);
-  const sourcePath = resolve(repoRoot, 'packages/desktop/server/extensions/backendApi', specifier);
-  const candidates = [compiledPath, sourcePath, sourcePath.endsWith('.js') ? sourcePath.slice(0, -3) + '.ts' : sourcePath];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return pathToFileURL(candidate).href;
-    }
-  }
-
-  return pathToFileURL(compiledPath).href;
-}
-
-async function callModuleExport<T>(specifier: string, name: string, ...args: unknown[]): Promise<T> {
-  const module = await dynamicImport(await serverModule(specifier));
-  const fn = module[name];
-  if (typeof fn !== 'function') throw new Error(`Knowledge backend API export ${name} is unavailable.`);
-  return (fn as (...callArgs: unknown[]) => Promise<T> | T)(...args);
-}
-
 async function getVaultRoot(): Promise<string> {
-  return callModuleExport<string>('@personal-agent/core', 'getVaultRoot');
+  return callServerModuleExport<string>('@personal-agent/core', 'getVaultRoot');
 }
 
 function isInsideRoot(root: string, target: string): boolean {
@@ -240,7 +198,7 @@ function buildVaultImageUploadFileName(filename: string, dataUrl: string, timest
 
 async function emitChanged() {
   try {
-    await callModuleExport<void>('../../shared/appEvents.js', 'invalidateAppTopics', 'knowledgeBase');
+    await callServerModuleExport<void>('../../shared/appEvents.js', 'invalidateAppTopics', 'knowledgeBase');
   } catch {
     // Invalidation is best-effort for extension backend bundles.
   }
@@ -249,7 +207,7 @@ async function emitChanged() {
 export const knowledgeVault: Record<string, unknown> = {
   async listFiles() {
     const vaultRoot = await getVaultRoot();
-    const files = await callModuleExport('../../knowledge/vaultFiles.js', 'listVaultFiles', vaultRoot);
+    const files = await callServerModuleExport('../../knowledge/vaultFiles.js', 'listVaultFiles', vaultRoot);
     return { root: vaultRoot, files };
   },
   async tree(input: { dir?: string } = {}) {
@@ -314,7 +272,7 @@ export const knowledgeVault: Record<string, unknown> = {
   },
   async importUrl(input: { url: string; title?: string; directoryId?: string; sourceApp?: string }) {
     const vaultRoot = await getVaultRoot();
-    const result = await callModuleExport('../../routes/vaultShareImport.js', 'importVaultSharedItem', {
+    const result = await callServerModuleExport('../../routes/vaultShareImport.js', 'importVaultSharedItem', {
       kind: 'url',
       root: vaultRoot,
       targetDirAbs: vaultRoot,
@@ -324,7 +282,7 @@ export const knowledgeVault: Record<string, unknown> = {
     return result;
   },
   async resolvePromptReferences(input: { text: string }) {
-    const files = await callModuleExport<Array<{ id: string; path: string }>>(
+    const files = await callServerModuleExport<Array<{ id: string; path: string }>>(
       '../../knowledge/vaultFiles.js',
       'resolveMentionedVaultFiles',
       input.text,
@@ -332,7 +290,7 @@ export const knowledgeVault: Record<string, unknown> = {
     return {
       contextBlocks:
         files.length > 0
-          ? [{ content: await callModuleExport('../../knowledge/vaultFiles.js', 'buildReferencedVaultFilesContext', files) }]
+          ? [{ content: await callServerModuleExport('../../knowledge/vaultFiles.js', 'buildReferencedVaultFilesContext', files) }]
           : [],
       references: files.map((file) => ({ kind: 'knowledgeFile', id: file.id, path: file.path })),
     };

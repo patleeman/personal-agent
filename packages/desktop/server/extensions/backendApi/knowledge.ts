@@ -1,11 +1,10 @@
-const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
+import { callServerModuleExport } from './serverModuleResolver.js';
 
 async function callCoreExport<T>(name: string, ...args: unknown[]): Promise<T> {
-  const core = await dynamicImport('@personal-agent/core');
-  const fn = core[name];
-  if (typeof fn !== 'function') throw new Error(`Core export ${name} is unavailable.`);
-  return (fn as (...callArgs: unknown[]) => Promise<T> | T)(...args);
+  return callServerModuleExport<T>('@personal-agent/core', name, ...args);
 }
+
+const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
 
 async function invalidateKnowledgeBase(): Promise<void> {
   try {

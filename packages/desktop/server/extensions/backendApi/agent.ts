@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
-import { getPiAgentRuntimeDir } from '@personal-agent/core';
+import { callServerModuleExport, importServerModule } from './serverModuleResolver.js';
 
 interface ImageInput {
   type: 'image';
@@ -102,8 +102,10 @@ interface ExtensionAgentConversationRecord {
 }
 
 const conversations = new Map<string, ExtensionAgentConversationRecord>();
-const defaultDynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+const defaultDynamicImport = importServerModule;
 let dynamicImport = defaultDynamicImport;
+const PI_CODING_AGENT_PACKAGE = '@earendil-works/pi-coding-agent';
+const PERSONAL_AGENT_CORE_PACKAGE = '@personal-agent/core';
 
 export function setExtensionAgentDynamicImportForTests(importer: typeof dynamicImport): void {
   dynamicImport = importer;
@@ -234,11 +236,13 @@ async function createSession(input: ExtensionAgentConversationCreateInput, ctx: 
   const model = input.modelRef ? resolveModel(modelRegistry.getAvailable(), input.modelRef) : agentCtx.model;
   if (!model) throw new Error(`Agent conversation model is not available: ${input.modelRef ?? '(current)'}`);
   const cwd = input.cwd ?? ctx.toolContext?.cwd ?? (typeof agentCtx.cwd === 'string' ? agentCtx.cwd : process.cwd());
-  const pi = await dynamicImport<PiModule>('@earendil-works/pi-coding-agent');
+  const pi = await dynamicImport<PiModule>(PI_CODING_AGENT_PACKAGE);
   const { session } = await pi.createAgentSession({
     cwd,
     model: model as never,
-    authStorage: pi.AuthStorage.create(join(getPiAgentRuntimeDir(), 'auth.json')),
+    authStorage: pi.AuthStorage.create(
+      join(await callServerModuleExport<string>(PERSONAL_AGENT_CORE_PACKAGE, 'getPiAgentRuntimeDir'), 'auth.json'),
+    ),
     modelRegistry: modelRegistry as never,
     sessionManager: pi.SessionManager.inMemory(cwd),
     ...(input.tools === 'none' ? { noTools: 'all' as const } : {}),
