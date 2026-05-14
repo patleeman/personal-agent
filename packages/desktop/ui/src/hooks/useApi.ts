@@ -15,11 +15,15 @@ export interface UseApiResult<T> {
   replaceData: (nextData: T) => void;
 }
 
+export interface UseApiOptions {
+  notifyOnError?: boolean;
+}
+
 /**
  * useApi — fetch once on mount/key change, then support background refetches
  * without dropping the current UI back into a loading state.
  */
-export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult<T> {
+export function useApi<T>(fetcher: () => Promise<T>, key?: string, options: UseApiOptions = {}): UseApiResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,9 +32,11 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
   const requestIdRef = useRef(0);
   const mountedRef = useRef(true);
   const dataRef = useRef<T | null>(null);
+  const notifyOnErrorRef = useRef(options.notifyOnError ?? true);
 
   fetcherRef.current = fetcher;
   dataRef.current = data;
+  notifyOnErrorRef.current = options.notifyOnError ?? true;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -74,7 +80,9 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
       const message = err instanceof Error ? err.message : String(err);
       if (!hasData || resetLoading) {
         setError(message);
-        addNotification({ type: 'error', message, details: err instanceof Error ? err.stack : undefined, source: 'core' });
+        if (notifyOnErrorRef.current) {
+          addNotification({ type: 'error', message, details: err instanceof Error ? err.stack : undefined, source: 'core' });
+        }
       }
       setLoading(false);
       setRefreshing(false);

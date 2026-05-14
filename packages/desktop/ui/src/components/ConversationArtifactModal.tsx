@@ -11,6 +11,14 @@ import { ConversationArtifactViewer } from './ConversationArtifactViewer';
 import { addNotification } from './notifications/notificationStore';
 import { cx, ErrorState, LoadingState } from './ui';
 
+function formatArtifactLoadError(error: string | null): string | null {
+  if (!error) {
+    return null;
+  }
+
+  return /Artifact not found/i.test(error) ? 'Artifact not found.' : error;
+}
+
 export function ConversationArtifactModal({ conversationId, artifactId }: { conversationId: string; artifactId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,7 +28,12 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
 
   const artifactFetcher = useCallback(() => api.conversationArtifact(conversationId, artifactId), [artifactId, conversationId]);
   const listFetcher = useCallback(() => api.conversationArtifacts(conversationId), [conversationId]);
-  const { data: artifactData, loading, error, refetch } = useApi(artifactFetcher, `${conversationId}:${artifactId}`);
+  const {
+    data: artifactData,
+    loading,
+    error,
+    refetch,
+  } = useApi(artifactFetcher, `${conversationId}:${artifactId}`, { notifyOnError: false });
   const { data: artifactListData, refetch: refetchList } = useApi(listFetcher, `${conversationId}:artifacts`);
 
   useEffect(() => {
@@ -71,6 +84,7 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
 
   const artifact = artifactData?.artifact ?? null;
   const artifacts = artifactListData?.artifacts ?? [];
+  const artifactError = formatArtifactLoadError(error);
 
   async function copySource() {
     if (!artifact) {
@@ -219,8 +233,8 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
             <div className="min-h-0 flex-1 overflow-hidden">
               {loading && !artifact ? (
                 <LoadingState label="Loading artifact…" className="justify-center h-full" />
-              ) : error || !artifact ? (
-                <ErrorState message={error || 'Artifact not found.'} className="px-4 py-4" />
+              ) : artifactError || !artifact ? (
+                <ErrorState message={artifactError || 'Artifact not found.'} className="px-4 py-4" />
               ) : (
                 <ConversationArtifactViewer artifact={artifact} />
               )}

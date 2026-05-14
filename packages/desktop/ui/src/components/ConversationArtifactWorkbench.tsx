@@ -115,6 +115,14 @@ export function ConversationArtifactRailContent({
   );
 }
 
+function formatArtifactLoadError(error: string | null): string | null {
+  if (!error) {
+    return null;
+  }
+
+  return /Artifact not found/i.test(error) ? 'Artifact not found.' : error;
+}
+
 export function ConversationArtifactWorkbenchPane({ conversationId, artifactId }: { conversationId: string; artifactId: string }) {
   const { versions } = useAppEvents();
   const [artifact, setArtifact] = useState<ConversationArtifactRecord | null>(null);
@@ -138,9 +146,12 @@ export function ConversationArtifactWorkbenchPane({ conversationId, artifactId }
       .catch((err: unknown) => {
         if (!cancelled) {
           setArtifact(null);
-          const msg = err instanceof Error ? err.message : 'Failed to load artifact.';
+          const rawMessage = err instanceof Error ? err.message : 'Failed to load artifact.';
+          const msg = formatArtifactLoadError(rawMessage) ?? rawMessage;
           setError(msg);
-          addNotification({ type: 'error', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
+          if (!/Artifact not found/i.test(rawMessage)) {
+            addNotification({ type: 'error', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
+          }
         }
       })
       .finally(() => {
