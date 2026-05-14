@@ -1,19 +1,17 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import {
   applyScheduledTaskThreadBinding,
-  createStoredAutomation,
-  parseDeferredResumeDelayMs,
-  pingDaemon,
-  setTaskCallbackBinding,
-} from '@personal-agent/extensions/backend/automations';
-import {
   cancelDurableRun,
+  createStoredAutomation,
   followUpDurableRun,
   getDurableRun,
   getDurableRunLog,
   invalidateAppTopics,
   listDurableRuns,
+  parseDeferredResumeDelayMs,
+  pingDaemon,
   rerunDurableRun,
+  setTaskCallbackBinding,
   startBackgroundRun,
 } from '@personal-agent/extensions/backend/runs';
 import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemetry';

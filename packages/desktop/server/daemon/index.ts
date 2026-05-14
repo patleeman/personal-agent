@@ -41,6 +41,7 @@ export {
   updateStoredAutomation,
 } from '../automation/store.js';
 export { ensureAutomationThread, normalizeAutomationThreadModeForSelection, resolveAutomationThreadTitle } from '../automation/threads.js';
+export { setTaskCallbackBinding } from '@personal-agent/core';
 
 // Tasks (previously daemon/modules/) — now at packages/desktop/server/automation/tasks/
 export type { ParsedTaskDefinition } from '../automation/tasks/tasks-parser.js';

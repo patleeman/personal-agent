@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 
-import { pingDaemon } from '@personal-agent/extensions/backend/automations';
 import {
   cancelDurableRun,
   getDurableRun,
   listDurableRuns,
+  pingDaemon,
   rerunDurableRun,
   startBackgroundRun,
 } from '@personal-agent/extensions/backend/runs';

@@ -20,14 +20,11 @@ vi.mock('./runTool.js', () => ({
   }),
 }));
 
-vi.mock('@personal-agent/extensions/backend/automations', () => ({
-  pingDaemon: mocks.pingDaemon,
-}));
-
 vi.mock('@personal-agent/extensions/backend/runs', () => ({
   cancelDurableRun: mocks.cancelDurableRun,
   getDurableRun: mocks.getDurableRun,
   listDurableRuns: mocks.listDurableRuns,
+  pingDaemon: mocks.pingDaemon,
   rerunDurableRun: mocks.rerunDurableRun,
   startBackgroundRun: mocks.startBackgroundRun,
 }));
