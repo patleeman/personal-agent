@@ -1,14 +1,25 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 
-import { invalidateAppTopics } from '../../shared/appEvents.js';
 import { callDaemonExport } from './daemonBridge.js';
-
-export { invalidateAppTopics };
 
 export interface ScheduledTaskThreadInput {
   threadMode?: string | null;
   threadConversationId?: string | null;
   threadSessionFile?: string | null;
+}
+
+const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
+
+export async function invalidateAppTopics(topics: string | string[]): Promise<void> {
+  try {
+    const appEvents = await dynamicImport('../../shared/appEvents.js');
+    const invalidate = appEvents.invalidateAppTopics;
+    if (typeof invalidate === 'function') {
+      invalidate(topics);
+    }
+  } catch {
+    // Invalidation is best-effort for extension backend bundles.
+  }
 }
 
 export async function pingDaemon(): Promise<boolean> {

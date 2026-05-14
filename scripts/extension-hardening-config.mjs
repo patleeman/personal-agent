@@ -7,7 +7,7 @@ export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
   ['system-images', 24 * 1024 * 1024],
   ['system-knowledge', 30 * 1024 * 1024],
   ['system-openai-native-compaction', 12 * 1024 * 1024],
-  ['system-runs', 24 * 1024 * 1024],
+  ['system-runs', 1 * 1024 * 1024],
   ['system-suggested-context', 24 * 1024 * 1024],
   ['system-web-tools', 24 * 1024 * 1024],
   ['slack-mcp-gateway', 26 * 1024 * 1024],

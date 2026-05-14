@@ -40,16 +40,16 @@ export {
   setTaskCallbackBinding,
 } from '@personal-agent/core';
 
-async function loadDaemon() {
-  return import('@personal-agent/daemon');
+import { callDaemonExport } from './daemonBridge.js';
+
+export async function pingDaemon(): Promise<boolean> {
+  try {
+    return await callDaemonExport<boolean>('pingDaemon');
+  } catch {
+    return false;
+  }
 }
 
-export async function pingDaemon(...args: Parameters<(typeof import('@personal-agent/daemon'))['pingDaemon']>) {
-  const daemon = await loadDaemon();
-  return daemon.pingDaemon(...args);
-}
-
-export async function startScheduledTaskRun(...args: Parameters<(typeof import('@personal-agent/daemon'))['startScheduledTaskRun']>) {
-  const daemon = await loadDaemon();
-  return daemon.startScheduledTaskRun(...args);
+export async function startScheduledTaskRun(input: unknown) {
+  return callDaemonExport<Record<string, unknown>>('startScheduledTaskRun', input);
 }
