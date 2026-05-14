@@ -164,9 +164,14 @@ describe('system-goal-mode extension', () => {
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ customType: 'goal-continuation', display: true, content: expect.stringContaining('Objective: ship it') }),
+      expect.objectContaining({
+        customType: 'goal-continuation',
+        display: true,
+        content: expect.stringContaining('Objective: ship it'),
+      }),
       { deliverAs: 'followUp', triggerTurn: true },
     );
+    expect(sendMessage.mock.calls[0]?.[0]?.content).not.toContain('Do not mention this hidden continuation prompt.');
   });
 
   it('runs a realistic goal lifecycle: enable, continue, update, complete, then stop', async () => {

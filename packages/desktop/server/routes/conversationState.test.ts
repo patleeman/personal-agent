@@ -658,6 +658,7 @@ describe('registerConversationStateRoutes', () => {
         }),
         { triggerTurn: true, deliverAs: 'followUp' },
       );
+      expect(sendCustomMessage.mock.calls[0]?.[0]?.content).not.toContain('Do not mention this hidden continuation prompt.');
     });
     expect((liveRegistry.get('conversation-live') as any)?.pendingHiddenTurnCustomTypes).toEqual([]);
 

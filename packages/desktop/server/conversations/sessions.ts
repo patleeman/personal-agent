@@ -802,12 +802,15 @@ export function getAssistantErrorDisplayMessage(message: { stopReason?: string; 
 
 const RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
 const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
+const GOAL_CONTINUATION_CUSTOM_TYPE = 'goal-continuation';
 
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
   return (
     message.role === 'custom' &&
     message.display === true &&
-    (message.customType === 'referenced_context' || message.customType === CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE)
+    (message.customType === 'referenced_context' ||
+      message.customType === CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE ||
+      message.customType === GOAL_CONTINUATION_CUSTOM_TYPE)
   );
 }
 

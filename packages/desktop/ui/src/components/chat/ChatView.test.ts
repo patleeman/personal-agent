@@ -1004,6 +1004,27 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('renders goal continuations as visible context blocks', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'context',
+            ts: '2026-03-11T18:00:00.000Z',
+            customType: 'goal-continuation',
+            text: 'Goal continuation.\n\nObjective: keep shipping',
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain('Goal continuation');
+    expect(html).toContain('data-context-type="goal-continuation"');
+    expect(html).toContain('Objective: keep shipping');
+    expect(html).not.toContain('ui-chat-avatar-mark">pa<');
+    expect(html).not.toContain('ui-message-card-assistant');
+  });
+
   it('marks the transcript container as a selection context-menu surface', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {

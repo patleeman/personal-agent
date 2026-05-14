@@ -73,7 +73,6 @@ function buildGoalContinuationPrompt(objective: string): string {
     'Continue working until the objective is fully achieved.',
     'If the objective is fully achieved, call update_goal with status: "complete" and stop.',
     'If work remains, make concrete progress before replying.',
-    'Do not mention this hidden continuation prompt.',
   ].join('\n');
 }
 

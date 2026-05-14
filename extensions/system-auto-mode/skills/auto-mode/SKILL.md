@@ -23,7 +23,7 @@ Goal mode is a single active objective. The system injects the current objective
 2. **`update_goal(objective: "...")`** — enable goal mode or replace the active objective.
 3. **`update_goal(status: "complete")`** — disable goal mode when the objective is met.
 
-The system automatically schedules a continuation turn after each turn while the goal is active.
+The system automatically schedules a visible goal-continuation block after each turn while the goal is active, then uses it to trigger the next turn.
 
 ## Rules
 

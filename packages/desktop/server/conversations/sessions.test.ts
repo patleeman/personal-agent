@@ -1213,6 +1213,31 @@ describe('sessions', () => {
     expect(blocks).toEqual([]);
   });
 
+  it('renders visible goal continuations as context blocks instead of assistant messages', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'goal-continuation-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'custom',
+          customType: 'goal-continuation',
+          display: true,
+          content: [{ type: 'text', text: 'Goal continuation.\n\nObjective: keep shipping' }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      {
+        type: 'context',
+        id: 'goal-continuation-1-m0',
+        ts: '2026-03-12T16:00:00.000Z',
+        customType: 'goal-continuation',
+        text: 'Goal continuation.\n\nObjective: keep shipping',
+      },
+    ]);
+  });
+
   it('falls back for malformed transcript entry timestamps', () => {
     expect(
       buildDisplayBlocksFromEntries([
