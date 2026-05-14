@@ -3,6 +3,16 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const { buildSessionContextForRuntimeMock } = vi.hoisted(() => ({
+  buildSessionContextForRuntimeMock: vi.fn((entries: SessionEntry[]) => ({
+    messages: entries.flatMap((entry) => (entry.type === 'message' && entry.message ? [entry.message] : [])),
+  })),
+}));
+
+vi.mock('@personal-agent/extensions/backend/runtime', () => ({
+  buildSessionContextForRuntime: buildSessionContextForRuntimeMock,
+}));
+
 import { createImageAgentExtension, parseImageGenerationSse } from '../../../../extensions/system-images/src/imageTool.js';
 
 function createJwtWithAccountId(accountId: string): string {
@@ -154,6 +164,7 @@ function createSuccessfulImageResponse(
 
 afterEach(() => {
   vi.restoreAllMocks();
+  buildSessionContextForRuntimeMock.mockClear();
   vi.unstubAllGlobals();
 });
 

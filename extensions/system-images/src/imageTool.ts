@@ -2,7 +2,8 @@ import { arch, platform } from 'node:os';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Api, ImageContent, Model } from '@earendil-works/pi-ai';
-import { buildSessionContext, type ExtensionAPI, type SessionEntry } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { buildSessionContextForRuntime } from '@personal-agent/extensions/backend/runtime';
 import { Type } from '@sinclair/typebox';
 
 const IMAGE_QUALITY_VALUES = ['auto', 'low', 'medium', 'high'] as const;
@@ -281,15 +282,16 @@ function collectImageReferenceGroups(messages: AgentMessage[]): ImageReferenceGr
   return groups;
 }
 
-function readSessionContextMessages(sessionManager?: {
-  getEntries?: () => SessionEntry[];
+async function readSessionContextMessages(sessionManager?: {
+  getEntries?: () => unknown[];
   getLeafId?: () => string | null;
-}): AgentMessage[] {
+}): Promise<AgentMessage[]> {
   if (!sessionManager?.getEntries) {
     return [];
   }
 
-  return buildSessionContext(sessionManager.getEntries(), sessionManager.getLeafId?.() ?? null).messages;
+  const context = await buildSessionContextForRuntime(sessionManager.getEntries(), sessionManager.getLeafId?.() ?? null);
+  return Array.isArray(context.messages) ? (context.messages as AgentMessage[]) : [];
 }
 
 function findLastGroup(groups: ImageReferenceGroup[], kind?: ImageReferenceGroup['kind']): ImageReferenceGroup | undefined {
@@ -645,7 +647,7 @@ async function generateImage(input: {
       ): Promise<{ ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string }>;
     };
     sessionManager?: {
-      getEntries?: () => SessionEntry[];
+      getEntries?: () => unknown[];
       getLeafId?: () => string | null;
     };
   };
@@ -662,7 +664,7 @@ async function generateImage(input: {
   sourceImageCount: number;
   action?: ImageAction;
 }> {
-  const sessionMessages = readSessionContextMessages(input.ctx.sessionManager);
+  const sessionMessages = await readSessionContextMessages(input.ctx.sessionManager);
   const sourceSelection = resolveSourceImages({
     prompt: input.prompt,
     messages: sessionMessages,
