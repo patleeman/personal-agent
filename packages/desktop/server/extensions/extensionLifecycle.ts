@@ -289,19 +289,21 @@ export async function buildRuntimeExtension(extensionId: string) {
   if (entry.manifest.backend?.entry && existsSync(backendSource)) {
     const outfile = resolve(packageRoot, entry.manifest.backend.entry);
     assertInside(packageRoot, outfile);
-    mkdirSync(dirname(outfile), { recursive: true });
-    await build({
-      entryPoints: [backendSource],
-      outfile,
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      target: 'node20',
-      sourcemap: true,
-      external: ['@personal-agent/*', 'electron'],
-      nodePaths: findAppNodeModules(),
-    });
-    outputs.push(outfile);
+    if (outfile !== backendSource) {
+      mkdirSync(dirname(outfile), { recursive: true });
+      await build({
+        entryPoints: [backendSource],
+        outfile,
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        target: 'node20',
+        sourcemap: true,
+        external: ['@personal-agent/*', 'electron'],
+        nodePaths: findAppNodeModules(),
+      });
+      outputs.push(outfile);
+    }
   }
 
   return { ok: true as const, extensionId, outputs };

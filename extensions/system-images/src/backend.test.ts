@@ -46,6 +46,21 @@ describe('system-images backend', () => {
       expect(result.text).toContain('"status"');
     });
 
+    it('unwraps manifest tool agent context before delegating', async () => {
+      mockExecute.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+      const wrappedAgentContext = { toolContext: { modelRegistry: { find: vi.fn() } }, onUpdate: vi.fn() };
+
+      await image({ prompt: 'a cat' }, createCtx({ agentToolContext: wrappedAgentContext }));
+
+      expect(mockExecute).toHaveBeenCalledWith(
+        'extension-backend-image',
+        { prompt: 'a cat' },
+        undefined,
+        undefined,
+        wrappedAgentContext.toolContext,
+      );
+    });
+
     it('throws when agentToolContext is missing', async () => {
       await expect(image({}, createCtx({ agentToolContext: undefined }))).rejects.toThrow(
         'Image tools require an active agent tool context',

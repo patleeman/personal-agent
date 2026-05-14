@@ -6,12 +6,20 @@ export interface WorkbenchBrowserToolHost {
   cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean; tabId?: string }): Promise<unknown>;
 }
 
-let host: WorkbenchBrowserToolHost | null = null;
+const WORKBENCH_BROWSER_TOOL_HOST_KEY = Symbol.for('personal-agent.workbenchBrowserToolHost');
+
+type WorkbenchBrowserToolHostGlobal = typeof globalThis & {
+  [WORKBENCH_BROWSER_TOOL_HOST_KEY]?: WorkbenchBrowserToolHost | null;
+};
+
+function hostGlobal(): WorkbenchBrowserToolHostGlobal {
+  return globalThis as WorkbenchBrowserToolHostGlobal;
+}
 
 export function setWorkbenchBrowserToolHost(nextHost: WorkbenchBrowserToolHost | null): void {
-  host = nextHost;
+  hostGlobal()[WORKBENCH_BROWSER_TOOL_HOST_KEY] = nextHost;
 }
 
 export function getWorkbenchBrowserToolHost(): WorkbenchBrowserToolHost | null {
-  return host;
+  return hostGlobal()[WORKBENCH_BROWSER_TOOL_HOST_KEY] ?? null;
 }

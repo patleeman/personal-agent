@@ -6,6 +6,17 @@ interface ImageBackendContext {
   toolContext?: { preferredVisionModel?: string };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function resolveAgentToolContext(agentToolContext: unknown): unknown {
+  if (isRecord(agentToolContext) && 'toolContext' in agentToolContext) {
+    return agentToolContext.toolContext;
+  }
+  return agentToolContext;
+}
+
 interface RegisteredTool {
   execute?: (...args: unknown[]) => Promise<unknown> | unknown;
 }
@@ -42,7 +53,7 @@ async function executeRegisteredTool(factory: (pi: RegisterToolApi) => void, inp
     throw new Error('Image tools require an active agent tool context.');
   }
 
-  return registeredTool.execute('extension-backend-image', input, undefined, undefined, ctx.agentToolContext);
+  return registeredTool.execute('extension-backend-image', input, undefined, undefined, resolveAgentToolContext(ctx.agentToolContext));
 }
 
 export async function image(input: unknown, ctx: ImageBackendContext) {

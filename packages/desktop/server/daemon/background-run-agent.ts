@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,7 +23,16 @@ export function looksLikeBackgroundAgentRunnerEntryPath(value: string | undefine
 
 function resolveBackgroundAgentRunnerEntryPath(): string {
   const daemonModulePath = fileURLToPath(import.meta.url);
-  return resolve(dirname(daemonModulePath), 'background-agent-runner.js');
+  const moduleDir = dirname(daemonModulePath);
+  const candidates = [
+    resolve(moduleDir, 'background-agent-runner.js'),
+    resolve(moduleDir, '../server/daemon/background-agent-runner.js'),
+    process.env.PERSONAL_AGENT_REPO_ROOT
+      ? resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server/daemon/background-agent-runner.js')
+      : undefined,
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;
 }
 
 export function buildBackgroundAgentArgv(spec: BackgroundRunAgentSpec): string[] {

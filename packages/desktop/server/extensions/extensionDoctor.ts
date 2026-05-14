@@ -202,17 +202,22 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
   }
 }
 
+function isSourceBackendEntry(entryPath: string): boolean {
+  return /\.[cm]?tsx?$/.test(entryPath);
+}
+
 async function validateBuiltImports(packageRoot: string, manifest: ExtensionManifest, findings: ExtensionDoctorFinding[]) {
   await init;
   const frontendEntry = manifest.frontend?.entry ? resolve(packageRoot, manifest.frontend.entry) : undefined;
   const backendEntry = manifest.backend?.entry ? resolve(packageRoot, manifest.backend.entry) : undefined;
   if (frontendEntry && existsSync(frontendEntry)) validatePortableImports(frontendEntry, findings, 'frontend');
-  if (backendEntry && existsSync(backendEntry)) validatePortableImports(backendEntry, findings, 'backend');
+  if (backendEntry && existsSync(backendEntry) && !isSourceBackendEntry(backendEntry))
+    validatePortableImports(backendEntry, findings, 'backend');
 }
 
 async function validateBackendImport(packageRoot: string, manifest: ExtensionManifest, findings: ExtensionDoctorFinding[]) {
   const backendEntry = manifest.backend?.entry ? resolve(packageRoot, manifest.backend.entry) : undefined;
-  if (!backendEntry || !existsSync(backendEntry)) return;
+  if (!backendEntry || !existsSync(backendEntry) || isSourceBackendEntry(backendEntry)) return;
   try {
     await import(`${pathToFileURL(backendEntry).href}?paDoctor=${Date.now()}`);
   } catch (error) {
