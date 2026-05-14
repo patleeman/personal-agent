@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0-rc.9 — 2026-05-14
+
+- fix: resolve desktop server TypeScript errors
+- chore: quiet non-actionable lint noise
+
 ## 0.8.0-rc.8 — 2026-05-14
 
 - Fix packaged experimental extension discovery and conversation startup
