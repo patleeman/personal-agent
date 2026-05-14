@@ -242,10 +242,10 @@ Extensions that need a host-owned one-shot agent can use the agent seam instead 
 ```ts
 import { runAgentTask } from '@personal-agent/extensions/backend/agent';
 
-const result = await runAgentTask({ prompt: 'Summarize this image', images, tools: 'none' }, ctx);
+const result = await runAgentTask({ prompt: 'Summarize this image', images, tools: 'none', timeoutMs: 30_000 }, ctx);
 ```
 
-The host owns model lookup, auth storage, session creation, and runtime policy. Extension code owns only the workflow request and result handling.
+The host owns model lookup, auth storage, session creation, timeout cleanup, and runtime policy. Extension code owns only the workflow request and result handling. Extensions must declare `agent:run` before using this seam.
 
 Extensions can record fire-and-forget app telemetry through the dedicated telemetry seam:
 

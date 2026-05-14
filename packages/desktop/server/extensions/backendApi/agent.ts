@@ -24,11 +24,21 @@ export interface ExtensionAgentRunTaskResult {
 }
 
 interface ExtensionBackendContextLike {
+  extensionId?: string;
   toolContext?: { cwd?: string };
   agentToolContext?: unknown;
 }
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+const defaultDynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+let dynamicImport = defaultDynamicImport;
+
+export function setExtensionAgentDynamicImportForTests(importer: typeof dynamicImport): void {
+  dynamicImport = importer;
+}
+
+export function resetExtensionAgentDynamicImportForTests(): void {
+  dynamicImport = defaultDynamicImport;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -79,6 +89,15 @@ function collectAssistantTexts(session: { messages?: unknown[] }): string[] {
     .filter(Boolean);
 }
 
+async function assertAgentRunPermission(ctx: ExtensionBackendContextLike): Promise<void> {
+  if (!ctx.extensionId) return;
+  const registry = await dynamicImport<typeof import('../extensionRegistry.js')>('../extensionRegistry.js');
+  const entry = registry.findExtensionEntry(ctx.extensionId);
+  const permissions = entry?.manifest.permissions ?? [];
+  if (!permissions.includes('agent:run'))
+    throw new Error(`Extension "${ctx.extensionId}" requires permission agent:run to run agent tasks.`);
+}
+
 function getAssistantErrorMessage(session: { messages?: unknown[] }): string | null {
   const messages = Array.isArray(session.messages) ? session.messages : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -89,10 +108,30 @@ function getAssistantErrorMessage(session: { messages?: unknown[] }): string | n
   return null;
 }
 
+async function runWithTimeout<T>(operation: Promise<T>, timeoutMs: number | undefined, onTimeout: () => void): Promise<T> {
+  if (timeoutMs === undefined) return operation;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error('Agent task timeoutMs must be a positive integer.');
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          onTimeout();
+          reject(new Error(`Agent task timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export async function runAgentTask(
   input: ExtensionAgentRunTaskInput,
   ctx: ExtensionBackendContextLike,
 ): Promise<ExtensionAgentRunTaskResult> {
+  await assertAgentRunPermission(ctx);
   const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : '';
   if (!prompt) throw new Error('Agent task prompt is required.');
   if (input.tools && input.tools !== 'none') throw new Error('Extension agent tasks currently support tools="none" only.');
@@ -126,7 +165,9 @@ export async function runAgentTask(
         if (text) assistantTexts.push(text);
       }
     });
-    await session.prompt(prompt, input.images?.length ? { images: input.images } : undefined);
+    await runWithTimeout(session.prompt(prompt, input.images?.length ? { images: input.images } : undefined), input.timeoutMs, () =>
+      session?.dispose(),
+    );
     const assistantError = getAssistantErrorMessage(session);
     if (assistantError) throw new Error(assistantError);
     if (assistantTexts.length === 0) assistantTexts.push(...collectAssistantTexts(session));

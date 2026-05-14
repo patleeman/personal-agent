@@ -46,7 +46,14 @@ function sdkBackendSubpaths() {
 
 function hostBackendApiModules() {
   return readdirSync(hostBackendApiRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && entry.name !== 'index.ts' && entry.name !== 'daemonBridge.ts')
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        entry.name.endsWith('.ts') &&
+        !entry.name.endsWith('.test.ts') &&
+        entry.name !== 'index.ts' &&
+        entry.name !== 'daemonBridge.ts',
+    )
     .map((entry) => basename(entry.name, extname(entry.name)))
     .sort();
 }

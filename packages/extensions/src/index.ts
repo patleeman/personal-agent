@@ -38,6 +38,7 @@ export type ExtensionIconName =
   | 'sparkle'
   | 'terminal';
 export type ExtensionPermission =
+  | 'agent:run'
   | 'runs:read'
   | 'runs:start'
   | 'runs:cancel'
