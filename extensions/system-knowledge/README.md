@@ -88,12 +88,12 @@ When idle, status can also include local change count plus ahead/behind counts.
 Knowledge affects agent behavior through file-based layers, not runtime prompt mutation. Pi assembles the final prompt from:
 
 1. `SYSTEM.md` in the agent dir
-2. `APPEND_SYSTEM.md` in the agent dir
+2. `APPEND_SYSTEM.md` in the agent dir, including concise runtime paths and knowledge guidance
 3. discovered `AGENTS.md` / `CLAUDE.md` files from the CWD walk
-4. available skills
+4. available skills from the runtime skill loader
 5. current date and working directory
 
-Extensions cannot modify the system prompt at runtime. To influence behavior, write durable content to the vault or one of the file-based instruction layers.
+`APPEND_SYSTEM.md` intentionally points at the vault and skills directory instead of enumerating every skill; the skill loader owns the detailed skill list. Extensions cannot modify the system prompt at runtime. To influence behavior, write durable content to the vault or one of the file-based instruction layers.
 
 ## Permissions
 

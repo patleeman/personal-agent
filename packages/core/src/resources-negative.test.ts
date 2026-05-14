@@ -122,7 +122,7 @@ describe('resources negative tests', () => {
 
       const appendSystemPath = join(runtime, 'APPEND_SYSTEM.md');
       expect(existsSync(appendSystemPath)).toBe(true);
-      expect(readFileSync(appendSystemPath, 'utf-8')).toContain(`The canonical durable knowledge vault root is: ${syncRoot}`);
+      expect(readFileSync(appendSystemPath, 'utf-8')).toContain(`Vault root: ${syncRoot}`);
     });
 
     it('handles runtime directory that does not exist', () => {

@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { parseDocument } from 'yaml';
+
 import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
-import { listUnifiedSkillNodeDirs, loadUnifiedNodes } from './nodes.js';
+import { listUnifiedSkillNodeDirs } from './nodes.js';
 import {
   getDurableAgentFilePath,
   getDurableProfileDir as getDurableRuntimeConfigDir,
@@ -20,14 +20,6 @@ import {
 } from './runtime/paths.js';
 import { renderSystemPromptTemplate } from './system-prompt-template.js';
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-function buildVaultRootAppendSystemChunk(vaultRoot = getVaultRoot()) {
-  return [
-    '## Durable knowledge vault',
-    `The canonical durable knowledge vault root is: ${vaultRoot}`,
-    'Use this path when you need to read or write durable notes, projects, skills, or root instruction files.',
-    'Treat the vault as the source of truth for durable knowledge; do not assume those files live under the runtime state subtree.',
-  ].join('\n');
-}
 function readJsonFile(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf-8'));
@@ -551,40 +543,6 @@ function mergeMaterializedSettings(settingsFiles, targetSettingsPath) {
   }
   return merged;
 }
-function readSkillPromptSummary(skillDir) {
-  const skillPath = join(skillDir, 'SKILL.md');
-  if (!existsSync(skillPath)) return null;
-  const fallbackName = skillDir.split(/[\\/]/).filter(Boolean).at(-1) ?? 'skill';
-  try {
-    const raw = readFileSync(skillPath, 'utf-8').replace(/\r\n/g, '\n');
-    if (!raw.startsWith('---\n')) return null;
-    const endIndex = raw.indexOf('\n---', 4);
-    if (endIndex === -1) return null;
-    const document = parseDocument(raw.slice(4, endIndex), { prettyErrors: false, uniqueKeys: true });
-    if (document.errors.length > 0) return null;
-    const frontmatter = document.toJS({ mapAsMap: false });
-    if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) return null;
-    const record = frontmatter;
-    const metadata = record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata) ? record.metadata : {};
-    const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : fallbackName;
-    const description = [record.description, record.summary, metadata.summary, metadata.description].find(
-      (candidate) => typeof candidate === 'string' && candidate.trim().length > 0,
-    );
-    return description ? { name, description: description.trim(), path: skillPath } : null;
-  } catch {
-    return null;
-  }
-}
-function listAdditionalSkillPromptSummaries(resources) {
-  const durableSkillRoot = resolve(getDurableSkillsDir(resources.vaultRoot));
-  return resources.skillDirs
-    .filter((skillDir) => {
-      const resolvedSkillDir = resolve(skillDir);
-      return resolvedSkillDir !== durableSkillRoot && !resolvedSkillDir.startsWith(`${durableSkillRoot}/`);
-    })
-    .map(readSkillPromptSummary)
-    .filter((skill) => skill !== null);
-}
 export function materializeRuntimeResourcesToAgentDir(resources, agentDir) {
   const targetDir = resolve(agentDir);
   mkdirSync(targetDir, { recursive: true });
@@ -635,36 +593,9 @@ export function materializeRuntimeResourcesToAgentDir(resources, agentDir) {
     docs_dir: join(resources.repoRoot, 'docs'),
     docs_index: join(resources.repoRoot, 'docs', 'index.md'),
   };
-  try {
-    const { nodes } = loadUnifiedNodes({ vaultRoot: resources.vaultRoot });
-    const vaultSkills = nodes
-      .filter((node) => node.kinds.includes('skill'))
-      .map((node) => ({
-        name: node.id,
-        description: (node.summary || node.description || '').trim(),
-        path: node.filePath,
-      }))
-      .filter((node) => node.description.length > 0)
-      .sort((left, right) => left.name.localeCompare(right.name));
-    const additionalSkills = listAdditionalSkillPromptSummaries(resources);
-    const skillsByName = new Map([...vaultSkills, ...additionalSkills].map((skill) => [skill.name, skill]));
-    const allSkills = [...skillsByName.values()].sort((left, right) => left.name.localeCompare(right.name));
-    if (allSkills.length > 0) {
-      templateVariables.available_skills = allSkills;
-    }
-  } catch {
-    const additionalSkills = listAdditionalSkillPromptSummaries(resources).sort((left, right) => left.name.localeCompare(right.name));
-    if (additionalSkills.length > 0) {
-      templateVariables.available_skills = additionalSkills;
-    }
-  }
   const generatedAppendContent = renderSystemPromptTemplate(templateVariables);
   const fileAppendContent = resources.appendSystemFiles.length > 0 ? combineMarkdownFiles(resources.appendSystemFiles) : undefined;
-  const appendContent = combineMarkdownChunks([
-    generatedAppendContent ?? '',
-    buildVaultRootAppendSystemChunk(resources.vaultRoot),
-    fileAppendContent ?? '',
-  ]);
+  const appendContent = combineMarkdownChunks([generatedAppendContent ?? '', fileAppendContent ?? '']);
   if (appendContent.length > 0) {
     writeOrRemove('APPEND_SYSTEM.md', `${appendContent}\n`);
   } else {
