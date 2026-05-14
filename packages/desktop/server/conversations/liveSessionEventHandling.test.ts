@@ -515,13 +515,11 @@ describe('legacy auto mode continuation quarantine', () => {
     });
   });
 
-  describe('auto mode continuation NOT triggered for non-review turns', () => {
-    it('does NOT schedule continuation for a non-hidden turn when flag is set', async () => {
-      // This tests the bug: non-hidden turns should NOT consume
-      // pendingAutoModeContinuation. The flag is only for the review turn handler.
+  describe('stale auto mode continuation cleanup', () => {
+    it('clears stale continuation state without scheduling hidden follow-up work', async () => {
       const entry = makeEntry({
         pendingAutoModeContinuation: true,
-        activeHiddenTurnCustomType: null, // not a hidden review turn
+        activeHiddenTurnCustomType: null,
       });
       const cbs = makeCallbacks();
 
@@ -529,7 +527,7 @@ describe('legacy auto mode continuation quarantine', () => {
 
       await new Promise((resolve) => queueMicrotask(resolve));
 
-      // Should NOT schedule continuation - flag is only for review turn
+      expect(entry.pendingAutoModeContinuation).toBe(false);
       expect(cbs.requestConversationAutoModeContinuationTurn).not.toHaveBeenCalled();
     });
   });

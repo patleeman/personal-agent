@@ -194,7 +194,7 @@ describe('resolveLastCompletedConversationEntryId', () => {
 });
 
 describe('resolveStableForkEntryId', () => {
-  it('forks from the previous completed turn while a visible user turn is in progress', () => {
+  it('forks from visible injected context while a user turn is in progress', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-stable-fork-visible-turn.jsonl');
@@ -255,10 +255,10 @@ describe('resolveStableForkEntryId', () => {
       ].join('\n'),
     );
 
-    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
+    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('ctx-1');
   });
 
-  it('forks from the latest completed assistant while a hidden turn is active', () => {
+  it('treats legacy hidden custom entries as visible fork targets', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-stable-fork-hidden-turn.jsonl');
@@ -298,7 +298,7 @@ describe('resolveStableForkEntryId', () => {
       ].join('\n'),
     );
 
-    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
+    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('hidden-turn-1');
   });
 });
 
@@ -4009,7 +4009,7 @@ describe('promptSession', () => {
 
     await promptSession('session-dangling-tool-repair', 'continue working');
 
-    expect(branch).toHaveBeenCalledWith('assistant-1');
+    expect(branch).toHaveBeenCalledWith('hidden-1');
     expect(resetLeaf).not.toHaveBeenCalled();
     expect(state.messages).toBe(sanitizedMessages);
     expect(prompt).toHaveBeenCalledWith('continue working');
@@ -4146,7 +4146,7 @@ describe('promptSession', () => {
     expect(followUp).toHaveBeenCalledWith('keep going');
   });
 
-  it('queues follow-up prompts while a hidden turn is pending even before streaming starts', async () => {
+  it('prompts immediately when only stale hidden-turn state remains', async () => {
     const prompt = vi.fn(async () => undefined);
     const steer = vi.fn(async () => undefined);
     const followUp = vi.fn(async () => undefined);
@@ -4172,9 +4172,9 @@ describe('promptSession', () => {
 
     await promptSession('session-hidden-pending-followup', 'my missing message');
 
-    expect(prompt).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledWith('my missing message');
     expect(steer).not.toHaveBeenCalled();
-    expect(followUp).toHaveBeenCalledWith('my missing message');
+    expect(followUp).not.toHaveBeenCalled();
   });
 
   it('retries queued steering prompts without images when the model rejects image input', async () => {

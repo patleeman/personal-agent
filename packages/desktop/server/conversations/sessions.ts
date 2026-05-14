@@ -964,6 +964,13 @@ function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAn
   const blocks: DisplayBlock[] = [];
   const toolCallIndex = new Map<string, number>();
   const hiddenTranscriptEntryIds = collectHiddenTranscriptEntryIds(messages);
+  if (hiddenTranscriptEntryIds.size > 0) {
+    throw new Error(
+      `Transcript transparency violation: ${hiddenTranscriptEntryIds.size} persisted transcript entr${
+        hiddenTranscriptEntryIds.size === 1 ? 'y was' : 'ies were'
+      } hidden from chat rendering.`,
+    );
+  }
 
   for (const [messageIndex, msg] of messages.entries()) {
     const { role, content, toolCallId, toolName, details, summary } = msg.message;

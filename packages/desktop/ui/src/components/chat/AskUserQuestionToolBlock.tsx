@@ -13,7 +13,7 @@ import {
   resolveAskUserQuestionOptionHotkey,
   shouldAdvanceAskUserQuestionAfterSelection,
 } from '../../transcript/askUserQuestions';
-import { cx, Pill, SurfacePanel } from '../ui';
+import { cx, Pill } from '../ui';
 
 export { describeAskUserQuestionState };
 
@@ -433,15 +433,18 @@ export function AskUserQuestionToolBlock({
   const statusTone = state.status === 'answered' ? 'success' : state.status === 'superseded' ? 'muted' : 'warning';
 
   return (
-    <SurfacePanel
-      muted
-      className={cx('px-3 py-2.5 text-[12px] transition-colors', state.status === 'pending' && 'border-warning/25 bg-warning/5')}
+    <div
+      className={cx(
+        'border-y border-border-subtle/40 py-2.5 text-[12px] transition-colors',
+        state.status === 'pending' && '-mx-2 border-warning/20 bg-warning/5 px-2',
+      )}
+      data-transcript-event="ask-user-question"
       onKeyDownCapture={mode === 'inline' ? handlePanelHotkeys : undefined}
     >
       <div className="flex items-start gap-2.5">
-        <div className="ui-chat-avatar mt-0.5">
-          <span className="ui-chat-avatar-mark">?</span>
-        </div>
+        <span className="mt-0.5 text-dim" aria-hidden="true">
+          ?
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-[13px] font-medium text-primary">
@@ -630,6 +633,6 @@ export function AskUserQuestionToolBlock({
           ) : null}
         </div>
       </div>
-    </SurfacePanel>
+    </div>
   );
 }

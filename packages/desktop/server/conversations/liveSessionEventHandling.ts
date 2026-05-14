@@ -185,7 +185,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       metadata: { hiddenTurnCustomType: activeHiddenTurnCustomType },
     });
 
-    if (activeHiddenTurnCustomType === 'conversation_automation_post_turn_review') {
+    if (entry.pendingAutoModeContinuation) {
       entry.pendingAutoModeContinuation = false;
     }
 

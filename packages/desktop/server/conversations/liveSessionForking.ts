@@ -39,17 +39,12 @@ export interface StableForkBranchEntry {
   id?: string;
   parentId?: string | null;
   type?: string;
-  display?: boolean;
   message?: {
     role?: string;
     content?: unknown;
     stopReason?: string;
     errorMessage?: string;
   };
-}
-
-function isHiddenCustomMessageEntry(entry: StableForkBranchEntry | undefined): boolean {
-  return entry?.type === 'custom_message' && entry.display === false;
 }
 
 export function getStableForkBranchEntries(sessionFile: string): StableForkBranchEntry[] {
@@ -87,11 +82,7 @@ function isStableCompletedBranchEntry(entry: StableForkBranchEntry | undefined):
     return false;
   }
 
-  if (entry.type === 'custom_message') {
-    return entry.display === true;
-  }
-
-  if (entry.type === 'compaction' || entry.type === 'branch_summary') {
+  if (entry.type === 'custom_message' || entry.type === 'compaction' || entry.type === 'branch_summary') {
     return true;
   }
 
@@ -136,20 +127,11 @@ export function resolveStableForkEntryId(sessionFile: string, options: { activeT
     const hasStableCompletedEntryAfterLatestUser = branch.slice(latestUserIndex + 1).some((entry) => isStableCompletedBranchEntry(entry));
 
     if (!hasStableCompletedEntryAfterLatestUser) {
-      let current: StableForkBranchEntry | undefined = latestUserEntry?.parentId ? branchById.get(latestUserEntry.parentId) : undefined;
-      while (current && isHiddenCustomMessageEntry(current)) {
-        current = current.parentId ? branchById.get(current.parentId) : undefined;
-      }
-      return current?.id?.trim() || null;
+      return latestUserEntry?.parentId ? (branchById.get(latestUserEntry.parentId)?.id?.trim() ?? null) : null;
     }
   }
 
-  let current: StableForkBranchEntry | undefined = branch[branch.length - 1];
-  while (current && isHiddenCustomMessageEntry(current)) {
-    current = current.parentId ? branchById.get(current.parentId) : undefined;
-  }
-
-  return current?.id?.trim() || null;
+  return branch[branch.length - 1]?.id?.trim() || null;
 }
 
 export function extractTextFromMessageContent(content: unknown): string {

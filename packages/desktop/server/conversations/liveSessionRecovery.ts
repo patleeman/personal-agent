@@ -1,12 +1,8 @@
-import { type AgentSession, type SessionEntry, type SessionManager } from '@earendil-works/pi-coding-agent';
+import { type AgentSession, type SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { getAssistantErrorDisplayMessage } from './sessions.js';
 
-function isHiddenSessionBranchEntry(entry: SessionEntry | undefined): boolean {
-  return entry?.type === 'custom_message' && entry.display === false;
-}
-
-function resolveDanglingToolCallRepairLeafId(sessionManager: Pick<SessionManager, 'getBranch' | 'getEntry'>): string | null | undefined {
+function resolveDanglingToolCallRepairLeafId(sessionManager: Pick<SessionManager, 'getBranch'>): string | null | undefined {
   const branch = sessionManager.getBranch();
   if (branch.length === 0) {
     return undefined;
@@ -60,14 +56,6 @@ function resolveDanglingToolCallRepairLeafId(sessionManager: Pick<SessionManager
     return undefined;
   }
 
-  while (repairLeafId) {
-    const parentEntry = sessionManager.getEntry(repairLeafId);
-    if (!isHiddenSessionBranchEntry(parentEntry) || !parentEntry) {
-      break;
-    }
-    repairLeafId = parentEntry.parentId ?? null;
-  }
-
   return repairLeafId;
 }
 
@@ -86,7 +74,7 @@ export function repairDanglingToolCallContext(session: Pick<AgentSession, 'sessi
     return false;
   }
 
-  const repairLeafId = resolveDanglingToolCallRepairLeafId(sessionManager as Pick<SessionManager, 'getBranch' | 'getEntry'>);
+  const repairLeafId = resolveDanglingToolCallRepairLeafId(sessionManager as Pick<SessionManager, 'getBranch'>);
   if (repairLeafId === undefined) {
     return false;
   }
@@ -109,19 +97,8 @@ export interface TranscriptTailRecoveryPlan {
   details?: unknown;
 }
 
-function resolveVisibleSessionBranchTargetId(
-  sessionManager: Pick<SessionManager, 'getEntry'>,
-  entryId: string | null | undefined,
-): string | null {
-  let targetEntryId = entryId ?? null;
-  while (targetEntryId) {
-    const targetEntry = sessionManager.getEntry(targetEntryId);
-    if (!targetEntry || !isHiddenSessionBranchEntry(targetEntry)) {
-      break;
-    }
-    targetEntryId = targetEntry.parentId ?? null;
-  }
-  return targetEntryId;
+function resolveVisibleSessionBranchTargetId(entryId: string | null | undefined): string | null {
+  return entryId ?? null;
 }
 
 function buildTranscriptTailRecoveryPlan(input: {
@@ -151,9 +128,7 @@ function buildTranscriptTailRecoveryPlan(input: {
   };
 }
 
-export function resolveTranscriptTailRecoveryPlan(
-  sessionManager: Pick<SessionManager, 'getBranch' | 'getEntry'>,
-): TranscriptTailRecoveryPlan | null {
+export function resolveTranscriptTailRecoveryPlan(sessionManager: Pick<SessionManager, 'getBranch'>): TranscriptTailRecoveryPlan | null {
   const branch = sessionManager.getBranch();
   if (branch.length === 0) {
     return null;
@@ -164,7 +139,7 @@ export function resolveTranscriptTailRecoveryPlan(
     const errorMessage = getAssistantErrorDisplayMessage(leafEntry.message);
     if (errorMessage) {
       return buildTranscriptTailRecoveryPlan({
-        targetEntryId: resolveVisibleSessionBranchTargetId(sessionManager, leafEntry.parentId ?? null),
+        targetEntryId: resolveVisibleSessionBranchTargetId(leafEntry.parentId ?? null),
         reason: 'assistant_error',
         errorMessage,
       });
