@@ -314,6 +314,25 @@ export function shouldResetWorkbenchRunsOnConversationChange(input: {
   return isRunsRailMode(input.activeTool) || input.activeRunId !== null;
 }
 
+export function shouldResetEmptyRunsRail(input: {
+  activeTool: WorkbenchRailMode;
+  showRunsTab: boolean;
+  hasRunsExtensionSurface: boolean;
+}): boolean {
+  return isRunsRailMode(input.activeTool) && !input.showRunsTab && !input.hasRunsExtensionSurface;
+}
+
+export function shouldResetEmptyArtifactsRail(input: {
+  activeTool: WorkbenchRailMode;
+  artifactsLoading: boolean;
+  artifactCount: number;
+  hasArtifactsExtensionSurface: boolean;
+}): boolean {
+  return (
+    isArtifactsRailMode(input.activeTool) && !input.artifactsLoading && input.artifactCount === 0 && !input.hasArtifactsExtensionSurface
+  );
+}
+
 export function clearWorkbenchOnlySearchParamsForCompact(search: string): string {
   const next = new URLSearchParams(search);
   next.delete('checkpoint');
@@ -829,7 +848,7 @@ function WorkbenchKnowledgeRail({
   }, [activeRunId, onActiveToolChange, onWorkspaceFileClear, systemRunsExtensionSurface]);
 
   useEffect(() => {
-    if (!isRunsRailMode(activeTool) || showRunsTab) {
+    if (!shouldResetEmptyRunsRail({ activeTool, showRunsTab, hasRunsExtensionSurface: systemRunsExtensionSurface !== null })) {
       return;
     }
 
@@ -842,7 +861,7 @@ function WorkbenchKnowledgeRail({
       },
       { replace: true },
     );
-  }, [activeTool, onActiveToolChange, setSearchParams, showRunsTab]);
+  }, [activeTool, onActiveToolChange, setSearchParams, showRunsTab, systemRunsExtensionSurface]);
 
   useEffect(() => {
     const parsed = parseExtensionToolPanelMode(activeTool);
@@ -852,7 +871,14 @@ function WorkbenchKnowledgeRail({
   }, [activeExtensionToolPanel, activeTool, onActiveToolChange]);
 
   useEffect(() => {
-    if (isArtifactsRailMode(activeTool) && !artifactsLoading && artifacts.length === 0) {
+    if (
+      shouldResetEmptyArtifactsRail({
+        activeTool,
+        artifactsLoading,
+        artifactCount: artifacts.length,
+        hasArtifactsExtensionSurface: systemArtifactsExtensionSurface !== null,
+      })
+    ) {
       onActiveToolChange('files');
       setSearchParams(
         (current) => {
@@ -863,7 +889,7 @@ function WorkbenchKnowledgeRail({
         { replace: true },
       );
     }
-  }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams]);
+  }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams, systemArtifactsExtensionSurface]);
 
   useEffect(() => {
     if (isDiffsRailMode(activeTool) && !activeCheckpointId && uncommittedResult) {

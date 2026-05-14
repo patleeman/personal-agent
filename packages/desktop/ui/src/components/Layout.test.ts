@@ -12,6 +12,8 @@ import {
   resolveActiveWorkspaceCwd,
   resolveDefaultDiffCheckpointId,
   resolveWorkbenchRailMode,
+  shouldResetEmptyArtifactsRail,
+  shouldResetEmptyRunsRail,
   shouldResetWorkbenchRunsOnConversationChange,
   shouldShowConversationRunsTab,
 } from './Layout';
@@ -59,6 +61,27 @@ describe('Layout workbench rail state', () => {
     expect(shouldShowConversationRunsTab({ runCount: 1 })).toBe(true);
     expect(shouldShowConversationRunsTab({ runCount: 0, activeRunId: 'run-1', activeRunConnected: false, runsLoaded: false })).toBe(true);
     expect(shouldShowConversationRunsTab({ runCount: 0, activeRunId: 'run-1', activeRunConnected: false, runsLoaded: true })).toBe(false);
+  });
+
+  it('keeps extension-backed empty workbench rails active', () => {
+    expect(shouldResetEmptyRunsRail({ activeTool: 'runs', showRunsTab: false, hasRunsExtensionSurface: true })).toBe(false);
+    expect(shouldResetEmptyRunsRail({ activeTool: 'runs', showRunsTab: false, hasRunsExtensionSurface: false })).toBe(true);
+    expect(
+      shouldResetEmptyArtifactsRail({
+        activeTool: 'artifacts',
+        artifactsLoading: false,
+        artifactCount: 0,
+        hasArtifactsExtensionSurface: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldResetEmptyArtifactsRail({
+        activeTool: 'artifacts',
+        artifactsLoading: false,
+        artifactCount: 0,
+        hasArtifactsExtensionSurface: false,
+      }),
+    ).toBe(true);
   });
 
   it('resets runs mode when switching conversations', () => {
