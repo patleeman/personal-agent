@@ -50,7 +50,7 @@ describe('ConversationPage desktop local state', () => {
             sessionFile: '/tmp/local-conv.jsonl',
             title: 'Local desktop state',
             isStreaming: false,
-            hasPendingHiddenTurn: false,
+            hasStaleTurnState: false,
           },
           stream: {
             blocks: [

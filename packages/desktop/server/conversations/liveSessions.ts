@@ -565,7 +565,7 @@ export function subscribe(
   });
 }
 
-/** Append hidden context before the next user-visible prompt in a live session. */
+/** Append internal context before the next user-visible prompt in a live session. */
 export async function queuePromptContext(sessionId: string, customType: string, content: string): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);

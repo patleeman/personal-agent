@@ -188,19 +188,19 @@ describe('desktop conversation state fallback', () => {
         sessionIsRunning: true,
         bootstrapLiveSessionIsStreaming: false,
         desktopLiveSessionIsStreaming: false,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       }),
     ).toEqual({ allowQueuedPrompts: true, defaultComposerBehavior: 'steer', streamControlsActive: true });
   });
 
-  it('uses follow-up behavior for hidden turns instead of exposing steer controls', () => {
+  it('uses follow-up behavior for stale turns instead of exposing steer controls', () => {
     expect(
       resolveConversationComposerRunState({
         streamIsStreaming: false,
         sessionIsRunning: true,
         bootstrapLiveSessionIsStreaming: false,
         desktopLiveSessionIsStreaming: false,
-        hasPendingHiddenTurn: true,
+        hasStaleTurnState: true,
       }),
     ).toEqual({ allowQueuedPrompts: true, defaultComposerBehavior: 'followUp', streamControlsActive: false });
   });

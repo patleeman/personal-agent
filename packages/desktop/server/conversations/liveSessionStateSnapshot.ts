@@ -23,7 +23,7 @@ function normalizeLiveSnapshotTailBlocks(value: number | undefined): number {
 
 export interface LiveSessionSnapshotHost {
   session: AgentSession;
-  activeHiddenTurnCustomType?: string | null;
+  activeStaleTurnCustomType?: string | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
 }
@@ -35,7 +35,7 @@ export interface LiveSessionStateSnapshot {
   hasSnapshot: boolean;
   isStreaming: boolean;
   isCompacting: boolean;
-  hasPendingHiddenTurn: boolean;
+  hasStaleTurnState: boolean;
   error: string | null;
   title: string | null;
   tokens: { input: number; output: number; total: number } | null;
@@ -127,7 +127,7 @@ export function readLiveSessionStateSnapshotFromEntry(
     hasSnapshot: true,
     isStreaming: entry.session.isStreaming,
     isCompacting: entry.isCompacting === true,
-    hasPendingHiddenTurn: hasQueuedOrActiveStaleTurn(entry),
+    hasStaleTurnState: hasQueuedOrActiveStaleTurn(entry),
     goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
     error: entry.currentTurnError ?? null,
     title,

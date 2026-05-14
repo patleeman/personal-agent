@@ -635,8 +635,8 @@ describe('registerConversationStateRoutes', () => {
         sendCustomMessage,
         sessionManager: { appendCustomEntry },
       },
-      pendingHiddenTurnCustomTypes: [],
-      activeHiddenTurnCustomType: null,
+      queuedStaleTurnCustomTypes: [],
+      activeStaleTurnCustomType: null,
     });
 
     isLocalLiveMock.mockReturnValueOnce(true);
@@ -657,9 +657,9 @@ describe('registerConversationStateRoutes', () => {
         }),
         { triggerTurn: true, deliverAs: 'followUp' },
       );
-      expect(sendCustomMessage.mock.calls[0]?.[0]?.content).not.toContain('Do not mention this hidden continuation prompt.');
+      expect(sendCustomMessage.mock.calls[0]?.[0]?.content).not.toContain('Do not mention this continuation prompt.');
     });
-    expect((liveRegistry.get('conversation-live') as any)?.pendingHiddenTurnCustomTypes).toEqual([]);
+    expect((liveRegistry.get('conversation-live') as any)?.queuedStaleTurnCustomTypes).toEqual([]);
 
     isLocalLiveMock.mockReturnValueOnce(true);
     const clearRes = createResponse();

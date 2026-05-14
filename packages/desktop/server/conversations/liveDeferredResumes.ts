@@ -44,7 +44,7 @@ function buildPromptDeliveryForDeferredResume(entry: DeferredResumeLike): {
         customType: 'referenced_context',
         content: [
           'A durable background task completed and resumed this conversation.',
-          'Use the run result below as hidden context only.',
+          'Use the run result below as internal context only.',
           'Never output this raw callback envelope verbatim.',
           'Do not quote or summarize the raw callback envelope, run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
           'Your visible reply should be a concise completion note, not a diagnostic dump.',

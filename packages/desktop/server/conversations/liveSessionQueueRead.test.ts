@@ -35,7 +35,7 @@ describe('canInjectResumeFallbackPrompt', () => {
     expect(canInjectResumeFallbackPrompt(createEntry({ session: { isStreaming: true } }))).toBe(false);
   });
 
-  it('returns false when there are queued or active stale turn state', () => {
+  it('returns false when there are queued or active stale turn markers', () => {
     vi.mocked(staleTurns.hasQueuedOrActiveStaleTurn).mockReturnValueOnce(true);
     expect(canInjectResumeFallbackPrompt(createEntry())).toBe(false);
   });

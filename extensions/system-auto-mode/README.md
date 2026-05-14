@@ -15,7 +15,7 @@ Auto mode is conversation-scoped background continuation. The composer exposes i
 | Mode    | Behavior                                                                                                                 | Stop condition                                                                                     |
 | ------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
 | Manual  | No automatic continuation.                                                                                               | User sends the next prompt.                                                                        |
-| Nudge   | Legacy soft auto mode. A hidden review turn decides whether useful work remains.                                         | The review calls stop, misses the control tool too many times, or the user stops the conversation. |
+| Nudge   | Legacy soft auto mode. A visible review event decides whether useful work remains.                                       | The review calls stop, misses the control tool too many times, or the user stops the conversation. |
 | Mission | Goal-driven mode with an AI-managed task list. The agent must keep updating `run_state` and continue while tasks remain. | All mission tasks are `done`, max turns is reached, or the user stops the conversation.            |
 | Loop    | Fixed-count mode. The same loop prompt is continued until the iteration counter reaches N.                               | Iterations used reaches max iterations, or the user stops the conversation.                        |
 
@@ -27,10 +27,10 @@ Manual, Mission, and Loop are selected from the run-mode control in the composer
 Visible assistant turn
        │
        ▼
-Hidden review turn
+Visible review event
        │
        ├── conversation_auto_control { action: "continue" }
-       │      └── hidden continuation turn, then another review
+       │      └── internal continuation turn, then another review event
        │
        ├── conversation_auto_control { action: "stop" }
        │      └── auto mode ends
@@ -52,11 +52,11 @@ On each mission turn, the agent should:
 3. Work the next incomplete task.
 4. Call `run_state { action: "update_tasks" }` to add tasks or mark status changes.
 
-Mission continuation is structural: the harness keeps scheduling hidden continuation turns while at least one task is not `done`. An empty task list is not complete; it forces the model to bootstrap tasks instead of silently ending.
+Mission continuation is structural: the harness keeps scheduling internal continuation turns while at least one task is not `done`. An empty task list is not complete; it forces the model to bootstrap tasks instead of silently ending.
 
 ## Loop Flow
 
-Loop mode stores a prompt, max iteration count, iterations used, and delay. After each loop turn, the harness increments the counter and schedules the next hidden continuation until the counter reaches the configured max.
+Loop mode stores a prompt, max iteration count, iterations used, and delay. After each loop turn, the harness increments the counter and schedules the next internal continuation until the counter reaches the configured max.
 
 Simple delays are supported in the loop delay field: `immediate`, `After each turn`, `500ms`, `2s`, `5m`, or `1h`. Unknown delay text falls back to immediate continuation.
 
@@ -74,7 +74,7 @@ The `set_goal` / `update_goal` tools are the legacy goal-mode path. They are har
 
 ### `conversation_auto_control`
 
-Visible only during Nudge hidden review turns.
+Visible only during Nudge review events.
 
 ```json
 { "action": "continue" }

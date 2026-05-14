@@ -1,23 +1,23 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
 export interface LiveSessionStaleTurnState {
-  pendingHiddenTurnCustomTypes: string[];
-  activeHiddenTurnCustomType: string | null;
+  queuedStaleTurnCustomTypes: string[];
+  activeStaleTurnCustomType: string | null;
 }
 
 export function createLiveSessionStaleTurnState(): LiveSessionStaleTurnState {
   return {
-    pendingHiddenTurnCustomTypes: [],
-    activeHiddenTurnCustomType: null,
+    queuedStaleTurnCustomTypes: [],
+    activeStaleTurnCustomType: null,
   };
 }
 
 export function ensureStaleTurnState(entry: Partial<LiveSessionStaleTurnState>): asserts entry is LiveSessionStaleTurnState {
-  if (!Array.isArray(entry.pendingHiddenTurnCustomTypes)) {
-    entry.pendingHiddenTurnCustomTypes = [];
+  if (!Array.isArray(entry.queuedStaleTurnCustomTypes)) {
+    entry.queuedStaleTurnCustomTypes = [];
   }
-  if (typeof entry.activeHiddenTurnCustomType === 'undefined') {
-    entry.activeHiddenTurnCustomType = null;
+  if (typeof entry.activeStaleTurnCustomType === 'undefined') {
+    entry.activeStaleTurnCustomType = null;
   }
 }
 
@@ -28,8 +28,8 @@ export function hasQueuedOrActiveStaleTurn(entry: Partial<LiveSessionStaleTurnSt
 
 export function clearQueuedStaleTurn(entry: Partial<LiveSessionStaleTurnState>, _event: Pick<AgentSessionEvent, 'type'>): string | null {
   ensureStaleTurnState(entry);
-  entry.pendingHiddenTurnCustomTypes = [];
-  entry.activeHiddenTurnCustomType = null;
+  entry.queuedStaleTurnCustomTypes = [];
+  entry.activeStaleTurnCustomType = null;
   return null;
 }
 
@@ -40,9 +40,9 @@ export function shouldSuppressLiveEventForStaleTurn(entry: Partial<LiveSessionSt
 
 export function clearStaleTurnStateAfterTerminalEvent(entry: Partial<LiveSessionStaleTurnState>, _event: AgentSessionEvent): boolean {
   ensureStaleTurnState(entry);
-  if (entry.activeHiddenTurnCustomType || entry.pendingHiddenTurnCustomTypes.length > 0) {
-    entry.activeHiddenTurnCustomType = null;
-    entry.pendingHiddenTurnCustomTypes = [];
+  if (entry.activeStaleTurnCustomType || entry.queuedStaleTurnCustomTypes.length > 0) {
+    entry.activeStaleTurnCustomType = null;
+    entry.queuedStaleTurnCustomTypes = [];
     return true;
   }
 

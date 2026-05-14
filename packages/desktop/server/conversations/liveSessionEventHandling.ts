@@ -105,7 +105,7 @@ export interface LiveSessionEventHost {
   session: AgentSession;
   title: string;
   currentTurnError?: string | null;
-  activeHiddenTurnCustomType?: string | null;
+  activeStaleTurnCustomType?: string | null;
   pendingAutoModeContinuation?: boolean;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
@@ -167,9 +167,9 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     throw new Error(`Custom transcript message "${customMessageDisplayFlagType}" must not use the display flag.`);
   }
 
-  const activeHiddenTurnCustomType = clearQueuedStaleTurn(entry, event);
-  if (activeHiddenTurnCustomType) {
-    entry.activeHiddenTurnCustomType = activeHiddenTurnCustomType;
+  const activeStaleTurnCustomType = clearQueuedStaleTurn(entry, event);
+  if (activeStaleTurnCustomType) {
+    entry.activeStaleTurnCustomType = activeStaleTurnCustomType;
   }
   const suppressLiveEvent = shouldSuppressLiveEventForStaleTurn(entry, event);
 
@@ -182,7 +182,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       sessionId: entry.sessionId,
       runId: entry.traceRunId ?? undefined,
       count: entry.traceRunTurnCount,
-      metadata: { hiddenTurnCustomType: activeHiddenTurnCustomType },
+      metadata: { staleTurnCustomType: activeStaleTurnCustomType },
     });
 
     if (entry.pendingAutoModeContinuation) {
@@ -426,8 +426,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     callbacks.broadcast(entry, sse);
   }
 
-  const hiddenTurnCleared = clearStaleTurnStateAfterTerminalEvent(entry, event);
-  if (hiddenTurnCleared) {
+  const staleTurnStateCleared = clearStaleTurnStateAfterTerminalEvent(entry, event);
+  if (staleTurnStateCleared) {
     callbacks.publishSessionMetaChanged(entry.sessionId);
   }
 

@@ -77,8 +77,8 @@ function setLiveEntry(sessionId: string, entry: Omit<Partial<LiveRegistryEntry>,
     lastContextUsageJson: entry.lastContextUsageJson ?? null,
     lastQueueStateJson: entry.lastQueueStateJson ?? null,
     lastParallelStateJson: entry.lastParallelStateJson ?? null,
-    pendingHiddenTurnCustomTypes: entry.pendingHiddenTurnCustomTypes ?? [],
-    activeHiddenTurnCustomType: entry.activeHiddenTurnCustomType ?? null,
+    queuedStaleTurnCustomTypes: entry.queuedStaleTurnCustomTypes ?? [],
+    activeStaleTurnCustomType: entry.activeStaleTurnCustomType ?? null,
     pendingAutoCompactionReason: entry.pendingAutoCompactionReason ?? null,
     lastCompactionSummaryTitle: entry.lastCompactionSummaryTitle ?? null,
     parallelJobs: entry.parallelJobs ?? [],
@@ -227,7 +227,7 @@ describe('resolveStableForkEntryId', () => {
           parentId: 'assistant-1',
           timestamp: '2026-03-13T18:00:03.000Z',
           customType: 'referenced_context',
-          content: [{ type: 'text', text: 'Hidden context for the next turn.' }],
+          content: [{ type: 'text', text: 'Internal context for the next turn.' }],
           display: false,
         }),
         JSON.stringify({
@@ -261,13 +261,13 @@ describe('resolveStableForkEntryId', () => {
   it('treats legacy hidden custom entries as visible fork targets', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
-    const sessionFile = join(dir, 'session-stable-fork-hidden-turn.jsonl');
+    const sessionFile = join(dir, 'session-stable-fork-stale-turn.jsonl');
     writeFileSync(
       sessionFile,
       [
         JSON.stringify({
           type: 'session',
-          id: 'session-stable-fork-hidden-turn',
+          id: 'session-stable-fork-stale-turn',
           timestamp: '2026-03-13T18:00:00.000Z',
           cwd: '/tmp/workspace',
         }),
@@ -287,18 +287,18 @@ describe('resolveStableForkEntryId', () => {
         }),
         JSON.stringify({
           type: 'custom_message',
-          id: 'hidden-turn-1',
+          id: 'stale-turn-1',
           parentId: 'assistant-1',
           timestamp: '2026-03-13T18:00:03.000Z',
           customType: 'conversation_automation_post_turn_review',
-          content: [{ type: 'text', text: 'Hidden review prompt.' }],
+          content: [{ type: 'text', text: 'Legacy review prompt.' }],
           display: false,
         }),
         '',
       ].join('\n'),
     );
 
-    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('hidden-turn-1');
+    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('stale-turn-1');
   });
 });
 
@@ -662,8 +662,8 @@ describe('parallel prompt job management', () => {
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
-      pendingHiddenTurnCustomTypes: [],
-      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      queuedStaleTurnCustomTypes: [],
+      activeStaleTurnCustomType: 'conversation_automation_post_turn_review',
       session: {
         sessionFile: '/tmp/session-hidden-auto-running.jsonl',
         isStreaming: true,
@@ -674,7 +674,7 @@ describe('parallel prompt job management', () => {
       expect.objectContaining({
         id: 'session-hidden-auto-running',
         isStreaming: true,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       }),
     );
   });
@@ -739,7 +739,7 @@ describe('requestConversationWorkingDirectoryChange', () => {
 });
 
 describe('live session registry helpers', () => {
-  it('reports live registry membership, titles, pending stale turn state, and fork entries', () => {
+  it('reports live registry membership, titles, stale turn state, and fork entries', () => {
     const forkEntries = [{ id: 'user-1' }];
 
     setLiveEntry('session-helper', {
@@ -750,7 +750,7 @@ describe('live session registry helpers', () => {
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
-      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      activeStaleTurnCustomType: 'conversation_automation_post_turn_review',
       session: {
         sessionFile: '/tmp/session-helper.jsonl',
         sessionName: 'Persisted title',
@@ -768,7 +768,7 @@ describe('live session registry helpers', () => {
       title: 'Persisted title',
       running: false,
       isStreaming: false,
-      hasPendingHiddenTurn: false,
+      hasStaleTurnState: false,
     });
     expect(getLiveSessionForkEntries('session-helper')).toBe(forkEntries);
     expect(getLiveSessionForkEntries('missing-session')).toBeNull();
@@ -1158,6 +1158,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 3,
       isStreaming: true,
+      goalState: null,
       blocks: [
         {
           type: 'user',
@@ -1186,18 +1187,18 @@ describe('live session subscriptions', () => {
     expect(events[5]).toEqual({ type: 'agent_start' });
   });
 
-  it('does not replay agent_start while a generic hidden turn is active', () => {
+  it('does not replay agent_start while a generic stale turn is active', () => {
     const events: SseEvent[] = [];
 
     setLiveEntry('session-hidden-streaming', {
       sessionId: 'session-hidden-streaming',
       cwd: '/tmp/workspace',
       listeners: new Set(),
-      title: 'Hidden streaming',
+      title: 'Stale marker streaming',
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
-      activeHiddenTurnCustomType: 'conversation_automation_review',
+      activeStaleTurnCustomType: 'conversation_automation_review',
       session: {
         state: {
           messages: [],
@@ -1217,18 +1218,18 @@ describe('live session subscriptions', () => {
     expect(events).not.toContainEqual({ type: 'agent_start' });
   });
 
-  it('replays agent_start while an auto-mode hidden turn is active so internal work stays visible', () => {
+  it('replays agent_start while an auto-mode stale turn is active so internal work stays visible', () => {
     const events: SseEvent[] = [];
 
     setLiveEntry('session-auto-hidden-streaming', {
       sessionId: 'session-auto-hidden-streaming',
       cwd: '/tmp/workspace',
       listeners: new Set(),
-      title: 'Auto hidden streaming',
+      title: 'Auto streaming',
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
-      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      activeStaleTurnCustomType: 'conversation_automation_post_turn_review',
       session: {
         state: {
           messages: [],
@@ -1552,6 +1553,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 5,
       isStreaming: true,
+      goalState: null,
       blocks: [
         {
           type: 'user',
@@ -2053,6 +2055,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 2,
       isStreaming: false,
+      goalState: null,
       blocks: [
         {
           type: 'summary',
@@ -2128,6 +2131,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 2,
       isStreaming: false,
+      goalState: null,
       blocks: [
         {
           type: 'summary',
@@ -2195,6 +2199,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 2,
       isStreaming: false,
+      goalState: null,
       blocks: [
         {
           type: 'summary',
@@ -2264,6 +2269,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 1,
       isStreaming: false,
+      goalState: null,
       blocks: [
         {
           type: 'summary',
@@ -2357,6 +2363,7 @@ describe('live session subscriptions', () => {
       blockOffset: 0,
       totalBlocks: 4,
       isStreaming: false,
+      goalState: null,
       blocks: [
         {
           type: 'user',
@@ -2419,7 +2426,7 @@ describe('live session subscriptions', () => {
         title: 'Keep this sidebar title fresh',
         running: false,
         isStreaming: false,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       },
     ]);
   });
@@ -2798,12 +2805,12 @@ describe('queued prompt restore', () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steeringQueue = {
       messages: [
-        { role: 'custom', content: 'hidden steer context' },
+        { role: 'custom', content: 'internal steer context' },
         {
           role: 'user',
           content: [{ type: 'text', text: 'first queued prompt' }],
         },
-        { role: 'custom', content: 'more hidden steer context' },
+        { role: 'custom', content: 'more internal steer context' },
         {
           role: 'user',
           content: [
@@ -2855,12 +2862,12 @@ describe('queued prompt restore', () => {
     expect(steeringMessages).toEqual(['first queued prompt']);
     expect(steeringQueue).toEqual({
       messages: [
-        { role: 'custom', content: 'hidden steer context' },
+        { role: 'custom', content: 'internal steer context' },
         {
           role: 'user',
           content: [{ type: 'text', text: 'first queued prompt' }],
         },
-        { role: 'custom', content: 'more hidden steer context' },
+        { role: 'custom', content: 'more internal steer context' },
       ],
     });
     expect(events).toContainEqual({
@@ -3186,7 +3193,7 @@ describe('queuePromptContext', () => {
 });
 
 describe('conversation auto mode', () => {
-  it('persists live auto mode state without immediately running a hidden review turn', async () => {
+  it('persists live auto mode state without immediately running a review event', async () => {
     const entries: unknown[] = [];
     const appendCustomEntry = vi.fn((customType: string, data: unknown) => {
       entries.push({ type: 'custom', customType, data });
@@ -3267,7 +3274,7 @@ describe('conversation auto mode', () => {
     await expect(requestConversationAutoModeTurn('session-auto-mode-empty')).resolves.toBe(false);
   });
 
-  it('does not queue another hidden review turn while work is already streaming', async () => {
+  it('does not queue another review event while work is already streaming', async () => {
     setLiveEntry('session-auto-mode-busy', {
       sessionId: 'session-auto-mode-busy',
       cwd: '/tmp/workspace',
@@ -3341,7 +3348,7 @@ describe('conversation auto mode', () => {
 
     await expect(requestConversationAutoModeContinuationTurn('session-auto-continue')).resolves.toBe(false);
     expect(sendCustomMessage).not.toHaveBeenCalled();
-    expect(registry.get('session-auto-continue')?.pendingHiddenTurnCustomTypes ?? []).toEqual([]);
+    expect(registry.get('session-auto-continue')?.queuedStaleTurnCustomTypes ?? []).toEqual([]);
   });
 
   it('run_state tool reads and writes mission task state through session manager', async () => {
@@ -3693,7 +3700,6 @@ describe('appendVisibleCustomMessage', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'automation_note',
       content: 'Show this note.',
-      display: true,
       details: { severity: 'info' },
     });
   });
@@ -3961,7 +3967,7 @@ describe('promptSession', () => {
               parentId: 'assistant-1',
               timestamp: '2026-04-18T10:00:02.000Z',
               customType: 'conversation_automation_post_turn_review',
-              content: [{ type: 'text', text: 'Hidden review prompt.' }],
+              content: [{ type: 'text', text: 'Legacy review prompt.' }],
               display: false,
             },
             {
@@ -3992,7 +3998,7 @@ describe('promptSession', () => {
                   parentId: 'assistant-1',
                   timestamp: '2026-04-18T10:00:02.000Z',
                   customType: 'conversation_automation_post_turn_review',
-                  content: [{ type: 'text', text: 'Hidden review prompt.' }],
+                  content: [{ type: 'text', text: 'Legacy review prompt.' }],
                   display: false,
                 },
               }) as Record<string, unknown>
@@ -4146,7 +4152,7 @@ describe('promptSession', () => {
     expect(followUp).toHaveBeenCalledWith('keep going');
   });
 
-  it('prompts immediately when only stale stale turn state remains', async () => {
+  it('prompts immediately when only stale turn state remains', async () => {
     const prompt = vi.fn(async () => undefined);
     const steer = vi.fn(async () => undefined);
     const followUp = vi.fn(async () => undefined);
@@ -4155,11 +4161,11 @@ describe('promptSession', () => {
       sessionId: 'session-hidden-pending-followup',
       cwd: '/tmp/workspace',
       listeners: new Set(),
-      title: 'Hidden pending follow-up',
+      title: 'Stale pending follow-up',
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
-      pendingHiddenTurnCustomTypes: ['conversation_automation_post_turn_review'],
+      queuedStaleTurnCustomTypes: ['conversation_automation_post_turn_review'],
       session: {
         state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,

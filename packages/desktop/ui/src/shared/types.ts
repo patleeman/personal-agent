@@ -801,7 +801,7 @@ export interface LiveSessionMeta {
   sessionFile: string;
   title?: string;
   isStreaming: boolean;
-  hasPendingHiddenTurn?: boolean;
+  hasStaleTurnState?: boolean;
 }
 
 export interface LiveSessionCreateResult {

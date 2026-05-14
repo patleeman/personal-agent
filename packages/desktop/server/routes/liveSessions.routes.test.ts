@@ -479,7 +479,7 @@ describe('live session routes', () => {
     expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
   });
 
-  it('handles prompt validation, hidden context injection, resumed sessions, and control conflicts', async () => {
+  it('handles prompt validation, internal context injection, resumed sessions, and control conflicts', async () => {
     const flushLiveDeferredResumes = vi.fn(async () => {});
     createDesktopHarness({
       flushLiveDeferredResumes,
@@ -707,8 +707,8 @@ describe('live session routes', () => {
         isStreaming: false,
         model: { id: 'gpt-4o' },
       },
-      pendingHiddenTurnCustomTypes: [],
-      activeHiddenTurnCustomType: null,
+      queuedStaleTurnCustomTypes: [],
+      activeStaleTurnCustomType: null,
     });
 
     const createRes = createResponse();

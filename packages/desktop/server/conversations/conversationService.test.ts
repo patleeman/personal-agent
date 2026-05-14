@@ -223,7 +223,7 @@ describe('conversationService', () => {
       sessionFile: '/tmp/workspace/session.jsonl',
       title: 'Conversation title',
       isStreaming: true,
-      hasPendingHiddenTurn: true,
+      hasStaleTurnState: true,
       session: {
         get theme() {
           throw new Error('Theme not initialized. Call initTheme() first.');
@@ -241,7 +241,7 @@ describe('conversationService', () => {
       sessionFile: '/tmp/workspace/session.jsonl',
       title: 'Conversation title',
       isStreaming: true,
-      hasPendingHiddenTurn: true,
+      hasStaleTurnState: true,
     });
     expect('session' in result).toBe(false);
     expect(() => JSON.stringify({ live: true, ...result })).not.toThrow();
@@ -280,7 +280,7 @@ describe('conversationService', () => {
         sessionFile: ' /sessions/live.jsonl ',
         title: 'Live title',
         isStreaming: true,
-        hasPendingHiddenTurn: true,
+        hasStaleTurnState: true,
       },
     ]);
     liveSessionRegistry.set('conversation-1', {
@@ -294,7 +294,7 @@ describe('conversationService', () => {
         sessionFile: ' /sessions/live.jsonl ',
         title: 'Live title',
         isStreaming: true,
-        hasPendingHiddenTurn: true,
+        hasStaleTurnState: true,
         session: { sessionManager: 'session-manager-1' },
       },
     ]);
@@ -420,11 +420,11 @@ describe('conversationService', () => {
         isStreaming: false,
       },
       {
-        id: 'hidden-turn-1',
-        cwd: '/repo/hidden-turn',
-        sessionFile: '/sessions/hidden-turn-1.jsonl',
+        id: 'stale-turn-1',
+        cwd: '/repo/stale-turn',
+        sessionFile: '/sessions/stale-turn-1.jsonl',
         isStreaming: false,
-        hasPendingHiddenTurn: true,
+        hasStaleTurnState: true,
       },
       {
         id: 'workspace-1',
@@ -463,7 +463,7 @@ describe('conversationService', () => {
           isRunning: false,
         }),
         expect.objectContaining({
-          id: 'hidden-turn-1',
+          id: 'stale-turn-1',
           isLive: true,
           isRunning: true,
         }),
@@ -550,7 +550,7 @@ describe('conversationService', () => {
         sessionFile: '/sessions/fallback.jsonl',
         // no `running` field — exercise the legacy derivation path
         isStreaming: false,
-        hasPendingHiddenTurn: true,
+        hasStaleTurnState: true,
       },
     ]);
 
@@ -559,7 +559,7 @@ describe('conversationService', () => {
       expect.objectContaining({
         id: 'fallback',
         isLive: true,
-        isRunning: true, // from hasPendingHiddenTurn via fallback path
+        isRunning: true, // from hasStaleTurnState via fallback path
       }),
     );
   });

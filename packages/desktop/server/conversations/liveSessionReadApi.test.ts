@@ -8,14 +8,14 @@ function makeEntry(overrides: Partial<LiveSessionReadHost> = {}): LiveSessionRea
     cwd: '/repo',
     session: { isStreaming: false } as any,
     title: 'Test',
-    activeHiddenTurnCustomType: null,
-    pendingHiddenTurnCustomTypes: [],
+    activeStaleTurnCustomType: null,
+    queuedStaleTurnCustomTypes: [],
     ...overrides,
   } as LiveSessionReadHost;
 }
 
 describe('computeLiveSessionRunning', () => {
-  it('returns false when lastDurableRunState is waiting and no hidden turn is active', () => {
+  it('returns false when lastDurableRunState is waiting and no stale turn is active', () => {
     expect(computeLiveSessionRunning(makeEntry({ lastDurableRunState: 'waiting' }))).toBe(false);
   });
 
@@ -34,23 +34,23 @@ describe('computeLiveSessionRunning', () => {
     expect(computeLiveSessionRunning(makeEntry({ isCompacting: true, lastDurableRunState: 'waiting' }))).toBe(true);
   });
 
-  it('returns true when session.isStreaming is true and no hidden turn masks it', () => {
+  it('returns true when session.isStreaming is true and no stale turn masks it', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
           session: { isStreaming: true } as any,
-          activeHiddenTurnCustomType: null,
+          activeStaleTurnCustomType: null,
         }),
       ),
     ).toBe(true);
   });
 
-  it('returns true when session.isStreaming is true even if a stale hidden-turn marker exists', () => {
+  it('returns true when session.isStreaming is true even if a stale stale-turn marker exists', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
           session: { isStreaming: true } as any,
-          activeHiddenTurnCustomType: 'auto_mode',
+          activeStaleTurnCustomType: 'auto_mode',
         }),
       ),
     ).toBe(true);
@@ -70,14 +70,14 @@ describe('computeLiveSessionRunning', () => {
     ).toBe(false);
   });
 
-  it('ignores stale hidden-turn markers when the session is otherwise idle', () => {
+  it('ignores stale stale-turn markers when the session is otherwise idle', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
           session: { isStreaming: false } as any,
           lastDurableRunState: 'waiting',
-          pendingHiddenTurnCustomTypes: ['auto_mode'],
-          activeHiddenTurnCustomType: 'auto_mode',
+          queuedStaleTurnCustomTypes: ['auto_mode'],
+          activeStaleTurnCustomType: 'auto_mode',
         }),
       ),
     ).toBe(false);
@@ -91,12 +91,12 @@ describe('computeLiveSessionRunning', () => {
     expect(computeLiveSessionRunning(makeEntry({ lastDurableRunState: 'recovering' }))).toBe(true);
   });
 
-  it('returns true when both session.isStreaming and hidden turn are present', () => {
+  it('returns true when both session.isStreaming and stale turn are present', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
           session: { isStreaming: true } as any,
-          activeHiddenTurnCustomType: 'auto_mode',
+          activeStaleTurnCustomType: 'auto_mode',
         }),
       ),
     ).toBe(true);
@@ -106,12 +106,12 @@ describe('computeLiveSessionRunning', () => {
     expect(computeLiveSessionRunning(makeEntry({ lastDurableRunState: undefined }))).toBe(false);
   });
 
-  it('returns false when interrupted durable run only has a stale hidden-turn marker', () => {
+  it('returns false when interrupted durable run only has a stale stale-turn marker', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
           lastDurableRunState: 'interrupted',
-          activeHiddenTurnCustomType: 'auto_mode',
+          activeStaleTurnCustomType: 'auto_mode',
         }),
       ),
     ).toBe(false);

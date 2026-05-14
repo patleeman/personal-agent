@@ -25,17 +25,17 @@ export function resolveConversationComposerRunState(input: {
   sessionIsRunning?: boolean | null;
   bootstrapLiveSessionIsStreaming?: boolean | null;
   desktopLiveSessionIsStreaming?: boolean | null;
-  hasPendingHiddenTurn: boolean;
+  hasStaleTurnState: boolean;
 }): { allowQueuedPrompts: boolean; defaultComposerBehavior: 'steer' | 'followUp' | undefined; streamControlsActive: boolean } {
   const streamControlsActive =
     input.streamIsStreaming ||
     input.bootstrapLiveSessionIsStreaming === true ||
     input.desktopLiveSessionIsStreaming === true ||
-    (input.sessionIsRunning === true && !input.hasPendingHiddenTurn);
+    (input.sessionIsRunning === true && !input.hasStaleTurnState);
 
   return {
-    allowQueuedPrompts: streamControlsActive || input.hasPendingHiddenTurn,
-    defaultComposerBehavior: streamControlsActive ? 'steer' : input.hasPendingHiddenTurn ? 'followUp' : undefined,
+    allowQueuedPrompts: streamControlsActive || input.hasStaleTurnState,
+    defaultComposerBehavior: streamControlsActive ? 'steer' : input.hasStaleTurnState ? 'followUp' : undefined,
     streamControlsActive,
   };
 }

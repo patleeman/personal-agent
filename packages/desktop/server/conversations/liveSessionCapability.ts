@@ -116,7 +116,7 @@ export interface CreateLiveSessionCapabilityResult {
       sessionFile: string;
       title?: string;
       isStreaming: boolean;
-      hasPendingHiddenTurn?: boolean;
+      hasStaleTurnState?: boolean;
     };
   };
 }
@@ -205,14 +205,14 @@ function buildLiveSessionOptions(context: LiveSessionCapabilityContext, override
   };
 }
 
-function buildBackgroundRunHiddenContext(entries: Array<{ prompt: string }>): string {
+function buildBackgroundRunInternalContext(entries: Array<{ prompt: string }>): string {
   if (entries.length === 0) {
     return '';
   }
 
   const lines = [
     'Background run completions became available since the previous explicit user turn.',
-    'Use this as hidden context only. Do not treat it as a standalone follow-up instruction.',
+    'Use this as internal context only. Do not treat it as a standalone follow-up instruction.',
     'Never output this raw completion block verbatim.',
     'Do not quote or summarize raw run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
     'If the only sensible next step is to wait and inspect again later, add a conversation_queue item with trigger "delay" or "at" yourself instead of asking the user to remind you.',
@@ -401,8 +401,8 @@ function buildCreatedLiveSessionBootstrap(
   const now = new Date().toISOString();
   const title = liveEntry.title.trim() || 'New Conversation';
   const model = typeof liveEntry.session.model?.id === 'string' ? liveEntry.session.model.id : '';
-  const hasPendingHiddenTurn = liveEntry.pendingHiddenTurnCustomTypes.length > 0 || liveEntry.activeHiddenTurnCustomType !== null;
-  const isRunning = liveEntry.session.isStreaming || hasPendingHiddenTurn;
+  const hasStaleTurnState = liveEntry.queuedStaleTurnCustomTypes.length > 0 || liveEntry.activeStaleTurnCustomType !== null;
+  const isRunning = liveEntry.session.isStreaming || hasStaleTurnState;
 
   return {
     conversationId,
@@ -433,7 +433,7 @@ function buildCreatedLiveSessionBootstrap(
       sessionFile,
       ...(title ? { title } : {}),
       isStreaming: liveEntry.session.isStreaming,
-      ...(hasPendingHiddenTurn ? { hasPendingHiddenTurn: true } : {}),
+      ...(hasStaleTurnState ? { hasStaleTurnState: true } : {}),
     },
   };
 }
@@ -680,7 +680,7 @@ async function prepareLiveSessionPrompt(
         sessionFile,
       })
     : [];
-  const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
+  const backgroundRunInternalContext = buildBackgroundRunInternalContext(backgroundRunContextEntries);
 
   const referencedPaths = new Set<string>([
     ...referencedMemoryDocs.map((doc) => doc.path),
@@ -694,17 +694,17 @@ async function prepareLiveSessionPrompt(
     referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, context.getRepoRoot()) : '',
     referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, context.getRepoRoot()) : '',
     ...extensionPromptReferences.contextBlocks,
-    backgroundRunHiddenContext,
+    backgroundRunInternalContext,
   ].filter(Boolean);
 
-  const hiddenContext = queuedContextBlocks.join('\n\n');
+  const internalContext = queuedContextBlocks.join('\n\n');
   const normalizedContextMessages = [
     ...promptContextMessages,
     ...(queuedContextBlocks.length > 0
       ? [
           {
             customType: 'referenced_context',
-            content: hiddenContext,
+            content: internalContext,
           },
         ]
       : []),

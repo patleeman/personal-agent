@@ -437,8 +437,8 @@ describe('legacy auto mode continuation quarantine', () => {
       session: {} as any,
       title: 'Auto mode',
       pendingAutoModeContinuation: false,
-      pendingHiddenTurnCustomTypes: [] as string[],
-      activeHiddenTurnCustomType: null,
+      queuedStaleTurnCustomTypes: [] as string[],
+      activeStaleTurnCustomType: null,
       ...overrides,
     } as any;
   }
@@ -465,10 +465,10 @@ describe('legacy auto mode continuation quarantine', () => {
   }
 
   describe('nudge mode review turn', () => {
-    it('clears legacy continuation intent without scheduling another hidden turn', async () => {
+    it('clears legacy continuation intent without scheduling another stale turn', async () => {
       const entry = makeEntry({
         pendingAutoModeContinuation: true,
-        activeHiddenTurnCustomType: REVIEW_TYPE,
+        activeStaleTurnCustomType: REVIEW_TYPE,
       });
       const cbs = makeCallbacks();
 
@@ -484,7 +484,7 @@ describe('legacy auto mode continuation quarantine', () => {
     it('clears pendingAutoModeContinuation flag after consuming it', () => {
       const entry = makeEntry({
         pendingAutoModeContinuation: true,
-        activeHiddenTurnCustomType: REVIEW_TYPE,
+        activeStaleTurnCustomType: REVIEW_TYPE,
       });
       const cbs = makeCallbacks();
 
@@ -511,15 +511,15 @@ describe('legacy auto mode continuation quarantine', () => {
         ),
       ).toThrow('Custom transcript message "goal-continuation" must not use the display flag.');
 
-      expect(entry.activeHiddenTurnCustomType).toBeNull();
+      expect(entry.activeStaleTurnCustomType).toBeNull();
     });
   });
 
   describe('stale auto mode continuation cleanup', () => {
-    it('clears stale continuation state without scheduling hidden follow-up work', async () => {
+    it('clears stale continuation state without scheduling implicit follow-up work', async () => {
       const entry = makeEntry({
         pendingAutoModeContinuation: true,
-        activeHiddenTurnCustomType: null,
+        activeStaleTurnCustomType: null,
       });
       const cbs = makeCallbacks();
 

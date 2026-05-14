@@ -165,7 +165,7 @@ interface TailScanDisplayEntrySummary {
   id: string;
   parentId: string | null;
   visibleBlockCount: number;
-  hiddenRoot: boolean;
+  suppressedRoot: boolean;
   displayEntry: DisplayMessageEntryLike;
 }
 
@@ -515,14 +515,14 @@ function summarizeTailScanEntry(rawLine: string): TailScanEntrySummary | null {
 
   const displayEntry = buildDisplayMessageEntryFromRawLine(parsed as RawDisplayLine);
   const visibleBlockCount = buildDisplayBlocksFromEntries([displayEntry]).length;
-  const hiddenRoot = shouldHideTranscriptDescendants(displayEntry.message);
+  const suppressedRoot = shouldSuppressTranscriptDescendants(displayEntry.message);
 
   return {
     kind: 'display',
     id,
     parentId,
     visibleBlockCount,
-    hiddenRoot,
+    suppressedRoot,
     displayEntry,
   };
 }
@@ -563,8 +563,8 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
   }
 
   const chronologicalDisplayEntries = branchDisplayEntries.slice().reverse();
-  const hiddenEntryIds = collectHiddenTranscriptEntryIds(chronologicalDisplayEntries.map((entry) => entry.displayEntry));
-  const visibleEntries = chronologicalDisplayEntries.filter((entry) => !hiddenEntryIds.has(entry.id));
+  const suppressedEntryIds = collectSuppressedTranscriptEntryIds(chronologicalDisplayEntries.map((entry) => entry.displayEntry));
+  const visibleEntries = chronologicalDisplayEntries.filter((entry) => !suppressedEntryIds.has(entry.id));
   const totalBlocks = visibleEntries.reduce((sum, entry) => sum + entry.visibleBlockCount, 0);
   const tailBlockLimit = Math.min(tailBlocks, totalBlocks);
 
@@ -915,60 +915,62 @@ function buildSessionSearchText(entries: SessionEntry[], maxCharacters: number):
   return segments.reverse().join('\n');
 }
 
-function shouldHideTranscriptDescendants(_message: DisplayMessageEntryLike['message']): boolean {
+function shouldSuppressTranscriptDescendants(_message: DisplayMessageEntryLike['message']): boolean {
   // Transcript transparency rule: persisted transcript entries should remain visible in the chat.
-  // Legacy hidden-turn markers may still exist in old session files, but the reader must not
-  // hide them or their descendants.
+  // Legacy stale-turn markers may still exist in old session files, but the reader must not
+  // suppress them or their descendants.
   return false;
 }
 
-function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): Set<string> {
-  const hiddenRoots = new Set(messages.filter((message) => shouldHideTranscriptDescendants(message.message)).map((message) => message.id));
-  if (hiddenRoots.size === 0) {
+function collectSuppressedTranscriptEntryIds(messages: DisplayMessageEntryLike[]): Set<string> {
+  const suppressedRoots = new Set(
+    messages.filter((message) => shouldSuppressTranscriptDescendants(message.message)).map((message) => message.id),
+  );
+  if (suppressedRoots.size === 0) {
     return new Set();
   }
 
   const parentById = new Map(messages.map((message) => [message.id, message.parentId ?? null] as const));
   const messageById = new Map(messages.map((message) => [message.id, message.message] as const));
-  const hiddenById = new Map<string, boolean>();
+  const suppressedById = new Map<string, boolean>();
 
-  const isHidden = (id: string | undefined): boolean => {
+  const isSuppressed = (id: string | undefined): boolean => {
     if (!id) {
       return false;
     }
-    if (hiddenById.has(id)) {
-      return hiddenById.get(id) ?? false;
+    if (suppressedById.has(id)) {
+      return suppressedById.get(id) ?? false;
     }
 
     const message = messageById.get(id);
     if (message?.role === 'user') {
-      hiddenById.set(id, false);
+      suppressedById.set(id, false);
       return false;
     }
 
-    if (hiddenRoots.has(id)) {
-      hiddenById.set(id, true);
+    if (suppressedRoots.has(id)) {
+      suppressedById.set(id, true);
       return true;
     }
 
     const parentId = parentById.get(id) ?? null;
-    const hidden = parentId ? isHidden(parentId) : false;
-    hiddenById.set(id, hidden);
-    return hidden;
+    const suppressed = parentId ? isSuppressed(parentId) : false;
+    suppressedById.set(id, suppressed);
+    return suppressed;
   };
 
-  return new Set(messages.filter((message) => isHidden(message.id)).map((message) => message.id));
+  return new Set(messages.filter((message) => isSuppressed(message.id)).map((message) => message.id));
 }
 
 function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAnchorIndexById?: Map<string, number>): DisplayBlock[] {
   const blocks: DisplayBlock[] = [];
   const toolCallIndex = new Map<string, number>();
-  const hiddenTranscriptEntryIds = collectHiddenTranscriptEntryIds(messages);
-  if (hiddenTranscriptEntryIds.size > 0) {
+  const suppressedTranscriptEntryIds = collectSuppressedTranscriptEntryIds(messages);
+  if (suppressedTranscriptEntryIds.size > 0) {
     throw new Error(
-      `Transcript transparency violation: ${hiddenTranscriptEntryIds.size} persisted transcript entr${
-        hiddenTranscriptEntryIds.size === 1 ? 'y was' : 'ies were'
-      } hidden from chat rendering.`,
+      `Transcript transparency violation: ${suppressedTranscriptEntryIds.size} persisted transcript entr${
+        suppressedTranscriptEntryIds.size === 1 ? 'y was' : 'ies were'
+      } suppressed from chat rendering.`,
     );
   }
 
@@ -978,7 +980,7 @@ function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAn
     const contentBlocks = normalizeContent(content);
     const errorMessage = getAssistantErrorDisplayMessage(msg.message);
     const baseId = msg.id || `msg-${messageIndex}`;
-    if (hiddenTranscriptEntryIds.has(baseId)) {
+    if (suppressedTranscriptEntryIds.has(baseId)) {
       continue;
     }
     let anchorRecorded = false;

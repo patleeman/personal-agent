@@ -121,7 +121,7 @@ describe('createLiveDeferredResumeFlusher', () => {
         sessionFile: '/tmp/session-1.jsonl',
         title: 'Conversation 1',
         isStreaming: false,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       },
     ]);
     liveRegistry.set('conv-1', {
@@ -198,7 +198,7 @@ describe('createLiveDeferredResumeFlusher', () => {
         sessionFile: '/tmp/session-1.jsonl',
         title: 'Conversation 1',
         isStreaming: false,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       },
     ]);
     liveRegistry.set('conv-1', {
@@ -232,7 +232,7 @@ describe('createLiveDeferredResumeFlusher', () => {
     expect(promptSessionMock).toHaveBeenCalledWith('conv-1', 'Continue from here.', undefined);
   });
 
-  it('keeps background run callback details hidden behind a clean visible prompt', async () => {
+  it('keeps background run callback details in internal context behind a clean visible prompt', async () => {
     const ready = {
       ...createReadyResume('background-run-resume-1'),
       prompt: [
@@ -254,7 +254,7 @@ describe('createLiveDeferredResumeFlusher', () => {
         sessionFile: '/tmp/session-1.jsonl',
         title: 'Conversation 1',
         isStreaming: false,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       },
     ]);
     liveRegistry.set('conv-1', {
@@ -327,7 +327,7 @@ describe('createLiveDeferredResumeFlusher', () => {
         sessionFile: '/tmp/session-1.jsonl',
         title: 'Conversation 1',
         isStreaming: true,
-        hasPendingHiddenTurn: false,
+        hasStaleTurnState: false,
       },
     ]);
     liveRegistry.set('conv-1', {

@@ -24,7 +24,7 @@ export interface LiveSessionReadHost extends LiveSessionStaleTurnState {
  *
  *  The lastDurableRunState guard handles the race where agent_end fires before
  *  session.isStreaming is cleared by the Pi runtime. When lastDurableRunState
- *  is 'waiting' and there's no pending hidden work, the session is truly idle. */
+ *  is 'waiting' and there's no queued stale turn state, the session is truly idle. */
 export function computeLiveSessionRunning(entry: LiveSessionReadHost): boolean {
   if (entry.isCompacting) {
     return true;
@@ -56,7 +56,7 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
         : entry.lastDurableRunState === 'waiting'
           ? false
           : entry.session.isStreaming || entry.lastDurableRunState === 'running' || entry.lastDurableRunState === 'recovering',
-    hasPendingHiddenTurn: hasQueuedOrActiveStaleTurn(entry),
+    hasStaleTurnState: hasQueuedOrActiveStaleTurn(entry),
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
   }));
 }

@@ -219,7 +219,7 @@ export interface PublicLiveSessionMeta {
   sessionFile: string;
   title?: string;
   isStreaming: boolean;
-  hasPendingHiddenTurn?: boolean;
+  hasStaleTurnState?: boolean;
   lastDurableRunState?: string;
 }
 
@@ -229,7 +229,7 @@ export function toPublicLiveSessionMeta(session: {
   sessionFile: string;
   title?: string;
   isStreaming: boolean;
-  hasPendingHiddenTurn?: boolean;
+  hasStaleTurnState?: boolean;
   lastDurableRunState?: string;
 }): PublicLiveSessionMeta {
   return {
@@ -238,7 +238,7 @@ export function toPublicLiveSessionMeta(session: {
     sessionFile: session.sessionFile,
     ...(typeof session.title === 'string' ? { title: session.title } : {}),
     isStreaming: session.isStreaming,
-    ...(typeof session.hasPendingHiddenTurn === 'boolean' ? { hasPendingHiddenTurn: session.hasPendingHiddenTurn } : {}),
+    ...(typeof session.hasStaleTurnState === 'boolean' ? { hasStaleTurnState: session.hasStaleTurnState } : {}),
     ...(typeof session.lastDurableRunState === 'string' ? { lastDurableRunState: session.lastDurableRunState } : {}),
   };
 }
@@ -351,7 +351,7 @@ function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[nu
   }
   return Boolean(
     liveEntry?.isStreaming ||
-    liveEntry?.hasPendingHiddenTurn ||
+    liveEntry?.hasStaleTurnState ||
     liveEntry?.lastDurableRunState === 'running' ||
     liveEntry?.lastDurableRunState === 'recovering',
   );

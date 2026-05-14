@@ -533,7 +533,7 @@ describe('sessions', () => {
           parentId: 'h-assistant-1',
           timestamp: '2026-03-11T12:00:02.000Z',
           customType: 'conversation_automation_review',
-          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          content: [{ type: 'text', text: 'Legacy bookkeeping prompt.' }],
           display: false,
         }),
         JSON.stringify({
@@ -541,7 +541,7 @@ describe('sessions', () => {
           id: 'h-assistant-2',
           parentId: 'h-hidden-1',
           timestamp: '2026-03-11T12:00:03.000Z',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Legacy assistant reply' }] },
         }),
         JSON.stringify({
           type: 'message',
@@ -559,8 +559,8 @@ describe('sessions', () => {
     expect(detail?.blocks).toEqual([
       expect.objectContaining({ type: 'user', text: 'Visible prompt' }),
       expect.objectContaining({ type: 'text', text: 'Visible answer' }),
-      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
-      expect.objectContaining({ type: 'text', text: 'Hidden assistant reply' }),
+      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Legacy bookkeeping prompt.' }),
+      expect.objectContaining({ type: 'text', text: 'Legacy assistant reply' }),
       expect.objectContaining({ type: 'tool_use', tool: 'bash', output: 'ls' }),
     ]);
   });
@@ -609,7 +609,7 @@ describe('sessions', () => {
           parentId: 'uah-assistant-1',
           timestamp: '2026-03-11T12:00:03.000Z',
           customType: 'conversation_automation_review',
-          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          content: [{ type: 'text', text: 'Legacy bookkeeping prompt.' }],
           display: false,
         }),
         JSON.stringify({
@@ -617,7 +617,7 @@ describe('sessions', () => {
           id: 'uah-assistant-2',
           parentId: 'uah-hidden-1',
           timestamp: '2026-03-11T12:00:04.000Z',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden automation reply' }] },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Legacy automation reply' }] },
         }),
         JSON.stringify({
           type: 'message',
@@ -661,8 +661,8 @@ describe('sessions', () => {
     expect(detail?.blocks).toEqual([
       expect.objectContaining({ type: 'user', text: 'First prompt' }),
       expect.objectContaining({ type: 'text', text: 'First answer' }),
-      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
-      expect.objectContaining({ type: 'text', text: 'Hidden automation reply' }),
+      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Legacy bookkeeping prompt.' }),
+      expect.objectContaining({ type: 'text', text: 'Legacy automation reply' }),
       expect.objectContaining({ type: 'tool_use', tool: 'wait_for_user', output: 'Waiting for user.' }),
       expect.objectContaining({ type: 'text', text: 'Still hidden automation summary.' }),
       expect.objectContaining({ type: 'user', text: 'Second prompt' }),
@@ -735,7 +735,7 @@ describe('sessions', () => {
           parentId: 'lineage-assistant-2',
           timestamp: '2026-03-11T12:00:06.000Z',
           customType: 'conversation_automation_review',
-          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          content: [{ type: 'text', text: 'Legacy bookkeeping prompt.' }],
           display: false,
         }),
         JSON.stringify({
@@ -743,7 +743,7 @@ describe('sessions', () => {
           id: 'lineage-hidden-assistant-1',
           parentId: 'lineage-hidden-1',
           timestamp: '2026-03-11T12:00:07.000Z',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Legacy assistant reply' }] },
         }),
       ].join('\n') + '\n',
     );
@@ -756,8 +756,8 @@ describe('sessions', () => {
       expect.objectContaining({ type: 'text', text: 'First answer' }),
       expect.objectContaining({ type: 'user', text: 'Second prompt' }),
       expect.objectContaining({ type: 'text', text: 'Second answer' }),
-      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
-      expect.objectContaining({ type: 'text', text: 'Hidden assistant reply' }),
+      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Legacy bookkeeping prompt.' }),
+      expect.objectContaining({ type: 'text', text: 'Legacy assistant reply' }),
     ]);
   });
 
@@ -1366,7 +1366,7 @@ describe('sessions', () => {
           role: 'custom',
           customType: 'conversation_automation_review',
           display: false,
-          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          content: [{ type: 'text', text: 'Legacy bookkeeping prompt.' }],
         },
       },
       {
@@ -1399,7 +1399,7 @@ describe('sessions', () => {
       expect.objectContaining({
         type: 'context',
         customType: 'conversation_automation_review',
-        text: 'Hidden bookkeeping prompt.',
+        text: 'Legacy bookkeeping prompt.',
       }),
       expect.objectContaining({
         type: 'text',
@@ -1440,7 +1440,7 @@ describe('sessions', () => {
           role: 'custom',
           customType: 'conversation_automation_post_turn_review',
           display: false,
-          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          content: [{ type: 'text', text: 'Legacy bookkeeping prompt.' }],
         },
       },
       {
@@ -1498,7 +1498,7 @@ describe('sessions', () => {
       expect.objectContaining({
         type: 'context',
         customType: 'conversation_automation_post_turn_review',
-        text: 'Hidden bookkeeping prompt.',
+        text: 'Legacy bookkeeping prompt.',
       }),
       expect.objectContaining({
         type: 'thinking',

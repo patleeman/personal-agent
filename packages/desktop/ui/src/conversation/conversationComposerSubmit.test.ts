@@ -77,7 +77,7 @@ describe('resolveConversationComposerSubmitState', () => {
     expect(resolveConversationComposerSubmitState(false, true)).toEqual({ label: 'Send', action: 'submit' });
   });
 
-  it('shows Follow up when the session is idle but new prompts will queue behind a hidden turn', () => {
+  it('shows Follow up when the session is idle but new prompts will queue behind a stale turn', () => {
     expect(resolveConversationComposerSubmitState(false, false, true)).toEqual({
       label: 'Follow up',
       action: 'submit',
@@ -85,7 +85,7 @@ describe('resolveConversationComposerSubmitState', () => {
     });
   });
 
-  it('shows Parallel when a hidden turn is pending and the parallel modifier is held', () => {
+  it('shows Parallel when a stale turn is pending and the parallel modifier is held', () => {
     expect(resolveConversationComposerSubmitState(false, false, true, true)).toEqual({
       label: 'Parallel',
       action: 'parallel',
@@ -120,7 +120,7 @@ describe('resolveConversationComposerSubmitState', () => {
     });
   });
 
-  it('hidden turn does not affect the default submit while streaming', () => {
+  it('stale turn does not affect the default submit while streaming', () => {
     // isStreaming=true always shows Steer by default regardless of queuesFollowUpsWhenIdle
     expect(resolveConversationComposerSubmitState(true, false, true)).toEqual({
       label: 'Steer',
@@ -128,15 +128,15 @@ describe('resolveConversationComposerSubmitState', () => {
     });
   });
 
-  it('hidden turn does not affect alt/parallel modifiers while streaming', () => {
-    // Even with hidden turn, Alt produces follow-up when streaming
+  it('stale turn does not affect alt/parallel modifiers while streaming', () => {
+    // Even with stale turn, Alt produces follow-up when streaming
     expect(resolveConversationComposerSubmitState(true, true, true)).toEqual({
       label: 'Follow up',
       action: 'submit',
       behavior: 'followUp',
     });
 
-    // Even with hidden turn, Ctrl produces parallel when streaming
+    // Even with stale turn, Ctrl produces parallel when streaming
     expect(resolveConversationComposerSubmitState(true, false, true, true)).toEqual({
       label: 'Parallel',
       action: 'parallel',

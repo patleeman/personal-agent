@@ -11,24 +11,24 @@ import {
 describe('live session stale turn state', () => {
   it('does not support stale turn state or suppress events', () => {
     const state = createLiveSessionStaleTurnState();
-    state.pendingHiddenTurnCustomTypes = ['legacy-hidden'];
-    state.activeHiddenTurnCustomType = 'legacy-active';
+    state.queuedStaleTurnCustomTypes = ['legacy-hidden'];
+    state.activeStaleTurnCustomType = 'legacy-active';
 
     expect(hasQueuedOrActiveStaleTurn(state)).toBe(false);
     expect(clearQueuedStaleTurn(state, { type: 'agent_start' } as any)).toBeNull();
-    expect(state.pendingHiddenTurnCustomTypes).toEqual([]);
-    expect(state.activeHiddenTurnCustomType).toBeNull();
+    expect(state.queuedStaleTurnCustomTypes).toEqual([]);
+    expect(state.activeStaleTurnCustomType).toBeNull();
     expect(shouldSuppressLiveEventForStaleTurn(state, { type: 'message_update' } as any)).toBe(false);
   });
 
-  it('clears stale stale turn state without preserving hidden behavior', () => {
+  it('clears stale turn state without preserving suppression behavior', () => {
     const state = createLiveSessionStaleTurnState();
-    state.pendingHiddenTurnCustomTypes = ['queued'];
-    state.activeHiddenTurnCustomType = 'active';
+    state.queuedStaleTurnCustomTypes = ['queued'];
+    state.activeStaleTurnCustomType = 'active';
 
     expect(clearStaleTurnStateAfterTerminalEvent(state, { type: 'turn_end' } as any)).toBe(true);
-    expect(state.pendingHiddenTurnCustomTypes).toEqual([]);
-    expect(state.activeHiddenTurnCustomType).toBeNull();
+    expect(state.queuedStaleTurnCustomTypes).toEqual([]);
+    expect(state.activeStaleTurnCustomType).toBeNull();
     expect(hasQueuedOrActiveStaleTurn(state)).toBe(false);
   });
 });

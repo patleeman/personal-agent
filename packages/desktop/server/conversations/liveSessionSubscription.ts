@@ -91,7 +91,7 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   }
   if (
     entry.session.isStreaming &&
-    (!entry.activeHiddenTurnCustomType || entry.activeHiddenTurnCustomType === 'conversation_automation_post_turn_review')
+    (!entry.activeStaleTurnCustomType || entry.activeStaleTurnCustomType === 'conversation_automation_post_turn_review')
   ) {
     subscription.send({ type: 'agent_start' });
   }

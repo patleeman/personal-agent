@@ -317,7 +317,7 @@ describe('readConversationAutoModeStateFromSessionManager', () => {
 });
 
 describe('auto mode controller prompt', () => {
-  it('tells the hidden review turn to keep going until the work is actually done', () => {
+  it('tells the review event to keep going until the work is actually done', () => {
     expect(CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT).toContain(
       'The user enabled auto mode because they want you to keep working without waiting for user input.',
     );

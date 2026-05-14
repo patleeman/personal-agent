@@ -87,7 +87,7 @@ export interface DesktopConversationState {
         sessionFile: string;
         title?: string;
         isStreaming: boolean;
-        hasPendingHiddenTurn?: boolean;
+        hasStaleTurnState?: boolean;
       };
   stream: DesktopConversationStreamState;
 }
@@ -538,7 +538,7 @@ export async function readDesktopConversationState(input: {
         sessionFile: sessionMeta.file,
         ...(liveSession.title ? { title: liveSession.title } : {}),
         isStreaming: liveSession.isStreaming,
-        hasPendingHiddenTurn: liveSession.hasPendingHiddenTurn,
+        hasStaleTurnState: liveSession.hasStaleTurnState,
       },
       stream: createDesktopConversationStreamStateFromSnapshot(liveSession),
     };

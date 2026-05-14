@@ -683,7 +683,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
-  const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
+  const [liveSessionHasStaleTurnState, setLiveSessionHasStaleTurnState] = useState(false);
   const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
   const [pendingInitialPromptDispatching, setPendingInitialPromptDispatchingState] = useState(false);
   const [draftPendingPrompt, setDraftPendingPrompt] = useState<PendingConversationPrompt | null>(null);
@@ -837,27 +837,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     if (useDesktopConversation) {
       setConfirmedLive(visibleConversationBootstrap?.liveSession.live ?? false);
-      setLiveSessionHasPendingHiddenTurn(
-        visibleConversationBootstrap?.liveSession.live === true && visibleConversationBootstrap.liveSession.hasPendingHiddenTurn === true,
+      setLiveSessionHasStaleTurnState(
+        visibleConversationBootstrap?.liveSession.live === true && visibleConversationBootstrap.liveSession.hasStaleTurnState === true,
       );
       return;
     }
 
     if (!id) {
       setConfirmedLive(false);
-      setLiveSessionHasPendingHiddenTurn(false);
+      setLiveSessionHasStaleTurnState(false);
       return;
     }
 
     if (visibleConversationBootstrap?.liveSession.live) {
       setConfirmedLive(true);
-      setLiveSessionHasPendingHiddenTurn(visibleConversationBootstrap.liveSession.hasPendingHiddenTurn === true);
+      setLiveSessionHasStaleTurnState(visibleConversationBootstrap.liveSession.hasStaleTurnState === true);
       return;
     }
 
     if (visibleConversationBootstrap?.liveSession.live === false || sessionSnapshot?.isLive === false) {
       setConfirmedLive(false);
-      setLiveSessionHasPendingHiddenTurn(false);
+      setLiveSessionHasStaleTurnState(false);
       return;
     }
 
@@ -872,7 +872,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
 
         setConfirmedLive(response.live);
-        setLiveSessionHasPendingHiddenTurn(response.live && response.hasPendingHiddenTurn === true);
+        setLiveSessionHasStaleTurnState(response.live && response.hasStaleTurnState === true);
       })
       .catch((error) => {
         if (cancelled) {
@@ -883,7 +883,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         if (message.startsWith('404 ') || (sessionsLoaded && sessionSnapshot?.isLive !== true)) {
           setConfirmedLive(false);
         }
-        setLiveSessionHasPendingHiddenTurn(false);
+        setLiveSessionHasStaleTurnState(false);
       });
 
     return () => {
@@ -908,11 +908,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       visibleConversationBootstrap?.liveSession.live === true ? visibleConversationBootstrap.liveSession.isStreaming : false,
     desktopLiveSessionIsStreaming:
       visibleDesktopConversationState?.liveSession.live === true ? visibleDesktopConversationState.liveSession.isStreaming : false,
-    hasPendingHiddenTurn: liveSessionHasPendingHiddenTurn,
+    hasStaleTurnState: liveSessionHasStaleTurnState,
   });
   const allowQueuedPrompts = composerRunState.allowQueuedPrompts;
   const defaultComposerBehavior = composerRunState.defaultComposerBehavior;
-  const conversationRunningForPage = composerRunState.streamControlsActive || liveSessionHasPendingHiddenTurn;
+  const conversationRunningForPage = composerRunState.streamControlsActive || liveSessionHasStaleTurnState;
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
@@ -4909,7 +4909,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const nextSubmit = resolveConversationComposerSubmitState(
       composerRunState.streamControlsActive,
       altKeyHeld,
-      liveSessionHasPendingHiddenTurn,
+      liveSessionHasStaleTurnState,
       parallelKeyHeld,
     );
 
@@ -5299,7 +5299,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerSubmit = resolveConversationComposerSubmitState(
     composerRunState.streamControlsActive,
     composerAltHeld,
-    liveSessionHasPendingHiddenTurn,
+    liveSessionHasStaleTurnState,
     composerParallelHeld,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
