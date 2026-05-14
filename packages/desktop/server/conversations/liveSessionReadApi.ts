@@ -11,6 +11,7 @@ export interface LiveSessionReadHost extends LiveSessionHiddenTurnState {
   session: AgentSession;
   title: string;
   lastDurableRunState?: string;
+  isCompacting?: boolean;
 }
 
 /** Single canonical function that determines whether a live session is running.
@@ -19,12 +20,16 @@ export interface LiveSessionReadHost extends LiveSessionHiddenTurnState {
  *  A session is running when:
  *   - The agent is actively streaming (agent runtime), OR
  *   - A hidden turn is active or queued (auto mode, etc.), OR
+ *   - A manual/auto compaction is in progress, OR
  *   - The durable run state is 'running' or 'recovering'
  *
  *  The lastDurableRunState guard handles the race where agent_end fires before
  *  session.isStreaming is cleared by the Pi runtime. When lastDurableRunState
  *  is 'waiting' and there's no pending hidden work, the session is truly idle. */
 export function computeLiveSessionRunning(entry: LiveSessionReadHost): boolean {
+  if (entry.isCompacting) {
+    return true;
+  }
   if (entry.lastDurableRunState === 'waiting' && !hasQueuedOrActiveHiddenTurn(entry)) {
     return false;
   }
@@ -52,11 +57,13 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
       // cleared by the agent runtime. Without this guard the conversation appears
       // permanently 'running' because agent_end listeners (handleLiveSessionEvent)
       // fire before the agent's finishRun() sets isStreaming = false.
-      entry.lastDurableRunState === 'waiting'
-        ? false
-        : (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
-          entry.lastDurableRunState === 'running' ||
-          entry.lastDurableRunState === 'recovering',
+      entry.isCompacting
+        ? true
+        : entry.lastDurableRunState === 'waiting'
+          ? false
+          : (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
+            entry.lastDurableRunState === 'running' ||
+            entry.lastDurableRunState === 'recovering',
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
   }));

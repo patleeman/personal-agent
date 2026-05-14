@@ -25,6 +25,7 @@ export interface LiveSessionSnapshotHost {
   session: AgentSession;
   activeHiddenTurnCustomType?: string | null;
   lastCompactionSummaryTitle?: string | null;
+  isCompacting?: boolean;
 }
 
 export interface LiveSessionStateSnapshot {
@@ -87,7 +88,7 @@ export function buildLiveSessionSnapshot(entry: LiveSessionSnapshotHost, tailBlo
   // session.state.messages is the *current context window*, not a chronological display transcript.
   // After compaction it can reorder blocks as: summary → pre-compaction tail → post-compaction tail.
   // For idle live sessions we should render the durable transcript from disk exactly as persisted.
-  if (!entry.session.isStreaming) {
+  if (!entry.session.isStreaming && !entry.isCompacting) {
     return {
       blocks: applyLatestCompactionSummaryTitle(persisted.blocks, entry.lastCompactionSummaryTitle),
       blockOffset: persisted.blockOffset,

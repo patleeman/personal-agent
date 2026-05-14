@@ -17,6 +17,7 @@ export interface LiveSessionMaintenanceHost {
   title: string;
   lastCompactionSummaryTitle?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
+  isCompacting?: boolean;
 }
 
 export async function compactLiveSession<TEntry extends LiveSessionMaintenanceHost>(
@@ -29,13 +30,20 @@ export async function compactLiveSession<TEntry extends LiveSessionMaintenanceHo
     publishSessionMetaChanged: (sessionId: string) => void;
   },
 ): Promise<unknown> {
-  const result = await entry.session.compact(customInstructions);
-  entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({ mode: 'manual' });
+  entry.isCompacting = true;
   callbacks.broadcastSnapshot(entry);
-  callbacks.clearContextUsageTimer(entry);
-  callbacks.broadcastContextUsage(entry, true);
   callbacks.publishSessionMetaChanged(entry.sessionId);
-  return result;
+  try {
+    const result = await entry.session.compact(customInstructions);
+    entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({ mode: 'manual' });
+    return result;
+  } finally {
+    entry.isCompacting = false;
+    callbacks.broadcastSnapshot(entry);
+    callbacks.clearContextUsageTimer(entry);
+    callbacks.broadcastContextUsage(entry, true);
+    callbacks.publishSessionMetaChanged(entry.sessionId);
+  }
 }
 
 export function renameLiveSession<TEntry extends LiveSessionMaintenanceHost>(

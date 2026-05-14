@@ -30,6 +30,10 @@ describe('computeLiveSessionRunning', () => {
     ).toBe(false);
   });
 
+  it('returns true during compaction even when the durable run is waiting', () => {
+    expect(computeLiveSessionRunning(makeEntry({ isCompacting: true, lastDurableRunState: 'waiting' }))).toBe(true);
+  });
+
   it('returns true when session.isStreaming is true and no hidden turn masks it', () => {
     expect(
       computeLiveSessionRunning(
