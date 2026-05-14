@@ -317,7 +317,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           {
             customType: CONTINUATION_CUSTOM_TYPE,
             content: prompt,
-            display: true,
             details: { source: 'goal-mode', continuationId },
           },
           { deliverAs: 'followUp', triggerTurn: true },

@@ -552,7 +552,6 @@ describe('parallel prompt job management', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         customType: 'parallel_result',
-        display: true,
         details: expect.objectContaining({ childConversationId: 'child-ready', status: 'complete' }),
       }),
     );
@@ -3090,7 +3089,6 @@ describe('queuePromptContext', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'referenced_context',
       content: 'Conversation automation context',
-      display: true,
       details: undefined,
     });
   });
@@ -3120,7 +3118,6 @@ describe('queuePromptContext', () => {
       {
         customType: 'referenced_context',
         content: 'Conversation automation context',
-        display: true,
         details: undefined,
       },
       {

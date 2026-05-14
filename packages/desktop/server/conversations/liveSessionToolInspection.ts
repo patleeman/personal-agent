@@ -8,7 +8,6 @@ const NEW_SESSION_PROMPT_PROBE = 'hello';
 export interface BeforeAgentStartProbeMessage {
   customType: string;
   content: string;
-  display?: boolean;
   details?: unknown;
 }
 

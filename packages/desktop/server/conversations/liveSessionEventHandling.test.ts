@@ -495,8 +495,8 @@ describe('legacy auto mode continuation quarantine', () => {
     });
   });
 
-  describe('hidden custom turns', () => {
-    it('rejects hidden custom messages before they can become invisible transcript turns', () => {
+  describe('custom message display flags', () => {
+    it('rejects custom message display flags before they can affect transcript visibility', () => {
       const entry = makeEntry();
       const cbs = makeCallbacks();
 
@@ -509,7 +509,7 @@ describe('legacy auto mode continuation quarantine', () => {
           } as any,
           cbs,
         ),
-      ).toThrow('Custom transcript message "goal-continuation" must be visible.');
+      ).toThrow('Custom transcript message "goal-continuation" must not use the display flag.');
 
       expect(entry.activeHiddenTurnCustomType).toBeNull();
     });

@@ -10,12 +10,6 @@ export interface LiveSessionMessageAppendHost {
 
 const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 
-function assertVisibleCustomMessage(message: { customType?: string; display?: boolean }): void {
-  if (message.display === false) {
-    throw new Error(`Custom transcript message "${message.customType ?? 'unknown'}" must be visible.`);
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -42,10 +36,8 @@ export async function queueLiveSessionPromptContext(
   const customMessage = {
     customType,
     content: message,
-    display: true,
     details: undefined,
   };
-  assertVisibleCustomMessage(customMessage);
 
   if (entry.session.isStreaming) {
     await entry.session.sendCustomMessage(customMessage, {
@@ -116,10 +108,8 @@ export async function appendVisibleLiveSessionCustomMessage<TEntry extends LiveS
   const customMessage = {
     customType,
     content: message,
-    display: true,
     details,
   };
-  assertVisibleCustomMessage(customMessage);
   await entry.session.sendCustomMessage(customMessage);
   callbacks.broadcastSnapshot(entry);
   callbacks.publishSessionMetaChanged(entry.sessionId);
@@ -140,10 +130,8 @@ export async function appendParallelImportedLiveSessionMessage<TEntry extends Li
   const customMessage = {
     customType: 'parallel_result',
     content: `Imported parallel response from ${details.childConversationId}.`,
-    display: true,
     details,
   };
-  assertVisibleCustomMessage(customMessage);
   await entry.session.sendCustomMessage(customMessage);
   callbacks.broadcastSnapshot(entry);
   callbacks.publishSessionMetaChanged(entry.sessionId);

@@ -653,7 +653,6 @@ describe('registerConversationStateRoutes', () => {
       expect(sendCustomMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           customType: 'goal-continuation',
-          display: true,
           content: expect.stringContaining('Objective: keep looping'),
         }),
         { triggerTurn: true, deliverAs: 'followUp' },

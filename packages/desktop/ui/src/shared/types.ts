@@ -1251,7 +1251,6 @@ interface PackageInstallState {
 export interface InjectedPromptMessage {
   customType: string;
   content: string;
-  display?: boolean;
   details?: unknown;
 }
 

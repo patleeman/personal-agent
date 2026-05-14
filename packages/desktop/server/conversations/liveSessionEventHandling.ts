@@ -143,7 +143,7 @@ export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> 
   tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
 }
 
-function readHiddenCustomMessageType(event: AgentSessionEvent): string | null {
+function readCustomMessageDisplayFlagType(event: AgentSessionEvent): string | null {
   if (event.type !== 'message_start') {
     return null;
   }
@@ -152,7 +152,9 @@ function readHiddenCustomMessageType(event: AgentSessionEvent): string | null {
     return null;
   }
   const record = message as Record<string, unknown>;
-  return record.role === 'custom' && record.display === false && typeof record.customType === 'string' ? record.customType : null;
+  return record.role === 'custom' && Object.prototype.hasOwnProperty.call(record, 'display') && typeof record.customType === 'string'
+    ? record.customType
+    : null;
 }
 
 export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
@@ -160,9 +162,9 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   event: AgentSessionEvent,
   callbacks: LiveSessionEventCallbacks<TEntry>,
 ): void {
-  const hiddenCustomMessageType = readHiddenCustomMessageType(event);
-  if (hiddenCustomMessageType) {
-    throw new Error(`Custom transcript message "${hiddenCustomMessageType}" must be visible.`);
+  const customMessageDisplayFlagType = readCustomMessageDisplayFlagType(event);
+  if (customMessageDisplayFlagType) {
+    throw new Error(`Custom transcript message "${customMessageDisplayFlagType}" must not use the display flag.`);
   }
 
   const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event);

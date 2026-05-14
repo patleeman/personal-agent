@@ -807,7 +807,6 @@ const GOAL_CONTINUATION_CUSTOM_TYPE = 'goal-continuation';
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
   return (
     message.role === 'custom' &&
-    message.display === true &&
     (message.customType === 'referenced_context' ||
       message.customType === CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE ||
       message.customType === GOAL_CONTINUATION_CUSTOM_TYPE)
@@ -1208,17 +1207,30 @@ function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAn
 
     if (role === 'toolResult' && toolCallId) {
       const idx = toolCallIndex.get(toolCallId);
+      const resultText = contentBlocks
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('\n')
+        .slice(0, 8000);
+
       if (idx !== undefined) {
         const existing = blocks[idx] as DisplayBlock & { type: 'tool_use' };
-        const resultText = contentBlocks
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text ?? '')
-          .join('\n')
-          .slice(0, 8000);
         const startMs = new Date(existing.ts).getTime();
         const endMs = new Date(ts).getTime();
         const duration = endMs > startMs ? endMs - startMs : undefined;
         blocks[idx] = { ...existing, output: resultText, durationMs: duration, details };
+      } else if (resultText) {
+        recordAnchor();
+        blocks.push({
+          type: 'tool_use',
+          id: `${baseId}-c${blocks.length}`,
+          ts,
+          tool: normalizeTranscriptToolName(toolName ?? 'unknown'),
+          input: {},
+          output: resultText,
+          toolCallId,
+          ...(details ? { details } : {}),
+        });
       }
 
       let resultImageIndex = 0;

@@ -554,13 +554,14 @@ describe('sessions', () => {
     );
 
     const detail = readSessionBlocks('session-tail-hidden', { tailBlocks: 5 });
-    expect(detail?.totalBlocks).toBe(4);
+    expect(detail?.totalBlocks).toBe(5);
     expect(detail?.blockOffset).toBe(0);
     expect(detail?.blocks).toEqual([
       expect.objectContaining({ type: 'user', text: 'Visible prompt' }),
       expect.objectContaining({ type: 'text', text: 'Visible answer' }),
       expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
       expect.objectContaining({ type: 'text', text: 'Hidden assistant reply' }),
+      expect.objectContaining({ type: 'tool_use', tool: 'bash', output: 'ls' }),
     ]);
   });
 
@@ -655,11 +656,15 @@ describe('sessions', () => {
     );
 
     const detail = readSessionBlocks('session-tail-user-after-hidden', { tailBlocks: 400 });
-    expect(detail?.totalBlocks).toBe(4);
+    expect(detail?.totalBlocks).toBe(8);
     expect(detail?.blockOffset).toBe(0);
     expect(detail?.blocks).toEqual([
       expect.objectContaining({ type: 'user', text: 'First prompt' }),
       expect.objectContaining({ type: 'text', text: 'First answer' }),
+      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
+      expect.objectContaining({ type: 'text', text: 'Hidden automation reply' }),
+      expect.objectContaining({ type: 'tool_use', tool: 'wait_for_user', output: 'Waiting for user.' }),
+      expect.objectContaining({ type: 'text', text: 'Still hidden automation summary.' }),
       expect.objectContaining({ type: 'user', text: 'Second prompt' }),
       expect.objectContaining({ type: 'text', text: 'Second answer' }),
     ]);
@@ -744,13 +749,15 @@ describe('sessions', () => {
     );
 
     const detail = readSessionBlocks('session-tail-lineage', { tailBlocks: 400 });
-    expect(detail?.totalBlocks).toBe(4);
+    expect(detail?.totalBlocks).toBe(6);
     expect(detail?.blockOffset).toBe(0);
     expect(detail?.blocks).toEqual([
       expect.objectContaining({ type: 'user', text: 'First prompt' }),
       expect.objectContaining({ type: 'text', text: 'First answer' }),
       expect.objectContaining({ type: 'user', text: 'Second prompt' }),
       expect.objectContaining({ type: 'text', text: 'Second answer' }),
+      expect.objectContaining({ type: 'context', customType: 'conversation_automation_review', text: 'Hidden bookkeeping prompt.' }),
+      expect.objectContaining({ type: 'text', text: 'Hidden assistant reply' }),
     ]);
   });
 
@@ -1397,6 +1404,11 @@ describe('sessions', () => {
       expect.objectContaining({
         type: 'text',
         text: 'No automation changes needed.',
+      }),
+      expect.objectContaining({
+        type: 'tool_use',
+        tool: 'bash',
+        output: 'ls',
       }),
     ]);
   });
