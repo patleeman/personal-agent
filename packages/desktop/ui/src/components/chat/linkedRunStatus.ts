@@ -37,7 +37,7 @@ export function describeInlineRunStatus(status: unknown): {
   }
 
   return {
-    text: statusText?.trim().length ? statusText : 'linked',
+    text: statusText?.trim().length ? statusText : 'mentioned',
     tone: 'muted',
   };
 }

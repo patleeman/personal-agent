@@ -66,7 +66,7 @@ describe('linkedRuns', () => {
     expect(linkedRuns).toEqual({
       scope: 'listed',
       runs: [
-        { runId: 'run-chat-cleanup-abc123', title: 'Chat cleanup', detail: 'running · agent task' },
+        { runId: 'run-chat-cleanup-abc123', title: 'Chat cleanup', detail: 'running · background task' },
         { runId: 'task-nightly-review', title: 'Nightly review', detail: 'queued · automation execution' },
       ],
     });
@@ -108,7 +108,7 @@ describe('linkedRuns', () => {
 
     expect(linkedRuns).toEqual({
       scope: 'mentioned',
-      runs: [{ runId: 'run-foo-bar-abc123', title: 'Foo bar', detail: 'agent task' }],
+      runs: [{ runId: 'run-foo-bar-abc123', title: 'Foo bar', detail: 'background task' }],
     });
   });
 

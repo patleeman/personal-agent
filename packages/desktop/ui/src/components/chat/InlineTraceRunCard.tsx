@@ -72,11 +72,12 @@ export function InlineTraceRunCard({ run, expanded, onToggle }: { run: LinkedRun
     pollIntervalMs: INLINE_RUN_POLL_INTERVAL_MS,
   });
   const detailRun = snapshot.detail?.run ?? resolvedRunRecord ?? null;
+  const fallbackSummary = run.detail ? `Background task mentioned by this step · ${run.detail}` : 'Background task mentioned by this step';
   const headline = detailRun
     ? getRunHeadline(detailRun, runLookups)
     : {
-        title: run.title,
-        summary: run.detail ?? 'Linked run',
+        title: `Background task: ${run.title}`,
+        summary: fallbackSummary,
       };
   const status = describeInlineRunStatus(detailRun?.status?.status ?? inferStatusFromLinkedRunDetail(run.detail));
   const runStreaming = isRunActive(detailRun);
@@ -126,7 +127,7 @@ export function InlineTraceRunCard({ run, expanded, onToggle }: { run: LinkedRun
             </Link>
           ) : null}
           <button type="button" onClick={onToggle} className="text-[10px] uppercase tracking-[0.14em] text-dim">
-            {expanded ? 'hide' : 'show'}
+            {expanded ? 'hide details' : 'show details'}
           </button>
         </div>
       </div>

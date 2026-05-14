@@ -353,10 +353,10 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Continuous conversations next chunk ui');
-    expect(html).toContain('agent task');
+    expect(html).toContain('Background task: Continuous conversations next chunk ui');
+    expect(html).toContain('Background task mentioned by this step');
     expect(html).toContain('text-left');
-    expect(html).toContain('mentioned execution');
+    expect(html).toContain('1 background task mentioned in this step');
   });
 
   it('shows run tool previews and linked run metadata for started agent runs', () => {
@@ -420,7 +420,7 @@ describe('chat view streaming disclosure', () => {
 
     expect(html).toContain('start printf ok');
     expect(html).toContain('printf ok');
-    expect(html).toContain('shell command');
+    expect(html).toContain('background command');
     expect(html).toContain('ui-preview-check');
     expect(html).toContain('cwd personal-agent');
   });
@@ -452,9 +452,9 @@ describe('chat view streaming disclosure', () => {
     );
 
     expect(html).toContain('Internal work');
-    expect(html).toContain('background work');
+    expect(html).toContain('related background work');
     expect(html).toContain('Inspect git diff');
-    expect(html).toContain('show');
+    expect(html).toContain('show details');
   });
 
   it('resolves legacy linked run ids to current durable run records using task slug', () => {
@@ -578,7 +578,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('Show all');
     expect(html).toContain('Fix build a');
     expect(html).toContain('Fix build e');
-    expect(html).toContain('queued · agent task');
+    expect(html).toContain('queued · background task');
     expect(html).not.toContain('Fix build f');
     expect(html).not.toContain('Fix build g');
   });

@@ -88,14 +88,14 @@ function describeLinkedRun(runId: string): LinkedRunDescriptor {
     return {
       title: 'Background Work',
       detail: summarizeLinkedRunTail(runId.slice('run-'.length)),
-      kindLabel: 'agent task',
+      kindLabel: 'background task',
     };
   }
 
   return {
     title: 'Background Work',
     detail: summarizeLinkedRunTail(runId),
-    kindLabel: 'background work',
+    kindLabel: 'background task',
   };
 }
 
@@ -282,7 +282,7 @@ function describeListedRunKind(details: ListedRunDetails): string | null {
   }
 
   if (details.kind === 'background-run') {
-    return 'agent task';
+    return 'background task';
   }
 
   if (details.kind === 'conversation') {
@@ -382,7 +382,7 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
       pushRunDetail(detailBits, 'agent task');
       break;
     case 'start':
-      pushRunDetail(detailBits, 'shell command');
+      pushRunDetail(detailBits, 'background command');
       break;
     case 'follow_up':
       pushRunDetail(detailBits, 'follow-up task');

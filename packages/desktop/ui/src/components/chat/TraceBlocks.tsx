@@ -261,12 +261,14 @@ export function TraceClusterBlock({
       {linkedRuns.length > 0 && (
         <div className="ml-2.5 space-y-1.5 border-l border-border-subtle pl-2.5">
           <div className="flex flex-wrap items-center gap-2 rounded-md bg-elevated/30 px-2.5 py-1.5 text-[11px] text-secondary">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-dim">background work</span>
-            <span>{linkedRuns.length} linked</span>
+            <span className="text-[10px] uppercase tracking-[0.14em] text-dim">related background work</span>
+            <span>
+              {linkedRuns.length} background task{linkedRuns.length === 1 ? '' : 's'} mentioned in this step
+            </span>
             <span className="flex-1" />
             {hiddenLinkedRunCount > 0 && (
               <button type="button" onClick={() => setShowAllLinkedRuns((current) => !current)} className="ui-action-button text-[10px]">
-                {showAllLinkedRuns ? `Show first ${TRACE_LINKED_RUN_VISIBLE_LIMIT}` : `Show all ${linkedRuns.length}`}
+                {showAllLinkedRuns ? `Show first ${TRACE_LINKED_RUN_VISIBLE_LIMIT}` : `Show all ${linkedRuns.length} background tasks`}
               </button>
             )}
           </div>
