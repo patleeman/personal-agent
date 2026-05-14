@@ -1500,8 +1500,8 @@ export function Layout() {
       return;
     }
 
-    setActiveConversationTool('files');
-  }, [activeWorkbenchKnowledgeFileId]);
+    setActiveConversationTool(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'files');
+  }, [activeWorkbenchKnowledgeFileId, setActiveConversationTool, systemKnowledgeExtensionSurface]);
 
   useEffect(() => {
     function handleWorkbenchCloseActiveFile() {
