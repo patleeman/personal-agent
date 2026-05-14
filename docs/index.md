@@ -23,6 +23,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Knowledge](../extensions/system-knowledge/README.md) — vault, docs, skills, instruction files, and managed sync
 - [Knowledge base sync](knowledge-base.md) — git-backed knowledge base setup, local paths, and sync behavior
 - [Configuration](configuration.md) — file-based config, env vars
+- [Development workflow](development.md) — validation, UI QA, checkpoints, and secret scanning
 - [Daemon](daemon.md) — background process and runtime lifecycle
 - [Sandboxing](sandboxing.md) — shared process execution launcher, wrapper extensions, and direct process API policy
 - [Activity tree](activity-tree.md) — shared model for conversations, runs, and future sidebar sub-items
@@ -76,4 +77,4 @@ Feature-specific documentation lives beside the owning extension package:
 
 **Connectivity** — iOS companion and runtime connectivity architecture.
 
-**Operations** — configuration file format and release cycle.
+**Operations** — development workflow, configuration file format, and release cycle.

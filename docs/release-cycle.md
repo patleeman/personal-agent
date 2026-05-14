@@ -2,6 +2,18 @@
 
 Desktop releases are built, signed, notarized, and published locally. Pushing a tag to `main` does not automatically produce a release — release is a manual local process.
 
+## Current release
+
+**v0.7.9-rc.10** — published 2026-05-12.
+
+Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.7.9-rc.10
+
+Highlights:
+
+- Fixed dev app startup: repo root resolution, missing preload/worker bundles, daemon inlining, and Codex port conflict.
+- `pnpm run dev` in `packages/desktop` works end-to-end: builds, launches the testing app bundle, and loads the UI with API endpoints responding.
+- The signed `.app` build through `desktop:dist` is blocked by pre-existing `packages/desktop/server` TypeScript errors. The esbuild-produced bundled output still works; use the direct build workaround below when needed.
+
 ## Release Commands
 
 ```bash
@@ -75,7 +87,29 @@ If the version bump and build succeeded but the publish step failed:
 pnpm run release:publish
 ```
 
-This runs the smoke test, push, and GitHub release creation without repeating the version bump, changelog update, and build steps.
+This runs the smoke test, push, and GitHub release creation without repeating the version bump, changelog update, and build steps. For non-interactive reruns of an already-tested build, set `PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1`.
+
+## Release artifacts
+
+Release assets must include Electron updater metadata plus signed macOS artifacts:
+
+- `latest-mac.yml`
+- signed `.zip` and `.zip.blockmap`
+- optionally `.dmg` and `.dmg.blockmap`
+
+The publish script loads Apple credentials from `PERSONAL_AGENT_RELEASE_ENV`, then `.env`, then `~/.config/personal-agent/release-env`. It maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for notarization and can target another public release repo with `PERSONAL_AGENT_RELEASE_REPO`.
+
+## Gotchas
+
+- `pnpm version prerelease --preid=rc` only bumps the version and creates a git tag. It does not build or upload artifacts. Run `pnpm run release:publish` for the full signed release.
+- `desktop:dist` runs `tsc --build --force` through the desktop package build chain. If pre-existing server TypeScript errors block the build, use the direct esbuild/electron-builder path:
+
+  ```bash
+  cd packages/desktop
+  pnpm run build:deps
+  node scripts/build-main.mjs
+  npx electron-builder --config electron-builder.config.mjs --publish never
+  ```
 
 ## Prerequisites
 
