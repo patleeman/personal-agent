@@ -1,7 +1,6 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import type { SseEvent } from './liveSessionEvents.js';
-import { ensureHiddenTurnState, type LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
 import { type ParallelPromptJob, readParallelState } from './liveSessionParallelJobs.js';
 import {
   buildLiveSessionPresenceState,
@@ -11,6 +10,7 @@ import {
   removeLiveSessionSurface,
 } from './liveSessionPresence.js';
 import { readQueueState } from './liveSessionQueue.js';
+import { ensureStaleTurnState, type LiveSessionStaleTurnState } from './liveSessionStaleTurns.js';
 import { readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
 import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
 import { readGoalFromEntries } from './sessions.js';
@@ -20,7 +20,7 @@ export interface LiveSessionSubscriptionListener {
   tailBlocks?: number;
 }
 
-export interface LiveSessionSubscriptionHost extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
+export interface LiveSessionSubscriptionHost extends LiveSessionPresenceHost, LiveSessionStaleTurnState {
   session: AgentSession;
   listeners: Set<LiveSessionSubscriptionListener>;
   title: string;
@@ -72,7 +72,7 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   options: { tailBlocks?: number; surface?: { surfaceId: string; surfaceType: LiveSessionSurfaceType } } | undefined,
   resolveTitle: (entry: TEntry) => string,
 ): void {
-  ensureHiddenTurnState(entry);
+  ensureStaleTurnState(entry);
   const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
   subscription.send({
     type: 'snapshot',

@@ -1,9 +1,9 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
-import { hasQueuedOrActiveHiddenTurn, type LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
 import { type QueuedPromptPreview, readQueueState } from './liveSessionQueue.js';
+import { hasQueuedOrActiveStaleTurn, type LiveSessionStaleTurnState } from './liveSessionStaleTurns.js';
 
-export interface LiveSessionQueueReadHost extends LiveSessionHiddenTurnState {
+export interface LiveSessionQueueReadHost extends LiveSessionStaleTurnState {
   session: AgentSession;
 }
 
@@ -12,7 +12,7 @@ export function canInjectResumeFallbackPrompt(entry: LiveSessionQueueReadHost | 
     return false;
   }
 
-  if (entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
+  if (entry.session.isStreaming || hasQueuedOrActiveStaleTurn(entry)) {
     return false;
   }
 

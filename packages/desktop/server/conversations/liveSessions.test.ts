@@ -653,12 +653,12 @@ describe('parallel prompt job management', () => {
     expect(existsSync(jobsFile)).toBe(false);
   });
 
-  it('does not report hidden auto-mode turns as user-visible streaming sessions', () => {
+  it('ignores stale auto-mode markers when reporting streaming sessions', () => {
     setLiveEntry('session-hidden-auto-running', {
       sessionId: 'session-hidden-auto-running',
       cwd: '/tmp/workspace',
       listeners: new Set(),
-      title: 'Hidden auto running',
+      title: 'Stale auto marker',
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
@@ -673,8 +673,8 @@ describe('parallel prompt job management', () => {
     expect(getLiveSessions()).toContainEqual(
       expect.objectContaining({
         id: 'session-hidden-auto-running',
-        isStreaming: false,
-        hasPendingHiddenTurn: true,
+        isStreaming: true,
+        hasPendingHiddenTurn: false,
       }),
     );
   });
@@ -739,7 +739,7 @@ describe('requestConversationWorkingDirectoryChange', () => {
 });
 
 describe('live session registry helpers', () => {
-  it('reports live registry membership, titles, pending hidden turns, and fork entries', () => {
+  it('reports live registry membership, titles, pending stale turn state, and fork entries', () => {
     const forkEntries = [{ id: 'user-1' }];
 
     setLiveEntry('session-helper', {
@@ -766,9 +766,9 @@ describe('live session registry helpers', () => {
       cwd: '/tmp/workspace',
       sessionFile: '/tmp/session-helper.jsonl',
       title: 'Persisted title',
-      running: true,
+      running: false,
       isStreaming: false,
-      hasPendingHiddenTurn: true,
+      hasPendingHiddenTurn: false,
     });
     expect(getLiveSessionForkEntries('session-helper')).toBe(forkEntries);
     expect(getLiveSessionForkEntries('missing-session')).toBeNull();
@@ -4146,7 +4146,7 @@ describe('promptSession', () => {
     expect(followUp).toHaveBeenCalledWith('keep going');
   });
 
-  it('prompts immediately when only stale hidden-turn state remains', async () => {
+  it('prompts immediately when only stale stale turn state remains', async () => {
     const prompt = vi.fn(async () => undefined);
     const steer = vi.fn(async () => undefined);
     const followUp = vi.fn(async () => undefined);

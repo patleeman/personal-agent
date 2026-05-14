@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./liveSessionHiddenTurns.js', () => ({
-  hasQueuedOrActiveHiddenTurn: vi.fn(() => false),
+vi.mock('./liveSessionStaleTurns.js', () => ({
+  hasQueuedOrActiveStaleTurn: vi.fn(() => false),
 }));
 
-import * as hiddenTurns from './liveSessionHiddenTurns.js';
 import { canInjectResumeFallbackPrompt } from './liveSessionQueueRead.js';
+import * as staleTurns from './liveSessionStaleTurns.js';
 
 function createEntry(overrides?: Record<string, unknown>) {
   return {
@@ -35,8 +35,8 @@ describe('canInjectResumeFallbackPrompt', () => {
     expect(canInjectResumeFallbackPrompt(createEntry({ session: { isStreaming: true } }))).toBe(false);
   });
 
-  it('returns false when there are queued or active hidden turns', () => {
-    vi.mocked(hiddenTurns.hasQueuedOrActiveHiddenTurn).mockReturnValueOnce(true);
+  it('returns false when there are queued or active stale turn state', () => {
+    vi.mocked(staleTurns.hasQueuedOrActiveStaleTurn).mockReturnValueOnce(true);
     expect(canInjectResumeFallbackPrompt(createEntry())).toBe(false);
   });
 

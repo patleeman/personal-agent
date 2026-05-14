@@ -11,10 +11,10 @@ import { restoreLiveSessionQueuedMessage } from './liveSessionQueueOperations.js
 
 describe('liveSessionQueue', () => {
   it('normalizes prompt behavior only when a prompt must be queued', () => {
-    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasHiddenTurnQueued: false })).toBeUndefined();
-    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: true, hasHiddenTurnQueued: false })).toBe('followUp');
-    expect(normalizeQueuedPromptBehavior('steer', { isStreaming: true, hasHiddenTurnQueued: false })).toBe('steer');
-    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasHiddenTurnQueued: true })).toBeUndefined();
+    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasQueuedStaleTurn: false })).toBeUndefined();
+    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: true, hasQueuedStaleTurn: false })).toBe('followUp');
+    expect(normalizeQueuedPromptBehavior('steer', { isStreaming: true, hasQueuedStaleTurn: false })).toBe('steer');
+    expect(normalizeQueuedPromptBehavior(undefined, { isStreaming: false, hasQueuedStaleTurn: true })).toBeUndefined();
   });
 
   it('builds previews from internal queued user messages and keeps image-only prompts restorable', () => {

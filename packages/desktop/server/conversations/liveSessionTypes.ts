@@ -1,9 +1,9 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import type { WebLiveConversationRunState } from './conversationRuns.js';
-import type { LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
 import type { ParallelPromptJob } from './liveSessionParallelJobs.js';
 import type { LiveSessionPresenceHost } from './liveSessionPresence.js';
+import type { LiveSessionStaleTurnState } from './liveSessionStaleTurns.js';
 import type { LiveSessionSubscriptionListener } from './liveSessionSubscription.js';
 
 export type LiveListener = LiveSessionSubscriptionListener;
@@ -18,7 +18,7 @@ export interface PersistedTokensSnapshot {
   cost: number;
 }
 
-export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
+export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionStaleTurnState {
   sessionId: string;
   session: AgentSession;
   cwd: string;

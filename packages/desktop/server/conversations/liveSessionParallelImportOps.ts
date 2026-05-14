@@ -37,7 +37,7 @@ export interface LiveSessionParallelChildHost {
 }
 
 export interface LiveSessionParallelImportCallbacks<TEntry extends LiveSessionParallelImportHost> {
-  hasQueuedOrActiveHiddenTurn: (entry: TEntry) => boolean;
+  hasQueuedOrActiveStaleTurn: (entry: TEntry) => boolean;
   persistParallelJobs: (entry: TEntry) => void;
   broadcastParallelState: (entry: TEntry, force?: boolean) => void;
   appendParallelImportedMessage: (
@@ -76,7 +76,7 @@ export async function startParallelPromptSession<TEntry extends LiveSessionParal
       images?: PromptImageAttachment[],
     ) => Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }>;
     resolveDefaultServiceTier: (entry: TEntry) => LiveSessionLoaderOptions['initialServiceTier'];
-    hasQueuedOrActiveHiddenTurn: (entry: TEntry) => boolean;
+    hasQueuedOrActiveStaleTurn: (entry: TEntry) => boolean;
     persistParallelJobs: (entry: TEntry) => void;
     broadcastParallelState: (entry: TEntry, force?: boolean) => void;
     getCurrentEntry: () => TEntry | undefined;
@@ -94,7 +94,7 @@ export async function startParallelPromptSession<TEntry extends LiveSessionParal
     throw new Error('Parallel prompts require a persisted session file.');
   }
 
-  const activeTurnInProgress = entry.session.isStreaming || callbacks.hasQueuedOrActiveHiddenTurn(entry);
+  const activeTurnInProgress = entry.session.isStreaming || callbacks.hasQueuedOrActiveStaleTurn(entry);
   if (!activeTurnInProgress) {
     throw new Error('Parallel prompts are only available while the conversation is busy.');
   }
@@ -300,7 +300,7 @@ export async function tryImportReadyParallelJobs<TEntry extends LiveSessionParal
   callbacks: LiveSessionParallelImportCallbacks<TEntry>,
 ): Promise<void> {
   entry.parallelJobs ??= [];
-  if (entry.importingParallelJobs || entry.session.isStreaming || callbacks.hasQueuedOrActiveHiddenTurn(entry)) {
+  if (entry.importingParallelJobs || entry.session.isStreaming || callbacks.hasQueuedOrActiveStaleTurn(entry)) {
     return;
   }
 
@@ -311,7 +311,7 @@ export async function tryImportReadyParallelJobs<TEntry extends LiveSessionParal
 
   entry.importingParallelJobs = true;
   try {
-    while (!entry.session.isStreaming && !callbacks.hasQueuedOrActiveHiddenTurn(entry)) {
+    while (!entry.session.isStreaming && !callbacks.hasQueuedOrActiveStaleTurn(entry)) {
       const currentJob = entry.parallelJobs[0];
       if (!currentJob || (currentJob.status !== 'ready' && currentJob.status !== 'failed')) {
         break;

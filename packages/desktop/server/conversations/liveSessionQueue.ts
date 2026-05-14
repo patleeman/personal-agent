@@ -36,7 +36,7 @@ let queuedPromptPreviewIdCounter = 0;
 
 export function normalizeQueuedPromptBehavior(
   behavior: 'steer' | 'followUp' | undefined,
-  options: { isStreaming: boolean; hasHiddenTurnQueued: boolean },
+  options: { isStreaming: boolean; hasQueuedStaleTurn: boolean },
 ): 'steer' | 'followUp' | undefined {
   if (options.isStreaming) {
     return behavior ?? 'followUp';

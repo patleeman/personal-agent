@@ -5,10 +5,10 @@ import { persistTraceCompaction, persistTraceToolCall } from '../traces/tracePer
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import { type SseEvent, toSse } from './liveSessionEvents.js';
 import {
-  activateNextHiddenTurn,
-  clearActiveHiddenTurnAfterTerminalEvent,
-  shouldSuppressLiveEventForHiddenTurn,
-} from './liveSessionHiddenTurns.js';
+  clearQueuedStaleTurn,
+  clearStaleTurnStateAfterTerminalEvent,
+  shouldSuppressLiveEventForStaleTurn,
+} from './liveSessionStaleTurns.js';
 import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
 import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
@@ -167,11 +167,11 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     throw new Error(`Custom transcript message "${customMessageDisplayFlagType}" must not use the display flag.`);
   }
 
-  const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event);
+  const activeHiddenTurnCustomType = clearQueuedStaleTurn(entry, event);
   if (activeHiddenTurnCustomType) {
     entry.activeHiddenTurnCustomType = activeHiddenTurnCustomType;
   }
-  const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
+  const suppressLiveEvent = shouldSuppressLiveEventForStaleTurn(entry, event);
 
   if (event.type === 'turn_end') {
     entry.traceRunTurnCount = (entry.traceRunTurnCount ?? 0) + 1;
@@ -426,7 +426,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     callbacks.broadcast(entry, sse);
   }
 
-  const hiddenTurnCleared = clearActiveHiddenTurnAfterTerminalEvent(entry, event);
+  const hiddenTurnCleared = clearStaleTurnStateAfterTerminalEvent(entry, event);
   if (hiddenTurnCleared) {
     callbacks.publishSessionMetaChanged(entry.sessionId);
   }

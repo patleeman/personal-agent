@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs';
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import type { LiveContextUsage } from './liveSessionEvents.js';
-import { hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
 import { type ParallelPromptJob, type ParallelPromptPreview, readParallelState } from './liveSessionParallelJobs.js';
 import { buildLiveSessionPresenceState, type LiveSessionPresenceHost, type LiveSessionPresenceState } from './liveSessionPresence.js';
 import { type QueuedPromptPreview, readQueueState } from './liveSessionQueue.js';
+import { hasQueuedOrActiveStaleTurn } from './liveSessionStaleTurns.js';
 import { readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
 import { applyLatestCompactionSummaryTitle, buildLiveStateBlocks, mergeConversationHistoryBlocks } from './liveSessionTranscript.js';
 import type { ThreadGoal } from './sessions.js';
@@ -127,7 +127,7 @@ export function readLiveSessionStateSnapshotFromEntry(
     hasSnapshot: true,
     isStreaming: entry.session.isStreaming,
     isCompacting: entry.isCompacting === true,
-    hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
+    hasPendingHiddenTurn: hasQueuedOrActiveStaleTurn(entry),
     goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
     error: entry.currentTurnError ?? null,
     title,

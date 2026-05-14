@@ -31,10 +31,10 @@ export function broadcastSnapshot(
   entry: LiveEntry,
   callbacks: {
     buildLiveSessionSnapshot: (entry: LiveEntry, tailBlocks?: number) => Record<string, unknown>;
-    ensureHiddenTurnState: (entry: LiveEntry) => void;
+    ensureStaleTurnState: (entry: LiveEntry) => void;
   },
 ): void {
-  callbacks.ensureHiddenTurnState(entry);
+  callbacks.ensureStaleTurnState(entry);
   const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
   for (const listener of entry.listeners) {
     listener.send({

@@ -1962,23 +1962,7 @@ function readCachedSessionMeta(filePath: string, cwdSlug: string): SessionMeta |
   return meta;
 }
 
-let lastScanTime = 0;
-const SCAN_THROTTLE_MS = 500;
-
 function scanSessionMetas(): SessionMeta[] {
-  const now = Date.now();
-  if (now - lastScanTime < SCAN_THROTTLE_MS) {
-    // Return the most recent cached result from sessionMetaCache
-    ensurePersistentIndexLoaded();
-    const cached: SessionMeta[] = [];
-    for (const [, entry] of sessionMetaCache) {
-      cached.push(entry.meta);
-    }
-    cached.sort((left, right) => right.timestamp.localeCompare(left.timestamp));
-    return cached;
-  }
-  lastScanTime = now;
-
   ensurePersistentIndexLoaded();
 
   const sessionsDir = resolveSessionsDir();

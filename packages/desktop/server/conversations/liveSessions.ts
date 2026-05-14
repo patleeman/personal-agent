@@ -47,7 +47,6 @@ import { destroyLiveSession } from './liveSessionDestroy.js';
 import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 import { type LiveContextUsage, type SseEvent } from './liveSessionEvents.js';
 import { makeAuth as makeFactoryAuth, makeRegistry } from './liveSessionFactory.js';
-import { createLiveSessionHiddenTurnState, ensureHiddenTurnState, hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
 import {
   getDefaultLifecycleHandlers,
   notifyLiveSessionLifecycleHandlers,
@@ -100,6 +99,7 @@ import {
   refreshAllLiveSessionModelRegistries as refreshLiveSessionModelRegistries,
   reloadAllLiveSessionAuth as reloadLiveSessionAuth,
 } from './liveSessionRegistryMaintenance.js';
+import { createLiveSessionStaleTurnState, ensureStaleTurnState, hasQueuedOrActiveStaleTurn } from './liveSessionStaleTurns.js';
 import {
   buildLiveSessionSnapshot,
   type LiveSessionStateSnapshot,
@@ -245,7 +245,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
   if (!entry) {
     throw new Error(`Session ${sessionId} is not live`);
   }
-  ensureHiddenTurnState(entry);
+  ensureStaleTurnState(entry);
   return readLiveSessionStateSnapshotFromEntry(entry, resolveEntryTitle(entry), tailBlocks);
 }
 
@@ -300,7 +300,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
     lastParallelStateJson: null,
     currentTurnError: null,
     tracePersistedTokens: initialPersistedTokens,
-    ...createLiveSessionHiddenTurnState(),
+    ...createLiveSessionStaleTurnState(),
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
     isCompacting: false,
@@ -370,7 +370,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
             const fn = buildLiveSessionSnapshot;
             return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
           })(),
-          ensureHiddenTurnState,
+          ensureStaleTurnState,
         }),
       broadcast,
       tryImportReadyParallelJobs,
@@ -624,7 +624,7 @@ export async function appendVisibleCustomMessage(sessionId: string, customType: 
           const fn = buildLiveSessionSnapshot;
           return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
         })(),
-        ensureHiddenTurnState,
+        ensureStaleTurnState,
       }),
     publishSessionMetaChanged,
   });
@@ -649,7 +649,7 @@ async function appendParallelImportedMessage(
           const fn = buildLiveSessionSnapshot;
           return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
         })(),
-        ensureHiddenTurnState,
+        ensureStaleTurnState,
       }),
     publishSessionMetaChanged,
   });
@@ -668,7 +668,7 @@ async function finalizeParallelChildLiveSession(
 
 async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
   await tryImportReadyParallelJobsWithCallbacks(entry, {
-    hasQueuedOrActiveHiddenTurn,
+    hasQueuedOrActiveStaleTurn,
     persistParallelJobs,
     broadcastParallelState,
     appendParallelImportedMessage,
@@ -700,7 +700,7 @@ export async function startParallelPromptSession(
       buildConversationServiceTierPreferenceInput(
         resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
       ),
-    hasQueuedOrActiveHiddenTurn,
+    hasQueuedOrActiveStaleTurn,
     persistParallelJobs,
     broadcastParallelState,
     getCurrentEntry: () => registry.get(sessionId),
@@ -729,7 +729,7 @@ export async function manageParallelPromptJob(
 function resolvePromptBehavior(entry: LiveEntry, behavior?: 'steer' | 'followUp'): 'steer' | 'followUp' | undefined {
   return normalizeQueuedPromptBehavior(behavior, {
     isStreaming: entry.session.isStreaming,
-    hasHiddenTurnQueued: hasQueuedOrActiveHiddenTurn(entry),
+    hasQueuedStaleTurn: hasQueuedOrActiveStaleTurn(entry),
   });
 }
 
@@ -750,7 +750,7 @@ export function repairLiveSessionTranscriptTail(sessionId: string): {
           const fn = buildLiveSessionSnapshot;
           return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
         })(),
-        ensureHiddenTurnState,
+        ensureStaleTurnState,
       }),
     clearContextUsageTimer,
     broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
@@ -827,7 +827,7 @@ export async function executeSessionBash(
           const fn = buildLiveSessionSnapshot;
           return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
         })(),
-        ensureHiddenTurnState,
+        ensureStaleTurnState,
       }),
     publishSessionMetaChanged,
   });
@@ -873,7 +873,7 @@ export async function compactSession(sessionId: string, customInstructions?: str
           const fn = buildLiveSessionSnapshot;
           return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
         })(),
-        ensureHiddenTurnState,
+        ensureStaleTurnState,
       }),
     clearContextUsageTimer,
     broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),

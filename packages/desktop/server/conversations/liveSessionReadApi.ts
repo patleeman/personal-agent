@@ -2,11 +2,11 @@ import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import type { LiveContextUsage } from './liveSessionEvents.js';
-import { hasQueuedOrActiveHiddenTurn, type LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
 import { resolveLiveSessionFile } from './liveSessionPersistence.js';
+import { hasQueuedOrActiveStaleTurn, type LiveSessionStaleTurnState } from './liveSessionStaleTurns.js';
 import { readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
 
-export interface LiveSessionReadHost extends LiveSessionHiddenTurnState {
+export interface LiveSessionReadHost extends LiveSessionStaleTurnState {
   cwd: string;
   session: AgentSession;
   title: string;
@@ -32,11 +32,7 @@ export function computeLiveSessionRunning(entry: LiveSessionReadHost): boolean {
   if (entry.lastDurableRunState === 'waiting') {
     return false;
   }
-  return Boolean(
-    entry.session.isStreaming ||
-    entry.lastDurableRunState === 'running' ||
-    entry.lastDurableRunState === 'recovering',
-  );
+  return Boolean(entry.session.isStreaming || entry.lastDurableRunState === 'running' || entry.lastDurableRunState === 'recovering');
 }
 
 export function listLiveSessions<TEntry extends LiveSessionReadHost>(
@@ -60,7 +56,7 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
         : entry.lastDurableRunState === 'waiting'
           ? false
           : entry.session.isStreaming || entry.lastDurableRunState === 'running' || entry.lastDurableRunState === 'recovering',
-    hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
+    hasPendingHiddenTurn: hasQueuedOrActiveStaleTurn(entry),
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
   }));
 }
