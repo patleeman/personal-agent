@@ -22,7 +22,13 @@ export interface SlashMenuItem {
   action?: string;
 }
 
-const BASE_SLASH_COMMANDS = [] as const;
+const BASE_SLASH_COMMANDS = [
+  {
+    cmd: '/compact',
+    icon: '◌',
+    desc: 'Manually compact the current conversation. Add text to guide the summary.',
+  },
+] as const;
 
 interface ParsedSlashInput {
   command: string;

@@ -26,9 +26,16 @@ describe('parseSlashInput', () => {
 });
 
 describe('buildSlashMenuItems', () => {
-  it('returns empty command list when no built-in commands exist', () => {
+  it('shows the manual compaction command in the default slash menu', () => {
     const items = buildSlashMenuItems('/', SKILLS);
-    expect(items.filter((item) => item.kind === 'command')).toHaveLength(0);
+    expect(items.filter((item) => item.kind === 'command')).toEqual([
+      expect.objectContaining({ displayCmd: '/compact', insertText: '/compact ', kind: 'command' }),
+    ]);
+  });
+
+  it('fuzzy-finds the manual compaction command', () => {
+    const items = buildSlashMenuItems('/comp', SKILLS);
+    expect(items[0]).toEqual(expect.objectContaining({ displayCmd: '/compact', kind: 'command' }));
   });
 
   it('fuzzy-finds extension slash commands for a matching query', () => {
