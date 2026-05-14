@@ -306,7 +306,7 @@ describe('trace-db', () => {
     cpSync(resolveObservabilityDbPath(testDir), legacyPath);
     rmSync(join(testDir, 'observability'), { recursive: true, force: true });
 
-    writeTraceStats({ sessionId: 'post-import-session', modelId: 'gpt-4o', tokensInput: 1, tokensOutput: 2 });
+    writeTraceStats({ sessionId: 'post-import-session', modelId: 'gpt-4o', tokensInput: 1, tokensOutput: 2, cost: 0 });
     closeTraceDbs();
 
     const db = openSqliteDatabase(resolveObservabilityDbPath(testDir));

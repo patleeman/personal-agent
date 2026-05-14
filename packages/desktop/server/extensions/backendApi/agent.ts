@@ -477,17 +477,14 @@ export async function runAgentTask(
     if ((input.images?.length ?? 0) > 0 && !modelAcceptsImages(record.model)) {
       throw new Error(`Agent task model does not accept images: ${input.modelRef ?? '(current)'}`);
     }
-    await runWithTimeout(
-      record.session.prompt(prompt, input.images?.length ? { images: input.images } : undefined),
-      input.timeoutMs,
-      () => {
-        void record.session.abort?.();
-        record.session.dispose();
-      },
-    );
-    const assistantError = getAssistantErrorMessage(record.session);
+    const session = created.session;
+    await runWithTimeout(session.prompt(prompt, input.images?.length ? { images: input.images } : undefined), input.timeoutMs, () => {
+      void session.abort?.();
+      session.dispose();
+    });
+    const assistantError = getAssistantErrorMessage(session);
     if (assistantError) throw new Error(assistantError);
-    if (record.assistantTexts.length === 0) record.assistantTexts.push(...collectAssistantTexts(record.session));
+    if (record.assistantTexts.length === 0) record.assistantTexts.push(...collectAssistantTexts(session));
     return {
       text: record.assistantTexts.at(-1)?.trim() || '',
       model: (record.model as { id?: string }).id,

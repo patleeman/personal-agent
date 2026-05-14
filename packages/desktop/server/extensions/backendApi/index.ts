@@ -21,5 +21,6 @@ export {
   rerunDurableRun,
   startBackgroundRun,
 } from './runs.js';
+export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from './runtime.js';
 export * from './runtime.js';
 export * from './telemetry.js';

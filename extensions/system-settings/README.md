@@ -177,7 +177,7 @@ Providers connect the agent to LLM APIs. Models define which specific model to u
 Credentials are resolved in this order:
 
 1. **Environment variables** — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`
-2. **Auth file** — stored in `<config-root>/auth.json`, managed through Settings
+2. **Auth file** — stored in `<state-root>/pi-agent-runtime/auth.json`, managed through Settings
 3. **OAuth login** — subscription providers like Claude Pro/Max and GitHub Copilot use OAuth via `/login` in the agent
 
 ### Subscription login

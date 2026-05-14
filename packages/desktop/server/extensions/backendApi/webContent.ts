@@ -15,7 +15,7 @@ export async function extractReadableHtml(input: { html: string; url: string }):
   const { JSDOM } = await dynamicImport<typeof import('jsdom')>('jsdom');
   const { Readability } = await dynamicImport<typeof import('@mozilla/readability')>('@mozilla/readability');
   const TurndownModule = await dynamicImport<typeof import('turndown')>('turndown');
-  const Turndown = TurndownModule.default || TurndownModule;
+  const Turndown = (TurndownModule as unknown as { default?: typeof TurndownModule }).default || TurndownModule;
 
   const dom = new JSDOM(input.html, { url: input.url });
   const article = new Readability(dom.window.document).parse();

@@ -4,7 +4,7 @@ interface ExtensionBackendContext {
   profile: string;
   runtime: {
     getRepoRoot: () => string;
-    getLiveSessionResourceOptions: () => unknown;
+    getLiveSessionResourceOptions: () => Record<string, unknown>;
   };
 }
 

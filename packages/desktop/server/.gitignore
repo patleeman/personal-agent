@@ -5,4 +5,4 @@
 *.d.ts
 
 # Keep the dist/ output (built by esbuild, not committed)
-!dist/
+dist/

@@ -95,7 +95,7 @@ While the agent is processing, you can queue additional messages. The composer r
 | Follow-up | Hold Option/Alt and press Enter while the agent is streaming   | Queues a new prompt after the agent completes all current work. Use this when the next instruction should not interrupt the current chain of thought. |
 | Parallel  | Hold Command/Ctrl and press Enter while the agent is streaming | Starts a side conversation from the current context. The result can be imported back into the main thread, skipped, cancelled, or opened separately.  |
 
-When auto mode has a hidden turn pending, normal submits become follow-ups. Holding Command/Ctrl still starts a parallel side conversation.
+When the run mode has a pending continuation (Nudge/Mission/Loop), normal submits become follow-ups. Holding Command/Ctrl still starts a parallel side conversation.
 
 Queued steer and follow-up prompts appear in the queue shelf above the composer. Use `restore` to pull a queued prompt back into the composer. Press Escape to abort the active response and restore queued messages to the editor. Press Alt+Up to retrieve queued messages back.
 
@@ -105,11 +105,22 @@ Deferred resumes (`/resume`, `/defer`) also appear in the activity shelf above t
 
 Interrupted prompts are not replayed automatically after an app restart. Durable run state is used for status and explicit recovery surfaces only; startup recovery must not silently resend the last prompt.
 
-## Goal Mode
+## Run Mode / Auto Mode
 
-Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. The continuation prompt tells the agent to call `update_goal` when the objective is achieved. Continuations are scheduled only after `agent_end`, not after every tool turn, so a tool-heavy run cannot stack stale hidden turns before the goal completes. If two continuation turns make no tool-driven progress, goal mode pauses the objective with a `no progress` stop reason instead of spinning forever. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.
+The composer exposes a run-mode selector with four states:
 
-Legacy conversation auto-mode state (`nudge`, `mission`, and `loop`) remains readable for older session files and compatibility APIs, but it no longer schedules hidden continuation turns. Autonomous continuation is owned by the goal-mode extension state (`conversation-goal`) so only one loop controller can drive a conversation.
+| Mode    | Behavior                                                                             |
+| ------- | ------------------------------------------------------------------------------------ |
+| Manual  | No automatic continuation.                                                           |
+| Nudge   | Hidden review turn decides whether useful work remains.                              |
+| Mission | Goal-driven mode with an AI-managed task list via the `run_state` tool.              |
+| Loop    | Fixed-count mode. The same prompt is repeated until the iteration counter reaches N. |
+
+See [Auto Mode](../extensions/system-auto-mode/README.md) for the full nudge, mission, and loop flows.
+
+### Goal Mode (legacy)
+
+The `set_goal` / `update_goal` tools provide a legacy goal-mode path. Continuations are scheduled only after `agent_end`, and repeated `update_goal { status: "complete" }` calls are idempotent. This is separate from the run-mode selector; only one loop controller can drive a conversation at a time.
 
 ## Slash Commands
 
@@ -117,32 +128,20 @@ Type `/` in the composer to open the command menu. Commands execute immediately 
 
 | Command              | Action                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------- |
-| `/model`             | Open model selector                                                                   |
 | `/compact`           | Manually compact session context (optionally pass guidance)                           |
-| `/export`            | Export session to HTML file                                                           |
-| `/name`              | Set session display name                                                              |
-| `/session`           | Show session info and stats                                                           |
-| `/fork`              | Fork a new conversation from a previous message                                       |
-| `/summarize-fork`    | Duplicate + compact thread into a new conversation                                    |
-| `/new`               | Start a new conversation                                                              |
-| `/reload`            | Reload extensions, skills, prompts, and themes                                        |
-| `/page`              | Create or reference a page for this conversation                                      |
-| `/draw`              | Create an Excalidraw drawing attachment                                               |
-| `/drawings`          | Attach an existing saved drawing                                                      |
-| `/resume` / `/defer` | Schedule this conversation to continue later (usage: `/resume 10m continue checking`) |
-| `/clear`             | Clear the composer                                                                    |
-| `/image`             | Open file picker to attach an image                                                   |
+| `/export [path]`     | Export session to HTML file                                                           |
+| `/name <title>`      | Set session display name                                                              |
+| `/run <cmd>`         | Send "Run this shell command: …" to the agent                                         |
+| `/search <query>`    | Send "Search the web for: …" to the agent                                             |
+| `/summarize`         | Send "Summarize our conversation so far" to the agent                                 |
+| `/think [topic]`     | Send "Think step-by-step about: …" to the agent                                       |
 | `/copy`              | Copy the last agent message to clipboard                                              |
+| `/resume` / `/defer` | Schedule this conversation to continue later (usage: `/resume 10m continue checking`) |
 | `/skill:<name>`      | Trigger a skill by name                                                               |
 
-The following commands send a prompt to the agent instead of executing directly:
+Several of these send a prompt to the agent instead of executing locally: `/run`, `/search`, `/summarize`, `/think`.
 
-| Command           | Sends                                              |
-| ----------------- | -------------------------------------------------- |
-| `/run <cmd>`      | "Run this shell command and show me the output: …" |
-| `/search <query>` | "Search the web for: …"                            |
-| `/summarize`      | "Summarize our conversation so far concisely."     |
-| `/think [topic]`  | "Think step-by-step about: …"                      |
+Commands accessible through dedicated desktop UI rather than the `/` menu include: `/model` (model picker in composer preferences row), `/fork` (message action menu), `/new` (sidebar + button), `/reload` (Extension Manager), `/clear` (Escape to cancel), `/image` (attachment button), `/draw` (composer input tool), `/session` (info display).
 
 ## Bash Commands
 
@@ -183,28 +182,35 @@ Select any portion of text in a conversation message. A **Reply** action appears
 
 The agent can read other conversation transcripts using the `conversation_inspect` tool. This provides read-only access to message history, tool calls, and results across threads. Live and running scopes include other currently active conversations, not just persisted session files. See [Conversation Inspect](../extensions/system-conversation-tools/README.md).
 
-## Auto Mode
-
-When enabled, each visible assistant turn is followed by a hidden review turn. The review runs in the background and can perform follow-up work. See [Auto Mode](../extensions/system-auto-mode/README.md).
-
 ## Keyboard Shortcuts
 
-| Action                   | Shortcut       |
-| ------------------------ | -------------- |
-| New conversation         | `Cmd+N`        |
-| Toggle sidebar           | `Cmd+\`        |
-| Toggle workbench         | `Cmd+Option+\` |
-| Submit message           | Enter          |
-| New line in composer     | Shift+Enter    |
-| Cancel agent response    | Escape         |
-| Retrieve queued messages | Alt+Up         |
+| Action                   | Shortcut              |
+| ------------------------ | --------------------- |
+| New conversation         | `Cmd+N`               |
+| Conversation mode        | `F1`                  |
+| Workbench mode           | `F2`                  |
+| Toggle sidebar           | `Cmd+/` (or `Ctrl+/`) |
+| Toggle right rail        | `Cmd+\` (or `Ctrl+\`) |
+| Submit message           | Enter                 |
+| New line in composer     | Shift+Enter           |
+| Cancel agent response    | Escape                |
+| Retrieve queued messages | Alt+Up                |
 
-All shortcuts are configurable in Settings.
+Default shortcuts are configurable in Settings → Keyboard.
 
 ## Routes
+
+The desktop app and system extensions register these routes:
 
 | Route                | Page                  |
 | -------------------- | --------------------- |
 | `/conversations`     | Conversation list     |
 | `/conversations/new` | New conversation      |
 | `/conversations/:id` | Existing conversation |
+| `/settings`          | Settings page         |
+| `/knowledge`         | Knowledge browser     |
+| `/automations`       | Scheduled task list   |
+| `/automations/:id`   | Automation detail     |
+| `/extensions`        | Extension Manager     |
+| `/telemetry`         | Telemetry traces      |
+| `/gateways`          | Gateway connections   |

@@ -62,34 +62,34 @@ Electron main process
 | Conversation | `F1`     | Single-pane layout with left sidebar |
 | Workbench    | `F2`     | Multi-pane layout with side rails    |
 
-Switch between Conversation and Workbench with `Cmd+Option+\`. Toggle the left sidebar with `Cmd+\`. Toggle the right rail with `Cmd+Shift+\`.
+Toggle the left sidebar with `Cmd+/` (or `Ctrl+/`). Toggle the right rail with `Cmd+\` (or `Ctrl+\`).
 
 ## Workbench Rails
 
-In Workbench mode, the right rail provides configurable tabs:
+In Workbench mode, the right rail nav tabs include:
 
 | Tab           | Description                       |
 | ------------- | --------------------------------- |
-| Knowledge     | Browse and edit vault files       |
 | File Explorer | Project file tree browser         |
 | Diffs         | Checkpoint diffs and file changes |
 | Artifacts     | Rendered HTML, Mermaid, LaTeX     |
+| Runs          | Background runs and subagents     |
 | Browser       | Embedded webview                  |
 
-Tabs are context-sensitive — Diffs and Artifacts only appear when the conversation has checkpoint or artifact data. Heavy workbench panels are lazy-loaded so they do not inflate the initial renderer bundle.
+Knowledge is a primary left-sidebar page (not a workbench tab). Extension-contributed tool panels also appear in the nav. Tabs are context-sensitive — Diffs, Artifacts, and Runs only appear when the conversation has relevant data. Heavy workbench panels are lazy-loaded so they do not inflate the initial renderer bundle.
 
 ## Keyboard Shortcuts
 
-All desktop shortcuts are configurable in Settings. Defaults:
+All desktop shortcuts are configurable in Settings → Keyboard. Defaults:
 
-| Action             | Default        |
-| ------------------ | -------------- |
-| New conversation   | `Cmd+N`        |
-| Toggle sidebar     | `Cmd+\`        |
-| Toggle workbench   | `Cmd+Option+\` |
-| Toggle right rail  | `Cmd+Shift+\`  |
-| Settings           | `Cmd+,`        |
-| Toggle layout mode | `F1`/`F2`      |
+| Action            | Default               |
+| ----------------- | --------------------- |
+| New conversation  | `Cmd+N`               |
+| Conversation mode | `F1`                  |
+| Workbench mode    | `F2`                  |
+| Toggle sidebar    | `Cmd+/` (or `Ctrl+/`) |
+| Toggle right rail | `Cmd+\` (or `Ctrl+\`) |
+| Settings          | `Cmd+,`               |
 
 ## Routes
 
@@ -102,6 +102,9 @@ All desktop shortcuts are configurable in Settings. Defaults:
 | `/automations`       | Scheduled task list   |
 | `/automations/:id`   | Automation detail     |
 | `/settings`          | Settings panel        |
+| `/extensions`        | Extension Manager     |
+| `/telemetry`         | Telemetry traces page |
+| `/gateways`          | Gateway connections   |
 
 ## Demo Mode
 
