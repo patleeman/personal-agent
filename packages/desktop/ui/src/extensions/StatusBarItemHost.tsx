@@ -2,6 +2,7 @@ import type { ExtensionStatusBarItemProps } from '@personal-agent/extensions';
 import { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
+import { ensureExtensionFrontendReactGlobals } from './extensionFrontendReactGlobals';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
@@ -12,6 +13,7 @@ type StatusBarComponent = ComponentType<ExtensionStatusBarItemProps>;
 type StatusBarContext = ExtensionStatusBarItemProps['statusBarContext'];
 
 function loadStatusBarModule(registration: ExtensionStatusBarItemRegistration, revision: number): Promise<Record<string, unknown>> {
+  ensureExtensionFrontendReactGlobals();
   const systemLoader = systemExtensionModules.get(registration.extensionId);
   if (systemLoader) return systemLoader();
   const entry = registration.frontendEntry;

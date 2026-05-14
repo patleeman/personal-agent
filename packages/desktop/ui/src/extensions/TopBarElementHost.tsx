@@ -1,6 +1,7 @@
 import { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
+import { ensureExtensionFrontendReactGlobals } from './extensionFrontendReactGlobals';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
@@ -11,6 +12,7 @@ type TopBarExtensionComponent = ComponentType<{
 }>;
 
 function loadTopBarModule(registration: ExtensionTopBarElementRegistration, revision: number): Promise<Record<string, unknown>> {
+  ensureExtensionFrontendReactGlobals();
   const systemLoader = systemExtensionModules.get(registration.extensionId);
   if (systemLoader) return systemLoader();
   const entry = registration.frontendEntry;

@@ -59,7 +59,7 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
       '.ttf': 'dataurl',
       '.otf': 'dataurl',
     },
-    plugins: [createFrontendRawCssPlugin(), createFrontendExtensionSdkPlugin()],
+    plugins: [createFrontendRawCssPlugin(), createFrontendSharedReactPlugin(), createFrontendExtensionSdkPlugin()],
     nodePaths: findAppNodeModules(),
     metafile: true,
   });
@@ -129,6 +129,74 @@ function createFrontendRawCssPlugin() {
       buildContext.onLoad({ filter: /\.css$/, namespace: 'pa-raw-css' }, (args) => ({
         contents: readFileSync(args.path, 'utf8'),
         loader: 'text',
+      }));
+    },
+  };
+}
+
+function createFrontendSharedReactPlugin() {
+  const reactFacade = `const React = globalThis.__PA_REACT__;
+if (!React) throw new Error('Personal Agent React host runtime is unavailable.');
+export const Children = React.Children;
+export const Component = React.Component;
+export const Fragment = React.Fragment;
+export const Profiler = React.Profiler;
+export const PureComponent = React.PureComponent;
+export const StrictMode = React.StrictMode;
+export const Suspense = React.Suspense;
+export const cloneElement = React.cloneElement;
+export const createContext = React.createContext;
+export const createElement = React.createElement;
+export const createRef = React.createRef;
+export const forwardRef = React.forwardRef;
+export const isValidElement = React.isValidElement;
+export const lazy = React.lazy;
+export const memo = React.memo;
+export const startTransition = React.startTransition;
+export const use = React.use;
+export const useActionState = React.useActionState;
+export const useCallback = React.useCallback;
+export const useContext = React.useContext;
+export const useDebugValue = React.useDebugValue;
+export const useDeferredValue = React.useDeferredValue;
+export const useEffect = React.useEffect;
+export const useId = React.useId;
+export const useImperativeHandle = React.useImperativeHandle;
+export const useInsertionEffect = React.useInsertionEffect;
+export const useLayoutEffect = React.useLayoutEffect;
+export const useMemo = React.useMemo;
+export const useOptimistic = React.useOptimistic;
+export const useReducer = React.useReducer;
+export const useRef = React.useRef;
+export const useState = React.useState;
+export const useSyncExternalStore = React.useSyncExternalStore;
+export const useTransition = React.useTransition;
+export const version = React.version;
+export default React;
+`;
+  const jsxRuntimeFacade = `const runtime = globalThis.__PA_REACT_JSX_RUNTIME__;
+if (!runtime) throw new Error('Personal Agent React JSX runtime is unavailable.');
+export const Fragment = runtime.Fragment;
+export const jsx = runtime.jsx;
+export const jsxs = runtime.jsxs;
+export const jsxDEV = runtime.jsxDEV;
+`;
+  return {
+    name: 'personal-agent-frontend-shared-react',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^react$/ }, () => ({ path: 'pa-shared-react', namespace: 'pa-shared-react' }));
+      buildContext.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({
+        path: 'pa-shared-react-jsx-runtime',
+        namespace: 'pa-shared-react',
+      }));
+      buildContext.onResolve({ filter: /^react\/jsx-dev-runtime$/ }, () => ({
+        path: 'pa-shared-react-jsx-dev-runtime',
+        namespace: 'pa-shared-react',
+      }));
+      buildContext.onLoad({ filter: /^pa-shared-react$/, namespace: 'pa-shared-react' }, () => ({ contents: reactFacade, loader: 'js' }));
+      buildContext.onLoad({ filter: /^pa-shared-react-jsx-(?:dev-)?runtime$/, namespace: 'pa-shared-react' }, () => ({
+        contents: jsxRuntimeFacade,
+        loader: 'js',
       }));
     },
   };

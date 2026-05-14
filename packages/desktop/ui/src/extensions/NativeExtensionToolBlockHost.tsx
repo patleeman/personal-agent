@@ -5,6 +5,7 @@ import { addNotification } from '../components/notifications/notificationStore';
 import { ErrorState, LoadingState } from '../components/ui';
 import type { MessageBlock } from '../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../transcript/askUserQuestions';
+import { ensureExtensionFrontendReactGlobals } from './extensionFrontendReactGlobals';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionInstallSummary, ExtensionTranscriptRendererContribution } from './types';
@@ -33,6 +34,7 @@ type ExtensionToolBlockComponent = ComponentType<{
 }>;
 
 function loadExtensionModule(extension: ExtensionInstallSummary, revision: number): Promise<Record<string, unknown>> {
+  ensureExtensionFrontendReactGlobals();
   const systemLoader = systemExtensionModules.get(extension.id);
   if (systemLoader) return systemLoader();
   const entry = extension.manifest.frontend?.entry;

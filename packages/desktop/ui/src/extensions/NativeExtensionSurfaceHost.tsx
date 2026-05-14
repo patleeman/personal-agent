@@ -3,6 +3,7 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 import { buildApiPath } from '../client/apiBase';
 import { addNotification } from '../components/notifications/notificationStore';
 import { ErrorState, LoadingState } from '../components/ui';
+import { ensureExtensionFrontendReactGlobals } from './extensionFrontendReactGlobals';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import {
   type ExtensionHostViewComponent,
@@ -19,6 +20,7 @@ import { useExtensionStyles } from './useExtensionStyles';
 type ExtensionComponent = ComponentType<ExtensionHostViewComponentProps>;
 
 function loadExtensionModule(surface: NativeExtensionViewSummary, revision: number, retryNonce?: number): Promise<Record<string, unknown>> {
+  ensureExtensionFrontendReactGlobals();
   const systemLoader = systemExtensionModules.get(surface.extensionId);
   if (systemLoader) return systemLoader();
   const entry = surface.frontend?.entry;
