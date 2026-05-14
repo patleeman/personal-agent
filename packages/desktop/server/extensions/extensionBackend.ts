@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
-import { getPiAgentRuntimeDir, getStateRoot, resolveLocalProfileSettingsFilePath } from '@personal-agent/core';
+import { getPiAgentRuntimeDir, getStateRoot, queryAppTelemetryEvents, resolveLocalProfileSettingsFilePath } from '@personal-agent/core';
 import type { Plugin } from 'esbuild';
 
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
@@ -177,9 +177,50 @@ const actionTelemetry: ExtensionActionTelemetryEntry[] = [];
 function recordActionTelemetry(entry: ExtensionActionTelemetryEntry): void {
   actionTelemetry.unshift(entry);
   actionTelemetry.splice(100);
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'extension_action',
+    name: entry.actionId,
+    durationMs: entry.durationMs,
+    metadata: {
+      extensionId: entry.extensionId,
+      ok: entry.ok,
+      ...(entry.error ? { error: entry.error } : {}),
+    },
+  });
+}
+
+function parseTelemetryMetadata(metadataJson: string | null): Record<string, unknown> {
+  if (!metadataJson) return {};
+  try {
+    const parsed = JSON.parse(metadataJson) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
 
 export function listExtensionActionTelemetry(extensionId?: string): ExtensionActionTelemetryEntry[] {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const entries = queryAppTelemetryEvents({ since, limit: 1000 })
+    .filter((event) => event.category === 'extension_action')
+    .map((event): ExtensionActionTelemetryEntry | null => {
+      const metadata = parseTelemetryMetadata(event.metadataJson);
+      const eventExtensionId = typeof metadata.extensionId === 'string' ? metadata.extensionId : undefined;
+      if (!eventExtensionId || (extensionId && eventExtensionId !== extensionId)) return null;
+      return {
+        extensionId: eventExtensionId,
+        actionId: event.name,
+        ok: metadata.ok === true,
+        durationMs: event.durationMs ?? 0,
+        at: event.ts,
+        ...(typeof metadata.error === 'string' ? { error: metadata.error } : {}),
+      };
+    })
+    .filter((entry): entry is ExtensionActionTelemetryEntry => entry != null)
+    .slice(0, 100);
+
+  if (entries.length > 0) return entries;
   return actionTelemetry.filter((entry) => !extensionId || entry.extensionId === extensionId);
 }
 

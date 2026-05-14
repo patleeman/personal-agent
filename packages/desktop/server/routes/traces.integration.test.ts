@@ -179,7 +179,7 @@ describe('traces API integration', () => {
     expect(res.body.failureTrajectories[0].previousCalls).toEqual(['bash:git']);
   });
 
-  it('session-integrity returns app telemetry from the observability database', async () => {
+  it('session-integrity returns app telemetry from JSONL telemetry logs', async () => {
     const res = await call('GET', '/api/traces/session-integrity');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);

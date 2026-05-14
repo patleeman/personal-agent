@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeAppTelemetryDbs, queryAppTelemetryEvents, writeAppTelemetryEvent } from './app-telemetry-db.js';
+import { resolveAppTelemetryLogPath } from './app-telemetry-log.js';
 import { openSqliteDatabase } from './sqlite.js';
 import { closeTraceDbs, writeTraceStats } from './trace-db.js';
 
@@ -41,9 +42,10 @@ describe('app-telemetry-db', () => {
     delete process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
     rmSync(join(testDir, 'observability'), { recursive: true, force: true });
+    rmSync(join(testDir, 'logs'), { recursive: true, force: true });
   });
 
-  it('writes and queries generic telemetry events', () => {
+  it('writes and queries generic telemetry events from JSONL logs', () => {
     writeAppTelemetryEvent({
       source: 'renderer',
       category: 'navigation',
@@ -59,6 +61,21 @@ describe('app-telemetry-db', () => {
     expect(rows[0]).toMatchObject({ source: 'renderer', category: 'navigation', name: 'route_view', route: '/telemetry' });
     expect(rows[0].durationMs).toBe(12.4);
     expect(rows[0].metadataJson).toContain('viewport');
+
+    const logPath = resolveAppTelemetryLogPath(rows[0].ts, testDir);
+    const logLine = readFileSync(logPath, 'utf-8').trim();
+    expect(JSON.parse(logLine)).toMatchObject({ schemaVersion: 1, category: 'navigation', name: 'route_view' });
+  });
+
+  it('queries JSONL telemetry when the SQLite index is unavailable', () => {
+    writeAppTelemetryEvent({ source: 'server', category: 'api', name: 'request', route: '/health' });
+    closeAppTelemetryDbs();
+    rmSync(join(testDir, 'observability'), { recursive: true, force: true });
+
+    const rows = queryAppTelemetryEvents({ since: new Date(Date.now() - 60_000).toISOString() });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ source: 'server', category: 'api', name: 'request', route: '/health' });
   });
 
   it('drops events without category or name', () => {

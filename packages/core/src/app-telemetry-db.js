@@ -6,6 +6,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+
+import { closeAppTelemetryLogs, readAppTelemetryLogEvents, writeAppTelemetryLogEvent } from './app-telemetry-log.js';
 import {
   applyObservabilityMigrations,
   ensureObservabilityDbDir,
@@ -47,6 +49,7 @@ export function closeAppTelemetryDbs() {
   }
   dbCache.clear();
   writeCounts.clear();
+  closeAppTelemetryLogs();
 }
 function resolveAppTelemetryDbPath(stateRoot) {
   return resolveObservabilityDbPath(stateRoot);
@@ -104,6 +107,14 @@ function normalizeString(value, max = 240) {
 function normalizeFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
+function normalizeMetadata(metadata) {
+  if (!metadata) return null;
+  try {
+    return JSON.parse(truncate(JSON.stringify(metadata), 4000));
+  } catch {
+    return null;
+  }
+}
 function stringifyMetadata(metadata) {
   if (!metadata) return null;
   try {
@@ -141,30 +152,51 @@ export function writeAppTelemetryEvent(input) {
     const category = normalizeString(input.category, 120);
     const name = normalizeString(input.name, 160);
     if (!category || !name) return;
-    const dbPath = resolveAppTelemetryDbPath(input.stateRoot);
-    const db = getAppTelemetryDb(input.stateRoot);
-    db.prepare(
-      `
+    const event = {
+      schemaVersion: 1,
+      id: randomUUID(),
+      ts: nowIso(),
+      source: input.source,
+      category,
+      name,
+      sessionId: normalizeString(input.sessionId, 160),
+      runId: normalizeString(input.runId, 200),
+      route: normalizeString(input.route, 500),
+      status: Number.isInteger(input.status) ? input.status : null,
+      durationMs: normalizeFiniteNumber(input.durationMs),
+      count: Number.isInteger(input.count) ? input.count : null,
+      value: normalizeFiniteNumber(input.value),
+      metadata: normalizeMetadata(input.metadata),
+    };
+    writeAppTelemetryLogEvent(event, input.stateRoot);
+    try {
+      const dbPath = resolveAppTelemetryDbPath(input.stateRoot);
+      const db = getAppTelemetryDb(input.stateRoot);
+      db.prepare(
+        `
       INSERT INTO app_telemetry_events (
         id, ts, source, category, name, session_id, run_id, route, status, duration_ms, count, value, metadata_json
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    ).run(
-      randomUUID(),
-      nowIso(),
-      input.source,
-      category,
-      name,
-      normalizeString(input.sessionId, 160),
-      normalizeString(input.runId, 200),
-      normalizeString(input.route, 500),
-      Number.isInteger(input.status) ? input.status : null,
-      normalizeFiniteNumber(input.durationMs),
-      Number.isInteger(input.count) ? input.count : null,
-      normalizeFiniteNumber(input.value),
-      stringifyMetadata(input.metadata),
-    );
-    maybePruneAppTelemetryEvents(db, dbPath);
+      ).run(
+        event.id,
+        event.ts,
+        event.source,
+        event.category,
+        event.name,
+        event.sessionId,
+        event.runId,
+        event.route,
+        event.status,
+        event.durationMs,
+        event.count,
+        event.value,
+        stringifyMetadata(event.metadata),
+      );
+      maybePruneAppTelemetryEvents(db, dbPath);
+    } catch {
+      // SQLite indexing must never affect app behavior. The JSONL log is the source of truth.
+    }
   } catch {
     // Telemetry must never affect app behavior.
   }
@@ -188,6 +220,24 @@ function mapEventRow(row) {
 }
 export function queryAppTelemetryEvents(input) {
   const limit = Math.max(1, Math.min(input.limit ?? 200, 1000));
+  const loggedEvents = readAppTelemetryLogEvents({ since: input.since, limit, stateRoot: input.stateRoot });
+  if (loggedEvents.length > 0) {
+    return loggedEvents.map((event) => ({
+      id: event.id,
+      ts: event.ts,
+      source: event.source,
+      category: event.category,
+      name: event.name,
+      sessionId: event.sessionId,
+      runId: event.runId,
+      route: event.route,
+      status: event.status,
+      durationMs: event.durationMs,
+      count: event.count,
+      value: event.value,
+      metadataJson: stringifyMetadata(event.metadata),
+    }));
+  }
   const rows = getAppTelemetryDb(input.stateRoot)
     .prepare(
       `

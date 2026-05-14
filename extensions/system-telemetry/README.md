@@ -10,13 +10,13 @@ This extension owns the product behavior documented below. Keep extension-specif
 
 Telemetry explains how Personal Agent records local trace data for the desktop monitoring page.
 
-The desktop app writes turn stats, context pressure, compactions, tool calls, logs, app events, and lightweight metrics into one bounded local SQLite observability database at `observability/observability.db`. The Traces page reads aggregated views from `/api/traces/*` endpoints; writes are fire-and-forget through the trace and telemetry queues so conversation execution does not wait on analytics. Token counters are stored and rendered as whole tokens; dollar amounts stay in the separate cost fields.
+The desktop app writes turn stats, context pressure, compactions, and tool calls into the local SQLite observability database at `observability/observability.db`. Generic app telemetry is written first to append-only JSONL files under `logs/telemetry/`, then indexed into SQLite on a best-effort basis for query/UI convenience. The Traces page reads aggregated views from `/api/traces/*` endpoints; writes are fire-and-forget through the trace and telemetry queues so conversation execution does not wait on analytics. Token counters are stored and rendered as whole tokens; dollar amounts stay in the separate cost fields.
 
 Legacy `pi-agent/state/trace/trace.db`, `pi-agent/state/trace/app-telemetry.db`, and older `sync/pi-agent/state/trace/*` files are imported into the unified database once per state root, then left untouched.
 
 ## Application telemetry
 
-Application telemetry is a generic local event sink for signals that are useful to collect now before the UI has a first-class chart. It writes to the shared observability database through `writeAppTelemetryEvent` and stores source, category, name, session/run ids, route, status, duration, counts, values, and bounded JSON metadata.
+Application telemetry is a generic local event sink for signals that are useful to collect now before the UI has a first-class chart. It writes source-of-truth JSONL through `writeAppTelemetryEvent`, then stores the same source, category, name, session/run ids, route, status, duration, counts, values, and bounded JSON metadata into the shared observability database as a derived index.
 
 Current producers include server API request timing, server `Server-Timing` metrics, server warn/error logs, server app events, renderer route views/leaves, renderer visibility changes, renderer crashes/rejections, conversation stream connect/snapshot/reconnect events, conversation prompt submissions, tool execution detail, and agent loop lifecycle/latency/outcome events. The endpoint for renderer events is `POST /api/telemetry/event`; it is intentionally fire-and-forget and must never block or break the app. If the in-process app telemetry queue overflows, the app records a `system/telemetry/queue_drop` event before shedding old buffered entries.
 
