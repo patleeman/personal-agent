@@ -139,6 +139,7 @@ export {
   startScheduledTaskRun,
   stopDaemon,
   syncWebLiveConversationRunState,
+  updateCompanionConfig,
 } from '../daemon/client.js';
 export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from '../daemon/companion/runtime.js';
 export * from '../daemon/companion/types.js';

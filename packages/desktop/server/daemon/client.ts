@@ -6,6 +6,7 @@ import { loadDaemonConfig } from '../config.js';
 import { resolveDaemonPaths } from '../paths.js';
 import { publishAppEvent } from '../shared/appEvents.js';
 import { logWarn } from '../shared/logging.js';
+import { DEFAULT_COMPANION_HOST } from './companion/types.js';
 import { createDaemonEvent } from './events.js';
 import { getDaemonClientTransportOverride } from './in-process-client.js';
 import type {
@@ -179,10 +180,29 @@ export async function getCompanionUrl(config?: DaemonConfig): Promise<string | n
     return null;
   }
 
-  const host = resolvedConfig.companion?.host ?? '127.0.0.1';
+  const host = resolvedConfig.companion?.host ?? DEFAULT_COMPANION_HOST;
   const port = resolvedConfig.companion?.port ?? 3843;
   const formattedHost = host.includes(':') ? `[${host}]` : host;
   return `http://${formattedHost}:${String(port)}`;
+}
+
+export async function updateCompanionConfig(
+  input: { enabled?: boolean; host?: string; port?: number },
+  config?: DaemonConfig,
+): Promise<{ url: string | null }> {
+  const transport = getTransport();
+  if (transport?.updateCompanionConfig) {
+    return transport.updateCompanionConfig(input, config);
+  }
+
+  return sendRequest<{ url: string | null }>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'companion.updateConfig',
+      input,
+    },
+    config,
+  );
 }
 
 export async function stopDaemon(config?: DaemonConfig): Promise<void> {

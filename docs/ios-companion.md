@@ -91,3 +91,5 @@ The companion API is served by the daemon and can be exposed over LAN or Tailsca
 - **Socket**: `ws(s)://<host>:<port>/companion/v1/socket`
 
 Core reads use HTTP (`/hello`, `/auth/pair`, `/conversations`, `/models`, `/knowledge/*`, `/tasks`, `/runs`). Live conversation control uses the single companion socket with commands such as `conversation.bootstrap`, `conversation.create`, `conversation.prompt`, and `conversation.resume`, plus `conversation` subscriptions for streaming transcript events.
+
+The daemon binds companion access to `0.0.0.0` by default so paired phones can reach the host over LAN/Tailnet; pairing and subsequent requests still require bearer-token authentication.

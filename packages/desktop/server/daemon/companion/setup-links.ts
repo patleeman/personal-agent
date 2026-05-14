@@ -2,7 +2,7 @@ import { networkInterfaces } from 'node:os';
 
 import type { DaemonConfig } from '../../config.js';
 import { resolveCompanionTailscaleUrl } from '../tailscale-serve.js';
-import type { CompanionPairingCode, CompanionSetupLink, CompanionSetupState } from './types.js';
+import { type CompanionPairingCode, type CompanionSetupLink, type CompanionSetupState, DEFAULT_COMPANION_HOST } from './types.js';
 
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
@@ -57,7 +57,7 @@ export function buildCompanionSetupState(input: {
   readNetworkInterfaces?: typeof networkInterfaces;
   resolveTailnetUrl?: (port: number) => string | undefined;
 }): CompanionSetupState {
-  const companionHost = input.config.companion?.host?.trim() || '127.0.0.1';
+  const companionHost = input.config.companion?.host?.trim() || DEFAULT_COMPANION_HOST;
   const companionPort = input.config.companion?.port ?? 3843;
   const warnings: string[] = [];
   const links: CompanionSetupLink[] = [];

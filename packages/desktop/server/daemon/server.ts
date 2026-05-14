@@ -36,7 +36,7 @@ import {
 } from '../shared/sqliteDbLifecycle.js';
 import { looksLikeBackgroundAgentRunnerEntryPath } from './background-run-agent.js';
 import { DaemonCompanionServer } from './companion/server.js';
-import type { CompanionRuntimeProvider } from './companion/types.js';
+import { type CompanionRuntimeProvider, DEFAULT_COMPANION_HOST } from './companion/types.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { type DaemonRequest, type DaemonResponse, parseRequest, serializeResponse } from './ipc-protocol.js';
@@ -401,7 +401,7 @@ export class PersonalAgentDaemon {
   async updateCompanionConfig(input: { enabled?: boolean; host?: string; port?: number }): Promise<{ url: string | null }> {
     const previous = {
       enabled: this.config.companion?.enabled !== false,
-      host: this.config.companion?.host ?? '127.0.0.1',
+      host: this.config.companion?.host ?? DEFAULT_COMPANION_HOST,
       port: this.config.companion?.port ?? 3843,
     };
     const next = {
@@ -629,6 +629,15 @@ export class PersonalAgentDaemon {
 
     if (request.type === 'status') {
       this.respond(socket, { id: request.id, ok: true, result: this.getStatus() });
+      return;
+    }
+
+    if (request.type === 'companion.updateConfig') {
+      this.respond(socket, {
+        id: request.id,
+        ok: true,
+        result: await this.updateCompanionConfig(request.input),
+      });
       return;
     }
 

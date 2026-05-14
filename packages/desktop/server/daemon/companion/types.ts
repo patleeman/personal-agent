@@ -1,6 +1,7 @@
 import type { DaemonConfig } from '../../config.js';
 
 export const COMPANION_PROTOCOL_VERSION = 'v1';
+export const DEFAULT_COMPANION_HOST = '0.0.0.0';
 export const COMPANION_API_ROOT = '/companion/v1';
 export const COMPANION_SOCKET_PATH = `${COMPANION_API_ROOT}/socket`;
 

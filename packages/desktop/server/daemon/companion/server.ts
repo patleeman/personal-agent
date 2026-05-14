@@ -63,6 +63,7 @@ import {
   type CompanionSubscribeMessage,
   type CompanionSurfaceType,
   type CompanionUnsubscribeMessage,
+  DEFAULT_COMPANION_HOST,
 } from './types.js';
 
 const DEFAULT_DAEMON_VERSION = '0.0.0';
@@ -261,7 +262,7 @@ function buildSetupState(
     companion: {
       ...config.companion,
       enabled: config.companion?.enabled ?? true,
-      host: config.companion?.host ?? '127.0.0.1',
+      host: config.companion?.host ?? DEFAULT_COMPANION_HOST,
       port: portOverride ?? config.companion?.port ?? 3843,
     },
   };
@@ -437,7 +438,7 @@ export class DaemonCompanionServer {
       return;
     }
 
-    const host = this.config.companion?.host ?? '127.0.0.1';
+    const host = this.config.companion?.host ?? DEFAULT_COMPANION_HOST;
     const preferredPort = this.config.companion?.port ?? 3843;
 
     try {

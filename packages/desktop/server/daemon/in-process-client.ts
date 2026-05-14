@@ -20,6 +20,10 @@ export interface DaemonClientTransport {
   ping(config?: DaemonConfig): Promise<boolean>;
   getStatus(config?: DaemonConfig): Promise<DaemonStatus>;
   getCompanionUrl?(config?: DaemonConfig): Promise<string | null>;
+  updateCompanionConfig?(
+    input: { enabled?: boolean; host?: string; port?: number },
+    config?: DaemonConfig,
+  ): Promise<{ url: string | null }>;
   stop(config?: DaemonConfig): Promise<void>;
   listDurableRuns(config?: DaemonConfig): Promise<ListDurableRunsResult>;
   getDurableRun(runId: string, config?: DaemonConfig): Promise<GetDurableRunResult>;
@@ -65,6 +69,7 @@ export function createInProcessDaemonClient(daemon: PersonalAgentDaemon): Daemon
     ping: async () => daemon.isRunning(),
     getStatus: async () => daemon.getStatus(),
     getCompanionUrl: async () => daemon.getCompanionUrl(),
+    updateCompanionConfig: async (input) => daemon.updateCompanionConfig(input),
     stop: async () => {
       await daemon.requestStop();
     },

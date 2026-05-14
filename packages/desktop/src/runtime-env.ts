@@ -121,8 +121,8 @@ export function applyDesktopRuntimeEnvironmentOverrides(
     env.PERSONAL_AGENT_STATE_ROOT = overrides.stateRoot;
   }
 
-  // Use a separate codex port for the testing variant to avoid conflicts
-  // with the production app's codex protocol server (default port 3843).
+  // Use separate codex ports for packaged variants to avoid conflicts between
+  // stable, testing, and RC companion-protocol servers.
   const launchMode = resolveDesktopLaunchPresentation(env, options).mode;
   if (!env.CODEX_PORT && launchMode === 'testing') {
     env.CODEX_PORT = '3846';

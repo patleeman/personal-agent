@@ -4,7 +4,7 @@ The Codex Protocol for Companion App extension exposes Personal Agent conversati
 
 ## Connection
 
-The server listens on the configured Codex port, bound to `0.0.0.0` so LAN and Tailnet clients can reach it.
+The server listens on `CODEX_PORT`, defaulting to `3847`, bound to `0.0.0.0` so LAN and Tailnet clients can reach it without colliding with the companion API on `3843`.
 
 - URL: `ws://<host-or-tailnet-ip>:<port>/`
 - Path: `/`
