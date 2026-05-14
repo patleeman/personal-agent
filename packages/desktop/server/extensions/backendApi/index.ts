@@ -5,12 +5,20 @@ export * from './autoMode.js';
 export * from './browser.js';
 export * from './checkpoints.js';
 export * from './conversations.js';
-export * from './events.js';
+export { publishAppEvent } from './events.js';
 export * from './extensions.js';
 export * from './images.js';
 export * from './knowledge.js';
 export * from './knowledgeVault.js';
 export * from './mcp.js';
-export * from './runs.js';
+export {
+  cancelDurableRun,
+  followUpDurableRun,
+  getDurableRun,
+  getDurableRunLog,
+  listDurableRuns,
+  rerunDurableRun,
+  startBackgroundRun,
+} from './runs.js';
 export * from './runtime.js';
 export * from './telemetry.js';
