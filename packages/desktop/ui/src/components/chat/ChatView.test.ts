@@ -976,6 +976,8 @@ describe('chat view streaming disclosure', () => {
 
     expect(html).toContain('data-summary-kind="compaction"');
     expect(html).toContain('<details');
+    expect(html).toContain('rounded-xl');
+    expect(html).toContain('bg-surface/25');
     expect(html).toContain('Context compacted');
     expect(html).toContain('Older turns were summarized to keep the active context window focused.');
     expect(html).not.toContain('Show summary');
@@ -999,6 +1001,8 @@ describe('chat view streaming disclosure', () => {
     );
 
     expect(html).toContain('<details');
+    expect(html).toContain('rounded-xl');
+    expect(html).toContain('bg-surface/25');
     expect(html).toContain('Context added');
     expect(html).toContain('data-context-type="referenced_context"');
     expect(html).toContain('Conversation automation context');

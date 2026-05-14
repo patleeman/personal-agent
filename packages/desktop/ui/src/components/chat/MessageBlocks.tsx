@@ -311,7 +311,7 @@ function SystemEventFrame({
   children: ReactNode;
 }) {
   return (
-    <details className="group border-y border-border-subtle/40 py-2" {...dataAttributes}>
+    <details className="group rounded-xl border border-border-subtle/60 bg-surface/25 px-3 py-2.5" {...dataAttributes}>
       <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
         <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
           ›
