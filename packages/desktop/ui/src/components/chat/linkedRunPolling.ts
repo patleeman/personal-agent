@@ -14,6 +14,7 @@ export interface PolledRunSnapshotState {
   loading: boolean;
   refreshing: boolean;
   error: string | null;
+  unavailable: boolean;
 }
 
 const EMPTY_POLLED_RUN_SNAPSHOT_STATE: PolledRunSnapshotState = {
@@ -22,6 +23,7 @@ const EMPTY_POLLED_RUN_SNAPSHOT_STATE: PolledRunSnapshotState = {
   loading: false,
   refreshing: false,
   error: null,
+  unavailable: false,
 };
 
 export function buildInlineRunExpansionKey(clusterStartIndex: number, runId: string): string {
@@ -41,6 +43,25 @@ export function normalizeInlineRunPollingOptions(options?: { tail?: number; poll
       ? Math.min(MAX_INLINE_RUN_POLL_INTERVAL_MS, options?.pollIntervalMs as number)
       : INLINE_RUN_POLL_INTERVAL_MS;
   return { tail, pollIntervalMs };
+}
+
+function isDurableRunUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /run not found/i.test(message);
+}
+
+function describeDurableRunPollingError(error: unknown): { message: string; unavailable: boolean } {
+  if (isDurableRunUnavailableError(error)) {
+    return {
+      message: 'Run record unavailable. This linked task may have been cleaned up or belongs to an older dev session.',
+      unavailable: true,
+    };
+  }
+
+  return {
+    message: error instanceof Error ? error.message : 'Could not load run.',
+    unavailable: false,
+  };
 }
 
 export function usePolledDurableRunSnapshot(
@@ -69,6 +90,7 @@ export function usePolledDurableRunSnapshot(
             loading: false,
             refreshing: false,
             error: null,
+            unavailable: false,
           },
     );
   }, [runId]);
@@ -81,6 +103,15 @@ export function usePolledDurableRunSnapshot(
 
     let cancelled = false;
     let inFlight = false;
+    let intervalId: number | null = null;
+
+    const stopPolling = () => {
+      cancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
 
     const pollSnapshot = async (initial: boolean) => {
       if (cancelled || inFlight) {
@@ -95,6 +126,7 @@ export function usePolledDurableRunSnapshot(
           loading: initial && !hasDetail,
           refreshing: !initial && hasDetail,
           error: initial ? null : current.error,
+          unavailable: false,
         };
       });
 
@@ -111,16 +143,22 @@ export function usePolledDurableRunSnapshot(
           loading: false,
           refreshing: false,
           error: null,
+          unavailable: false,
         });
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : 'Could not load run.';
+          const pollingError = describeDurableRunPollingError(error);
           setState((current) => ({
             ...current,
             loading: false,
             refreshing: false,
-            error: message,
+            error: pollingError.message,
+            unavailable: pollingError.unavailable,
           }));
+
+          if (pollingError.unavailable) {
+            stopPolling();
+          }
         }
       } finally {
         inFlight = false;
@@ -128,13 +166,12 @@ export function usePolledDurableRunSnapshot(
     };
 
     void pollSnapshot(true);
-    const intervalId = window.setInterval(() => {
+    intervalId = window.setInterval(() => {
       void pollSnapshot(false);
     }, pollIntervalMs);
 
     return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
+      stopPolling();
     };
   }, [enabled, pollIntervalMs, runId, tail]);
 

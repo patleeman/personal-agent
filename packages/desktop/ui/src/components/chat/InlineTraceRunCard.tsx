@@ -97,6 +97,7 @@ export function InlineTraceRunCard({ run, expanded, onToggle }: { run: LinkedRun
     : undefined;
   const latestTimelinePoint = timeline.at(-1);
   const resolvedFromMention = resolvedRunId !== run.runId;
+  const pollingLabel = snapshot.unavailable ? 'Run record unavailable' : pollEnabled ? 'Polling live log' : 'Polling paused (off-screen)';
 
   return (
     <div ref={cardRef} className="rounded-lg border border-border-subtle/70 bg-elevated/35 overflow-hidden">
@@ -133,9 +134,7 @@ export function InlineTraceRunCard({ run, expanded, onToggle }: { run: LinkedRun
       {expanded && (
         <div className="space-y-2.5 border-t border-border-subtle/70 bg-base/30 px-2.5 py-2.5">
           <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-dim">
-            <span className={pollEnabled ? 'text-accent' : 'text-dim'}>
-              {pollEnabled ? 'Polling live log' : 'Polling paused (off-screen)'}
-            </span>
+            <span className={snapshot.unavailable ? 'text-warning' : pollEnabled ? 'text-accent' : 'text-dim'}>{pollingLabel}</span>
             {snapshot.refreshing && <span>· refreshing…</span>}
             {resolvedFromMention && (
               <>
@@ -157,7 +156,9 @@ export function InlineTraceRunCard({ run, expanded, onToggle }: { run: LinkedRun
 
           {snapshot.loading && !detailRun && <p className="text-[11px] text-dim animate-pulse">Loading run…</p>}
 
-          {snapshot.error && !detailRun && <p className="text-[11px] text-danger/85">{snapshot.error}</p>}
+          {snapshot.error && !detailRun && (
+            <p className={cx('text-[11px]', snapshot.unavailable ? 'text-warning' : 'text-danger/85')}>{snapshot.error}</p>
+          )}
 
           {(detailRun || snapshot.log) && (
             <div className="rounded-md border border-border-subtle/70 bg-elevated/40 overflow-hidden">

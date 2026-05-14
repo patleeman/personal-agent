@@ -100,11 +100,11 @@ function createMessages(): MessageBlock[] {
   ];
 }
 
-function renderChatView(messages: MessageBlock[]) {
+function renderChatView(messages: MessageBlock[], options?: { listedRuns?: DurableRunRecord[] }) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const runRecord = createRunRecord();
+  const listedRuns = options?.listedRuns ?? [createRunRecord()];
 
   act(() => {
     root.render(
@@ -117,11 +117,11 @@ function renderChatView(messages: MessageBlock[]) {
             scannedAt: '2026-03-11T18:00:10.000Z',
             runsRoot: '/tmp/runs',
             summary: {
-              total: 1,
+              total: listedRuns.length,
               recoveryActions: {},
-              statuses: { running: 1 },
+              statuses: listedRuns.length > 0 ? { running: listedRuns.length } : {},
             },
-            runs: [runRecord],
+            runs: listedRuns,
           },
           setProjects: () => {},
           setSessions: () => {},
@@ -209,6 +209,26 @@ describe('ChatView inline run cards', () => {
     expect(apiMocks.durableRunLog).toHaveBeenCalledTimes(1);
     expect(apiMocks.durableRunLog).toHaveBeenCalledWith(RUN_ID, 240);
     expect(container.textContent).toContain('Polling live log');
+  });
+
+  it('shows a friendly unavailable state when a linked run record cannot be loaded', async () => {
+    apiMocks.durableRun.mockRejectedValue(
+      new Error("Error invoking remote method 'personal-agent-desktop:read-durable-run': Error: Run not found"),
+    );
+    apiMocks.durableRunLog.mockRejectedValue(new Error('Run not found'));
+
+    const { container } = renderChatView(createMessages());
+    const runButtons = findInlineRunButtons(container);
+
+    await act(async () => {
+      runButtons[0]?.click();
+      await flushAsyncWork();
+    });
+
+    expect(apiMocks.durableRun).toHaveBeenCalledWith(RUN_ID);
+    expect(container.textContent).toContain('Run record unavailable');
+    expect(container.textContent).toContain('This linked task may have been cleaned up or belongs to an older dev session.');
+    expect(container.textContent).not.toContain('Error invoking remote method');
   });
 
   it('collapses raw delivered run callbacks into a clickable run card', async () => {
