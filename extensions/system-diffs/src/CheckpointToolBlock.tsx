@@ -1,7 +1,7 @@
 import { timeAgo } from '@personal-agent/extensions/data';
 import { CheckpointInlineDiff, cx, Pill, SurfacePanel } from '@personal-agent/extensions/ui';
 import type { readCheckpointPresentation } from '@personal-agent/extensions/workbench';
-import { memo } from 'react';
+import React, { memo } from 'react';
 
 const CheckpointToolBlock = memo(function CheckpointToolBlock({
   block,
