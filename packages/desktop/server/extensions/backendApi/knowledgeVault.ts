@@ -26,14 +26,31 @@ interface VaultEntry {
   updatedAt: string;
 }
 
-function serverModule(specifier: string): string {
+async function resolveRepoRoot(): Promise<string> {
+  if (process.env.PERSONAL_AGENT_REPO_ROOT) {
+    return process.env.PERSONAL_AGENT_REPO_ROOT;
+  }
+
+  try {
+    const core = await dynamicImport('@personal-agent/core');
+    if (typeof core.getRepoRoot === 'function') {
+      return core.getRepoRoot() as string;
+    }
+  } catch {
+    // Fall through to process.cwd() for tests and unusual embedders.
+  }
+
+  return process.cwd();
+}
+
+async function serverModule(specifier: string): Promise<string> {
   if (!specifier.startsWith('.')) return specifier;
-  const sourcePath = resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi', specifier);
+  const sourcePath = resolve(await resolveRepoRoot(), 'packages/desktop/server/extensions/backendApi', specifier);
   return pathToFileURL(sourcePath.endsWith('.js') ? sourcePath.slice(0, -3) + '.ts' : sourcePath).href;
 }
 
 async function callModuleExport<T>(specifier: string, name: string, ...args: unknown[]): Promise<T> {
-  const module = await dynamicImport(serverModule(specifier));
+  const module = await dynamicImport(await serverModule(specifier));
   const fn = module[name];
   if (typeof fn !== 'function') throw new Error(`Knowledge backend API export ${name} is unavailable.`);
   return (fn as (...callArgs: unknown[]) => Promise<T> | T)(...args);

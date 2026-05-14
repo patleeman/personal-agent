@@ -14,6 +14,12 @@ import {
 const EXTENSION_ID = 'system-knowledge';
 const KNOWLEDGE_ACTION_TIMEOUT_MS = 15_000;
 
+interface ExtensionActionResponse<T> {
+  ok?: boolean;
+  result?: T;
+  error?: string;
+}
+
 async function invoke<T>(actionId: string, input: unknown = {}): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -23,7 +29,13 @@ async function invoke<T>(actionId: string, input: unknown = {}): Promise<T> {
   });
 
   try {
-    const response = await Promise.race([api.invokeExtensionAction(EXTENSION_ID, actionId, input), timeout]);
+    const response = (await Promise.race([
+      api.invokeExtensionAction(EXTENSION_ID, actionId, input),
+      timeout,
+    ])) as ExtensionActionResponse<T>;
+    if (response.ok === false) {
+      throw new Error(response.error ?? `Knowledge action '${actionId}' failed.`);
+    }
     return response.result as T;
   } finally {
     if (timeoutId) {
