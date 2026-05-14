@@ -1,5 +1,127 @@
 # Changelog
 
+## 0.8.0-rc.10 — 2026-05-14
+
+- chore: sync patched dependency lockfile
+- test: smoke system extension backend runtime paths
+- fix: load compiled knowledge backend modules
+- docs: clarify extension tool prompt guidance
+- fix: condense tool prompt guidance
+- fix: reduce duplicated prompt tool and path text
+- fix: drop vague custom tools prompt line
+- fix: remove generic manifest tool guidance
+- docs: split repo agent instructions
+- refactor: slim generated agent prompt
+- feat: show context section token counts
+- fix: tighten startup context spacing
+- fix: repair host view component build resolution
+- docs: expand host view component guide
+- feat: finish host view component customization
+- fix: inline transcript history controls
+- feat: add host-rendered extension views
+- refactor: split heavyweight extension frontend entries
+- feat: show live system prompt disclosure
+- fix: keep empty workbench tool tabs active
+- fix: load knowledge files from extension backend
+- Fix custom message display handling
+- fix: restore activity tree thread dragging
+- fix: resolve extension backend API imports from bundles
+- refactor: lazy load excalidraw input editor
+- fix: contain system event transcript blocks
+- fix: stop emitting custom display flags
+- fix: keep injected prompt context visible
+- fix: resolve dictation whisper dependency
+- fix: window chat by transcript span
+- fix: avoid mounting collapsed trace blocks
+- fix: skip idle inline run scans
+- chore: instrument chat render timing
+- fix: restore desktop build validation
+- refactor: remove latex artifact rendering
+- chore: harden extension source and bundle checks
+- refactor: move web content parsing behind host seam
+- refactor: route image session context through runtime seam
+- feat: add extension compaction backend seam
+- fix: render branch summaries as system events
+- fix: reuse system event frame for compactions
+- feat: add visible extension agent conversations
+- fix: clarify stale turn naming
+- feat: add extension-owned agent conversations
+- fix: clean up stale turn state
+- test: harden extension agent task seam
+- fix: remove hidden transcript semantics
+- feat: add host-owned extension agent tasks
+- fix: polish transcript system events
+- refactor: trim web tools backend bundle
+- chore: formalize extension backend api seams
+- fix: render context as quiet system events
+- refactor: slim remaining extension backend seams
+- fix: make custom transcript messages visible
+- refactor: slim knowledge extension backend seam
+- test: cover telemetry maintenance cleanup
+- feat: harden telemetry storage maintenance
+- fix: enforce transparent transcript custom messages
+- refactor: slim conversations extension backend seam
+- fix: show checkpoint subject while saving
+- fix: render goal continuations as context blocks
+- Fix backend API export ambiguity
+- refactor: slim automations extension backend bundle
+- refactor: slim runs extension backend bundle
+- docs: document telemetry storage and diagnostics
+- refactor: route runs backend API through daemon bridge
+- feat: add telemetry log diagnostics to settings
+- fix: route composer modifiers through run state
+- fix: block direct runtime imports in extension sources
+- chore: centralize extension hardening config
+- feat: write app telemetry to jsonl logs
+- fix: stabilize system workbench rail modes
+- chore: add conversation load perf phase
+- fix: share extension registry across UI
+- fix: hide background cards for run id mentions
+- fix: canonicalize shell tool aliases
+- fix: preserve pinned thread order in sidebar
+- fix: treat shelved shell starts as background bash
+- docs: protect existing test app processes
+- fix: load uncommitted diffs asynchronously
+- fix: rename checkpoint diff button
+- docs: document extension slash commands
+- fix: bound uncommitted diff rendering
+- fix: restore compact slash command
+- fix: clarify inline background run labels
+- docs: clarify packaged extension smoke coverage
+- fix: mirror desktop logs to browser console
+- fix: mirror desktop logs to console
+- fix: restore checkpoint diff links
+- fix: hide linked cards for background shell tools
+- fix: add extension self-test guards
+- fix: render checkpoint transcript fallback
+- fix: render background bash like bash tool calls
+- fix: disable hidden turn behavior
+- fix: render goal continuation prompts
+- fix: keep conversations running during compaction
+- fix: soften missing linked run errors
+- fix: hide goal continuations from queue shelf
+- fix: remove duplicate case from server bundles
+- fix: harden system extension validation
+- Clear completed hidden context turns
+- fix: remove automatic durable conversation recovery
+- fix: make goal mode state and recovery consistent
+- fix: skip readonly worker when local API bundle is missing
+- feat: nest subagent conversations
+- Recover corrupt conversation context sqlite db
+- fix: keep knowledge file selections in knowledge rail
+- fix: stop replaying pending prompts after restart
+- fix: load browser workbench panel
+- fix: allow browser tools to open session
+- fix: stabilize composer modifier keys
+- test: clarify goal mode run boundary semantics
+- fix: render background bash like terminal commands
+- fix: schedule goal continuations after agent end
+- fix: ingest composer image attachments immediately
+- fix: repair smoke-tested tool plumbing
+- chore: release v0.8.0-rc.9
+- fix: resolve desktop server TypeScript errors
+- chore: quiet non-actionable lint noise
+
 ## 0.8.0-rc.9 — 2026-05-14
 
 - fix: resolve desktop server TypeScript errors
