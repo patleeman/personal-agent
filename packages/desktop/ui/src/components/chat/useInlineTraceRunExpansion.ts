@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
 import { collectTraceClusterLinkedRuns } from './linkedRuns.js';
@@ -50,11 +50,16 @@ export function toggleInlineRunKey(current: ReadonlySet<string>, inlineRunKey: s
 
 export function useInlineTraceRunExpansion(renderItems: ChatRenderItem[]) {
   const [expandedInlineRunKeys, setExpandedInlineRunKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const visibleInlineRunKeySet = useMemo(() => collectVisibleInlineRunKeys(renderItems), [renderItems]);
 
   useEffect(() => {
-    setExpandedInlineRunKeys((current) => filterInlineRunKeys(current, visibleInlineRunKeySet));
-  }, [visibleInlineRunKeySet]);
+    setExpandedInlineRunKeys((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+
+      return filterInlineRunKeys(current, collectVisibleInlineRunKeys(renderItems));
+    });
+  }, [renderItems]);
 
   const isInlineRunExpanded = useCallback((inlineRunKey: string) => expandedInlineRunKeys.has(inlineRunKey), [expandedInlineRunKeys]);
 
