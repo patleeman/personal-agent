@@ -1,19 +1,34 @@
-import { readKnowledgeBaseState, syncKnowledgeBaseNow, updateKnowledgeBase } from '@personal-agent/core';
+const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
 
-import { invalidateAppTopics } from '../../shared/appEvents.js';
-
-export function readKnowledgeState() {
-  return readKnowledgeBaseState();
+async function callCoreExport<T>(name: string, ...args: unknown[]): Promise<T> {
+  const core = await dynamicImport('@personal-agent/core');
+  const fn = core[name];
+  if (typeof fn !== 'function') throw new Error(`Core export ${name} is unavailable.`);
+  return (fn as (...callArgs: unknown[]) => Promise<T> | T)(...args);
 }
 
-export function updateKnowledgeState(input: { repoUrl?: string | null; branch?: string | null }) {
-  const nextState = updateKnowledgeBase(input);
-  invalidateAppTopics('knowledgeBase');
+async function invalidateKnowledgeBase(): Promise<void> {
+  try {
+    const appEvents = await dynamicImport('../../shared/appEvents.js');
+    const invalidate = appEvents.invalidateAppTopics;
+    if (typeof invalidate === 'function') invalidate('knowledgeBase');
+  } catch {
+    // Invalidation is best-effort for extension backend bundles.
+  }
+}
+
+export async function readKnowledgeState() {
+  return callCoreExport('readKnowledgeBaseState');
+}
+
+export async function updateKnowledgeState(input: { repoUrl?: string | null; branch?: string | null }) {
+  const nextState = await callCoreExport('updateKnowledgeBase', input);
+  await invalidateKnowledgeBase();
   return nextState;
 }
 
-export function syncKnowledgeState() {
-  const nextState = syncKnowledgeBaseNow();
-  invalidateAppTopics('knowledgeBase');
+export async function syncKnowledgeState() {
+  const nextState = await callCoreExport('syncKnowledgeBaseNow');
+  await invalidateKnowledgeBase();
   return nextState;
 }

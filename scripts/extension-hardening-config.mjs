@@ -5,7 +5,7 @@ export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
   ['system-conversation-tools', 1 * 1024 * 1024],
   ['system-extension-manager', 24 * 1024 * 1024],
   ['system-images', 24 * 1024 * 1024],
-  ['system-knowledge', 30 * 1024 * 1024],
+  ['system-knowledge', 1 * 1024 * 1024],
   ['system-openai-native-compaction', 12 * 1024 * 1024],
   ['system-runs', 1 * 1024 * 1024],
   ['system-suggested-context', 1 * 1024 * 1024],
