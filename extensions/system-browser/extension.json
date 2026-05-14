@@ -95,7 +95,9 @@
         "title": "Browser",
         "location": "rightRail",
         "scope": "global",
-        "component": "BrowserTabsPanel",
+        "component": {
+          "host": "workbench.browser.rail"
+        },
         "icon": "browser",
         "detailView": "browser-workbench",
         "placement": "workbench-tool",
@@ -107,7 +109,9 @@
         "id": "browser-workbench",
         "title": "Browser",
         "location": "workbench",
-        "component": "BrowserWorkbenchPanel",
+        "component": {
+          "host": "workbench.browser.detail"
+        },
         "placement": "workbench-tool",
         "scope": "global",
         "activation": "on-open",

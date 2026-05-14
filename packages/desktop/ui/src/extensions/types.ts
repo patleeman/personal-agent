@@ -48,7 +48,7 @@ interface ExtensionViewContribution {
   id: string;
   title: string;
   location: 'main' | 'rightRail' | 'workbench';
-  component: string;
+  component: ExtensionComponentReference;
   route?: string;
   scope?: ExtensionRightSurfaceScope | ExtensionViewScope;
   icon?: ExtensionIconName;
@@ -473,7 +473,16 @@ export interface ExtensionQuickOpenRegistration {
 }
 
 export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; packageType?: ExtensionPackageType };
-export type NativeExtensionViewSummary = ExtensionViewContribution & {
+export interface ExtensionHostComponentReference {
+  host: string;
+  props?: Record<string, unknown>;
+  override?: string;
+}
+
+export type ExtensionComponentReference = string | ExtensionHostComponentReference;
+
+export type NativeExtensionViewSummary = Omit<ExtensionViewContribution, 'component'> & {
+  component: ExtensionComponentReference;
   extensionId: string;
   packageType?: ExtensionPackageType;
   frontend?: ExtensionFrontendManifest;
@@ -505,7 +514,12 @@ function isNativeExtensionViewSurface(surface: unknown): surface is NativeExtens
     'extensionId' in surface &&
     'location' in surface &&
     'component' in surface &&
-    typeof (surface as NativeExtensionViewSummary).component === 'string',
+    (typeof (surface as NativeExtensionViewSummary).component === 'string' ||
+      Boolean(
+        (surface as NativeExtensionViewSummary).component &&
+        typeof (surface as NativeExtensionViewSummary).component === 'object' &&
+        typeof ((surface as NativeExtensionViewSummary).component as { host?: unknown }).host === 'string',
+      )),
   );
 }
 

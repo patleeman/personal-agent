@@ -16,7 +16,9 @@
         "title": "File Explorer",
         "location": "rightRail",
         "scope": "workspace",
-        "component": "WorkspaceFilesPanel",
+        "component": {
+          "host": "workbench.files.rail"
+        },
         "icon": "file",
         "detailView": "workspace-file-detail",
         "placement": "workbench-tool",
@@ -28,7 +30,9 @@
         "id": "workspace-file-detail",
         "title": "Workspace file",
         "location": "workbench",
-        "component": "WorkspaceFileDetailPanel",
+        "component": {
+          "host": "workbench.files.detail"
+        },
         "placement": "workbench-tool",
         "scope": "workspace",
         "activation": "on-open",

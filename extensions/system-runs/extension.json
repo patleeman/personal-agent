@@ -242,7 +242,9 @@
         "title": "Background work",
         "location": "rightRail",
         "scope": "conversation",
-        "component": "ConversationBackgroundWorkPanel",
+        "component": {
+          "host": "workbench.runs.rail"
+        },
         "icon": "terminal",
         "detailView": "conversation-run-detail",
         "placement": "workbench-tool",
@@ -253,7 +255,9 @@
         "id": "conversation-run-detail",
         "title": "Background work detail",
         "location": "workbench",
-        "component": "ConversationBackgroundWorkDetailPanel",
+        "component": {
+          "host": "workbench.runs.detail"
+        },
         "placement": "workbench-tool",
         "scope": "conversation",
         "activation": "on-open"

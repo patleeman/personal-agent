@@ -1185,6 +1185,7 @@ describe('extension frontends - file existence checks', () => {
       const views = s.manifest.contributes?.views ?? [];
 
       for (const view of views) {
+        if (typeof view.component !== 'string') continue;
         const componentName = view.component;
         // Check that the component is exported
         const componentPattern = new RegExp(

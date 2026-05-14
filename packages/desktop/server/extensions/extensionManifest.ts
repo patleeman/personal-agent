@@ -24,6 +24,20 @@ export type ExtensionViewActivation = (typeof EXTENSION_VIEW_ACTIVATIONS)[number
 export const EXTENSION_ROUTE_CAPABILITIES = ['contextRail', 'workbench', 'workbenchFilePane', 'knowledgeFiles', 'settingsSection'] as const;
 export type ExtensionRouteCapability = (typeof EXTENSION_ROUTE_CAPABILITIES)[number];
 
+export const EXTENSION_HOST_VIEW_COMPONENTS = [
+  'workbench.artifacts.rail',
+  'workbench.artifacts.detail',
+  'workbench.diffs.rail',
+  'workbench.diffs.detail',
+  'workbench.files.rail',
+  'workbench.files.detail',
+  'workbench.runs.rail',
+  'workbench.runs.detail',
+  'workbench.browser.rail',
+  'workbench.browser.detail',
+] as const;
+export type ExtensionHostViewComponentId = (typeof EXTENSION_HOST_VIEW_COMPONENTS)[number];
+
 export const EXTENSION_ICON_NAMES = [
   'app',
   'automation',
@@ -283,11 +297,19 @@ export interface ExtensionQuickOpenContribution {
   order?: number;
 }
 
+export interface ExtensionHostComponentReference {
+  host: string;
+  props?: Record<string, unknown>;
+  override?: string;
+}
+
+export type ExtensionComponentReference = string | ExtensionHostComponentReference;
+
 export interface ExtensionViewContribution {
   id: string;
   title: string;
   location: 'main' | 'rightRail' | 'workbench';
-  component: string;
+  component: ExtensionComponentReference;
   route?: string;
   scope?: ExtensionRightSurfaceScope | ExtensionViewScope;
   icon?: ExtensionIconName;

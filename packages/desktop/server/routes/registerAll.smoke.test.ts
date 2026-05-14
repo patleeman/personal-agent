@@ -178,7 +178,7 @@ describe('registerServerRoutes smoke test', () => {
     // Each surface should have extension identification
     for (const surface of body) {
       expect(typeof surface.extensionId).toBe('string');
-      expect(typeof surface.component).toBe('string');
+      expect(typeof surface.component === 'string' || (surface.component && typeof surface.component.host === 'string')).toBe(true);
       expect(surface.location).toMatch(/^(main|rightRail|workbench)$/);
     }
   });

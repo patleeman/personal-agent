@@ -85,7 +85,9 @@
         "title": "Diffs",
         "location": "rightRail",
         "scope": "conversation",
-        "component": "ConversationDiffsPanel",
+        "component": {
+          "host": "workbench.diffs.rail"
+        },
         "icon": "diff",
         "detailView": "conversation-diff-detail",
         "placement": "workbench-tool",
@@ -96,7 +98,9 @@
         "id": "conversation-diff-detail",
         "title": "Diff detail",
         "location": "workbench",
-        "component": "ConversationDiffDetailPanel",
+        "component": {
+          "host": "workbench.diffs.detail"
+        },
         "placement": "workbench-tool",
         "scope": "conversation",
         "activation": "on-open"

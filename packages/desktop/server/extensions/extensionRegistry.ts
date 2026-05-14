@@ -14,6 +14,7 @@ import type {
   ExtensionViewContribution,
 } from './extensionManifest.js';
 import {
+  EXTENSION_HOST_VIEW_COMPONENTS,
   EXTENSION_ICON_NAMES,
   EXTENSION_PACKAGE_TYPES,
   EXTENSION_PLACEMENTS,
@@ -780,13 +781,22 @@ function validateThemeTokens(value: unknown, path: string): void {
   }
 }
 
+function validateViewComponent(value: unknown, path: string): void {
+  if (typeof value === 'string' && value.trim().length > 0) return;
+  if (!isRecord(value)) throw new Error(`Extension manifest ${path} must be a component export string or host component object.`);
+  const host = requireString(value.host, `${path}.host`);
+  validateEnum(host, EXTENSION_HOST_VIEW_COMPONENTS, `${path}.host`);
+  validateOptionalString(value.override, `${path}.override`);
+  if (value.props !== undefined && !isRecord(value.props)) throw new Error(`Extension manifest ${path}.props must be an object.`);
+}
+
 function validateExtensionContributions(contributes: Record<string, unknown>): void {
   if (contributes.views !== undefined) {
     for (const [index, view] of assertRecordArray(contributes.views, 'contributes.views').entries()) {
       requireString(view.id, `contributes.views[${index}].id`);
       requireString(view.title, `contributes.views[${index}].title`);
       validateEnum(view.location, ['main', 'rightRail', 'workbench'], `contributes.views[${index}].location`);
-      requireString(view.component, `contributes.views[${index}].component`);
+      validateViewComponent(view.component, `contributes.views[${index}].component`);
       validateOptionalString(view.route, `contributes.views[${index}].route`);
       if (view.scope !== undefined) validateEnum(view.scope, EXTENSION_RIGHT_SURFACE_SCOPES, `contributes.views[${index}].scope`);
       if (view.placement !== undefined) validateEnum(view.placement, EXTENSION_VIEW_PLACEMENTS, `contributes.views[${index}].placement`);

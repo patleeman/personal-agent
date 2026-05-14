@@ -49,6 +49,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)
 - [Extension Manager](../extensions/system-extension-manager/README.md)
+- [Host view components](host-view-components.md)
 - [File Explorer](../extensions/system-files/README.md)
 - [Gateways](../extensions/system-gateways/README.md)
 - [Images](../extensions/system-images/README.md)

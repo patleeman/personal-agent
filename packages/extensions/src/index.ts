@@ -61,11 +61,19 @@ export interface ExtensionFrontend {
   styles?: string[];
 }
 
+export interface ExtensionHostComponentReference {
+  host: string;
+  props?: Record<string, unknown>;
+  override?: string;
+}
+
+export type ExtensionComponentReference = string | ExtensionHostComponentReference;
+
 export interface ExtensionViewContribution {
   id: string;
   title: string;
   location: 'main' | 'rightRail' | 'workbench';
-  component: string;
+  component: ExtensionComponentReference;
   route?: string;
   scope?: ExtensionRightSurfaceScope | ExtensionViewScope;
   icon?: ExtensionIconName;

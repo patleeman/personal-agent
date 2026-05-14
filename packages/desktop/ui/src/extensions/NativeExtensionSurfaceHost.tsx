@@ -4,6 +4,7 @@ import { buildApiPath } from '../client/apiBase';
 import { addNotification } from '../components/notifications/notificationStore';
 import { ErrorState, LoadingState } from '../components/ui';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
+import { isHostViewComponentReference, lazyHostViewComponent } from './hostViewComponents';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
@@ -52,6 +53,9 @@ function lazyExtensionComponent(surface: NativeExtensionViewSummary, revision: n
       // a fresh URL so the fixed dist/frontend.js can load without an app restart.
       module = await loadExtensionModule(surface, revision, Date.now());
     }
+    if (typeof surface.component !== 'string') {
+      throw new Error(`Extension component export is only available for custom component references.`);
+    }
     const component = module[surface.component];
     if (typeof component !== 'function') {
       throw new Error(`Extension component not found: ${surface.component}`);
@@ -83,7 +87,10 @@ export function NativeExtensionSurfaceHost({
 
   const pa = useMemo(() => createNativeExtensionClient(surface.extensionId), [surface.extensionId]);
   const moduleKey = extensionModuleKey(surface);
-  const Component = useMemo(() => lazyExtensionComponent(surface, getExtensionRegistryRevision()), [surface, moduleKey]);
+  const Component = useMemo(() => {
+    if (isHostViewComponentReference(surface.component)) return lazyHostViewComponent(surface.component.host);
+    return lazyExtensionComponent(surface, getExtensionRegistryRevision());
+  }, [surface, moduleKey]);
   const context = useMemo(
     () => ({ extensionId: surface.extensionId, surfaceId: surface.id, route: surface.route, pathname, search, hash, conversationId, cwd }),
     [conversationId, cwd, hash, pathname, search, surface.extensionId, surface.id, surface.route],
@@ -97,7 +104,13 @@ export function NativeExtensionSurfaceHost({
     >
       <Suspense fallback={<LoadingState label="Loading extension…" className="h-full justify-center" />}>
         <ExtensionErrorBoundary extensionId={surface.extensionId}>
-          <Component pa={pa} context={context} surface={surface} params={{}} />
+          <Component
+            pa={pa}
+            context={context}
+            surface={surface}
+            params={{}}
+            hostProps={isHostViewComponentReference(surface.component) ? surface.component.props : undefined}
+          />
         </ExtensionErrorBoundary>
       </Suspense>
     </section>
