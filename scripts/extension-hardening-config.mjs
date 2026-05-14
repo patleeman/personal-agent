@@ -1,5 +1,7 @@
 export const DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT = 2 * 1024 * 1024;
 
+export const FRONTEND_INITIAL_BUNDLE_BYTE_LIMITS = new Map([['system-excalidraw-input', 64 * 1024]]);
+
 export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
   ['system-automations', 1 * 1024 * 1024],
   ['system-conversation-tools', 1 * 1024 * 1024],
@@ -27,6 +29,10 @@ export const PRODUCT_CRITICAL_EXTENSION_SMOKE_ACTIONS = new Map([
 
 export function backendBundleByteLimit(extensionId) {
   return BACKEND_BUNDLE_BYTE_LIMITS.get(extensionId) ?? DEFAULT_BACKEND_BUNDLE_BYTE_LIMIT;
+}
+
+export function frontendInitialBundleByteLimit(extensionId) {
+  return FRONTEND_INITIAL_BUNDLE_BYTE_LIMITS.get(extensionId) ?? null;
 }
 
 export function criticalSmokeActionInput(extensionId, actionId) {

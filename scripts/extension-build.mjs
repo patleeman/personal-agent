@@ -40,8 +40,12 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
   mkdirSync(dirname(outfile), { recursive: true });
   const result = await build({
     entryPoints: [frontendSource],
-    outfile,
+    outdir: dirname(outfile),
+    entryNames: '[name]',
+    chunkNames: 'chunks/[name]-[hash]',
+    assetNames: 'assets/[name]-[hash]',
     bundle: true,
+    splitting: true,
     platform: 'browser',
     format: 'esm',
     target: 'es2022',
@@ -55,7 +59,7 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
       '.ttf': 'dataurl',
       '.otf': 'dataurl',
     },
-    plugins: [createFrontendExtensionSdkPlugin()],
+    plugins: [createFrontendRawCssPlugin(), createFrontendExtensionSdkPlugin()],
     nodePaths: findAppNodeModules(),
     metafile: true,
   });
@@ -105,6 +109,24 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
 }
 
 writeBuildManifest(buildOutputs);
+
+function createFrontendRawCssPlugin() {
+  return {
+    name: 'personal-agent-frontend-raw-css',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /\.css\?raw$/ }, async (args) => {
+        const cssPath = args.path.slice(0, -'?raw'.length);
+        const resolved = await buildContext.resolve(cssPath, { importer: args.importer, kind: args.kind, resolveDir: args.resolveDir });
+        if (resolved.errors.length > 0) return { errors: resolved.errors };
+        return { path: resolved.path, namespace: 'pa-raw-css' };
+      });
+      buildContext.onLoad({ filter: /\.css$/, namespace: 'pa-raw-css' }, (args) => ({
+        contents: readFileSync(args.path, 'utf8'),
+        loader: 'text',
+      }));
+    },
+  };
+}
 
 function createFrontendExtensionSdkPlugin() {
   const moduleFiles = {

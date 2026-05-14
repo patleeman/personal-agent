@@ -270,19 +270,24 @@ export async function buildRuntimeExtension(extensionId: string) {
     const outfile = resolve(packageRoot, entry.manifest.frontend.entry);
     assertInside(packageRoot, outfile);
     mkdirSync(dirname(outfile), { recursive: true });
-    await build({
+    const result = await build({
       entryPoints: [frontendSource],
-      outfile,
+      outdir: dirname(outfile),
+      entryNames: '[name]',
+      chunkNames: 'chunks/[name]-[hash]',
+      assetNames: 'assets/[name]-[hash]',
       bundle: true,
+      splitting: true,
       platform: 'browser',
       format: 'esm',
       target: 'es2022',
       jsx: 'automatic',
       sourcemap: true,
-      plugins: [createFrontendExtensionSdkPlugin()],
+      metafile: true,
+      plugins: [createFrontendRawCssPlugin(), createFrontendExtensionSdkPlugin()],
       nodePaths: findAppNodeModules(),
     });
-    outputs.push(outfile);
+    outputs.push(...Object.keys(result.metafile.outputs ?? {}));
   }
 
   const backendSource = join(packageRoot, 'src', 'backend.ts');
@@ -398,6 +403,24 @@ function resolveDesktopUiExtensionModule(moduleName: string): string | null {
   ];
 
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function createFrontendRawCssPlugin(): Plugin {
+  return {
+    name: 'personal-agent-frontend-raw-css',
+    setup(build) {
+      build.onResolve({ filter: /\.css\?raw$/ }, async (args) => {
+        const cssPath = args.path.slice(0, -'?raw'.length);
+        const resolved = await build.resolve(cssPath, { importer: args.importer, kind: args.kind, resolveDir: args.resolveDir });
+        if (resolved.errors.length > 0) return { errors: resolved.errors };
+        return { path: resolved.path, namespace: 'pa-raw-css' };
+      });
+      build.onLoad({ filter: /\.css$/, namespace: 'pa-raw-css' }, (args) => ({
+        contents: readFileSync(args.path, 'utf8'),
+        loader: 'text',
+      }));
+    },
+  };
 }
 
 function createFrontendExtensionSdkPlugin(): Plugin {
