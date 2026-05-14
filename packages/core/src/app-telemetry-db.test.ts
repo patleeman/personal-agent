@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeAppTelemetryDbs, queryAppTelemetryEvents, writeAppTelemetryEvent } from './app-telemetry-db.js';
-import { resolveAppTelemetryLogPath } from './app-telemetry-log.js';
+import { exportAppTelemetryLogBundle, listAppTelemetryLogFiles, resolveAppTelemetryLogPath } from './app-telemetry-log.js';
 import { openSqliteDatabase } from './sqlite.js';
 import { closeTraceDbs, writeTraceStats } from './trace-db.js';
 
@@ -76,6 +76,21 @@ describe('app-telemetry-db', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ source: 'server', category: 'api', name: 'request', route: '/health' });
+  });
+
+  it('lists and exports telemetry log files', () => {
+    writeAppTelemetryEvent({ source: 'server', category: 'api', name: 'request', route: '/health' });
+    writeAppTelemetryEvent({ source: 'server', category: 'api', name: 'response', route: '/health' });
+
+    const files = listAppTelemetryLogFiles(testDir);
+    const exported = exportAppTelemetryLogBundle({ stateRoot: testDir });
+    const exportContent = readFileSync(exported.path, 'utf-8');
+
+    expect(files).toHaveLength(1);
+    expect(files[0].name).toMatch(/^app-telemetry-\d{4}-\d{2}-\d{2}\.jsonl$/);
+    expect(exported).toMatchObject({ fileCount: 1, eventCount: 2 });
+    expect(exportContent).toContain('"name":"request"');
+    expect(exportContent).toContain('"name":"response"');
   });
 
   it('drops events without category or name', () => {

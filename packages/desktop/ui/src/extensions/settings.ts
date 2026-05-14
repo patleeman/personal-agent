@@ -19,6 +19,8 @@ export {
   type ProviderEditorDraft,
 } from '../model/modelProviderEditorDrafts';
 export type {
+  AppTelemetryLogBundleExport,
+  AppTelemetryLogDiagnostics,
   DesktopAppPreferencesState,
   DesktopEnvironmentState,
   ModelProviderApi,

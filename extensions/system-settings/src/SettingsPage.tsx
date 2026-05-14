@@ -4,6 +4,8 @@ import {
   AppPageLayout,
   AppPageSection,
   AppPageToc,
+  type AppTelemetryLogBundleExport,
+  type AppTelemetryLogDiagnostics,
   type ColorTheme,
   createDesktopAwareEventSource,
   createModelEditorDraft,
@@ -1207,6 +1209,116 @@ export function DesktopCompanionSettingsPanel() {
           <p className="ui-card-meta">No paired devices yet.</p>
         )}
       </div>
+    </SettingsPanel>
+  );
+}
+
+function formatTelemetryLogBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function TelemetryLogsSettingsPanel() {
+  const { data, loading, error, refetch } = useApi<AppTelemetryLogDiagnostics>(api.telemetryLogs as never, 'telemetry-logs');
+  const [action, setAction] = useState<'open' | 'export' | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const openPath = useCallback(async (path: string) => {
+    const bridge = getDesktopBridge() as { openPath?: (targetPath: string) => Promise<{ ok?: boolean; error?: string }> } | null;
+    if (!bridge?.openPath) {
+      setNotice(`Path: ${path}`);
+      return;
+    }
+
+    const result = await bridge.openPath(path);
+    if (result?.error) {
+      setNotice(result.error);
+      return;
+    }
+    setNotice(`Opened ${path}`);
+  }, []);
+
+  const openLogFolder = useCallback(async () => {
+    if (!data?.logDir) return;
+    setAction('open');
+    setNotice(null);
+    try {
+      await openPath(data.logDir);
+    } catch (nextError) {
+      setNotice(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }, [data?.logDir, openPath]);
+
+  const exportLogs = useCallback(async () => {
+    setAction('export');
+    setNotice(null);
+    try {
+      const exported = (await api.exportTelemetryLogs()) as AppTelemetryLogBundleExport;
+      await refetch({ resetLoading: false });
+      await openPath(exported.path);
+      setNotice(`Exported ${exported.eventCount} events from ${exported.fileCount} files to ${exported.path}.`);
+    } catch (nextError) {
+      setNotice(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }, [openPath, refetch]);
+
+  return (
+    <SettingsPanel
+      title="Telemetry logs"
+      description="Raw app telemetry is stored as JSONL files first; SQLite is only the query index."
+      actions={
+        <>
+          <button type="button" className={ACTION_BUTTON_CLASS} onClick={openLogFolder} disabled={!data?.logDir || action !== null}>
+            {action === 'open' ? 'Opening…' : 'Open log folder'}
+          </button>
+          <button type="button" className={ACTION_BUTTON_CLASS} onClick={exportLogs} disabled={action !== null}>
+            {action === 'export' ? 'Exporting…' : 'Export JSONL bundle'}
+          </button>
+        </>
+      }
+    >
+      {loading ? <p className="ui-card-meta">Loading telemetry log details…</p> : null}
+      {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+      {data ? (
+        <div className="space-y-3">
+          <div className="grid gap-2 text-[13px] text-secondary sm:grid-cols-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-dim">Files</div>
+              <div className="text-primary">{data.fileCount}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-dim">Size</div>
+              <div className="text-primary">{formatTelemetryLogBytes(data.sizeBytes)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-dim">Location</div>
+              <div className="truncate font-mono text-[12px] text-primary" title={data.logDir}>
+                {data.logDir}
+              </div>
+            </div>
+          </div>
+          {data.files.length > 0 ? (
+            <div className="space-y-1.5">
+              {data.files.slice(0, 3).map((file) => (
+                <div key={file.path} className="flex items-center justify-between gap-3 text-[12px] text-secondary">
+                  <span className="min-w-0 truncate font-mono text-primary" title={file.path}>
+                    {file.name}
+                  </span>
+                  <span className="shrink-0 text-dim">{formatTelemetryLogBytes(file.sizeBytes)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="ui-card-meta">No telemetry log files yet.</p>
+          )}
+        </div>
+      ) : null}
+      {notice ? <p className="ui-card-meta break-words">{notice}</p> : null}
     </SettingsPanel>
   );
 }
@@ -4270,6 +4382,7 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
 
             <SettingsSection id="settings-desktop" label="Desktop" description="App behavior and keyboard shortcuts for the desktop app.">
               <DesktopConnectionsSettingsPanel />
+              <TelemetryLogsSettingsPanel />
 
               {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
             </SettingsSection>

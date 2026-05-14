@@ -28,6 +28,7 @@ export * from './deferred-resume.js';
 export * from './alerts.js';
 // Trace database exports
 export * from './app-telemetry-db.js';
+export * from './app-telemetry-log.js';
 export * from './observability-db.js';
 export * from './trace-db.js';
 // Scheduled task callback binding exports

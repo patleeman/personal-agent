@@ -230,6 +230,22 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.telemetryLogs) {
+        return buildUseApiResult({
+          logDir: '/tmp/pa/logs/telemetry',
+          fileCount: 1,
+          sizeBytes: 42,
+          files: [
+            {
+              path: '/tmp/pa/logs/telemetry/app-telemetry-2026-05-14.jsonl',
+              name: 'app-telemetry-2026-05-14.jsonl',
+              sizeBytes: 42,
+              modifiedAt: '2026-05-14T00:00:00.000Z',
+            },
+          ],
+        });
+      }
+
       if (fetcher === api.providerAuth) {
         return buildUseApiResult({
           authFile: '/tmp/auth.json',
@@ -318,6 +334,8 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('aria-label="Choose indexed root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
+    expect(html).toContain('Telemetry logs');
+    expect(html).toContain('app-telemetry-2026-05-14.jsonl');
     expect(html).not.toContain('↻ Refresh');
   });
 

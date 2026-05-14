@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { getStateRoot } from './runtime/paths.js';
@@ -28,13 +28,13 @@ export interface AppTelemetryLogEvent {
   metadata: Record<string, unknown> | null;
 }
 
-function resolveTelemetryLogDir(stateRoot?: string): string {
+export function resolveAppTelemetryLogDir(stateRoot?: string): string {
   return join(stateRoot ?? getStateRoot(), 'logs', LOG_DIR);
 }
 
 export function resolveAppTelemetryLogPath(ts: string, stateRoot?: string): string {
   const day = /^\d{4}-\d{2}-\d{2}/.exec(ts)?.[0] ?? new Date().toISOString().slice(0, 10);
-  return join(resolveTelemetryLogDir(stateRoot), `${LOG_PREFIX}${day}${LOG_SUFFIX}`);
+  return join(resolveAppTelemetryLogDir(stateRoot), `${LOG_PREFIX}${day}${LOG_SUFFIX}`);
 }
 
 function resolveRetentionDays(): number {
@@ -51,7 +51,7 @@ export function closeAppTelemetryLogs(): void {
 export function writeAppTelemetryLogEvent(event: AppTelemetryLogEvent, stateRoot?: string): void {
   try {
     const path = resolveAppTelemetryLogPath(event.ts, stateRoot);
-    const dir = resolveTelemetryLogDir(stateRoot);
+    const dir = resolveAppTelemetryLogDir(stateRoot);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     appendFileSync(path, `${JSON.stringify(event)}\n`, 'utf-8');
     maybePruneAppTelemetryLogs(stateRoot);
@@ -61,7 +61,7 @@ export function writeAppTelemetryLogEvent(event: AppTelemetryLogEvent, stateRoot
 }
 
 function maybePruneAppTelemetryLogs(stateRoot?: string): void {
-  const dir = resolveTelemetryLogDir(stateRoot);
+  const dir = resolveAppTelemetryLogDir(stateRoot);
   const count = (writeCounts.get(dir) ?? 0) + 1;
   writeCounts.set(dir, count);
   if (count % PRUNE_EVERY_WRITES !== 0) return;
@@ -105,8 +105,75 @@ function parseLogEvent(line: string): AppTelemetryLogEvent | null {
   }
 }
 
+export interface AppTelemetryLogFileSummary {
+  path: string;
+  name: string;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+export interface AppTelemetryLogBundleExport {
+  path: string;
+  fileCount: number;
+  eventCount: number;
+  sizeBytes: number;
+}
+
+export function listAppTelemetryLogFiles(stateRoot?: string): AppTelemetryLogFileSummary[] {
+  const dir = resolveAppTelemetryLogDir(stateRoot);
+  if (!existsSync(dir)) return [];
+
+  try {
+    return readdirSync(dir)
+      .filter((fileName) => fileName.startsWith(LOG_PREFIX) && fileName.endsWith(LOG_SUFFIX))
+      .sort((left, right) => right.localeCompare(left))
+      .map((fileName) => {
+        const path = join(dir, fileName);
+        const stat = statSync(path);
+        return { path, name: fileName, sizeBytes: stat.size, modifiedAt: stat.mtime.toISOString() };
+      });
+  } catch {
+    return [];
+  }
+}
+
+export function exportAppTelemetryLogBundle(input: { since?: string; stateRoot?: string } = {}): AppTelemetryLogBundleExport {
+  const files = listAppTelemetryLogFiles(input.stateRoot);
+  const exportDir = join(input.stateRoot ?? getStateRoot(), 'exports', 'telemetry');
+  mkdirSync(exportDir, { recursive: true });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const path = join(exportDir, `app-telemetry-${timestamp}.jsonl`);
+  const lines: string[] = [];
+  let fileCount = 0;
+  const seenFiles = new Set<string>();
+
+  for (const file of files.slice().reverse()) {
+    try {
+      const fileLines = readFileSync(file.path, 'utf-8').split('\n').filter(Boolean);
+      let included = false;
+      for (const line of fileLines) {
+        const event = parseLogEvent(line);
+        if (!event || (input.since && event.ts < input.since)) continue;
+        lines.push(JSON.stringify(event));
+        included = true;
+      }
+      if (included && !seenFiles.has(file.path)) {
+        seenFiles.add(file.path);
+        fileCount += 1;
+      }
+    } catch {
+      // Ignore files that disappear while exporting.
+    }
+  }
+
+  writeFileSync(path, `${lines.join('\n')}${lines.length > 0 ? '\n' : ''}`, 'utf-8');
+  const stat = statSync(path);
+  return { path, fileCount, eventCount: lines.length, sizeBytes: stat.size };
+}
+
 export function readAppTelemetryLogEvents(input: { since: string; limit: number; stateRoot?: string }): AppTelemetryLogEvent[] {
-  const dir = resolveTelemetryLogDir(input.stateRoot);
+  const dir = resolveAppTelemetryLogDir(input.stateRoot);
   if (!existsSync(dir)) return [];
 
   const events: AppTelemetryLogEvent[] = [];

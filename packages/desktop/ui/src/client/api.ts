@@ -14,6 +14,8 @@ import type {
 import type {
   AppStatus,
   AppTelemetryEventRow,
+  AppTelemetryLogBundleExport,
+  AppTelemetryLogDiagnostics,
   CacheEfficiencyAggregate,
   CacheEfficiencyPoint,
   ContextPointerUsageResult,
@@ -1502,6 +1504,8 @@ export const api = {
     get<{ series: SystemPromptPoint[]; aggregate: SystemPromptAggregate }>(`/traces/system-prompt${range ? `?range=${range}` : ''}`),
   tracesContextPointers: (range?: string) => get<ContextPointerUsageResult>(`/traces/context-pointers${range ? `?range=${range}` : ''}`),
   tracesSessionIntegrity: (range?: string) => get<AppTelemetryEventRow[]>(`/traces/session-integrity${range ? `?range=${range}` : ''}`),
+  telemetryLogs: () => get<AppTelemetryLogDiagnostics>('/telemetry/logs'),
+  exportTelemetryLogs: (input?: { since?: string }) => post<AppTelemetryLogBundleExport>('/telemetry/logs/export', input ?? {}),
 
   // ── Unified settings store ──────────────────────────────────────
 

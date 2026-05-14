@@ -1407,6 +1407,27 @@ export interface AppTelemetryEventRow {
   metadataJson: string | null;
 }
 
+export interface AppTelemetryLogFileSummary {
+  path: string;
+  name: string;
+  sizeBytes: number;
+  modifiedAt: string;
+}
+
+export interface AppTelemetryLogDiagnostics {
+  logDir: string;
+  fileCount: number;
+  sizeBytes: number;
+  files: AppTelemetryLogFileSummary[];
+}
+
+export interface AppTelemetryLogBundleExport {
+  path: string;
+  fileCount: number;
+  eventCount: number;
+  sizeBytes: number;
+}
+
 export interface TraceSummary {
   activeSessions: number;
   runsToday: number;

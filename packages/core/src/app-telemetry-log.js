@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { getStateRoot } from './runtime/paths.js';
@@ -9,12 +9,12 @@ const LOG_SUFFIX = '.jsonl';
 const DEFAULT_RETENTION_DAYS = 30;
 const PRUNE_EVERY_WRITES = 250;
 const writeCounts = new Map();
-function resolveTelemetryLogDir(stateRoot) {
+export function resolveAppTelemetryLogDir(stateRoot) {
   return join(stateRoot ?? getStateRoot(), 'logs', LOG_DIR);
 }
 export function resolveAppTelemetryLogPath(ts, stateRoot) {
   const day = /^\d{4}-\d{2}-\d{2}/.exec(ts)?.[0] ?? new Date().toISOString().slice(0, 10);
-  return join(resolveTelemetryLogDir(stateRoot), `${LOG_PREFIX}${day}${LOG_SUFFIX}`);
+  return join(resolveAppTelemetryLogDir(stateRoot), `${LOG_PREFIX}${day}${LOG_SUFFIX}`);
 }
 function resolveRetentionDays() {
   const raw = process.env.PERSONAL_AGENT_APP_TELEMETRY_LOG_RETENTION_DAYS;
@@ -28,7 +28,7 @@ export function closeAppTelemetryLogs() {
 export function writeAppTelemetryLogEvent(event, stateRoot) {
   try {
     const path = resolveAppTelemetryLogPath(event.ts, stateRoot);
-    const dir = resolveTelemetryLogDir(stateRoot);
+    const dir = resolveAppTelemetryLogDir(stateRoot);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     appendFileSync(path, `${JSON.stringify(event)}\n`, 'utf-8');
     maybePruneAppTelemetryLogs(stateRoot);
@@ -37,7 +37,7 @@ export function writeAppTelemetryLogEvent(event, stateRoot) {
   }
 }
 function maybePruneAppTelemetryLogs(stateRoot) {
-  const dir = resolveTelemetryLogDir(stateRoot);
+  const dir = resolveAppTelemetryLogDir(stateRoot);
   const count = (writeCounts.get(dir) ?? 0) + 1;
   writeCounts.set(dir, count);
   if (count % PRUNE_EVERY_WRITES !== 0) return;
@@ -78,8 +78,55 @@ function parseLogEvent(line) {
     return null;
   }
 }
+export function listAppTelemetryLogFiles(stateRoot) {
+  const dir = resolveAppTelemetryLogDir(stateRoot);
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir)
+      .filter((fileName) => fileName.startsWith(LOG_PREFIX) && fileName.endsWith(LOG_SUFFIX))
+      .sort((left, right) => right.localeCompare(left))
+      .map((fileName) => {
+        const path = join(dir, fileName);
+        const stat = statSync(path);
+        return { path, name: fileName, sizeBytes: stat.size, modifiedAt: stat.mtime.toISOString() };
+      });
+  } catch {
+    return [];
+  }
+}
+export function exportAppTelemetryLogBundle(input = {}) {
+  const files = listAppTelemetryLogFiles(input.stateRoot);
+  const exportDir = join(input.stateRoot ?? getStateRoot(), 'exports', 'telemetry');
+  mkdirSync(exportDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const path = join(exportDir, `app-telemetry-${timestamp}.jsonl`);
+  const lines = [];
+  let fileCount = 0;
+  const seenFiles = new Set();
+  for (const file of files.slice().reverse()) {
+    try {
+      const fileLines = readFileSync(file.path, 'utf-8').split('\n').filter(Boolean);
+      let included = false;
+      for (const line of fileLines) {
+        const event = parseLogEvent(line);
+        if (!event || (input.since && event.ts < input.since)) continue;
+        lines.push(JSON.stringify(event));
+        included = true;
+      }
+      if (included && !seenFiles.has(file.path)) {
+        seenFiles.add(file.path);
+        fileCount += 1;
+      }
+    } catch {
+      // Ignore files that disappear while exporting.
+    }
+  }
+  writeFileSync(path, `${lines.join('\n')}${lines.length > 0 ? '\n' : ''}`, 'utf-8');
+  const stat = statSync(path);
+  return { path, fileCount, eventCount: lines.length, sizeBytes: stat.size };
+}
 export function readAppTelemetryLogEvents(input) {
-  const dir = resolveTelemetryLogDir(input.stateRoot);
+  const dir = resolveAppTelemetryLogDir(input.stateRoot);
   if (!existsSync(dir)) return [];
   const events = [];
   try {

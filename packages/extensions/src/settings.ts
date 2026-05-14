@@ -1,4 +1,6 @@
 export type HostComponent = (...args: never[]) => unknown;
+export type AppTelemetryLogBundleExport = unknown;
+export type AppTelemetryLogDiagnostics = unknown;
 export type DesktopAppPreferencesState = unknown;
 export type DesktopEnvironmentState = unknown;
 export type ModelEditorDraft = unknown;

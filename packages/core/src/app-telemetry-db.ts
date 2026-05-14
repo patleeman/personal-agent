@@ -229,9 +229,9 @@ export function writeAppTelemetryEvent(input: AppTelemetryEventInput): void {
       sessionId: normalizeString(input.sessionId, 160),
       runId: normalizeString(input.runId, 200),
       route: normalizeString(input.route, 500),
-      status: Number.isInteger(input.status) ? input.status : null,
+      status: typeof input.status === 'number' && Number.isInteger(input.status) ? input.status : null,
       durationMs: normalizeFiniteNumber(input.durationMs),
-      count: Number.isInteger(input.count) ? input.count : null,
+      count: typeof input.count === 'number' && Number.isInteger(input.count) ? input.count : null,
       value: normalizeFiniteNumber(input.value),
       metadata: normalizeMetadata(input.metadata),
     };

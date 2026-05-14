@@ -321,6 +321,10 @@ describe('SettingsPage provider model editor', () => {
         return statusResult;
       }
 
+      if (fetcher === api.telemetryLogs) {
+        return buildUseApiResult({ logDir: '/tmp/pa/logs/telemetry', fileCount: 0, sizeBytes: 0, files: [] });
+      }
+
       if (fetcher === api.providerAuth) {
         return providerAuthResult;
       }
