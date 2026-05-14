@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0-rc.8 — 2026-05-14
+
+- Fix packaged experimental extension discovery and conversation startup
+
 ## 0.8.0-rc.7 — 2026-05-14
 
 - Add companion app group entitlement for shared container
