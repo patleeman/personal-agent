@@ -100,6 +100,25 @@ function collectNonPortableImports(filePath) {
   return collectImportSpecifiers(filePath).filter((specifier) => specifier.startsWith('/') || specifier.startsWith('file:'));
 }
 
+function isForbiddenExtensionSourceImport(specifier) {
+  return (
+    specifier === '@personal-agent/core' ||
+    specifier.startsWith('@personal-agent/core/') ||
+    specifier === '@personal-agent/daemon' ||
+    specifier.startsWith('@personal-agent/daemon/') ||
+    specifier.includes('/packages/desktop/server/') ||
+    specifier.includes('/packages/core/')
+  );
+}
+
+function collectForbiddenExtensionSourceImports(extensionDir, manifest) {
+  const sourceBackendEntry = manifest.backend?.entry;
+  if (!sourceBackendEntry?.startsWith('src/')) return [];
+  const backendSourcePath = join(extensionDir, sourceBackendEntry);
+  if (!existsSync(backendSourcePath)) return [];
+  return collectImportSpecifiers(backendSourcePath).filter(isForbiddenExtensionSourceImport);
+}
+
 function collectForbiddenBundledPaths(filePath) {
   const source = readFileSync(filePath, 'utf8');
   return FORBIDDEN_BUNDLED_PATH_FRAGMENTS.filter((fragment) => source.includes(fragment));
@@ -201,6 +220,11 @@ for (const extensionDir of listPackagedExtensionDirs()) {
   const hasBuildManifest = existsSync(buildManifestPath);
 
   if (hasBuildManifest) row.manifest = 'ok';
+
+  const forbiddenSourceImports = collectForbiddenExtensionSourceImports(extensionDir, manifest);
+  if (forbiddenSourceImports.length > 0) {
+    failures.push(`${id}: backend source imports forbidden host/runtime modules: ${forbiddenSourceImports.join(', ')}`);
+  }
 
   if (backendPath) {
     if (!existsSync(backendPath)) {

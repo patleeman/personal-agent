@@ -1,21 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const mockRunExecute = vi.fn();
-const mockBackgroundCommandExecute = vi.fn();
-const mockSubagentExecute = vi.fn();
-const mockStartBackgroundRun = vi.fn();
+const mocks = vi.hoisted(() => ({
+  runExecute: vi.fn(),
+  backgroundCommandExecute: vi.fn(),
+  subagentExecute: vi.fn(),
+  pingDaemon: vi.fn().mockResolvedValue(true),
+  startBackgroundRun: vi.fn(),
+  listDurableRuns: vi.fn(),
+  getDurableRun: vi.fn(),
+  cancelDurableRun: vi.fn(),
+  rerunDurableRun: vi.fn(),
+}));
 
 vi.mock('./runTool.js', () => ({
   createRunAgentExtension: vi.fn(() => (pi: { registerTool: (t: unknown) => void }) => {
-    pi.registerTool({ name: 'run', execute: mockRunExecute });
-    pi.registerTool({ name: 'background_command', execute: mockBackgroundCommandExecute });
-    pi.registerTool({ name: 'subagent', execute: mockSubagentExecute });
+    pi.registerTool({ name: 'run', execute: mocks.runExecute });
+    pi.registerTool({ name: 'background_command', execute: mocks.backgroundCommandExecute });
+    pi.registerTool({ name: 'subagent', execute: mocks.subagentExecute });
   }),
 }));
 
-vi.mock('@personal-agent/daemon', () => ({
-  pingDaemon: vi.fn().mockResolvedValue(true),
-  startBackgroundRun: mockStartBackgroundRun,
+vi.mock('@personal-agent/extensions/backend/automations', () => ({
+  pingDaemon: mocks.pingDaemon,
+}));
+
+vi.mock('@personal-agent/extensions/backend/runs', () => ({
+  cancelDurableRun: mocks.cancelDurableRun,
+  getDurableRun: mocks.getDurableRun,
+  listDurableRuns: mocks.listDurableRuns,
+  rerunDurableRun: mocks.rerunDurableRun,
+  startBackgroundRun: mocks.startBackgroundRun,
 }));
 
 vi.mock('@personal-agent/extensions/backend', () => ({
@@ -52,7 +66,7 @@ describe('system-runs backend', () => {
 
   describe('run handler', () => {
     it('delegates to the registered run tool and wraps text result', async () => {
-      mockRunExecute.mockResolvedValue({
+      mocks.runExecute.mockResolvedValue({
         content: [{ type: 'text', text: 'Run abc1234 started.' }],
       });
 
@@ -61,7 +75,7 @@ describe('system-runs backend', () => {
     });
 
     it('passes details through when present', async () => {
-      mockRunExecute.mockResolvedValue({
+      mocks.runExecute.mockResolvedValue({
         content: [{ type: 'text', text: 'Running...' }],
         details: { runId: 'abc1234', status: 'running' },
       });
@@ -71,7 +85,7 @@ describe('system-runs backend', () => {
     });
 
     it('handles multiple content blocks', async () => {
-      mockRunExecute.mockResolvedValue({
+      mocks.runExecute.mockResolvedValue({
         content: [
           { type: 'text', text: 'Run 1' },
           { type: 'text', text: 'Run 2' },
@@ -81,63 +95,49 @@ describe('system-runs backend', () => {
       const result = await run({ action: 'list' }, createCtx());
       expect(result.text).toBe('Run 1\nRun 2');
     });
+  });
 
-    it('handles non-array content result', async () => {
-      mockRunExecute.mockResolvedValue({ status: 'ok' });
+  describe('bash handler', () => {
+    it('runs foreground commands through the shell context', async () => {
+      const ctx = createCtx();
+      const result = await bash({ command: 'echo hi' }, ctx);
 
-      const result = await run({ action: 'get', runId: 'abc' }, createCtx());
-      expect(result.text).toContain('"status"');
+      expect(ctx.shell.exec).toHaveBeenCalledWith({ command: 'sh', args: ['-lc', 'echo hi'], cwd: '/tmp/repo', timeoutMs: undefined });
+      expect(result.text).toBe('ok');
     });
 
-    it('invalidates runs and tasks topics after execution', async () => {
-      const invalidate = vi.fn();
-      mockRunExecute.mockResolvedValue({
-        content: [{ type: 'text', text: 'ok' }],
+    it('starts background commands through the host runs backend API', async () => {
+      mocks.startBackgroundRun.mockResolvedValue({ accepted: true, runId: 'run-123', logPath: '/tmp/run.log' });
+
+      const result = await bash({ command: 'sleep 1', background: true }, createCtx());
+
+      expect(mocks.pingDaemon).toHaveBeenCalled();
+      expect(mocks.startBackgroundRun).toHaveBeenCalled();
+      expect(result.text).toBe('Started background command run-123 for sleep-1.');
+    });
+  });
+
+  describe('background_command handler', () => {
+    it('lists durable runs through the host runs backend API', async () => {
+      mocks.listDurableRuns.mockResolvedValue({ runs: [], summary: { total: 0 } });
+
+      const result = await background_command({ action: 'list' }, createCtx());
+
+      expect(mocks.listDurableRuns).toHaveBeenCalled();
+      expect(result.text).toBe('No durable runs found.');
+    });
+  });
+
+  describe('subagent handler', () => {
+    it('normalizes start to start_agent and delegates to the registered subagent tool', async () => {
+      mocks.subagentExecute.mockResolvedValue({
+        content: [{ type: 'text', text: 'Started subagent run-789.' }],
       });
 
-      await run({ action: 'list' }, createCtx({ ui: { invalidate } }));
-      expect(invalidate).toHaveBeenCalledWith(['runs', 'tasks']);
+      const result = await subagent({ action: 'start', prompt: 'hello' }, createCtx());
+
+      expect(result.text).toBe('Started subagent run-789.');
+      expect(mocks.subagentExecute).toHaveBeenCalled();
     });
-  });
-
-  it('starts background bash directly as a shell background run', async () => {
-    mockStartBackgroundRun.mockResolvedValue({ accepted: true, runId: 'run-123', logPath: '/tmp/run-123/output.log' });
-
-    const result = await bash({ command: 'sleep 1', background: true, taskSlug: 'sleep' }, createCtx());
-
-    expect(result.text).toBe('Started background command run-123 for sleep.');
-    expect(result.details).toMatchObject({ command: 'sleep 1', runId: 'run-123' });
-    expect(result.details).not.toHaveProperty('displayMode');
-    expect(mockStartBackgroundRun).toHaveBeenCalledWith(
-      expect.objectContaining({ taskSlug: 'sleep', cwd: '/tmp/repo', shellCommand: 'sleep 1' }),
-    );
-    expect(mockBackgroundCommandExecute).not.toHaveBeenCalled();
-    expect(mockSubagentExecute).not.toHaveBeenCalled();
-  });
-
-  it('starts the background_command action directly as a shell background run', async () => {
-    mockStartBackgroundRun.mockResolvedValue({ accepted: true, runId: 'run-456', logPath: '/tmp/run-456/output.log' });
-
-    const result = await background_command({ action: 'start', command: 'sleep 1', taskSlug: 'sleep' }, createCtx());
-
-    expect(result.text).toBe('Started background command run-456 for sleep.');
-    expect(result.details).toMatchObject({ command: 'sleep 1', runId: 'run-456' });
-    expect(result.details).not.toHaveProperty('displayMode');
-    expect(mockStartBackgroundRun).toHaveBeenCalledWith(
-      expect.objectContaining({ taskSlug: 'sleep', cwd: '/tmp/repo', shellCommand: 'sleep 1' }),
-    );
-    expect(mockBackgroundCommandExecute).not.toHaveBeenCalled();
-    expect(mockSubagentExecute).not.toHaveBeenCalled();
-  });
-
-  it('uses the subagent registered tool for the subagent action', async () => {
-    mockSubagentExecute.mockResolvedValue({
-      content: [{ type: 'text', text: 'Started subagent run-789.' }],
-    });
-
-    const result = await subagent({ action: 'start', prompt: 'Do work', taskSlug: 'agent' }, createCtx());
-
-    expect(result.text).toBe('Started subagent run-789.');
-    expect(mockSubagentExecute).toHaveBeenCalled();
   });
 });

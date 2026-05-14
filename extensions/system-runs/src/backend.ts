@@ -1,5 +1,14 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 
+import { pingDaemon } from '@personal-agent/extensions/backend/automations';
+import {
+  cancelDurableRun,
+  getDurableRun,
+  listDurableRuns,
+  rerunDurableRun,
+  startBackgroundRun,
+} from '@personal-agent/extensions/backend/runs';
+
 type RunAgentExtensionFactory = (api: RegisterToolApi) => void;
 
 interface NativeBackendContext {
@@ -48,10 +57,6 @@ function readRequiredString(value: unknown, label: string): string {
   }
 
   return normalized;
-}
-
-async function loadDaemon() {
-  return import('@personal-agent/daemon');
 }
 
 async function runForegroundBash(
@@ -169,12 +174,11 @@ async function startBackgroundCommand(input: unknown, ctx: NativeBackendContext)
     throw new Error('deliverResultToConversation requires an active persisted conversation.');
   }
 
-  const daemon = await loadDaemon();
-  if (!(await daemon.pingDaemon())) {
+  if (!(await pingDaemon())) {
     throw new Error('Daemon is not responding. Ensure the desktop app is running.');
   }
 
-  const result = await daemon.startBackgroundRun({
+  const result = await startBackgroundRun({
     taskSlug,
     cwd,
     shellCommand: command,
@@ -261,15 +265,14 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
     return startBackgroundCommand(params, ctx);
   }
 
-  const daemon = await loadDaemon();
   if (action === 'list') {
-    const result = await daemon.listDurableRuns();
+    const result = await listDurableRuns();
     return { text: formatBackgroundRunList(result), details: { action: 'list', runCount: result.runs.length } };
   }
 
   const runId = readRequiredString(params.runId, 'runId');
   if (action === 'get') {
-    const result = await daemon.getDurableRun(runId);
+    const result = await getDurableRun(runId);
     if (!result) throw new Error(`Run not found: ${runId}`);
     const run = result.run;
     return {
@@ -279,7 +282,7 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
   }
 
   if (action === 'logs') {
-    const result = await daemon.getDurableRun(runId);
+    const result = await getDurableRun(runId);
     if (!result) throw new Error(`Run not found: ${runId}`);
     const path = result.run.paths.outputLogPath;
     const tail = normalizeRunLogTail(params.tail);
@@ -290,14 +293,14 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
   }
 
   if (action === 'cancel') {
-    const result = await daemon.cancelDurableRun(runId);
+    const result = await cancelDurableRun(runId);
     ctx.ui.invalidate(['runs', 'tasks']);
     if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel run ${runId}.`);
     return { text: `Cancelled background work ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
   }
 
   if (action === 'rerun') {
-    const result = await daemon.rerunDurableRun(runId);
+    const result = await rerunDurableRun(runId);
     ctx.ui.invalidate(['runs', 'tasks']);
     if (!result.accepted) throw new Error(result.reason ?? `Could not rerun ${runId}.`);
     return { text: `Rerun started ${result.runId} from ${runId}.`, details: { action: 'rerun', runId: result.runId, sourceRunId: runId } };
