@@ -85,6 +85,10 @@ function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<
   );
 }
 
+function isLeadingContextItem(item: ChatRenderItem): boolean {
+  return item.type === 'message' && (item.block.type === 'context' || item.block.type === 'summary');
+}
+
 export const ChatView = memo(function ChatView({
   messages,
   conversationId = null,
@@ -234,7 +238,7 @@ export const ChatView = memo(function ChatView({
     };
   }, [selectedImage]);
 
-  const renderChatItem = (item: ChatRenderItem, itemIndex: number) => (
+  const renderChatItem = (item: ChatRenderItem, itemIndex: number, renderItemsLength = renderItems.length) => (
     <ChatRenderItemView
       key={
         item.type === 'trace_cluster'
@@ -247,7 +251,7 @@ export const ChatView = memo(function ChatView({
       }
       item={item}
       itemIndex={itemIndex}
-      renderItemsLength={renderItems.length}
+      renderItemsLength={renderItemsLength}
       messageIndexOffset={messageIndexOffset}
       messages={messages}
       isStreaming={isStreaming}
@@ -277,7 +281,23 @@ export const ChatView = memo(function ChatView({
     />
   );
 
-  const fullTranscript = <div className="space-y-4">{renderItems.map((item, itemIndex) => renderChatItem(item, itemIndex))}</div>;
+  const leadingContextItemCount = (() => {
+    let count = 0;
+    for (const item of renderItems) {
+      if (!isLeadingContextItem(item)) {
+        break;
+      }
+      count += 1;
+    }
+    return count;
+  })();
+  const shouldGroupIntroContext = !shouldWindowTranscript && (Boolean(systemPrompt?.trim()) || leadingContextItemCount > 0);
+  const introContextItems = shouldGroupIntroContext ? renderItems.slice(0, leadingContextItemCount) : [];
+  const transcriptItems = shouldGroupIntroContext ? renderItems.slice(leadingContextItemCount) : renderItems;
+
+  const fullTranscript = (
+    <div className="space-y-4">{transcriptItems.map((item, itemIndex) => renderChatItem(item, itemIndex + leadingContextItemCount))}</div>
+  );
 
   const windowedTranscript = visibleChunkRange ? (
     <>
@@ -357,7 +377,16 @@ export const ChatView = memo(function ChatView({
         {/* Bottom padding (pb-24) keeps the last message clear of the input area
             when the user is scrolled to the bottom and the textarea grows
             while typing (e.g. multi-line input). */}
-        {systemPrompt?.trim() ? <SystemPromptMessage text={systemPrompt} /> : null}
+        {shouldGroupIntroContext ? (
+          <div className={transcriptItems.length > 0 || transcriptBoundary ? 'mb-7 space-y-1.5' : 'space-y-1.5'}>
+            {systemPrompt?.trim() ? <SystemPromptMessage text={systemPrompt} /> : null}
+            {introContextItems.map((item, itemIndex) => renderChatItem(item, itemIndex))}
+          </div>
+        ) : systemPrompt?.trim() ? (
+          <div className="mb-1.5">
+            <SystemPromptMessage text={systemPrompt} />
+          </div>
+        ) : null}
         {transcriptBoundary}
         {shouldWindowTranscript ? windowedTranscript : fullTranscript}
         {showStreamingIndicator && (

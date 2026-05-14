@@ -1006,7 +1006,36 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('Runtime instructions available for inspection.');
     expect(html).toContain('You are Patrick');
     expect(html).toContain('rounded-xl');
+    expect(html).not.toContain('Dec 31');
     expect(html).not.toContain('ui-message-card-assistant');
+  });
+
+  it('groups startup context disclosures tightly before the first user message', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        systemPrompt: 'Runtime instructions.',
+        messages: [
+          {
+            type: 'summary',
+            ts: '2026-03-11T18:00:00.000Z',
+            kind: 'related',
+            title: 'Related conversation pointers',
+            text: '1. Suggested context pointer',
+            detail: '1 related conversation pointer was offered before this prompt. Inspect a conversation before relying on its details.',
+          },
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:01.000Z',
+            text: 'Start',
+          },
+        ],
+      }),
+    );
+
+    expect(html).toContain('mb-7 space-y-1.5');
+    expect(html).toContain('data-context-type="system_prompt"');
+    expect(html).toContain('data-summary-kind="related"');
+    expect(html).toContain('Related conversation pointers');
   });
 
   it('renders context blocks as quiet expandable system events', () => {

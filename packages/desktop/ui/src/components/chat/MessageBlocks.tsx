@@ -308,19 +308,19 @@ function SystemEventFrame({
 }: {
   label: string;
   preview: string;
-  ts: string;
+  ts?: string;
   dataAttributes: Record<string, string>;
   children: ReactNode;
 }) {
   return (
-    <details className="group rounded-xl border border-border-subtle/60 bg-surface/25 px-3 py-2.5" {...dataAttributes}>
+    <details className="group rounded-xl border border-border-subtle/60 bg-surface/25 px-3 py-2" {...dataAttributes}>
       <summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] text-secondary marker:hidden hover:text-primary [&::-webkit-details-marker]:hidden">
         <span className="text-dim transition-transform group-open:rotate-90" aria-hidden="true">
           ›
         </span>
-        <span className="font-medium text-primary/80">{label}</span>
+        <span className="shrink-0 font-medium text-primary/80">{label}</span>
         <span className="min-w-0 flex-1 truncate text-dim">{preview}</span>
-        <span className="ui-message-meta shrink-0">{timeAgo(ts)}</span>
+        {ts ? <span className="ui-message-meta shrink-0">{timeAgo(ts)}</span> : null}
       </summary>
       {children}
     </details>
@@ -337,7 +337,6 @@ export const SystemPromptMessage = memo(function SystemPromptMessage({ text }: {
     <SystemEventFrame
       label="System prompt"
       preview="Runtime instructions available for inspection."
-      ts={new Date(0).toISOString()}
       dataAttributes={{ 'data-context-type': 'system_prompt' }}
     >
       <div className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">{renderText(normalizedText)}</div>
