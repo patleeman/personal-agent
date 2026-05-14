@@ -1179,6 +1179,34 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('/bin/bash: npm: command not found');
   });
 
+  it('renders background bash starts like normal bash tool calls with a background modifier', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'npm run desktop:dev', background: true },
+            output: 'Started background command run-desktop-dev-abc123 for desktop-dev.',
+            status: 'done',
+            details: {
+              action: 'start',
+              displayMode: 'terminal',
+              command: 'npm run desktop:dev',
+              runId: 'run-desktop-dev-abc123',
+              taskSlug: 'desktop-dev',
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(html).not.toContain('ui-terminal-block');
+    expect(html).toContain('bash');
+    expect(html).toContain('background task');
+  });
+
   it('renders a continue action for the tail internal-work cluster when recovery is available', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {

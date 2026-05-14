@@ -1,5 +1,6 @@
 import type { MessageBlock } from '../../shared/types';
 import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
+import { isBackgroundShellStart } from './toolPresentation.js';
 
 export type TraceConversationBlock = Extract<MessageBlock, { type: 'thinking' | 'tool_use' | 'subagent' | 'error' }>;
 
@@ -71,8 +72,14 @@ function summarizeTraceCluster(blocks: TraceConversationBlock[]): TraceClusterSu
         addSummaryCategory(categories, { key: 'error', kind: 'error', label: 'error' });
         hasError = true;
         break;
-      case 'tool_use':
-        addSummaryCategory(categories, { key: `tool:${block.tool}`, kind: 'tool', label: block.tool, tool: block.tool });
+      case 'tool_use': {
+        const backgroundShellStart = isBackgroundShellStart(block);
+        addSummaryCategory(categories, {
+          key: backgroundShellStart ? 'tool:bash:background' : `tool:${block.tool}`,
+          kind: 'tool',
+          label: backgroundShellStart ? 'bash · background task' : block.tool,
+          tool: backgroundShellStart ? 'bash' : block.tool,
+        });
         if (block.status === 'running' || block.running) {
           hasRunning = true;
         }
@@ -84,6 +91,7 @@ function summarizeTraceCluster(blocks: TraceConversationBlock[]): TraceClusterSu
           hasDuration = true;
         }
         break;
+      }
     }
   }
 

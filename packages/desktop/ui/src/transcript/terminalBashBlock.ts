@@ -50,14 +50,19 @@ function readExecutionWrappers(value: Record<string, unknown> | null): Array<{ i
 }
 
 export function readTerminalBashToolPresentation(block: MessageBlock | null | undefined): TerminalBashToolPresentation | null {
-  if (!block || block.type !== 'tool_use' || (block.tool !== 'bash' && block.tool !== 'background_command')) {
+  if (!block || block.type !== 'tool_use' || block.tool !== 'bash') {
     return null;
   }
 
   const input = isRecord(block.input) ? block.input : null;
   const details = isRecord(block.details) ? block.details : null;
-  const isBackgroundCommandStart = block.tool === 'background_command' && (details?.action === 'start' || input?.action === 'start');
-  if (!hasTerminalDisplayMode(details) && !hasTerminalDisplayMode(input) && !isBackgroundCommandStart) {
+  const isBackgroundStart =
+    input?.background === true || details?.background === true || input?.action === 'start' || details?.action === 'start';
+  if (isBackgroundStart) {
+    return null;
+  }
+
+  if (!hasTerminalDisplayMode(details) && !hasTerminalDisplayMode(input)) {
     return null;
   }
 

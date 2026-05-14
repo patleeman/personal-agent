@@ -16,7 +16,7 @@ describe('terminalBashBlock', () => {
     ).toEqual([{ id: 'example-wrapper', label: 'Example Wrapper' }]);
   });
 
-  it('reads background command starts as terminal bash presentations', () => {
+  it('does not read background command starts as terminal bash presentations', () => {
     expect(
       readTerminalBashToolPresentation({
         type: 'tool_use',
@@ -26,7 +26,20 @@ describe('terminalBashBlock', () => {
         details: { action: 'start', runId: 'run-123' },
         status: 'done',
       } as never),
-    ).toMatchObject({ command: 'npm run desktop:dev' });
+    ).toBeNull();
+  });
+
+  it('does not read background bash starts as terminal bash presentations', () => {
+    expect(
+      readTerminalBashToolPresentation({
+        type: 'tool_use',
+        id: 'tool-1',
+        tool: 'bash',
+        input: { command: 'npm run desktop:dev', background: true },
+        details: { action: 'start', displayMode: 'terminal', runId: 'run-123' },
+        status: 'done',
+      } as never),
+    ).toBeNull();
   });
 
   it('ignores fractional bash exit codes', () => {

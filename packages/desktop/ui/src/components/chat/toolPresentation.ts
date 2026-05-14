@@ -24,6 +24,21 @@ export function toolMeta(t: string) {
   return TOOL_META[t] ?? { icon: '⚙', label: t, color: 'text-secondary bg-elevated', tone: 'muted' as const };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function isBackgroundShellStart(block: Extract<MessageBlock, { type: 'tool_use' }>): boolean {
+  const input = isRecord(block.input) ? block.input : null;
+  const details = isRecord(block.details) ? block.details : null;
+
+  if (block.tool === 'bash') {
+    return input?.background === true || details?.background === true;
+  }
+
+  return block.tool === 'background_command' && (input?.action === 'start' || details?.action === 'start');
+}
+
 export type DisclosurePreference = 'auto' | 'open' | 'closed';
 
 export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosurePreference): boolean {

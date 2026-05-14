@@ -10,7 +10,13 @@ import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
 import { TerminalToolBlock } from './TerminalToolBlock.js';
-import { type DisclosurePreference, resolveDisclosureOpen, toggleDisclosurePreference, toolMeta } from './toolPresentation.js';
+import {
+  type DisclosurePreference,
+  isBackgroundShellStart,
+  resolveDisclosureOpen,
+  toggleDisclosurePreference,
+  toolMeta,
+} from './toolPresentation.js';
 
 const MAX_VISIBLE_LINKED_RUNS = 5;
 
@@ -76,7 +82,8 @@ export function ToolBlock({
     }
     return null;
   }, [block.tool, extensionRegistry.extensions]);
-  const meta = toolMeta(block.tool);
+  const backgroundShellStart = isBackgroundShellStart(block);
+  const meta = backgroundShellStart ? toolMeta('bash') : toolMeta(block.tool);
   const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
 
   if (terminalBashBlock) {
@@ -140,6 +147,11 @@ export function ToolBlock({
         <Pill tone={isError ? 'danger' : meta.tone} mono className="shrink-0">
           {meta.label}
         </Pill>
+        {backgroundShellStart && (
+          <Pill tone="accent" mono className="shrink-0">
+            background task
+          </Pill>
+        )}
         <span className="flex-1 truncate opacity-70 font-normal">{preview}</span>
         {block.durationMs && !isRunning && <span className="shrink-0 opacity-40 ml-2">{(block.durationMs / 1000).toFixed(1)}s</span>}
         {isRunning ? (
