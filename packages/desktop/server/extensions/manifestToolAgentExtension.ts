@@ -38,11 +38,11 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
         label: tool.label ?? tool.title ?? tool.id,
         description: tool.description,
         promptSnippet: tool.promptSnippet ?? tool.description,
-        promptGuidelines: tool.promptGuidelines ?? [
-          isOverride
-            ? `This tool replaces the built-in "${registerName}" tool.`
-            : `Use this extension-provided tool when the task needs ${tool.extensionId}/${tool.id}.`,
-        ],
+        ...(tool.promptGuidelines
+          ? { promptGuidelines: tool.promptGuidelines }
+          : isOverride
+            ? { promptGuidelines: [`This tool replaces the built-in "${registerName}" tool.`] }
+            : {}),
         parameters: tool.inputSchema,
         async execute(_toolCallId, params, _signal, onUpdate: any, ctx: any) {
           const invokeResult = await invokeExtensionAction(
