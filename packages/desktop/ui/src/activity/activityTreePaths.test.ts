@@ -34,6 +34,17 @@ describe('buildActivityTreePathModel', () => {
     expect(() => tree.resetPaths(model.paths)).not.toThrow();
   });
 
+  it('keeps parented items under their parent while preserving sibling input order', () => {
+    const model = buildActivityTreePathModel([
+      item({ id: 'group:personal-agent', kind: 'group', title: 'personal-agent' }),
+      item({ id: 'group:other', kind: 'group', title: 'other' }),
+      item({ id: 'conversation:pinned', parentId: 'group:personal-agent', title: 'Pinned thread' }),
+      item({ id: 'conversation:open', parentId: 'group:personal-agent', title: 'Open thread' }),
+    ]);
+
+    expect(model.paths).toEqual(['personal-agent/', 'personal-agent/Pinned thread', 'personal-agent/Open thread', 'other']);
+  });
+
   it('keeps duplicate sibling titles addressable', () => {
     const model = buildActivityTreePathModel([
       item({ id: 'conversation:1', title: 'Untitled' }),

@@ -14,11 +14,13 @@ export interface ActivityTreePathModel {
 
 export function buildActivityTreePathModel(items: readonly ActivityTreeItem[]): ActivityTreePathModel {
   const itemById = new Map(items.map((item) => [item.id, item]));
+  const originalIndexById = new Map(items.map((item, index) => [item.id, index] as const));
   const pathById = new Map<string, string>();
+  const logicalPathById = new Map<string, string>();
   const usedSiblingSlugsByParent = new Map<string, Set<string>>();
 
   function buildPath(item: ActivityTreeItem, seen = new Set<string>()): string {
-    const existing = pathById.get(item.id);
+    const existing = logicalPathById.get(item.id);
     if (existing) return existing;
 
     if (seen.has(item.id)) {
@@ -31,18 +33,63 @@ export function buildActivityTreePathModel(items: readonly ActivityTreeItem[]): 
     const parentPath = parent ? buildPath(parent, nextSeen) : '';
     const segment = uniqueSegment(item, usedSiblingSlugsByParent, parentPath);
     const path = parentPath ? `${parentPath}/${segment}` : segment;
-    pathById.set(item.id, path);
+    logicalPathById.set(item.id, path);
     return path;
   }
 
   const parentIds = new Set(items.map((item) => item.parentId).filter((parentId): parentId is string => Boolean(parentId)));
-  const logicalEntries = items.map((item) => ({ item, path: buildPath(item) }));
-  const entries = logicalEntries.map(({ item, path }) => {
-    const treePath = parentIds.has(item.id) ? `${path}/` : path;
-    pathById.set(item.id, treePath);
-    return { item, path: treePath };
-  });
-  entries.sort((left, right) => left.path.localeCompare(right.path));
+  const logicalEntriesById = new Map(
+    items.map((item) => {
+      const path = buildPath(item);
+      const treePath = parentIds.has(item.id) ? `${path}/` : path;
+      pathById.set(item.id, treePath);
+      return [item.id, { item, path: treePath }] as const;
+    }),
+  );
+  const childrenByParentId = new Map<string, ActivityTreeItem[]>();
+  const rootItems: ActivityTreeItem[] = [];
+
+  for (const item of items) {
+    const parent = item.parentId ? itemById.get(item.parentId) : undefined;
+    if (!parent) {
+      rootItems.push(item);
+      continue;
+    }
+
+    const siblings = childrenByParentId.get(parent.id) ?? [];
+    siblings.push(item);
+    childrenByParentId.set(parent.id, siblings);
+  }
+
+  const sortByOriginalIndex = (left: ActivityTreeItem, right: ActivityTreeItem) =>
+    (originalIndexById.get(left.id) ?? 0) - (originalIndexById.get(right.id) ?? 0);
+  for (const children of childrenByParentId.values()) {
+    children.sort(sortByOriginalIndex);
+  }
+  rootItems.sort(sortByOriginalIndex);
+
+  const entries: ActivityTreePathEntry[] = [];
+  const visited = new Set<string>();
+  function visit(item: ActivityTreeItem) {
+    if (visited.has(item.id)) {
+      return;
+    }
+    visited.add(item.id);
+    const entry = logicalEntriesById.get(item.id);
+    if (entry) {
+      entries.push(entry);
+    }
+    for (const child of childrenByParentId.get(item.id) ?? []) {
+      visit(child);
+    }
+  }
+
+  for (const item of rootItems) {
+    visit(item);
+  }
+  for (const item of items) {
+    visit(item);
+  }
 
   return {
     entries,

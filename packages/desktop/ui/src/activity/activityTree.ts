@@ -75,29 +75,13 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
     });
   }
 
-  return items.sort(compareActivityTreeItems);
-}
-
-function compareActivityTreeItems(left: ActivityTreeItem, right: ActivityTreeItem): number {
-  if (left.parentId && left.parentId === right.id) return 1;
-  if (right.parentId && right.parentId === left.id) return -1;
-  if (left.parentId !== right.parentId) {
-    if (!left.parentId && right.parentId) return -1;
-    if (left.parentId && !right.parentId) return 1;
-    return String(left.parentId).localeCompare(String(right.parentId));
-  }
-  return getTimestamp(right.updatedAt) - getTimestamp(left.updatedAt) || left.title.localeCompare(right.title);
+  return items;
 }
 
 function isLiveConversationRun(run: DurableRunRecord): boolean {
   return (
     run.manifest?.kind === 'conversation' || run.manifest?.spec?.mode === 'web-live-session' || run.runId.startsWith('conversation-live-')
   );
-}
-
-function getTimestamp(value: string | undefined): number {
-  const timestamp = value ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function normalizeRunStatus(status: string | undefined): ActivityTreeItemStatus {

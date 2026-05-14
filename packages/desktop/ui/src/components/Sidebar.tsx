@@ -2265,9 +2265,13 @@ export function Sidebar() {
     return [...byId.values()];
   }, [renderedConversationItems]);
   const baseActivityTreeItems = useMemo(() => {
+    const pinnedIdSet = new Set(pinnedIds);
     const flatItems = buildActivityTreeItems({
       conversations: activityTreeSessions,
       runs: runs?.runs ?? [],
+    }).map((item) => {
+      const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
+      return conversationId && pinnedIdSet.has(conversationId) ? { ...item, metadata: { ...item.metadata, isPinned: true } } : item;
     });
 
     if (threadsOrganizeMode !== 'project' || groupedConversationRows.length === 0) {
@@ -2307,7 +2311,7 @@ export function Sidebar() {
       );
 
     return [...groupItems, ...groupedItems];
-  }, [activityTreeSessions, groupedConversationRows, runs, threadsOrganizeMode]);
+  }, [activityTreeSessions, groupedConversationRows, pinnedIds, runs, threadsOrganizeMode]);
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const conversationItemBySessionId = useMemo(

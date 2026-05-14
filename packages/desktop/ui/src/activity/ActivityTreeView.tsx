@@ -23,6 +23,24 @@ interface ActivityTreeContextMenuState {
   y: number;
 }
 
+function PinIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m15.75 3.75 4.5 4.5-3 3v3l-2.25 2.25-7.5-7.5L9.75 6.75h3l3-3ZM9.75 14.25 4.5 19.5" />
+    </svg>
+  );
+}
+
 export function ActivityTreeView({
   items,
   activeItemId,
@@ -102,6 +120,7 @@ export function ActivityTreeView({
           const canCreateChild = item.kind === 'group' && onCreateChildItem;
           const conversationIsRunning = item.kind === 'conversation' && item.metadata?.isRunning === true;
           const conversationNeedsAttention = item.kind === 'conversation' && item.metadata?.needsAttention === true;
+          const conversationIsPinned = item.kind === 'conversation' && item.metadata?.isPinned === true;
           const showConversationStatus = conversationIsRunning || conversationNeedsAttention;
           const rowPaddingLeft = item.kind === 'group' ? 0.5 : 0.5 + depth * 0.5;
           return (
@@ -174,6 +193,11 @@ export function ActivityTreeView({
               ) : (
                 <span className="h-4 w-4 shrink-0" aria-hidden="true" />
               )}
+              {conversationIsPinned ? (
+                <span className="ui-sidebar-pinned-icon shrink-0" title="Pinned chat" aria-label="Pinned chat">
+                  <PinIcon />
+                </span>
+              ) : null}
               <span className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] text-primary">{item.title}</span>
               {item.status !== 'idle' && item.kind !== 'conversation' ? (
                 <span className="shrink-0 text-[10px] text-dim">{formatActivityTreeStatus(item.status)}</span>

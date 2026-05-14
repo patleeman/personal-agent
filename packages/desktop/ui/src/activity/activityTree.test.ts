@@ -54,6 +54,20 @@ describe('buildActivityTreeItems', () => {
     ]);
   });
 
+  it('preserves caller-provided conversation order', () => {
+    const items = buildActivityTreeItems({
+      conversations: [
+        session({ id: 'pinned', title: 'Pinned thread', updatedAt: '2026-05-12T09:00:00.000Z' }),
+        session({ id: 'recent', title: 'Recent thread', updatedAt: '2026-05-12T10:00:00.000Z' }),
+      ],
+    });
+
+    expect(items.map((activityItem) => activityItem.id)).toEqual([
+      buildConversationActivityId('pinned'),
+      buildConversationActivityId('recent'),
+    ]);
+  });
+
   it('nests child conversations under their parent conversation', () => {
     const items = buildActivityTreeItems({
       conversations: [
