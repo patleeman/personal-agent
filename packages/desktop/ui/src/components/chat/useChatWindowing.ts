@@ -6,6 +6,7 @@ import {
   type ChatRenderChunk,
   type ChatRenderChunkLayout,
   type ChatWindowingProfile,
+  getChatRenderItemsSpanCount,
   resolveChunkIndexForOffset,
 } from './chatWindowing.js';
 import type { ChatRenderItem } from './transcriptItems.js';
@@ -123,7 +124,11 @@ export function useChatWindowing({
   focusMessageIndex: number | null;
   anchorToTail?: boolean;
 }) {
-  const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItems.length >= renderingProfile.windowingThreshold;
+  const renderItemSpanCount = useMemo(
+    () => getChatRenderItemsSpanCount(renderItems, messageIndexOffset),
+    [messageIndexOffset, renderItems],
+  );
+  const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItemSpanCount >= renderingProfile.windowingThreshold;
   const renderChunks = useMemo(
     () => (shouldWindowTranscript ? buildChatRenderChunks(renderItems, messageIndexOffset, renderingProfile.windowingChunkSize) : []),
     [messageIndexOffset, renderItems, renderingProfile.windowingChunkSize, shouldWindowTranscript],
@@ -204,5 +209,6 @@ export function useChatWindowing({
     renderChunks,
     visibleChunkRange,
     updateChunkHeight,
+    renderItemSpanCount,
   };
 }

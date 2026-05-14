@@ -58,17 +58,33 @@ export function getChatRenderItemAbsoluteRange(item: ChatRenderItem, messageInde
   };
 }
 
+export function getChatRenderItemSpanCount(item: ChatRenderItem, messageIndexOffset: number): number {
+  const range = getChatRenderItemAbsoluteRange(item, messageIndexOffset);
+  return range.end - range.start + 1;
+}
+
+export function getChatRenderItemsSpanCount(renderItems: ChatRenderItem[], messageIndexOffset: number): number {
+  return renderItems.reduce((count, item) => count + getChatRenderItemSpanCount(item, messageIndexOffset), 0);
+}
+
 export function buildChatRenderChunks(renderItems: ChatRenderItem[], messageIndexOffset: number, chunkSize: number): ChatRenderChunk[] {
   const chunks: ChatRenderChunk[] = [];
+  const normalizedChunkSize = Number.isSafeInteger(chunkSize) && chunkSize > 0 ? chunkSize : 1;
 
-  for (let startItemIndex = 0; startItemIndex < renderItems.length; startItemIndex += chunkSize) {
-    const items = renderItems.slice(startItemIndex, startItemIndex + chunkSize);
+  for (let startItemIndex = 0; startItemIndex < renderItems.length; ) {
+    const items: ChatRenderItem[] = [];
+    let spanCount = 0;
+    let endItemIndex = startItemIndex;
+
+    while (endItemIndex < renderItems.length && (items.length === 0 || spanCount < normalizedChunkSize)) {
+      const item = renderItems[endItemIndex];
+      items.push(item);
+      spanCount += getChatRenderItemSpanCount(item, messageIndexOffset);
+      endItemIndex += 1;
+    }
+
     const startRange = getChatRenderItemAbsoluteRange(items[0], messageIndexOffset);
     const endRange = getChatRenderItemAbsoluteRange(items[items.length - 1], messageIndexOffset);
-    const spanCount = items.reduce((count, item) => {
-      const range = getChatRenderItemAbsoluteRange(item, messageIndexOffset);
-      return count + (range.end - range.start + 1);
-    }, 0);
     chunks.push({
       // Use only the first item's start message index as the chunk key so it
       // stays stable when the last trace cluster grows during streaming. Using
@@ -77,11 +93,12 @@ export function buildChatRenderChunks(renderItems: ChatRenderItem[], messageInde
       key: `chunk-${startRange.start}`,
       items,
       startItemIndex,
-      endItemIndex: startItemIndex + items.length - 1,
+      endItemIndex: endItemIndex - 1,
       startMessageIndex: startRange.start,
       endMessageIndex: endRange.end,
       spanCount,
     });
+    startItemIndex = endItemIndex;
   }
 
   return chunks;

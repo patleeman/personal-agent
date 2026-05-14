@@ -4,6 +4,7 @@ import {
   buildChatRenderChunks,
   formatWindowingCount,
   getChatRenderItemAbsoluteRange,
+  getChatRenderItemsSpanCount,
   resolveChunkIndexForOffset,
 } from './chatWindowing.js';
 import type { ChatRenderItem } from './transcriptItems.js';
@@ -30,6 +31,10 @@ describe('chatWindowing', () => {
   it('resolves absolute ranges for messages and trace clusters', () => {
     expect(getChatRenderItemAbsoluteRange(messageItem(2), 10)).toEqual({ start: 12, end: 12 });
     expect(getChatRenderItemAbsoluteRange(traceCluster(3, 6), 10)).toEqual({ start: 13, end: 16 });
+  });
+
+  it('counts render item spans across clustered items', () => {
+    expect(getChatRenderItemsSpanCount([messageItem(0), traceCluster(1, 3), messageItem(4)], 20)).toBe(5);
   });
 
   it('builds render chunks with span counts across clustered items', () => {

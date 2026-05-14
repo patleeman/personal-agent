@@ -200,7 +200,7 @@ export const ChatView = memo(function ChatView({
     [contentVisibilityReady, shouldUseContentVisibility],
   );
 
-  const { shouldWindowTranscript, renderChunks, visibleChunkRange, updateChunkHeight } = useChatWindowing({
+  const { shouldWindowTranscript, renderChunks, visibleChunkRange, updateChunkHeight, renderItemSpanCount } = useChatWindowing({
     scrollContainerRef,
     renderItems,
     messageIndexOffset,
@@ -331,6 +331,7 @@ export const ChatView = memo(function ChatView({
         meta: {
           messageCount: messages.length,
           renderItemCount: renderItems.length,
+          renderItemSpanCount,
           mountedMessageCount,
           mountedChunkCount,
           totalChunkCount: renderChunks.length,
@@ -353,6 +354,7 @@ export const ChatView = memo(function ChatView({
     mountedMessageCount,
     performanceMode,
     renderChunks.length,
+    renderItemSpanCount,
     renderItemStats,
     renderItems.length,
     shouldWindowTranscript,
