@@ -54,7 +54,7 @@ export async function validateExtensionPackage(input: { extensionId?: string; pa
   const entry = input.extensionId ? findExtensionEntry(input.extensionId) : null;
   const packageRoot = resolve(input.packageRoot ?? entry?.packageRoot ?? '');
   const findings: ExtensionDoctorFinding[] = [];
-  const extensionId = input.extensionId ?? entry?.id ?? packageRoot.split(/[\\/]/).pop() ?? 'extension';
+  const extensionId = input.extensionId ?? entry?.manifest.id ?? packageRoot.split(/[\\/]/).pop() ?? 'extension';
 
   if (!packageRoot || packageRoot === resolve('')) {
     add(findings, 'error', 'missing-package-root', 'Provide an extension id or packageRoot to validate.');

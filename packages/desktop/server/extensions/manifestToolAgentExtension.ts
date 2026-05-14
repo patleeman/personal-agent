@@ -66,8 +66,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             },
             // Forward the streaming callback so backend handlers can
             // send progress updates during tool execution.
-            { onUpdate } satisfies { onUpdate?: AgentToolUpdateCallback },
-            ctx,
+            { onUpdate, toolContext: ctx } satisfies { onUpdate?: AgentToolUpdateCallback; toolContext: unknown },
           );
 
           // Handle backend invocation error (build failure, not found, etc.)

@@ -180,7 +180,7 @@ function readOptionalPort(value: unknown, label: string): number | undefined {
     return undefined;
   }
 
-  if (!Number.isInteger(value) || value < 0 || value > 65535) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 65535) {
     throw new Error(`${label} must be an integer between 0 and 65535`);
   }
 

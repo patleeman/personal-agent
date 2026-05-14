@@ -1,5 +1,6 @@
+import { reloadExtensionBackend } from '../extensionBackend.js';
 import { validateExtensionPackage } from '../extensionDoctor.js';
-import { buildRuntimeExtension, createRuntimeExtension, reloadExtensionBackend, snapshotRuntimeExtension } from '../extensionLifecycle.js';
+import { buildRuntimeExtension, createRuntimeExtension, snapshotRuntimeExtension } from '../extensionLifecycle.js';
 import { listExtensionInstallSummaries } from '../extensionRegistry.js';
 
 export {
