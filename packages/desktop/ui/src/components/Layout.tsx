@@ -97,6 +97,19 @@ function getSurfaceToolSlot(
   return 'toolSlot' in surface ? ((surface as Record<string, unknown>).toolSlot as string | undefined) : undefined;
 }
 
+function inferSurfaceToolSlot(
+  surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
+): string | undefined {
+  const explicitSlot = getSurfaceToolSlot(surface);
+  if (explicitSlot) return explicitSlot;
+  if (surface.extensionId === 'system-files') return 'files';
+  if (surface.extensionId === 'system-diffs') return 'diffs';
+  if (surface.extensionId === 'system-artifacts') return 'artifacts';
+  if (surface.extensionId === 'system-browser') return 'browser';
+  if (surface.extensionId === 'system-runs') return 'runs';
+  return undefined;
+}
+
 function extensionToolPanelMode(
   surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
 ): WorkbenchRailMode {
@@ -133,7 +146,7 @@ function findExtensionToolPanelBySlot(
   panels: Array<(ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary>,
   slot: string,
 ): (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary | null {
-  return panels.find((p) => getSurfaceToolSlot(p) === slot) ?? null;
+  return panels.find((p) => inferSurfaceToolSlot(p) === slot) ?? null;
 }
 
 export function resolveActiveExtensionWorkbenchSurface({
@@ -148,9 +161,7 @@ export function resolveActiveExtensionWorkbenchSurface({
   const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
   const activeRailSurface = parsed
     ? extensionRightToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId)
-    : activeWorkbenchTool === 'files'
-      ? findExtensionToolPanelBySlot(extensionRightToolPanels, 'files')
-      : null;
+    : findExtensionToolPanelBySlot(extensionRightToolPanels, activeWorkbenchTool);
   if (!activeRailSurface || !('detailView' in activeRailSurface) || typeof activeRailSurface.detailView !== 'string') return null;
   return (
     extensionWorkbenchSurfaces.find(
@@ -160,8 +171,7 @@ export function resolveActiveExtensionWorkbenchSurface({
 }
 
 export function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
-  // Built-in diffs mode or any tool with toolSlot matching "diffs" resolves to "diffs"
-  return mode === 'diffs';
+  return mode === 'diffs' || mode.startsWith('extension:system-diffs:');
 }
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
@@ -636,7 +646,7 @@ function WorkbenchKnowledgeRail({
   const availableExtensionToolPanels = extensionToolPanels;
   const activeExtensionToolPanel = useMemo(() => {
     const parsed = parseExtensionToolPanelMode(activeTool);
-    if (!parsed) return null;
+    if (!parsed) return findExtensionToolPanelBySlot(availableExtensionToolPanels, activeTool);
     return (
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
