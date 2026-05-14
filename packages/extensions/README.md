@@ -245,7 +245,7 @@ import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemet
 recordTelemetryEvent({ source: 'agent', category: 'my_extension', name: 'action_completed', durationMs: 42 });
 ```
 
-Backend action handlers can also use `ctx.telemetry.record(...)`, which automatically annotates metadata with the current extension id.
+Backend action handlers can also use `ctx.telemetry.record(...)`, which automatically annotates metadata with the current extension id. These events are stored as local JSONL first under `<state-root>/logs/telemetry/`, then indexed into SQLite best-effort for the Telemetry page and extension diagnostics. See [Telemetry](../../docs/telemetry.md) for storage paths, event shape, retention, and debugging guidance.
 
 If a system extension needs a host primitive that is not exported here, add it deliberately to this package as a reusable SDK capability. Do not punch through into app internals, and do not hardcode one-off product behavior in the app shell.
 

@@ -16,7 +16,7 @@ This caused the exact bug we hit: renaming `automations` → `automations_legacy
 
 ### `PRAGMA user_version`
 
-SQLite provides a single-integer schema version via `PRAGMA user_version`. This is the foundation of the migration system for single-schema stores. Shared stores, like the unified observability database, use a namespace table (`observability_schema_versions`) instead so trace and app-telemetry migrations do not fight over one global integer.
+SQLite provides a single-integer schema version via `PRAGMA user_version`. This is the foundation of the migration system for single-schema stores. Shared stores, like the unified observability database, use a namespace table (`observability_schema_versions`) instead so trace and app-telemetry migrations do not fight over one global integer. Generic app telemetry is JSONL-first; its SQLite rows are a derived index, so prefer adding new metadata fields to the JSON event shape before introducing indexed columns or migrations.
 
 ### `Migration`
 

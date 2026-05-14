@@ -27,6 +27,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Sandboxing](sandboxing.md) — shared process execution launcher, wrapper extensions, and direct process API policy
 - [Activity tree](activity-tree.md) — shared model for conversations, runs, and future sidebar sub-items
 - [Performance diagnostics](performance-diagnostics.md) — renderer timing tripwires for conversation load and API latency
+- [Telemetry](telemetry.md) — local JSONL telemetry logs, SQLite observability indexes, exports, and runtime producers
 - [Extension authoring](extensions.md) — build native extensions with manifests, frontend/backend entries, tools, skills, agent hooks, event bus, notifications, stable SDK imports, and integration testing
 - [Extension API types](../packages/extensions/README.md) — SDK package with exported types for frontend and backend code
 - [System extensions](../extensions) — feature-owned docs and implementation packages
@@ -52,13 +53,14 @@ Feature-specific documentation lives beside the owning extension package:
 - [Gateways](../extensions/system-gateways/README.md)
 - [Images](../extensions/system-images/README.md)
 - [Knowledge](../extensions/system-knowledge/README.md)
+- [Local Dictation](../extensions/system-local-dictation/README.md)
 - [MCP](../extensions/system-mcp/README.md)
 - [Onboarding](../extensions/system-onboarding/README.md) — first-run onboarding bootstrap and conversation flow
 - [OpenAI Native Compaction](../extensions/system-openai-native-compaction/README.md)
 - [Runs](../extensions/system-runs/README.md)
 - [Session Exchange](../experimental-extensions/extensions/system-session-exchange/README.md)
 - [Settings](../extensions/system-settings/README.md)
-- [Telemetry](../extensions/system-telemetry/README.md)
+- [Telemetry extension](../extensions/system-telemetry/README.md)
 - [Web Tools](../extensions/system-web-tools/README.md)
 
 ## Sections

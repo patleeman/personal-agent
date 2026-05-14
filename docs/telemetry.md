@@ -1,11 +1,3 @@
-# Telemetry Extension
-
-This extension owns the product behavior documented below. Keep extension-specific user and agent docs here so the implementation and documentation move together.
-
----
-
-<!-- Source: docs/telemetry.md -->
-
 # Telemetry
 
 Telemetry explains where Personal Agent stores local observability data, which path is authoritative, and how the Settings and Telemetry pages read it.
