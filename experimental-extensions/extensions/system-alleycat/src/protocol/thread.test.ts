@@ -85,7 +85,7 @@ describe('system-alleycat thread protocol', () => {
     expect(result.data[0].path).toBe('/repo/b');
   });
 
-  it('treats Kitty mobile /root cwd as global and reports live loaded threads', async () => {
+  it('treats Kitty mobile /root cwd as global and seeds loaded list from live or recent threads', async () => {
     const ctx = makeContext({
       list: vi.fn().mockResolvedValue([
         { id: 'a', title: 'Alpha', cwd: '/repo/a', updatedAt: 10, isLive: true },
@@ -99,5 +99,14 @@ describe('system-alleycat thread protocol', () => {
 
     const loaded = (await thread.loadedList({}, ctx as never, conn, vi.fn())) as { data: string[] };
     expect(loaded.data).toEqual(['a']);
+
+    const recentOnlyCtx = makeContext({
+      list: vi.fn().mockResolvedValue([
+        { id: 'old', title: 'Old', cwd: '/repo/a', updatedAt: 10 },
+        { id: 'new', title: 'New', cwd: '/repo/b', updatedAt: 30 },
+      ]),
+    });
+    const recentLoaded = (await thread.loadedList({ limit: 1 }, recentOnlyCtx as never, conn, vi.fn())) as { data: string[] };
+    expect(recentLoaded.data).toEqual(['new']);
   });
 });

@@ -334,18 +334,24 @@ export const thread = {
     return { data: filtered.slice(0, limit), nextCursor: null, backwardsCursor: null };
   }) as MethodHandler,
 
-  /** `thread/loaded/list` — list currently loaded (live) thread ids */
-  loadedList: (async (_params, ctx) => {
+  /** `thread/loaded/list` — list thread ids that should seed Kitty's home/open list */
+  loadedList: (async (params, ctx) => {
+    const p = params as Record<string, unknown> | undefined;
+    const limit = typeof p?.limit === 'number' && p.limit > 0 ? Math.min(Math.floor(p.limit), 80) : 10;
     const sessions = await ctx.conversations.list();
-    const loaded = Array.isArray(sessions)
-      ? sessions
-          .filter((s: unknown) => {
-            const session = s as Record<string, unknown>;
-            return isLiveOrRunning(session);
-          })
-          .map((s: unknown) => (s as Record<string, unknown>).id as string)
-          .filter(Boolean)
-      : [];
+    if (!Array.isArray(sessions)) return { data: [], nextCursor: null };
+
+    const sorted = sessions
+      .map((s: unknown) => s as Record<string, unknown>)
+      .filter((session) => typeof session.id === 'string' && session.id)
+      .sort((a, b) => epochSeconds(b.updatedAt) - epochSeconds(a.updatedAt));
+
+    const live = sorted.filter(isLiveOrRunning);
+    const source = live.length > 0 ? live : sorted;
+    const loaded = source
+      .slice(0, limit)
+      .map((session) => session.id as string)
+      .filter(Boolean);
     return { data: loaded, nextCursor: null };
   }) as MethodHandler,
 
