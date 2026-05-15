@@ -18,6 +18,7 @@ const DEFAULT_COMPAT_PORT = 3850;
 const SECRET_KEY = 'alleycat-secret-key';
 const STABLE_IDENTITY_FILE = 'kitty-litter-alleycat/identity.json';
 const SIDECAR_READY_TIMEOUT_MS = 12_000;
+const SIDECAR_PROCESS_NAME = 'pa-alleycat-host';
 
 export interface AlleycatPairPayload {
   v: 1;
@@ -164,6 +165,22 @@ async function isPidRunning(ctx: ExtensionBackendContext, pid: number): Promise<
   return result.stdout.trim() === 'yes';
 }
 
+async function stopStaleSidecars(ctx: ExtensionBackendContext): Promise<void> {
+  const result = await ctx.shell.exec({
+    command: 'sh',
+    args: ['-lc', `pgrep -f ${shellQuote(SIDECAR_PROCESS_NAME)} 2>/dev/null || true`],
+    timeoutMs: 5_000,
+  });
+  const pids = result.stdout
+    .split(/\s+/)
+    .map((value) => Number(value.trim()))
+    .filter((pid) => Number.isFinite(pid) && pid > 0 && pid !== process.pid);
+  const stalePids = sidecarPid ? pids.filter((pid) => pid !== sidecarPid) : pids;
+  if (stalePids.length === 0) return;
+  rememberLog(`stopping stale Alleycat sidecar processes: ${stalePids.join(', ')}`);
+  await ctx.shell.exec({ command: 'sh', args: ['-lc', `kill ${stalePids.join(' ')} >/dev/null 2>&1 || true`], timeoutMs: 5_000 });
+}
+
 async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
   if (!codexServer) throw new Error('Codex JSONL server must be running before Alleycat sidecar starts');
   if (sidecarPid && (await isPidRunning(ctx, sidecarPid))) return;
@@ -174,6 +191,8 @@ async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
     rememberLog('set PERSONAL_AGENT_ALLEYCAT_SIDECAR or rebuild/reimport the extension so dist/bin/pa-alleycat-host-* is packaged');
     return;
   }
+
+  await stopStaleSidecars(ctx);
 
   const auth = codexAuth ?? createCodexAuth(ctx);
   const token = await auth.ensurePairing();
@@ -235,6 +254,7 @@ export async function stop(_input?: unknown, ctx?: ExtensionBackendContext): Pro
     if (ctx) await ctx.shell.exec({ command: 'sh', args: ['-lc', `kill ${sidecarPid} >/dev/null 2>&1 || true`], timeoutMs: 5_000 });
     sidecarPid = null;
   }
+  if (ctx) await stopStaleSidecars(ctx);
   if (codexServer) {
     codexServer.stop();
     codexServer = null;
