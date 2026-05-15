@@ -17,6 +17,7 @@ import { loadLocalApiModule } from './local-api-module.js';
 import { installDesktopApplicationMenu, setDesktopApplicationMenuKeyboardShortcutsReader } from './menu.js';
 import { confirmDesktopQuit } from './quit.js';
 import { applyDesktopRuntimeEnvironmentOverrides } from './runtime-env.js';
+import { claimDesktopSingleInstance } from './single-instance.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
 import { DesktopTrayController } from './tray.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
@@ -133,6 +134,10 @@ const desktopUserDataDir = process.env.PERSONAL_AGENT_DESKTOP_USER_DATA_DIR?.tri
 if (desktopUserDataDir) {
   app.setPath('userData', resolve(desktopUserDataDir));
 }
+
+const hasDesktopSingleInstanceLock = claimDesktopSingleInstance(app, () => {
+  void openMainRoute(readInitialDesktopRoute());
+});
 
 function readInitialDesktopRoute(): string {
   const route = process.env.PERSONAL_AGENT_DESKTOP_INITIAL_ROUTE?.trim();
@@ -599,32 +604,34 @@ async function requestAppQuit(): Promise<void> {
   await quitRequestPromise;
 }
 
-app.on('before-quit', (event) => {
-  if (quitting) {
-    return;
-  }
+if (hasDesktopSingleInstanceLock) {
+  app.on('before-quit', (event) => {
+    if (quitting) {
+      return;
+    }
 
-  event.preventDefault();
-  void requestAppQuit();
-});
-
-app.on('window-all-closed', () => {
-  // Keep the tray app alive when the main window is closed.
-});
-
-app.on('activate', () => {
-  void openMainRoute('/');
-});
-
-app
-  .whenReady()
-  .then(async () => {
-    configureDesktopRuntimeEnvironment();
-    applyDesktopApplicationIcon(process.platform, app, resolveDesktopRuntimePaths().colorIconFile);
-    applyDesktopShellAppMode(process.platform, app);
-    await bootstrapDesktopApp();
-  })
-  .catch((error) => {
-    logBootstrapError(error);
-    app.exit(1);
+    event.preventDefault();
+    void requestAppQuit();
   });
+
+  app.on('window-all-closed', () => {
+    // Keep the tray app alive when the main window is closed.
+  });
+
+  app.on('activate', () => {
+    void openMainRoute('/');
+  });
+
+  app
+    .whenReady()
+    .then(async () => {
+      configureDesktopRuntimeEnvironment();
+      applyDesktopApplicationIcon(process.platform, app, resolveDesktopRuntimePaths().colorIconFile);
+      applyDesktopShellAppMode(process.platform, app);
+      await bootstrapDesktopApp();
+    })
+    .catch((error) => {
+      logBootstrapError(error);
+      app.exit(1);
+    });
+}
