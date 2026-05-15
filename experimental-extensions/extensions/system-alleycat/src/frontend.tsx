@@ -78,7 +78,7 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
     ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairPayloadJson)}`
     : null;
 
-  async function invoke(action: 'start' | 'stop' | 'rotateToken') {
+  async function invoke(action: 'rotateToken') {
     setBusy(true);
     try {
       const result = (await pa.extension.invoke(action)) as AlleycatStatus | { ok: true };
@@ -112,13 +112,13 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
         <div className={CALLOUT}>
           <div className="font-medium text-primary">Use the Kitty Litter mobile app — not the Kitty Litter npm host.</div>
           <ol className="mt-2 list-decimal space-y-1 pl-4">
-            <li>Click Start here in Personal Agent.</li>
+            <li>Enable this extension in Personal Agent; the companion host starts automatically.</li>
             <li>Open Kitty Litter on your phone and scan this QR code.</li>
             <li>Select Personal Agent. It should be the only advertised agent.</li>
           </ol>
           <p className="mt-2 text-tertiary">
-            Do not install or run <span className="font-mono">npx kittylitter</span>; that starts the upstream host and advertises its
-            built-in agents.
+            Disable the extension to stop the host. Do not install or run <span className="font-mono">npx kittylitter</span>; that starts
+            the upstream host and advertises its built-in agents.
           </p>
         </div>
       </div>
@@ -184,19 +184,6 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
 
       <div className={SECTION}>
         <div className="flex flex-wrap gap-2">
-          {status?.running ? (
-            <button className={`${BUTTON} bg-danger/10 text-danger hover:bg-danger/20`} disabled={busy} onClick={() => void invoke('stop')}>
-              Stop
-            </button>
-          ) : (
-            <button
-              className={`${BUTTON} bg-accent/10 text-accent hover:bg-accent/20`}
-              disabled={busy}
-              onClick={() => void invoke('start')}
-            >
-              Start
-            </button>
-          )}
           <button className={BUTTON} disabled={busy || !status?.pairPayload} onClick={() => void copyPairPayload()}>
             {copied ? 'Copied' : 'Copy pair payload'}
           </button>

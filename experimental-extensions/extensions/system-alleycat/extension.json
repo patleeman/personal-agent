@@ -11,6 +11,16 @@
   },
   "backend": {
     "entry": "src/backend.ts",
+    "services": [
+      {
+        "id": "host",
+        "handler": "startService",
+        "title": "Kitty Litter companion host",
+        "description": "Runs the PA-owned Alleycat-compatible host while the extension is enabled.",
+        "healthCheck": "status",
+        "restart": "on-failure"
+      }
+    ],
     "actions": [
       { "id": "start", "handler": "start", "title": "Start Alleycat host" },
       { "id": "stop", "handler": "stop", "title": "Stop Alleycat host" },
