@@ -6,8 +6,14 @@ import { broadcastToThread, subscribeConnectionToThread, unsubscribeConnectionFr
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function epochSeconds(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return Math.floor(Date.now() / 1000);
-  return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return Math.floor(parsed / 1000);
+  }
+  return Math.floor(Date.now() / 1000);
 }
 
 function defaultCwd(ctx?: { runtime?: { getRepoRoot?: () => string } }): string {
