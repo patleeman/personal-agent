@@ -8,55 +8,41 @@ function resolveDanglingToolCallRepairLeafId(sessionManager: Pick<SessionManager
     return undefined;
   }
 
-  const pendingToolCalls = new Map<string, { index: number; parentId: string | null }>();
+  const trailingToolResultIds = new Set<string>();
+  let index = branch.length - 1;
 
-  for (const [index, entry] of branch.entries()) {
-    if (entry.type !== 'message') {
-      continue;
+  while (index >= 0) {
+    const entry = branch[index];
+    if (entry?.type !== 'message' || entry.message.role !== 'toolResult') {
+      break;
     }
 
-    const { message } = entry;
-    if (message.role === 'assistant') {
-      for (const part of message.content) {
-        if (part.type !== 'toolCall') {
-          continue;
-        }
-
-        const toolCallId = part.id?.trim();
-        if (!toolCallId) {
-          continue;
-        }
-
-        pendingToolCalls.set(toolCallId, {
-          index,
-          parentId: entry.parentId ?? null,
-        });
-      }
-      continue;
+    const toolCallId = entry.message.toolCallId?.trim();
+    if (toolCallId) {
+      trailingToolResultIds.add(toolCallId);
     }
-
-    if (message.role === 'toolResult') {
-      const toolCallId = message.toolCallId?.trim();
-      if (toolCallId) {
-        pendingToolCalls.delete(toolCallId);
-      }
-    }
+    index -= 1;
   }
 
-  let repairLeafId: string | null | undefined;
-  let earliestPendingIndex = Number.POSITIVE_INFINITY;
-  for (const pending of pendingToolCalls.values()) {
-    if (pending.index < earliestPendingIndex) {
-      earliestPendingIndex = pending.index;
-      repairLeafId = pending.parentId;
-    }
-  }
-
-  if (repairLeafId === undefined) {
+  const candidate = branch[index];
+  if (candidate?.type !== 'message' || candidate.message.role !== 'assistant') {
     return undefined;
   }
 
-  return repairLeafId;
+  const toolCallIds = candidate.message.content.flatMap((part) => {
+    if (part.type !== 'toolCall') {
+      return [];
+    }
+    const toolCallId = part.id?.trim();
+    return toolCallId ? [toolCallId] : [];
+  });
+
+  if (toolCallIds.length === 0) {
+    return undefined;
+  }
+
+  const hasDanglingToolCall = toolCallIds.some((toolCallId) => !trailingToolResultIds.has(toolCallId));
+  return hasDanglingToolCall ? (candidate.parentId ?? null) : undefined;
 }
 
 export function repairDanglingToolCallContext(session: Pick<AgentSession, 'sessionManager' | 'state'>): boolean {
