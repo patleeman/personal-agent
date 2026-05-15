@@ -74,6 +74,7 @@ interface ExtensionCommandContribution {
   id: string;
   title: string;
   action: string;
+  args?: unknown;
   icon?: ExtensionIconName;
   category?: string;
   description?: string;
@@ -486,6 +487,7 @@ export interface ExtensionCommandRegistration {
   packageType?: ExtensionPackageType;
   title: string;
   action: string;
+  args?: unknown;
   icon?: string;
   category?: string;
   description?: string;

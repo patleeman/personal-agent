@@ -19,6 +19,8 @@ export interface ExtensionCommandExecutorOptions {
   openCommandPalette(scope?: string): void;
   openRightRail(target: string): boolean;
   setLayout(mode: 'compact' | 'workbench'): void;
+  focusComposer?(): void;
+  activeConversationId?: string | null;
   extensionCommands?: ExtensionCommandRegistration[];
   invokeExtensionCommand?(command: ExtensionCommandRegistration, args: unknown): Promise<unknown>;
   context?: ExtensionCommandContext;
@@ -73,6 +75,9 @@ export function listHostCommands(): Array<{ id: string; title: string; category?
     { id: 'palette.open', title: 'Open Command Palette', category: 'App' },
     { id: 'rail.open', title: 'Open Right Rail', category: 'App' },
     { id: 'layout.set', title: 'Set Layout', category: 'App' },
+    { id: 'conversation.new', title: 'New Conversation', category: 'Conversation' },
+    { id: 'conversation.open', title: 'Open Conversation', category: 'Conversation' },
+    { id: 'composer.focus', title: 'Focus Composer', category: 'Conversation' },
   ];
 }
 
@@ -121,6 +126,38 @@ export function createHostCommands(options: ExtensionCommandExecutorOptions): Ho
         return true;
       },
     },
+    {
+      id: 'conversation.new',
+      title: 'New Conversation',
+      category: 'Conversation',
+      execute() {
+        options.navigate('/conversations/new');
+        return true;
+      },
+    },
+    {
+      id: 'conversation.open',
+      title: 'Open Conversation',
+      category: 'Conversation',
+      execute(args) {
+        const conversationId = readStringArg(args, 'conversationId') ?? options.activeConversationId;
+        if (!conversationId) return false;
+        options.navigate(`/conversations/${encodeURIComponent(conversationId)}`);
+        return true;
+      },
+      canExecute(args) {
+        return Boolean(readStringArg(args, 'conversationId') ?? options.activeConversationId);
+      },
+    },
+    {
+      id: 'composer.focus',
+      title: 'Focus Composer',
+      category: 'Conversation',
+      execute() {
+        options.focusComposer?.();
+        return true;
+      },
+    },
   ];
 }
 
@@ -133,6 +170,11 @@ export function normalizeLegacyCommand(command: string): { command: string; args
   }
   if (command.startsWith('layout:')) return { command: 'layout.set', args: { mode: command.slice('layout:'.length) } };
   return { command };
+}
+
+function isHostCommandString(command: string): boolean {
+  const normalized = normalizeLegacyCommand(command).command;
+  return listHostCommands().some((candidate) => candidate.id === normalized);
 }
 
 export async function executeExtensionCommand(command: string, args: unknown, options: ExtensionCommandExecutorOptions): Promise<boolean> {
@@ -148,6 +190,10 @@ export async function executeExtensionCommand(command: string, args: unknown, op
   );
   if (!extensionCommand) return false;
   if (!evaluateCommandEnablement(extensionCommand.enablement, options.context)) return false;
-  await options.invokeExtensionCommand?.(extensionCommand, commandArgs ?? {});
+  const effectiveArgs = commandArgs ?? (extensionCommand.args as ExtensionCommandArgs);
+  if (isHostCommandString(extensionCommand.action)) {
+    return executeExtensionCommand(extensionCommand.action, effectiveArgs, options);
+  }
+  await options.invokeExtensionCommand?.(extensionCommand, effectiveArgs ?? {});
   return true;
 }

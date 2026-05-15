@@ -619,6 +619,11 @@ Built-in host commands include:
 - `palette.open` with `{ "scope": "threads" }`
 - `rail.open` with `{ "extensionId": "...", "surfaceId": "..." }`
 - `layout.set` with `{ "mode": "compact" | "workbench" }`
+- `conversation.new`
+- `conversation.open` with `{ "conversationId": "..." }`
+- `composer.focus`
+
+Extension command contributions may point at a backend action or at a built-in host command via `action`, with default `args` when needed.
 
 Legacy string commands still work for compatibility: `navigate:/path`, `commandPalette:threads|files|commands|search`, `rightRail:{extensionId}/{surfaceId}`, and `layout:compact|workbench`.
 

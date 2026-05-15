@@ -424,6 +424,15 @@ describe('extension manifests - structural validation', () => {
     ]);
     // Known system action prefixes that don't reference backend handlers
     const knownSystemActionPrefixes = ['commandPalette:', 'navigate:', 'rightRail:'];
+    const knownHostCommands = new Set([
+      'app.navigate',
+      'palette.open',
+      'rail.open',
+      'layout.set',
+      'conversation.new',
+      'conversation.open',
+      'composer.focus',
+    ]);
 
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
@@ -454,6 +463,8 @@ describe('extension manifests - structural validation', () => {
         if (backendActionIds.has(action)) continue;
         // If the action matches a known built-in frontend action, it's valid
         if (knownBuiltInFrontendActions.has(action)) continue;
+        // If the action matches a known host command, it's valid
+        if (knownHostCommands.has(action)) continue;
         // If the action starts with a known system prefix, it's valid
         if (knownSystemActionPrefixes.some((prefix) => action.startsWith(prefix))) continue;
         // Otherwise, flag it as potentially dangling

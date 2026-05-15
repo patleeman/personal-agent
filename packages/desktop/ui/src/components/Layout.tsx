@@ -1365,6 +1365,11 @@ export function Layout() {
         writeAppLayoutMode(mode);
         setAppLayoutMode(mode);
       },
+      focusComposer() {
+        const textarea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="Message"]');
+        textarea?.focus();
+      },
+      activeConversationId,
       invokeExtensionCommand(command: ExtensionCommandRegistration, args: unknown) {
         return api.invokeExtensionAction(command.extensionId, command.action, args ?? {});
       },

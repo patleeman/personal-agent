@@ -33,7 +33,8 @@
       {
         "id": "open-settings",
         "title": "Open Settings",
-        "action": "navigate:/settings",
+        "action": "app.navigate",
+        "args": { "to": "/settings" },
         "icon": "gear"
       }
     ],

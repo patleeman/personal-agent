@@ -18,8 +18,9 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
+import { evaluateCommandEnablement, listHostCommands } from '../extensions/commands';
 import { systemExtensionModules } from '../extensions/systemExtensionModules';
-import type { ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
+import type { ExtensionCommandRegistration, ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
 import type { ConversationContentSearchMatch, SessionMeta } from '../shared/types';
 import { timeAgo } from '../shared/utils';
@@ -45,7 +46,8 @@ type ExtensionQuickOpenProvider = {
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
-  | { kind: 'openFile'; fileId: string; extensionSurfaces?: ExtensionSurfaceSummary[] };
+  | { kind: 'openFile'; fileId: string; extensionSurfaces?: ExtensionSurfaceSummary[] }
+  | { kind: 'command'; command: string; args?: unknown };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
@@ -192,6 +194,7 @@ export function CommandPalette() {
   const [quickOpenSearchItems, setQuickOpenSearchItems] = useState<CommandPaletteItem<CommandPaletteAction>[]>([]);
   const [quickOpenSearchLoading, setQuickOpenSearchLoading] = useState(false);
   const [quickOpenSearchError, setQuickOpenSearchError] = useState<string | null>(null);
+  const [extensionCommands, setExtensionCommands] = useState<ExtensionCommandRegistration[]>([]);
   const openThreadSessions = useMemo(
     () => [...pinnedSessions.map((session) => ({ ...session, pinned: true }) satisfies ScopedSessionMeta), ...tabs],
     [pinnedSessions, tabs],
@@ -199,7 +202,33 @@ export function CommandPalette() {
 
   const openConversationItems = useMemo(() => buildConversationItems('open', openThreadSessions), [openThreadSessions]);
   const archivedConversationItems = useMemo(() => buildConversationItems('archived', archivedSessions), [archivedSessions]);
-  const fileItems = quickOpenItems;
+  const commandItems = useMemo<CommandPaletteItem<CommandPaletteAction>[]>(() => {
+    const hostItems = listHostCommands().map((command, index) => ({
+      id: `host-command:${command.id}`,
+      section: 'commands',
+      title: command.title,
+      subtitle: command.id,
+      meta: command.category,
+      keywords: [command.id, command.category],
+      order: index,
+      action: { kind: 'command' as const, command: command.id },
+    }));
+    const extensionItems = extensionCommands.map((command, index) => ({
+      id: `extension-command:${command.extensionId}:${command.surfaceId}`,
+      section: 'commands',
+      title: command.title,
+      subtitle: `${command.extensionId}.${command.surfaceId}`,
+      meta: command.category ?? command.extensionId,
+      keywords: [command.surfaceId, command.extensionId, command.category, command.description],
+      order: hostItems.length + index,
+      disabled: !evaluateCommandEnablement(command.enablement, {
+        route: location.pathname,
+      }),
+      action: { kind: 'command' as const, command: `${command.extensionId}.${command.surfaceId}`, args: command.args },
+    }));
+    return [...hostItems, ...extensionItems];
+  }, [extensionCommands, location.pathname]);
+  const fileItems = scope === 'commands' ? commandItems : quickOpenItems;
   const searchedFileItems = quickOpenSearchItems;
   const quickOpenScopes = useMemo(
     () =>
@@ -214,7 +243,11 @@ export function CommandPalette() {
   );
   const quickOpenScopeLabel = quickOpenScopes.find((option) => option.value === scope)?.label ?? 'items';
   const scopeOptions = useMemo(
-    () => [...COMMAND_PALETTE_SCOPE_OPTIONS, ...quickOpenScopes.map(({ value, label }) => ({ value, label }))],
+    () => [
+      ...COMMAND_PALETTE_SCOPE_OPTIONS,
+      { value: 'commands', label: 'Commands' },
+      ...quickOpenScopes.map(({ value, label }) => ({ value, label })),
+    ],
     [quickOpenScopes],
   );
   const quickOpenSectionLabels = useMemo(
@@ -268,6 +301,22 @@ export function CommandPalette() {
     setArchivedVisibleLimit(THREADS_EMPTY_QUERY_PAGE_SIZE);
     setOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api
+      .extensionCommands()
+      .then((commands) => {
+        if (!cancelled) setExtensionCommands(commands);
+      })
+      .catch(() => {
+        if (!cancelled) setExtensionCommands([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const loadQuickOpenItems = useCallback(async () => {
     setQuickOpenLoading(true);
@@ -496,6 +545,10 @@ export function CommandPalette() {
                 extensionSurfaces: item.action.extensionSurfaces,
               }),
             );
+            closePalette();
+            return;
+          case 'command':
+            await api.executeExtensionCommand(item.action.command, item.action.args ?? {});
             closePalette();
             return;
           default:

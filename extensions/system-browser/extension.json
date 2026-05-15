@@ -32,7 +32,8 @@
       {
         "id": "open-browser",
         "title": "Open browser",
-        "action": "rightRail:system-browser/browser-tabs",
+        "action": "rail.open",
+        "args": { "extensionId": "system-browser", "surfaceId": "browser-tabs" },
         "icon": "browser"
       }
     ],
@@ -58,7 +59,8 @@
         "id": "open-browser",
         "title": "Open browser",
         "keys": ["mod+shift+b"],
-        "command": "rightRail:system-browser/browser-tabs"
+        "command": "rail.open",
+        "args": { "extensionId": "system-browser", "surfaceId": "browser-tabs" }
       },
       {
         "id": "new-browser-tab",

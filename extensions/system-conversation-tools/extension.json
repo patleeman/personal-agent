@@ -49,13 +49,14 @@
         "surface": "conversationList"
       }
     ],
-    "commands": [{ "id": "open-thread-palette", "title": "Open thread palette", "action": "commandPalette:threads" }],
+    "commands": [{ "id": "open-thread-palette", "title": "Open thread palette", "action": "palette.open", "args": { "scope": "threads" } }],
     "keybindings": [
       {
         "id": "open-thread-palette",
         "title": "Open thread palette",
         "keys": ["mod+k"],
-        "command": "commandPalette:threads"
+        "command": "palette.open",
+        "args": { "scope": "threads" }
       }
     ]
   },

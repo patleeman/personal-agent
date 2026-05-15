@@ -382,6 +382,7 @@ export interface ExtensionCommandContribution {
   id: string;
   title: string;
   action: string;
+  args?: unknown;
   icon?: ExtensionIconName;
   category?: string;
   description?: string;

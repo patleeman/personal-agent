@@ -152,6 +152,7 @@ export interface ExtensionCommandRegistration {
   packageType: ExtensionManifest['packageType'];
   title: string;
   action: string;
+  args?: unknown;
   icon?: string;
   category?: string;
   description?: string;
@@ -1633,6 +1634,7 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
       packageType: extension.packageType ?? 'user',
       title: command.title,
       action: command.action,
+      ...(command.args !== undefined ? { args: command.args } : {}),
       ...(command.icon ? { icon: command.icon } : {}),
       ...(command.category ? { category: command.category } : {}),
       ...(command.description ? { description: command.description } : {}),
