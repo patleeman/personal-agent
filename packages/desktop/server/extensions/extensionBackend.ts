@@ -937,6 +937,9 @@ export async function checkEnabledExtensionBackendHealth(): Promise<Array<{ exte
   return results;
 }
 
+let extensionServiceShutdownHookInstalled = false;
+let extensionServiceHealthTimer: NodeJS.Timeout | null = null;
+
 export async function startExtensionStartupActions(
   serverContext?: ExtensionBackendServerContext,
 ): Promise<Array<{ extensionId: string; ok: boolean; error?: string }>> {
@@ -966,8 +969,20 @@ export async function startExtensionStartupActions(
 
   const { installExtensionSubscriptions } = await import('./extensionSubscriptions.js');
   await installExtensionSubscriptions(serverContext);
-  const { startExtensionServices } = await import('./extensionServices.js');
+  const { runExtensionServiceHealthChecks, startExtensionServices, stopAllExtensionServices } = await import('./extensionServices.js');
   await startExtensionServices(serverContext);
+  if (!extensionServiceShutdownHookInstalled) {
+    extensionServiceShutdownHookInstalled = true;
+    process.once('beforeExit', () => {
+      void stopAllExtensionServices();
+    });
+  }
+  if (!extensionServiceHealthTimer) {
+    extensionServiceHealthTimer = setInterval(() => {
+      void runExtensionServiceHealthChecks(serverContext);
+    }, 30_000);
+    extensionServiceHealthTimer.unref?.();
+  }
   return results;
 }
 
@@ -984,10 +999,14 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
     throw new Error('Extension has no backend entry.');
   }
 
+  const { stopExtensionServices, startExtensionServices } = await import('./extensionServices.js');
+  await stopExtensionServices(extensionId);
+
   const directLoadTarget = resolveExtensionBackendLoadTarget(entry, backendEntry);
   if (directLoadTarget) {
     await loadCompiledExtensionBackendModule(extensionId, directLoadTarget);
     clearExtensionHealthError(extensionId);
+    await startExtensionServices();
     return { ok: true, extensionId, rebuilt: false };
   }
   if (isPrebuiltOnlyExtensionRuntime()) {
@@ -1000,5 +1019,6 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
   const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: false });
   await loadCompiledExtensionBackendModule(extensionId, compiled);
   clearExtensionHealthError(extensionId);
+  await startExtensionServices();
   return { ok: true, extensionId, rebuilt: compiled.rebuilt };
 }

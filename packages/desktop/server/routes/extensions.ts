@@ -40,9 +40,37 @@ import { deleteExtensionState, listExtensionState, readExtensionState, writeExte
 import { logError } from '../middleware/index.js';
 import type { ServerRouteContext } from './context.js';
 
+async function readExtensionInstallSummariesWithRuntimeState() {
+  const summaries = listExtensionInstallSummaries();
+  const { listRunningExtensionServices } = await import('../extensions/extensionServices.js');
+  const running = new Map(listRunningExtensionServices().map((service) => [`${service.extensionId}:${service.serviceId}`, service]));
+  return summaries.map((summary) => ({
+    ...summary,
+    serviceStatuses: (summary.services ?? []).map((service) => {
+      const status = running.get(`${summary.id}:${service.id}`);
+      return { id: service.id, running: Boolean(status), startedAt: status?.startedAt ?? null };
+    }),
+  }));
+}
+
 function sendRouteError(res: Response, label: string, err: unknown): void {
   logError(label, { message: err instanceof Error ? err.message : String(err) });
   res.status(500).json({ error: String(err) });
+}
+
+function normalizeDependencyId(dependency: string | { id: string; optional?: boolean }): { id: string; optional: boolean } {
+  return typeof dependency === 'string'
+    ? { id: dependency, optional: false }
+    : { id: dependency.id, optional: Boolean(dependency.optional) };
+}
+
+function findMissingRequiredDependencies(extensionId: string): string[] {
+  const installed = new Set(listExtensionInstallSummaries().map((extension) => extension.id));
+  const entry = findExtensionEntry(extensionId);
+  return (entry?.manifest.dependsOn ?? [])
+    .map(normalizeDependencyId)
+    .filter((dependency) => !dependency.optional && !installed.has(dependency.id))
+    .map((dependency) => dependency.id);
 }
 
 function resolveExtensionFilePath(extensionId: string, relativePath: string): string {
@@ -120,9 +148,9 @@ export function registerExtensionRoutes(
     }
   });
 
-  router.get('/api/extensions/installed', (_req, res) => {
+  router.get('/api/extensions/installed', async (_req, res) => {
     try {
-      res.json(listExtensionInstallSummaries());
+      res.json(await readExtensionInstallSummariesWithRuntimeState());
     } catch (err) {
       sendRouteError(res, 'extensions installed error', err);
     }
@@ -460,6 +488,13 @@ export function registerExtensionRoutes(
       if (!enabled && entry.manifest.id === 'system-extension-manager') {
         res.status(400).json({ error: 'Cannot disable the Extension Manager: this extension is required by the application.' });
         return;
+      }
+      if (enabled) {
+        const missingDependencies = findMissingRequiredDependencies(entry.manifest.id);
+        if (missingDependencies.length > 0) {
+          res.status(400).json({ error: `Missing required extension dependencies: ${missingDependencies.join(', ')}` });
+          return;
+        }
       }
       setExtensionEnabled(entry.manifest.id, enabled);
       if (!enabled) {

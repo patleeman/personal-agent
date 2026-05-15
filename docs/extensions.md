@@ -842,7 +842,7 @@ await ctx.conversations.appendTranscriptBlock({ conversationId, blockType: 'appr
 await ctx.conversations.updateTranscriptBlock({ conversationId, blockId, blockType: 'approval', data: { status: 'approved' } });
 ```
 
-Long-lived backend services are declared under `backend.services` so the host can own lifecycle, health, and restart policy. Enabled extension services are started during extension startup; a service handler may return a stop function that the host calls on shutdown/disable.
+Long-lived backend services are declared under `backend.services` so the host can own lifecycle, health, and restart policy. Enabled extension services are started during extension startup; a service handler may return a stop function that the host calls on shutdown, disable, reload, or restart. Extension Manager shows declared services plus live runtime state (`running`, `stopped`, start time) from the host.
 
 ```json
 {
@@ -855,7 +855,7 @@ Long-lived backend services are declared under `backend.services` so the host ca
 }
 ```
 
-Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes. The host dispatches these through the extension event bus as `host:{source}` events; `pattern` narrows the event name.
+Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes. The host dispatches these through the extension event bus as `host:{source}` events; `pattern` narrows the event name. Current built-in producers include `host:workspaceFiles` for workspace writes/deletes/renames/moves, `host:settings` for settings updates, and frontend `host:selection` notifications when shared selection changes.
 
 ```json
 {
@@ -888,7 +888,7 @@ Extensions can declare dependencies on other extensions:
 }
 ```
 
-Missing required dependencies are surfaced in Extension Manager diagnostics. Optional dependencies are documentation/discovery contracts and should be checked with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before use.
+Missing required dependencies are surfaced in Extension Manager diagnostics and block enabling the dependent extension. Optional dependencies are documentation/discovery contracts and should be checked with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before use.
 
 ## Inter-extension Communication
 

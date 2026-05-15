@@ -36,6 +36,14 @@ function writeWorkspaceError(res: { status: (code: number) => { json: (body: unk
   res.status(status).json({ error: message });
 }
 
+function publishHostEvent(source: string, payload: unknown): void {
+  void import('../extensions/extensionSubscriptions.js')
+    .then(({ publishExtensionHostEvent }) => publishExtensionHostEvent(source, payload))
+    .catch((error) => {
+      logError('extension host event publish failed', { message: error instanceof Error ? error.message : String(error) });
+    });
+}
+
 export function registerWorkspaceExplorerRoutes(
   router: Pick<Express, 'delete' | 'get' | 'post' | 'put'>,
   context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
@@ -74,7 +82,9 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'cwd, path, and content required' });
         return;
       }
-      res.json(writeWorkspaceFile(cwd, path, content));
+      const result = writeWorkspaceFile(cwd, path, content);
+      publishHostEvent('workspaceFiles', { action: 'write', cwd, path });
+      res.json(result);
     } catch (error) {
       logError('workspace file write failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
@@ -89,7 +99,9 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      res.json(deleteWorkspacePath(cwd, path));
+      const result = deleteWorkspacePath(cwd, path);
+      publishHostEvent('workspaceFiles', { action: 'delete', cwd, path });
+      res.json(result);
     } catch (error) {
       logError('workspace path delete failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
@@ -104,7 +116,9 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      res.json(createWorkspaceFolder(cwd, path));
+      const result = createWorkspaceFolder(cwd, path);
+      publishHostEvent('workspaceFiles', { action: 'createFolder', cwd, path });
+      res.json(result);
     } catch (error) {
       logError('workspace folder create failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
@@ -120,7 +134,9 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path and newName required' });
         return;
       }
-      res.json(renameWorkspacePath(cwd, path, newName));
+      const result = renameWorkspacePath(cwd, path, newName);
+      publishHostEvent('workspaceFiles', { action: 'rename', cwd, path, newName });
+      res.json(result);
     } catch (error) {
       logError('workspace path rename failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
@@ -136,7 +152,9 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      res.json(moveWorkspacePath(cwd, path, targetDir));
+      const result = moveWorkspacePath(cwd, path, targetDir);
+      publishHostEvent('workspaceFiles', { action: 'move', cwd, path, targetDir });
+      res.json(result);
     } catch (error) {
       logError('workspace path move failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);

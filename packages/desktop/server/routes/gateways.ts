@@ -43,19 +43,21 @@ function initializeGatewayRoutesContext(context: ServerRouteContext): void {
   getStateRootFn = context.getStateRoot;
   getAuthFileFn = context.getAuthFile;
   routeContext = context;
-  if (!lifecycleRegistered) {
-    lifecycleRegistered = true;
-    registerLiveSessionLifecycleHandler(async (event) => {
-      if (event.trigger !== 'turn_end') return;
-      const text = readLatestAssistantText(event.conversationId);
-      if (text && lastTelegramDeliveryByConversation.get(event.conversationId) !== text) {
-        const delivered = await ensureTelegramRuntime().deliverAssistantReply({ conversationId: event.conversationId, text });
-        if (delivered) {
-          lastTelegramDeliveryByConversation.set(event.conversationId, text);
-        }
+}
+
+export function registerTelegramGatewayLifecycleDelivery(): void {
+  if (lifecycleRegistered) return;
+  lifecycleRegistered = true;
+  registerLiveSessionLifecycleHandler(async (event) => {
+    if (event.trigger !== 'turn_end') return;
+    const text = readLatestAssistantText(event.conversationId);
+    if (text && lastTelegramDeliveryByConversation.get(event.conversationId) !== text) {
+      const delivered = await ensureTelegramRuntime().deliverAssistantReply({ conversationId: event.conversationId, text });
+      if (delivered) {
+        lastTelegramDeliveryByConversation.set(event.conversationId, text);
       }
-    });
-  }
+    }
+  });
 }
 
 function currentGatewayContext(): { stateRoot: string; profile: string } {

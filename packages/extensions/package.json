@@ -127,10 +127,6 @@
       "types": "./dist/backend/runs.d.ts",
       "default": "./dist/backend/runs.js"
     },
-    "./backend/slackMcpGateway": {
-      "types": "./dist/backend/slackMcpGateway.d.ts",
-      "default": "./dist/backend/slackMcpGateway.js"
-    },
     "./backend/runtime": {
       "types": "./dist/backend/runtime.d.ts",
       "default": "./dist/backend/runtime.js"

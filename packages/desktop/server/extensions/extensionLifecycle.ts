@@ -165,6 +165,56 @@ export async function ping(_input: unknown, ctx: ExtensionBackendContext) {
   ctx.log.info('ping');
   return { ok: true, at: new Date().toISOString() };
 }
+
+// Service example: add backend.services[{ id: 'sync', handler: 'startSync' }] to extension.json.
+export async function startSync(_input: unknown, ctx: ExtensionBackendContext) {
+  ctx.log.info('sync service started');
+  return async () => ctx.log.info('sync service stopped');
+}
+
+// Subscription example: add contributes.subscriptions[{ id: 'settings', source: 'settings', handler: 'onSettingsChanged' }].
+export async function onSettingsChanged(input: unknown, ctx: ExtensionBackendContext) {
+  ctx.log.info('host event received', { input });
+}
+`;
+}
+
+function createStarterReadme(name: string): string {
+  return `# ${name}
+
+Native Personal Agent extension.
+
+## Useful manifest examples
+
+Service:
+
+\`\`\`json
+{ "backend": { "services": [{ "id": "sync", "handler": "startSync", "healthCheck": "checkSync", "restart": "on-failure" }] } }
+\`\`\`
+
+Selection action:
+
+\`\`\`json
+{ "contributes": { "selectionActions": [{ "id": "use-selection", "title": "Use Selection", "action": "useSelection", "kinds": ["text", "messages"] }] } }
+\`\`\`
+
+Transcript block:
+
+\`\`\`json
+{ "contributes": { "transcriptBlocks": [{ "id": "status", "component": "StatusBlock", "schemaVersion": 1 }] } }
+\`\`\`
+
+Subscription:
+
+\`\`\`json
+{ "contributes": { "subscriptions": [{ "id": "settings", "source": "settings", "handler": "onSettingsChanged" }] } }
+\`\`\`
+
+Dependency:
+
+\`\`\`json
+{ "dependsOn": ["system-knowledge", { "id": "optional-helper", "optional": true }] }
+\`\`\`
 `;
 }
 
@@ -221,6 +271,7 @@ export function createRuntimeExtension(input: CreateRuntimeExtensionInput, state
   writeFileSync(join(extensionRoot, 'extension.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   writeFileSync(join(extensionRoot, 'src', 'frontend.tsx'), createStarterFrontend(name, template));
   writeFileSync(join(extensionRoot, 'src', 'backend.ts'), createStarterBackend());
+  writeFileSync(join(extensionRoot, 'README.md'), createStarterReadme(name));
   writeFileSync(
     join(extensionRoot, 'package.json'),
     `${JSON.stringify({ type: 'module', dependencies: { '@personal-agent/extensions': '*' } }, null, 2)}\n`,

@@ -117,6 +117,9 @@ export interface ExtensionContributions {
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  selectionActions?: ExtensionSelectionActionContribution[];
+  transcriptBlocks?: ExtensionTranscriptBlockContribution[];
+  subscriptions?: ExtensionSubscriptionContribution[];
   threadHeaderActions?: ExtensionThreadHeaderActionContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
@@ -208,9 +211,35 @@ export interface ExtensionContextMenuContribution {
   id: string;
   title: string;
   action: string;
-  surface: 'message' | 'conversationList';
+  surface: 'message' | 'conversationList' | 'selection' | 'fileSelection' | 'transcriptSelection';
   separator?: boolean;
   when?: string;
+}
+
+export type ExtensionSelectionKind = 'text' | 'messages' | 'files' | 'transcriptRange';
+
+export interface ExtensionSelectionActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  kinds: ExtensionSelectionKind[];
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionTranscriptBlockContribution {
+  id: string;
+  component: string;
+  title?: string;
+  schemaVersion?: number;
+}
+
+export interface ExtensionSubscriptionContribution {
+  id: string;
+  handler: string;
+  source: 'workspaceFiles' | 'vaultFiles' | 'settings' | 'conversation' | 'route' | 'selection' | string;
+  pattern?: string;
+  debounceMs?: number;
 }
 
 export interface ExtensionSettingsContribution {
@@ -479,6 +508,8 @@ export interface ExtensionSlashCommandSurface extends ExtensionSurfaceBase {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  /** Declarative long-lived extension services owned by the host lifecycle. */
+  services?: ExtensionBackendService[];
   /**
    * Action id to call when the extension is enabled and the server starts.
    * The handler receives `(input, ctx)` and can start long-lived services
@@ -488,8 +519,21 @@ export interface ExtensionBackend {
   startupAction?: string;
   /** Action id to call immediately after the extension is enabled from the Extensions page. */
   onEnableAction?: string;
+  /** Action id to call immediately after the extension is disabled. */
+  onDisableAction?: string;
+  /** Action id to call before extension uninstall cleanup. */
+  onUninstallAction?: string;
   /** Optional export for backend-only agent lifecycle extensions. */
   agentExtension?: string;
+}
+
+export interface ExtensionBackendService {
+  id: string;
+  handler: string;
+  title?: string;
+  description?: string;
+  healthCheck?: string;
+  restart?: 'never' | 'on-failure' | 'always';
 }
 
 export interface ExtensionBackendAction {

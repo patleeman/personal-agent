@@ -241,11 +241,11 @@ Use `selectionActions` for selected text/messages/files/transcript ranges, and u
 
 Use `transcriptBlocks` plus `ctx.conversations.appendTranscriptBlock/updateTranscriptBlock` for extension-owned visible transcript blocks with stable block ids.
 
-Use `backend.services` for long-lived backend services. A service handler can return a stop function; declare `healthCheck` and `restart` for host diagnostics/restart policy.
+Use `backend.services` for long-lived backend services. A service handler can return a stop function; declare `healthCheck` and `restart` for host diagnostics/restart policy. The host stops services on shutdown/disable/reload, restarts unhealthy services when policy allows, and Extension Manager shows live `running`/`stopped` state.
 
-Use `contributes.subscriptions` for host event sources like workspace files, vault files, settings, conversations, routes, and selection changes.
+Use `contributes.subscriptions` for host event sources like workspace files, vault files, settings, conversations, routes, and selection changes. Current built-in producers include `host:workspaceFiles`, `host:settings`, and `host:selection`.
 
-Use top-level `dependsOn` for extension dependencies, e.g. `["system-knowledge", { "id": "agent-board", "optional": true }]`. Check optional dependencies with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before calling them.
+Use top-level `dependsOn` for extension dependencies, e.g. `["system-knowledge", { "id": "agent-board", "optional": true }]`. Missing required dependencies block enablement. Check optional dependencies with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before calling them.
 
 ## Frontend source pattern
 

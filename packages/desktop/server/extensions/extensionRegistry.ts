@@ -1049,11 +1049,57 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(menu.id, `contributes.contextMenus[${index}].id`);
       requireString(menu.title, `contributes.contextMenus[${index}].title`);
       requireString(menu.action, `contributes.contextMenus[${index}].action`);
-      validateEnum(menu.surface, ['message', 'conversationList'], `contributes.contextMenus[${index}].surface`);
+      validateEnum(
+        menu.surface,
+        ['message', 'conversationList', 'selection', 'fileSelection', 'transcriptSelection'],
+        `contributes.contextMenus[${index}].surface`,
+      );
       if (menu.separator !== undefined && typeof menu.separator !== 'boolean') {
         throw new Error(`Extension manifest contributes.contextMenus[${index}].separator must be a boolean.`);
       }
       validateOptionalString(menu.when, `contributes.contextMenus[${index}].when`);
+    }
+  }
+
+  if (contributes.selectionActions !== undefined) {
+    for (const [index, action] of assertRecordArray(contributes.selectionActions, 'contributes.selectionActions').entries()) {
+      requireString(action.id, `contributes.selectionActions[${index}].id`);
+      requireString(action.title, `contributes.selectionActions[${index}].title`);
+      requireString(action.action, `contributes.selectionActions[${index}].action`);
+      requireStringArray(action.kinds, `contributes.selectionActions[${index}].kinds`);
+      for (const [kindIndex, kind] of action.kinds.entries()) {
+        validateEnum(kind, ['text', 'messages', 'files', 'transcriptRange'], `contributes.selectionActions[${index}].kinds[${kindIndex}]`);
+      }
+      validateOptionalString(action.when, `contributes.selectionActions[${index}].when`);
+      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
+        throw new Error(`Extension manifest contributes.selectionActions[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
+  if (contributes.transcriptBlocks !== undefined) {
+    for (const [index, block] of assertRecordArray(contributes.transcriptBlocks, 'contributes.transcriptBlocks').entries()) {
+      requireString(block.id, `contributes.transcriptBlocks[${index}].id`);
+      requireString(block.component, `contributes.transcriptBlocks[${index}].component`);
+      validateOptionalString(block.title, `contributes.transcriptBlocks[${index}].title`);
+      if (block.schemaVersion !== undefined && (typeof block.schemaVersion !== 'number' || !Number.isInteger(block.schemaVersion))) {
+        throw new Error(`Extension manifest contributes.transcriptBlocks[${index}].schemaVersion must be an integer.`);
+      }
+    }
+  }
+
+  if (contributes.subscriptions !== undefined) {
+    for (const [index, subscription] of assertRecordArray(contributes.subscriptions, 'contributes.subscriptions').entries()) {
+      requireString(subscription.id, `contributes.subscriptions[${index}].id`);
+      requireString(subscription.handler, `contributes.subscriptions[${index}].handler`);
+      requireString(subscription.source, `contributes.subscriptions[${index}].source`);
+      validateOptionalString(subscription.pattern, `contributes.subscriptions[${index}].pattern`);
+      if (
+        subscription.debounceMs !== undefined &&
+        (typeof subscription.debounceMs !== 'number' || !Number.isInteger(subscription.debounceMs))
+      ) {
+        throw new Error(`Extension manifest contributes.subscriptions[${index}].debounceMs must be an integer.`);
+      }
     }
   }
 
@@ -1213,6 +1259,19 @@ function validateExtensionBackend(backend: Record<string, unknown>): void {
   validateOptionalString(backend.agentExtension, 'backend.agentExtension');
   validateOptionalString(backend.startupAction, 'backend.startupAction');
   validateOptionalString(backend.onEnableAction, 'backend.onEnableAction');
+  validateOptionalString(backend.onDisableAction, 'backend.onDisableAction');
+  validateOptionalString(backend.onUninstallAction, 'backend.onUninstallAction');
+  if (backend.services !== undefined) {
+    for (const [index, service] of assertRecordArray(backend.services, 'backend.services').entries()) {
+      requireString(service.id, `backend.services[${index}].id`);
+      requireString(service.handler, `backend.services[${index}].handler`);
+      validateOptionalString(service.title, `backend.services[${index}].title`);
+      validateOptionalString(service.description, `backend.services[${index}].description`);
+      validateOptionalString(service.healthCheck, `backend.services[${index}].healthCheck`);
+      if (service.restart !== undefined)
+        validateEnum(service.restart, ['never', 'on-failure', 'always'], `backend.services[${index}].restart`);
+    }
+  }
   if (backend.actions !== undefined) {
     for (const [index, action] of assertRecordArray(backend.actions, 'backend.actions').entries()) {
       requireString(action.id, `backend.actions[${index}].id`);

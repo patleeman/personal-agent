@@ -462,6 +462,26 @@ Prompt reference resolvers run in the backend during prompt submission. Use them
 
 The handler receives `{ text, mentionIds }` and returns `{ contextBlocks, references }`. Context blocks are appended to hidden prompt context; references are echoed in prompt submission metadata when relevant.
 
+## Selection, transcript blocks, services, subscriptions, and dependencies
+
+Use `contributes.selectionActions` for actions on selected text, messages, files, or transcript ranges. Frontend surfaces can read and publish shared selection with `pa.selection.get()`, `pa.selection.set(...)`, and `pa.selection.subscribe(...)`; the host also emits `host:selection` events for subscription consumers.
+
+Use `contributes.transcriptBlocks` plus `ctx.conversations.appendTranscriptBlock(...)` / `ctx.conversations.updateTranscriptBlock(...)` for extension-owned durable visible transcript blocks. This is the preferred seam for product-specific interactive blocks instead of baking new block types into core.
+
+Use `backend.services` for long-lived backend work. The host starts enabled services at startup, calls returned stop functions on shutdown/disable/reload, runs declared health checks, and applies `restart: "always" | "on-failure"` when health fails. Extension Manager reports live service state alongside manifest declarations.
+
+Use `contributes.subscriptions` for host-owned event sources. Current built-in producers include `workspaceFiles` (`host:workspaceFiles`), `settings` (`host:settings`), and shared selection changes (`host:selection`). Subscription handlers run in the backend through the extension event bus.
+
+Use top-level `dependsOn` for extension dependencies:
+
+```json
+{
+  "dependsOn": ["system-knowledge", { "id": "agent-board", "optional": true, "version": "^1.0.0" }]
+}
+```
+
+Missing required dependencies block enabling an extension. Optional dependencies should still be checked at runtime with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before calling into them.
+
 ## Agent skills and tools
 
 Extensions can contribute agent skills and agent tools. These are runtime-mounted from the enabled extension package; they are not copied into the knowledge vault.

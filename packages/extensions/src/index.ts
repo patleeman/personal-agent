@@ -529,6 +529,21 @@ export interface ExtensionRunSummary {
   [key: string]: unknown;
 }
 
+export interface ExtensionWorkspaceTreeEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'directory' | string;
+  children?: ExtensionWorkspaceTreeEntry[];
+  [key: string]: unknown;
+}
+
+export interface ExtensionWorkspaceFileResult {
+  path: string;
+  content: string;
+  encoding?: string;
+  [key: string]: unknown;
+}
+
 export interface ExtensionBrowserState {
   tabs?: Array<{ id: string; url?: string; title?: string; active?: boolean; [key: string]: unknown }>;
   activeTabId?: string | null;
@@ -606,16 +621,16 @@ export interface PersonalAgentClient {
     list<T = unknown>(prefix?: string): Promise<Array<{ key: string; value: T }>>;
   };
   workspace: {
-    tree(cwd: string, path?: string): Promise<unknown>;
-    readFile(cwd: string, path: string, opts?: { force?: boolean }): Promise<unknown>;
-    writeFile(cwd: string, path: string, content: string): Promise<unknown>;
-    createFile(cwd: string, path: string, content?: string): Promise<unknown>;
-    createFolder(cwd: string, path: string): Promise<unknown>;
-    deletePath(cwd: string, path: string): Promise<unknown>;
-    renamePath(cwd: string, path: string, newName: string): Promise<unknown>;
-    movePath(cwd: string, path: string, targetDir: string): Promise<unknown>;
-    diff(cwd: string, path: string): Promise<unknown>;
-    uncommittedDiff(cwd: string): Promise<unknown>;
+    tree(cwd: string, path?: string): Promise<ExtensionWorkspaceTreeEntry[]>;
+    readFile(cwd: string, path: string, opts?: { force?: boolean }): Promise<ExtensionWorkspaceFileResult>;
+    writeFile(cwd: string, path: string, content: string): Promise<{ ok: true } | Record<string, unknown>>;
+    createFile(cwd: string, path: string, content?: string): Promise<{ ok: true } | Record<string, unknown>>;
+    createFolder(cwd: string, path: string): Promise<{ ok: true } | Record<string, unknown>>;
+    deletePath(cwd: string, path: string): Promise<{ ok: true } | Record<string, unknown>>;
+    renamePath(cwd: string, path: string, newName: string): Promise<{ ok: true } | Record<string, unknown>>;
+    movePath(cwd: string, path: string, targetDir: string): Promise<{ ok: true } | Record<string, unknown>>;
+    diff(cwd: string, path: string): Promise<string | Record<string, unknown>>;
+    uncommittedDiff(cwd: string): Promise<string | Record<string, unknown>>;
   };
   workbench: {
     getDetailState<T = unknown>(surfaceId: string): T | null;
@@ -689,6 +704,13 @@ export interface ExtensionBackendContext {
   automations: Record<string, (...args: never[]) => Promise<unknown>>;
   vault: Record<string, (...args: never[]) => Promise<unknown>>;
   conversations: Record<string, (...args: never[]) => Promise<unknown>> & {
+    list(...args: never[]): Promise<unknown>;
+    getMeta(conversationId: string): Promise<unknown>;
+    get(conversationId: string, options?: { tailBlocks?: number }): Promise<unknown>;
+    searchIndex(sessionIds: string[]): Promise<unknown>;
+    sendMessage(conversationId: string, text: string, options?: { steer?: boolean }): Promise<unknown>;
+    setTitle(conversationId: string, title: string): Promise<unknown>;
+    compact(conversationId: string): Promise<unknown>;
     create(input?: ExtensionConversationCreateInput): Promise<ExtensionConversationResult>;
     fork(input: ExtensionConversationForkInput): Promise<ExtensionConversationResult>;
     appendTranscriptBlock(input: ExtensionTranscriptBlockWriteInput): Promise<{ blockId: string }>;

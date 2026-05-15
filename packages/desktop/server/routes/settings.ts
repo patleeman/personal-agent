@@ -4,6 +4,14 @@ import { logError } from '../middleware/index.js';
 import { createSettingsStore } from '../settings/settingsStore.js';
 import type { ServerRouteContext } from './context.js';
 
+function publishHostEvent(source: string, payload: unknown): void {
+  void import('../extensions/extensionSubscriptions.js')
+    .then(({ publishExtensionHostEvent }) => publishExtensionHostEvent(source, payload))
+    .catch((error) => {
+      logError('extension host event publish failed', { message: error instanceof Error ? error.message : String(error) });
+    });
+}
+
 export function registerSettingsRoutes(
   router: Pick<Express, 'get' | 'patch'>,
   _context?: Pick<ServerRouteContext, 'getCurrentProfile'>,
@@ -40,6 +48,7 @@ export function registerSettingsRoutes(
       }
       const store = createSettingsStore();
       const result = store.update(body);
+      publishHostEvent('settings', { keys: Object.keys(body), values: result });
       res.json(result);
     } catch (err) {
       logError('settings update error', { message: err instanceof Error ? err.message : String(err) });

@@ -22,6 +22,7 @@ export function setExtensionSelection(selection: Omit<ExtensionSelectionState, '
   currentSelection = selection ? { ...selection, updatedAt: new Date().toISOString() } : null;
   for (const listener of listeners) listener(currentSelection);
   window.dispatchEvent(new CustomEvent('pa-extension-selection-change', { detail: currentSelection }));
+  window.dispatchEvent(new CustomEvent('pa-ext-event', { detail: { event: 'host:selection', payload: currentSelection } }));
 }
 
 export function subscribeExtensionSelection(listener: (selection: ExtensionSelectionState | null) => void): { unsubscribe: () => void } {

@@ -12,6 +12,7 @@ async function callModuleExport<T>(specifier: string, name: string, ...args: unk
 }
 
 export async function startTelegramGatewayService(...args: unknown[]) {
+  await callModuleExport('../routes/gateways.js', 'registerTelegramGatewayLifecycleDelivery');
   return callModuleExport('../routes/gateways.js', 'startTelegramGatewayRuntime', ...args);
 }
 

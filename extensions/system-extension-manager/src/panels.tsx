@@ -384,7 +384,17 @@ function formatBackendActionSummary(extension: ExtensionInstallSummary): string 
 
 function formatServiceSummary(extension: ExtensionInstallSummary): string {
   return extension.services?.length
-    ? extension.services.map((service) => `${service.id} → ${service.handler}${service.restart ? ` (${service.restart})` : ''}`).join(', ')
+    ? extension.services
+        .map((service) => {
+          const status = extension.serviceStatuses?.find((candidate) => candidate.id === service.id);
+          const state = status
+            ? status.running
+              ? `running${status.startedAt ? ` since ${status.startedAt}` : ''}`
+              : 'stopped'
+            : 'declared';
+          return `${service.id} → ${service.handler}${service.restart ? ` (${service.restart})` : ''} · ${state}`;
+        })
+        .join(', ')
     : 'None';
 }
 
