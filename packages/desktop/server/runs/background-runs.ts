@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 
 import { type BackgroundRunAgentSpec, buildBackgroundAgentArgv } from '../daemon/background-run-agent.js';
@@ -156,6 +156,16 @@ function ensureCommandSpec(input: StartBackgroundRunInput): {
 function appendOutputLog(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   appendFileSync(path, text, 'utf-8');
+}
+
+function readExistingRunSummary(resultPath: string): string | undefined {
+  if (!existsSync(resultPath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(resultPath, 'utf-8')) as { summary?: unknown };
+    return typeof parsed.summary === 'string' && parsed.summary.trim().length > 0 ? parsed.summary.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function createBackgroundRunId(taskSlug: string, createdAt: string): string {
@@ -357,6 +367,7 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
   const marker = `\n__PA_RUN_EXIT_CODE=${String(input.exitCode)}\n`;
   appendOutputLog(input.runPaths.outputLogPath, `${marker}# endedAt=${input.endedAt}\n# status=${status}\n`);
 
+  const childSummary = readExistingRunSummary(input.runPaths.resultPath);
   writeFileSync(
     input.runPaths.resultPath,
     JSON.stringify(
@@ -373,6 +384,7 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
         success: input.exitCode === 0 && !input.cancelled,
         summary:
           input.summary ??
+          childSummary ??
           (input.error
             ? input.error
             : input.cancelled

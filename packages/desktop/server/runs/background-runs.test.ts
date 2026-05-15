@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -287,6 +287,29 @@ describe('background runs', () => {
     const failedOutput = readFileSync(failedRecord.paths.outputLogPath, 'utf-8');
     expect(failedOutput).toContain('__PA_RUN_EXIT_CODE=2');
     expect(failedOutput).toContain('# status=failed');
+
+    const summarizedRecord = await createBackgroundRunRecord(runsRoot, {
+      taskSlug: 'summarized-task',
+      cwd: '/tmp/summarized',
+      argv: ['node', '--version'],
+    });
+    writeFileSync(summarizedRecord.paths.resultPath, JSON.stringify({ version: 1, summary: 'subagent smoke ok' }));
+
+    await finalizeBackgroundRun({
+      runId: summarizedRecord.runId,
+      runPaths: summarizedRecord.paths,
+      taskSlug: 'summarized-task',
+      cwd: '/tmp/summarized',
+      startedAt: '2026-03-19T20:00:01.000Z',
+      endedAt: '2026-03-19T20:00:05.000Z',
+      exitCode: 0,
+      signal: null,
+      cancelled: false,
+    });
+
+    expect(JSON.parse(readFileSync(summarizedRecord.paths.resultPath, 'utf-8'))).toEqual(
+      expect.objectContaining({ summary: 'subagent smoke ok' }),
+    );
 
     const cancelledRecord = await createBackgroundRunRecord(runsRoot, {
       taskSlug: 'cancelled-task',

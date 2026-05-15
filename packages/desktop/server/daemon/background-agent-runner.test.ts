@@ -1,6 +1,13 @@
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { collectAssistantErrorMessages, collectAssistantTexts, extractTextContent } from './background-agent-runner.js';
+import {
+  collectAssistantErrorMessages,
+  collectAssistantTexts,
+  extractTextContent,
+  shouldRunBackgroundAgentMain,
+} from './background-agent-runner.js';
 
 describe('background agent runner output capture', () => {
   it('extracts final assistant text from session messages when no stream deltas were captured', () => {
@@ -28,5 +35,15 @@ describe('background agent runner output capture', () => {
         ],
       }),
     ).toEqual(['model exploded']);
+  });
+
+  it('runs from daemon-spawned Electron Node children even when argv path differs', () => {
+    const moduleUrl = pathToFileURL(
+      '/Applications/Personal Agent RC.app/Contents/Resources/app.asar/server/dist/background-agent-runner.js',
+    ).href;
+
+    expect(shouldRunBackgroundAgentMain(moduleUrl, '/private/var/folders/runner.js', { PERSONAL_AGENT_RUN_ID: 'run-123' })).toBe(true);
+    expect(shouldRunBackgroundAgentMain(moduleUrl, fileURLToPath(moduleUrl), {})).toBe(true);
+    expect(shouldRunBackgroundAgentMain(moduleUrl, '/private/var/folders/runner.js', {})).toBe(false);
   });
 });

@@ -234,7 +234,14 @@ export async function main(): Promise<void> {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+export function shouldRunBackgroundAgentMain(importMetaUrl: string, argvEntry: string | undefined, env: NodeJS.ProcessEnv): boolean {
+  if (env.PERSONAL_AGENT_RUN_ID?.trim()) {
+    return true;
+  }
+  return Boolean(argvEntry && fileURLToPath(importMetaUrl) === argvEntry);
+}
+
+if (shouldRunBackgroundAgentMain(import.meta.url, process.argv[1], process.env)) {
   main().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
