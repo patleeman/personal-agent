@@ -99,6 +99,31 @@ function writeRunnerResult(summary: string): void {
   writeFileSync(resultPath, `${JSON.stringify({ version: 1, summary }, null, 2)}\n`, 'utf-8');
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function extractTextContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (isRecord(part) && part.type === 'text') return typeof part.text === 'string' ? part.text : '';
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function collectAssistantTexts(session: { messages?: unknown[] }): string[] {
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  return messages
+    .filter((message) => isRecord(message) && message.role === 'assistant')
+    .map((message) => extractTextContent((message as { content?: unknown }).content).trim())
+    .filter(Boolean);
+}
+
 function readParentSessionFile(): string | undefined {
   const value = process.env.PERSONAL_AGENT_PARENT_SESSION_FILE?.trim();
   return value ? value : undefined;
@@ -157,17 +182,26 @@ async function main(): Promise<void> {
   });
 
   try {
+    const streamedChunks: string[] = [];
     session.subscribe((event) => {
       if (event.type === 'message_update') {
         const update = event.assistantMessageEvent;
-        if (update.type === 'text_delta') process.stdout.write(update.delta);
+        if (update.type === 'text_delta') {
+          streamedChunks.push(update.delta);
+          process.stdout.write(update.delta);
+        }
         if (update.type === 'thinking_delta') process.stdout.write(update.delta);
       }
     });
 
     await session.prompt(args.prompt);
+    const streamedText = streamedChunks.join('').trim();
+    const finalText = collectAssistantTexts(session).at(-1)?.trim() || '';
+    if (!streamedText && finalText) {
+      process.stdout.write(finalText);
+    }
     process.stdout.write('\n');
-    writeRunnerResult('Background agent completed successfully.');
+    writeRunnerResult(finalText || streamedText || 'Background agent completed successfully.');
   } finally {
     session.dispose();
   }
