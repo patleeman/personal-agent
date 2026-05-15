@@ -1,8 +1,14 @@
 import type { MethodHandler } from '../codexJsonRpcServer.js';
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+}
+
 function toCodexModel(model: Record<string, unknown>, index: number) {
   const id = String(model.id ?? model.model ?? 'personal-agent');
   const displayName = String(model.name ?? model.displayName ?? id);
+  const reasoningEfforts = stringArray(model.supportedReasoningEfforts ?? model.reasoningEfforts ?? model.thinkingLevels);
+  const defaultReasoning = typeof model.defaultReasoningEffort === 'string' ? model.defaultReasoningEffort : (reasoningEfforts[0] ?? null);
 
   return {
     id,
@@ -13,8 +19,11 @@ function toCodexModel(model: Record<string, unknown>, index: number) {
     displayName,
     description: String(model.description ?? displayName),
     hidden: false,
-    supportedReasoningEfforts: [],
-    defaultReasoningEffort: 'medium',
+    // Kitty/Codex render the reasoning selector from these fields. PA model
+    // metadata is not Codex-native, so map common PA fields and otherwise
+    // avoid advertising a fake reasoning selector.
+    supportedReasoningEfforts: reasoningEfforts,
+    defaultReasoningEffort: defaultReasoning,
     inputModalities: Array.isArray(model.input) ? model.input : ['text'],
     supportsPersonality: false,
     additionalSpeedTiers: [],

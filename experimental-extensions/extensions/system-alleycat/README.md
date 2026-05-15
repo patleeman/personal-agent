@@ -13,6 +13,8 @@ This extension should replace external `kittylitter` process management for Pers
 
 ## Setup / QA
 
+The same setup instructions are shown in the extension settings panel so users do not need to read this file.
+
 Do **not** install or run `npx kittylitter` for Personal Agent pairing. That starts the upstream Kitty Litter host and advertises its built-in agents.
 
 Use the PA extension instead:
@@ -58,6 +60,12 @@ The extension runs a PA-owned Rust iroh sidecar and forwards `connect` streams t
 - `configRequirements/read`
 - `skills/list`
 - filesystem / command / process compatibility handlers and stubs used by Codex clients
+
+Compatibility notes:
+
+- `model/list` maps PA model metadata into Codex fields, including reasoning-effort fields when PA metadata provides them. Do not advertise fake reasoning values.
+- Tool calls are emitted as Codex `dynamicToolCall` items under the `personal-agent` namespace so Kitty can render them instead of seeing opaque PA events.
+- If Kitty adds stricter Codex rendering assumptions, update the protocol mapper here rather than changing PA conversation internals.
 
 ## Transport
 

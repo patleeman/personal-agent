@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
   "id": "system-alleycat",
-  "name": "Alleycat Remote Host",
+  "name": "Kitty Litter Mobile Pairing (Alleycat)",
   "packageType": "system",
-  "description": "Personal Agent remote host for Kitty Litter using Alleycat-compatible pairing and Codex-shaped conversation APIs.",
+  "description": "Pair the Kitty Litter mobile app directly with Personal Agent using a PA-owned Alleycat-compatible host and Codex-shaped conversation APIs.",
   "version": "0.1.0",
   "frontend": {
     "entry": "dist/frontend.js",
@@ -22,7 +22,7 @@
     "views": [
       {
         "id": "page",
-        "title": "Alleycat",
+        "title": "Kitty Litter",
         "location": "main",
         "route": "/alleycat",
         "component": "AlleycatPage",
@@ -34,7 +34,7 @@
     "nav": [
       {
         "id": "nav",
-        "label": "Alleycat",
+        "label": "Kitty Litter",
         "route": "/alleycat",
         "icon": "terminal"
       }
@@ -43,8 +43,8 @@
       "id": "alleycat",
       "component": "AlleycatSettingsPanel",
       "sectionId": "settings-alleycat",
-      "label": "Remote Access (Alleycat)",
-      "description": "Pair Kitty Litter directly with Personal Agent.",
+      "label": "Kitty Litter Mobile Pairing",
+      "description": "Scan a PA-owned pairing QR from the Kitty Litter mobile app. Do not run npx kittylitter.",
       "order": 21
     }
   },

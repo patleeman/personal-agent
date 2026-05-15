@@ -29,6 +29,7 @@ const LABEL = 'mb-1.5 text-[12px] font-medium text-secondary';
 const MONO = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 font-mono text-[12px] leading-5 text-primary';
 const BUTTON = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] font-medium shadow-none transition-colors active:scale-[0.97]';
 const NOTE = 'mt-1 text-[11px] leading-relaxed text-tertiary';
+const CALLOUT = 'rounded-lg bg-surface/60 px-3 py-2 text-[12px] leading-relaxed text-secondary';
 
 function shortNodeId(nodeId: string): string {
   return nodeId.length <= 18 ? nodeId : `${nodeId.slice(0, 8)}…${nodeId.slice(-8)}`;
@@ -36,9 +37,9 @@ function shortNodeId(nodeId: string): string {
 
 export function AlleycatPage({ pa }: ExtensionSurfaceProps) {
   return (
-    <AppPageLayout title="Alleycat" summary="Pair Kitty Litter directly with Personal Agent.">
+    <AppPageLayout title="Kitty Litter Mobile Pairing" summary="Pair the Kitty Litter mobile app directly with Personal Agent.">
       <AppPageIntro
-        title="Personal Agent remote host"
+        title="Personal Agent for Kitty Litter"
         body="Manage the PA-owned Alleycat-compatible host. It advertises only Personal Agent and exposes conversations through the Codex-shaped API Kitty expects."
       />
       <AlleycatPanel pa={pa} />
@@ -106,6 +107,22 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
 
   return (
     <div>
+      <div className={SECTION}>
+        <div className={LABEL}>Setup</div>
+        <div className={CALLOUT}>
+          <div className="font-medium text-primary">Use the Kitty Litter mobile app — not the Kitty Litter npm host.</div>
+          <ol className="mt-2 list-decimal space-y-1 pl-4">
+            <li>Click Start here in Personal Agent.</li>
+            <li>Open Kitty Litter on your phone and scan this QR code.</li>
+            <li>Select Personal Agent. It should be the only advertised agent.</li>
+          </ol>
+          <p className="mt-2 text-tertiary">
+            Do not install or run <span className="font-mono">npx kittylitter</span>; that starts the upstream host and advertises its
+            built-in agents.
+          </p>
+        </div>
+      </div>
+
       <div className={SECTION}>
         <div className={LABEL}>Host status</div>
         <div className="flex items-center gap-2 text-[13px] text-primary">

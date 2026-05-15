@@ -150,9 +150,11 @@ export const turn = {
             turnId,
             item: {
               id: toolId,
-              type: 'toolUse',
-              toolName: ev.toolName as string,
-              status: 'started',
+              type: 'dynamicToolCall',
+              namespace: 'personal-agent',
+              tool: (ev.toolName as string) || 'tool',
+              arguments: ev.input ?? {},
+              status: 'inProgress',
             },
           });
           break;
@@ -164,11 +166,13 @@ export const turn = {
             turnId,
             item: {
               id: toolId,
-              type: 'toolUse',
-              toolName: ev.toolName as string,
+              type: 'dynamicToolCall',
+              namespace: 'personal-agent',
+              tool: (ev.toolName as string) || 'tool',
+              arguments: ev.input ?? {},
               status: 'completed',
-              isError: ev.isError as boolean,
-              output: ev.output as string,
+              contentItems: typeof ev.output === 'string' ? [{ type: 'text', text: ev.output }] : [],
+              success: ev.isError === true ? false : true,
             },
           });
           break;
