@@ -24,7 +24,6 @@ describe('extension registry', () => {
     expect(snapshot.extensions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'system-automations', packageType: 'system', name: 'Automations' }),
-        expect.objectContaining({ id: 'system-gateways', packageType: 'system', name: 'Gateways' }),
         expect.objectContaining({ id: 'system-telemetry', packageType: 'system', name: 'Telemetry' }),
         expect.objectContaining({ id: 'system-files', packageType: 'system', name: 'File Explorer' }),
         expect.objectContaining({ id: 'system-diffs', packageType: 'system', name: 'Diffs' }),
@@ -47,7 +46,6 @@ describe('extension registry', () => {
           component: 'AutomationsPage',
           route: '/automations',
         }),
-        expect.objectContaining({ extensionId: 'system-gateways', location: 'main', component: 'GatewaysPage', route: '/gateways' }),
         expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage', route: '/telemetry' }),
         expect.objectContaining({
           extensionId: 'system-files',

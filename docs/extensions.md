@@ -120,8 +120,10 @@ The manifest declares what your extension contributes:
 | `messageActions`             | Hover buttons on messages                                   | [See below](#message-actions-messageactions)                          |
 | `composerShelves`            | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                        |
 | `newConversationPanels`      | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)           |
-| `composerButtons`            | Component buttons beside submit                             | [See below](#composer-buttons-composerbuttons)                        |
-| `composerInputTools`         | Component tools beside attachment                           | [See below](#composer-input-tools-composerinputtools)                 |
+| `composerControls`           | Component controls in the composer bottom row               | [See below](#composer-controls-composercontrols)                      |
+| `composerSubmitActions`      | Submit-mode actions for the composer                        | [See below](#composer-submit-actions-composersubmitactions)           |
+| `composerButtons`            | Legacy composer controls                                    | [See below](#composer-buttons-composerbuttons)                        |
+| `composerInputTools`         | Component tools beside composer controls                    | [See below](#composer-input-tools-composerinputtools)                 |
 | `toolbarActions`             | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                          |
 | `conversationDecorators`     | Badges on conversation list items                           | [See below](#conversation-decorators-conversationdecorators)          |
 | `contextMenus`               | Right-click menu items                                      | [See below](#context-menus-contextmenus)                              |
@@ -276,22 +278,41 @@ Add one component-backed section to the main Settings page.
 
 The component receives `pa` and `settingsContext`. Use this for rich settings UIs; use `settings` for simple scalar settings managed by the built-in extension settings form.
 
-### Composer Buttons (`composerButtons`)
+### Composer Controls (`composerControls`)
 
-Add component-backed controls in the composer preference row, immediately after the model picker. Use this for interactive composer settings that need their own frontend state.
+Add component-backed controls in the composer bottom row. Core owns the row layout and passes composer state/actions through `controlContext`; extensions own visible controls such as attachments, model preferences, dictation, and goal mode.
 
 ```json
 {
   "id": "dictation",
   "component": "DictationButton",
   "title": "Dictation",
-  "placement": "afterModelPicker",
+  "slot": "preferences",
   "when": "!streamIsStreaming",
-  "priority": 10
+  "priority": 100
 }
 ```
 
-The component receives `pa` and `buttonContext`; `buttonContext.renderMode` is `inline` or `menu` depending on available width, and `buttonContext.insertText(text)` inserts text at the current composer selection.
+Slots are `leading`, `preferences`, and `actions`. Controls sort by `priority` ascending, then extension id, then contribution id. The component receives `pa`, `controlContext`, and the legacy alias `buttonContext`. `controlContext.renderMode` is `inline` or `menu`; `insertText(text)` inserts at the current composer selection; `openFilePicker()` opens the core-owned attachment input; and model/goal fields expose the current composer preference state.
+
+### Composer Submit Actions (`composerSubmitActions`)
+
+Declare submit-mode actions for composer sends. This is the extension boundary for future send strategies such as parallel prompts or follow-ups; core still owns low-level conversation primitives and permission checks.
+
+```json
+{
+  "id": "parallel",
+  "label": "Parallel",
+  "handler": "startParallelPrompt",
+  "when": "conversationBusy && composerHasContent",
+  "shortcut": "Mod+Enter",
+  "priority": 30
+}
+```
+
+### Composer Buttons (`composerButtons`)
+
+Legacy alias for composer controls. Existing `placement: "afterModelPicker"` maps to `slot: "preferences"`; `placement: "actions"` maps to `slot: "actions"`. New extensions should use `composerControls`.
 
 ### Composer Input Tools (`composerInputTools`)
 
@@ -1224,7 +1245,7 @@ See the system extensions in `extensions/` for practical examples:
 - **`system-conversation-tools`** — Agent lifecycle hooks + contextMenus
 - **`system-extension-manager`** — Extension management UI + nav
 - **`system-runs`** — Background runs + composer shelf (ActivityShelf)
-- **`system-gateways`** — Gateway management UI + nav
+- **`system-gateways`** — Experimental Telegram gateway management UI + nav (`experimental-extensions/extensions/system-gateways`)
 - **`system-settings`** — Settings panels + nav
 
 Each system extension has a complete `extension.json` manifest and

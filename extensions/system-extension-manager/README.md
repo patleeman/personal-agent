@@ -65,7 +65,7 @@ Preferred split: core records and serves cross-cutting state; native extensions 
 Native system extensions include:
 
 - `system-automations` owns `/automations` and scheduled/conversation-bound automation UI.
-- `system-gateways` owns `/gateways` while the core app keeps gateway state and APIs.
+- `system-gateways` owns `/gateways` while the core app keeps gateway state and APIs. It lives under `experimental-extensions/extensions/` and is default-disabled until enabled.
 - `system-telemetry` owns `/telemetry` while telemetry collection remains core infrastructure.
 - `system-files` owns the workspace File Explorer rail and paired workbench file detail view while workspace filesystem APIs remain core infrastructure.
 - `system-diffs` owns the conversation Diffs rail and paired workbench detail view while checkpoint persistence remains core infrastructure.

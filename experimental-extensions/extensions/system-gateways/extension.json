@@ -3,6 +3,7 @@
   "id": "system-gateways",
   "name": "Telegram Gateway",
   "packageType": "system",
+  "defaultEnabled": false,
   "description": "Manage Telegram gateway bindings and connection state.",
   "version": "0.1.0",
   "frontend": {

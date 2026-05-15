@@ -13,6 +13,7 @@ describe('system-gateways manifest', () => {
     expect(manifest.id).toBe('system-gateways');
     expect(manifest.name).toBe('Telegram Gateway');
     expect(manifest.packageType).toBe('system');
+    expect(manifest.defaultEnabled).toBe(false);
     expect(manifest.schemaVersion).toBe(2);
   });
 
