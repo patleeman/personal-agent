@@ -362,6 +362,7 @@ function collectFrontendComponents(manifest: ExtensionManifest): string[] {
   const contributions = manifest.contributes;
   return [
     ...(contributions?.views ?? []).map((item) => item.component),
+    ...(contributions?.composerControls ?? []).map((item) => item.component),
     ...(contributions?.composerButtons ?? []).map((item) => item.component),
     ...(contributions?.composerInputTools ?? []).map((item) => item.component),
     ...(contributions?.topBarElements ?? []).map((item) => item.component),

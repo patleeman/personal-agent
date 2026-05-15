@@ -240,6 +240,7 @@ export interface ExtensionComposerButtonRegistration {
   packageType: ExtensionManifest['packageType'];
   component: string;
   title?: string;
+  slot?: 'leading' | 'preferences' | 'actions';
   when?: string;
   priority?: number;
   frontendEntry?: string;
@@ -1007,6 +1008,36 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.composerControls !== undefined) {
+    for (const [index, control] of assertRecordArray(contributes.composerControls, 'contributes.composerControls').entries()) {
+      requireString(control.id, `contributes.composerControls[${index}].id`);
+      requireString(control.component, `contributes.composerControls[${index}].component`);
+      validateOptionalString(control.title, `contributes.composerControls[${index}].title`);
+      validateOptionalString(control.when, `contributes.composerControls[${index}].when`);
+      if (control.slot !== undefined)
+        validateEnum(control.slot, ['leading', 'preferences', 'actions'], `contributes.composerControls[${index}].slot`);
+      if (control.priority !== undefined && (typeof control.priority !== 'number' || !Number.isInteger(control.priority))) {
+        throw new Error(`Extension manifest contributes.composerControls[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
+  if (contributes.composerSubmitActions !== undefined) {
+    for (const [index, action] of assertRecordArray(contributes.composerSubmitActions, 'contributes.composerSubmitActions').entries()) {
+      requireString(action.id, `contributes.composerSubmitActions[${index}].id`);
+      requireString(action.label, `contributes.composerSubmitActions[${index}].label`);
+      requireString(action.handler, `contributes.composerSubmitActions[${index}].handler`);
+      validateOptionalString(action.when, `contributes.composerSubmitActions[${index}].when`);
+      validateOptionalString(action.shortcut, `contributes.composerSubmitActions[${index}].shortcut`);
+      if (action.default !== undefined && typeof action.default !== 'boolean') {
+        throw new Error(`Extension manifest contributes.composerSubmitActions[${index}].default must be a boolean.`);
+      }
+      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
+        throw new Error(`Extension manifest contributes.composerSubmitActions[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.composerButtons !== undefined) {
     for (const [index, button] of assertRecordArray(contributes.composerButtons, 'contributes.composerButtons').entries()) {
       requireString(button.id, `contributes.composerButtons[${index}].id`);
@@ -1280,6 +1311,17 @@ function validateExtensionBackend(backend: Record<string, unknown>): void {
       validateOptionalString(action.description, `backend.actions[${index}].description`);
     }
   }
+  if (backend.routes !== undefined) {
+    for (const [index, route] of assertRecordArray(backend.routes, 'backend.routes').entries()) {
+      validateEnum(route.method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], `backend.routes[${index}].method`);
+      requireString(route.path, `backend.routes[${index}].path`);
+      requireString(route.handler, `backend.routes[${index}].handler`);
+      validateOptionalString(route.title, `backend.routes[${index}].title`);
+      validateOptionalString(route.description, `backend.routes[${index}].description`);
+      if (!(route.path as string).startsWith('/')) throw new Error(`backend.routes[${index}].path must start with /.`);
+      if ((route.path as string).includes('..')) throw new Error(`backend.routes[${index}].path must not contain ..`);
+    }
+  }
 }
 
 function validateExtensionSurfaces(surfaces: unknown): void {
@@ -1519,6 +1561,8 @@ export function readExtensionSchema() {
       'messageActions',
       'composerShelves',
       'newConversationPanels',
+      'composerControls',
+      'composerSubmitActions',
       'composerButtons',
       'composerInputTools',
       'toolbarActions',
@@ -1767,25 +1811,47 @@ export function listExtensionNewConversationPanelRegistrations(
 }
 
 export function listExtensionComposerButtonRegistrations(stateRoot: string = getStateRoot()): ExtensionComposerButtonRegistration[] {
-  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
-    (entry.manifest.contributes?.composerButtons ?? []).flatMap((button): ExtensionComposerButtonRegistration[] => {
-      const id = button.id.trim();
-      const component = button.component.trim();
-      if (!id || !component) return [];
-      return [
-        {
-          extensionId: entry.manifest.id,
-          id,
-          packageType: entry.manifest.packageType ?? 'user',
-          component,
-          ...(button.title ? { title: button.title } : {}),
-          ...(button.when ? { when: button.when } : {}),
-          ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),
-          frontendEntry: entry.manifest.frontend?.entry,
-        },
-      ];
-    }),
-  );
+  return listEnabledExtensionEntries(stateRoot)
+    .flatMap((entry) => {
+      const controls = (entry.manifest.contributes?.composerControls ?? []).flatMap((control): ExtensionComposerButtonRegistration[] => {
+        const id = control.id.trim();
+        const component = control.component.trim();
+        if (!id || !component) return [];
+        return [
+          {
+            extensionId: entry.manifest.id,
+            id,
+            packageType: entry.manifest.packageType ?? 'user',
+            component,
+            slot: control.slot ?? 'preferences',
+            ...(control.title ? { title: control.title } : {}),
+            ...(control.when ? { when: control.when } : {}),
+            ...(typeof control.priority === 'number' ? { priority: control.priority } : {}),
+            frontendEntry: entry.manifest.frontend?.entry,
+          },
+        ];
+      });
+      const buttons = (entry.manifest.contributes?.composerButtons ?? []).flatMap((button): ExtensionComposerButtonRegistration[] => {
+        const id = button.id.trim();
+        const component = button.component.trim();
+        if (!id || !component) return [];
+        return [
+          {
+            extensionId: entry.manifest.id,
+            id,
+            packageType: entry.manifest.packageType ?? 'user',
+            component,
+            slot: button.placement === 'actions' ? 'actions' : 'preferences',
+            ...(button.title ? { title: button.title } : {}),
+            ...(button.when ? { when: button.when } : {}),
+            ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),
+            frontendEntry: entry.manifest.frontend?.entry,
+          },
+        ];
+      });
+      return [...controls, ...buttons];
+    })
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.extensionId.localeCompare(b.extensionId) || a.id.localeCompare(b.id));
 }
 
 export function listExtensionComposerInputToolRegistrations(stateRoot: string = getStateRoot()): ExtensionComposerInputToolRegistration[] {

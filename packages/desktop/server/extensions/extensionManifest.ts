@@ -53,6 +53,9 @@ export const EXTENSION_PERMISSIONS = [
   'runs:read',
   'runs:start',
   'runs:cancel',
+  'executions:read',
+  'executions:start',
+  'executions:cancel',
   'storage:read',
   'storage:write',
   'storage:readwrite',
@@ -113,6 +116,8 @@ export interface ExtensionContributions {
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
   newConversationPanels?: ExtensionNewConversationPanelContribution[];
+  composerControls?: ExtensionComposerControlContribution[];
+  composerSubmitActions?: ExtensionComposerSubmitActionContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
@@ -169,10 +174,30 @@ export interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+export interface ExtensionComposerControlContribution {
+  id: string;
+  component: string;
+  title?: string;
+  slot?: 'leading' | 'preferences' | 'actions';
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionComposerSubmitActionContribution {
+  id: string;
+  label: string;
+  handler: string;
+  when?: string;
+  shortcut?: string;
+  default?: boolean;
+  priority?: number;
+}
+
 export interface ExtensionComposerButtonContribution {
   id: string;
   component: string;
   title?: string;
+  placement?: 'afterModelPicker' | 'actions';
   when?: string;
   priority?: number;
 }
@@ -508,6 +533,7 @@ export interface ExtensionSlashCommandSurface extends ExtensionSurfaceBase {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  routes?: ExtensionBackendRoute[];
   /** Declarative long-lived extension services owned by the host lifecycle. */
   services?: ExtensionBackendService[];
   /**
@@ -538,6 +564,14 @@ export interface ExtensionBackendService {
 
 export interface ExtensionBackendAction {
   id: string;
+  handler: string;
+  title?: string;
+  description?: string;
+}
+
+export interface ExtensionBackendRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
   handler: string;
   title?: string;
   description?: string;

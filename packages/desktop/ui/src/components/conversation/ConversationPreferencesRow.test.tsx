@@ -5,41 +5,44 @@ import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ModelInfo } from '../../shared/types';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
+
+vi.mock('../../extensions/ComposerButtonHost', () => ({
+  ComposerButtonHost: ({ registration, buttonContext }: { registration: { id: string }; buttonContext: { renderMode: string } }) => (
+    <span data-control-id={registration.id} data-render-mode={buttonContext.renderMode}>
+      {registration.id}:{buttonContext.renderMode}
+    </span>
+  ),
+}));
 
 (globalThis as typeof globalThis & { React?: typeof React; IS_REACT_ACT_ENVIRONMENT?: boolean }).React = React;
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const models: ModelInfo[] = [
-  {
-    id: 'model-a',
-    provider: 'Provider A',
-    name: 'Model A',
-    context: 128000,
-    supportedServiceTiers: ['priority'],
-  },
-];
+function control(id: string, priority: number) {
+  return { extensionId: 'test-extension', id, component: 'Control', slot: 'preferences' as const, priority };
+}
 
 function rowProps(overrides: Partial<React.ComponentProps<typeof ConversationPreferencesRow>> = {}) {
   return {
-    models,
-    currentModel: 'model-a',
-    currentThinkingLevel: 'medium',
-    currentServiceTier: 'priority',
-    savingPreference: null,
-    composerButtons: [],
+    composerButtons: [control('model-preferences', 10), control('goal-mode', 100)],
     composerButtonContext: {
       composerDisabled: false,
       streamIsStreaming: false,
       composerHasContent: false,
+      openFilePicker: vi.fn(),
+      addFiles: vi.fn(),
+      insertText: vi.fn(),
+      models: [],
+      currentModel: '',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      savingPreference: null,
+      selectModel: vi.fn(),
+      selectThinkingLevel: vi.fn(),
+      selectServiceTier: vi.fn(),
       goalEnabled: false,
       toggleGoal: vi.fn(),
-      insertText: vi.fn(),
     },
-    onSelectModel: vi.fn(),
-    onSelectThinkingLevel: vi.fn(),
-    onSelectServiceTier: vi.fn(),
     inlineLimit: Number.POSITIVE_INFINITY,
     ...overrides,
   } satisfies React.ComponentProps<typeof ConversationPreferencesRow>;
@@ -69,61 +72,39 @@ function renderInteractive(overrides: Partial<React.ComponentProps<typeof Conver
 }
 
 describe('ConversationPreferencesRow', () => {
-  it('renders inline model, thinking, and fast mode controls', () => {
+  it('renders composer controls inline', () => {
     const html = renderRow();
 
-    expect(html).toContain('Conversation model');
-    expect(html).toContain('Provider A');
-    expect(html).toContain('Model A');
-    expect(html).toContain('Conversation thinking level');
-    expect(html).toContain('Disable fast mode');
+    expect(html).toContain('data-control-id="model-preferences"');
+    expect(html).toContain('data-render-mode="inline"');
+    expect(html).toContain('data-control-id="goal-mode"');
   });
 
-  it('does not render the overflow menu when all preference items fit inline', () => {
+  it('does not render the overflow menu when all preference controls fit inline', () => {
     const { container, unmount } = renderInteractive();
 
     try {
       expect(container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]')).toBeNull();
-      expect(container.textContent).toContain('Fast');
-      expect(container.textContent.indexOf('Fast')).toBeGreaterThan(container.textContent.indexOf('Model A'));
+      expect(container.textContent).toContain('model-preferences:inline');
+      expect(container.textContent).toContain('goal-mode:inline');
     } finally {
       unmount();
     }
   });
 
-  it('keeps model controls grouped inline and moves extra controls into the settings menu', () => {
-    const { container, unmount } = renderInteractive({
-      inlineLimit: 3,
-      composerButtons: [
-        {
-          extensionId: 'system-auto-mode',
-          id: 'goal-mode',
-          packageType: 'system',
-          component: 'GoalModeComposerButton',
-          placement: 'afterModelPicker',
-        },
-      ],
-    });
+  it('moves extra controls into the settings menu', () => {
+    const { container, unmount } = renderInteractive({ inlineLimit: 1 });
 
     try {
-      expect(container.textContent).toContain('Model A');
-      expect(container.textContent).toContain('Conversation thinking level');
-      expect(container.textContent).toContain('Fast');
+      expect(container.textContent).toContain('model-preferences:inline');
+      expect(container.textContent).not.toContain('goal-mode:menu');
 
       const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
       expect(moreButton).not.toBeNull();
+      act(() => moreButton?.click());
+      expect(container.textContent).toContain('goal-mode:menu');
     } finally {
       unmount();
     }
-  });
-
-  it('hides fast mode when the selected model does not support priority service tier', () => {
-    const html = renderRow({
-      models: [{ ...models[0]!, supportedServiceTiers: [] }],
-      currentServiceTier: '',
-    });
-
-    expect(html).not.toContain('Enable fast mode');
-    expect(html).toContain('Conversation thinking level');
   });
 });

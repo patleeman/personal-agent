@@ -9,6 +9,37 @@ import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerInputControls } from './ConversationComposerInputControls';
 import { ConversationRunModePanel } from './ConversationRunModePanel';
 
+vi.mock('../../extensions/ComposerButtonHost', () => ({
+  ComposerButtonHost: ({ registration }: { registration: { id: string } }) => {
+    if (registration.id === 'attach-files') return <button title="Attach image or file">Attach</button>;
+    if (registration.id === 'model-preferences') return <span>Conversation model</span>;
+    return <span>{registration.id}</span>;
+  },
+}));
+
+vi.mock('../../extensions/useExtensionRegistry', () => ({
+  useExtensionRegistry: () => ({
+    composerControls: [
+      {
+        extensionId: 'system-composer-attachments',
+        id: 'attach-files',
+        component: 'AttachFilesComposerControl',
+        slot: 'leading',
+        priority: 0,
+      },
+      {
+        extensionId: 'system-model-picker',
+        id: 'model-preferences',
+        component: 'ModelPreferencesComposerControl',
+        slot: 'preferences',
+        priority: 10,
+      },
+    ],
+    composerInputTools: [],
+    toolbarActions: [],
+  }),
+}));
+
 (globalThis as typeof globalThis & { React?: typeof React; IS_REACT_ACT_ENVIRONMENT?: boolean }).React = React;
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,9 +93,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       currentThinkingLevel="medium"
       currentServiceTier="priority"
       savingPreference={null}
-      showAutoModeToggle
-      conversationAutoModeEnabled={false}
-      conversationAutoModeBusy={false}
+      goalEnabled={false}
       conversationNeedsTakeover={false}
       composerHasContent={false}
       composerShowsQuestionSubmit={false}
@@ -84,7 +113,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onSelectModel={vi.fn()}
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
-      onToggleAutoMode={vi.fn()}
+      onToggleGoal={vi.fn()}
       onInsertComposerText={vi.fn()}
       onSubmitComposerQuestion={vi.fn()}
       onSubmitComposerActionForModifiers={vi.fn()}

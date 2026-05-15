@@ -23,15 +23,28 @@ interface ExtensionToolbarActionRegistration {
   priority?: number;
 }
 
-export interface ExtensionComposerButtonRegistration {
+export interface ExtensionComposerControlRegistration {
   extensionId: string;
   id: string;
   component: string;
   title?: string;
-  placement: 'afterModelPicker' | 'actions';
+  slot: 'leading' | 'preferences' | 'actions';
   when?: string;
   priority?: number;
   frontendEntry?: string;
+}
+
+export type ExtensionComposerButtonRegistration = ExtensionComposerControlRegistration;
+
+export interface ExtensionComposerSubmitActionRegistration {
+  extensionId: string;
+  id: string;
+  label: string;
+  handler: string;
+  when?: string;
+  shortcut?: string;
+  default?: boolean;
+  priority?: number;
 }
 
 export interface ExtensionComposerInputToolRegistration {
@@ -164,6 +177,8 @@ const EMPTY_EXTENSION_REGISTRY_STATE: ExtensionRegistryState = {
   newConversationPanels: [],
   settingsComponent: null,
   settingsComponents: [],
+  composerControls: [],
+  composerSubmitActions: [],
   composerButtons: [],
   composerInputTools: [],
   toolbarActions: [],
@@ -195,6 +210,8 @@ export interface ExtensionRegistryState {
   newConversationPanels: ExtensionNewConversationPanelRegistration[];
   settingsComponent: ExtensionSettingsComponentRegistration | null;
   settingsComponents: ExtensionSettingsComponentRegistration[];
+  composerControls: ExtensionComposerControlRegistration[];
+  composerSubmitActions: ExtensionComposerSubmitActionRegistration[];
   composerButtons: ExtensionComposerButtonRegistration[];
   composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
@@ -306,17 +323,32 @@ function normalizeSettingsComponents(extensions: ExtensionManifest[]): Extension
   return result;
 }
 
-function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionComposerButtonRegistration[] {
-  const result: ExtensionComposerButtonRegistration[] = [];
+function compareComposerControls(a: ExtensionComposerControlRegistration, b: ExtensionComposerControlRegistration): number {
+  return (a.priority ?? 0) - (b.priority ?? 0) || a.extensionId.localeCompare(b.extensionId) || a.id.localeCompare(b.id);
+}
+
+function normalizeComposerControls(extensions: ExtensionManifest[]): ExtensionComposerControlRegistration[] {
+  const result: ExtensionComposerControlRegistration[] = [];
   for (const extension of extensions) {
-    const buttons = extension.contributes?.composerButtons;
-    if (!buttons?.length) continue;
-    for (const button of buttons) {
+    for (const control of extension.contributes?.composerControls ?? []) {
+      result.push({
+        extensionId: extension.id,
+        id: control.id,
+        component: control.component,
+        slot: control.slot ?? 'preferences',
+        ...(control.title ? { title: control.title } : {}),
+        ...(control.when ? { when: control.when } : {}),
+        ...(typeof control.priority === 'number' ? { priority: control.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+
+    for (const button of extension.contributes?.composerButtons ?? []) {
       result.push({
         extensionId: extension.id,
         id: button.id,
         component: button.component,
-        placement: button.placement ?? 'actions',
+        slot: button.placement === 'actions' ? 'actions' : 'preferences',
         ...(button.title ? { title: button.title } : {}),
         ...(button.when ? { when: button.when } : {}),
         ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),
@@ -324,7 +356,27 @@ function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionCom
       });
     }
   }
-  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  result.sort(compareComposerControls);
+  return result;
+}
+
+function normalizeComposerSubmitActions(extensions: ExtensionManifest[]): ExtensionComposerSubmitActionRegistration[] {
+  const result: ExtensionComposerSubmitActionRegistration[] = [];
+  for (const extension of extensions) {
+    for (const action of extension.contributes?.composerSubmitActions ?? []) {
+      result.push({
+        extensionId: extension.id,
+        id: action.id,
+        label: action.label,
+        handler: action.handler,
+        ...(action.when ? { when: action.when } : {}),
+        ...(action.shortcut ? { shortcut: action.shortcut } : {}),
+        ...(typeof action.default === 'boolean' ? { default: action.default } : {}),
+        ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+      });
+    }
+  }
+  result.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.extensionId.localeCompare(b.extensionId) || a.id.localeCompare(b.id));
   return result;
 }
 
@@ -544,7 +596,9 @@ function useExtensionRegistryLoader(): ExtensionRegistryState {
             newConversationPanels: normalizeNewConversationPanels(enabledRegistryExtensions),
             settingsComponents,
             settingsComponent: settingsComponents[0] ?? null,
-            composerButtons: normalizeComposerButtons(enabledRegistryExtensions),
+            composerControls: normalizeComposerControls(enabledRegistryExtensions),
+            composerSubmitActions: normalizeComposerSubmitActions(enabledRegistryExtensions),
+            composerButtons: normalizeComposerControls(enabledRegistryExtensions),
             composerInputTools: normalizeComposerInputTools(enabledRegistryExtensions),
             toolbarActions: normalizeToolbarActions(enabledRegistryExtensions),
             contextMenus: normalizeContextMenus(enabledRegistryExtensions),

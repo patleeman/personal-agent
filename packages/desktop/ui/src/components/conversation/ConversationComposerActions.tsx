@@ -42,7 +42,7 @@ export function ConversationComposerActions({
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
 }) {
-  const { composerButtons, toolbarActions } = useExtensionRegistry();
+  const { composerControls, toolbarActions } = useExtensionRegistry();
   const visibleToolbarActions = useMemo(
     () =>
       toolbarActions.filter((action) => {
@@ -62,8 +62,8 @@ export function ConversationComposerActions({
 
   const visibleComposerButtons = useMemo(
     () =>
-      composerButtons.filter((button) => {
-        if (button.placement !== 'actions') return false;
+      composerControls.filter((button) => {
+        if (button.slot !== 'actions') return false;
         const expr = button.when;
         if (!expr) return true;
         const clauses = expr.split(/\s*&&\s*/).filter(Boolean);
@@ -75,7 +75,7 @@ export function ConversationComposerActions({
         }
         return true;
       }),
-    [composerButtons, composerHasContent, streamIsStreaming],
+    [composerControls, composerHasContent, streamIsStreaming],
   );
 
   const streamingSubmitLabel: Exclude<ConversationComposerSubmitLabel, 'Send'> =
@@ -116,7 +116,25 @@ export function ConversationComposerActions({
         <ComposerButtonHost
           key={`${button.extensionId}:${button.id}`}
           registration={button}
-          buttonContext={{ composerDisabled, streamIsStreaming, composerHasContent, insertText: onInsertComposerText }}
+          buttonContext={{
+            composerDisabled,
+            streamIsStreaming,
+            composerHasContent,
+            renderMode: 'inline',
+            openFilePicker: () => {},
+            addFiles: () => {},
+            insertText: onInsertComposerText,
+            models: [],
+            currentModel: '',
+            currentThinkingLevel: '',
+            currentServiceTier: '',
+            savingPreference: null,
+            selectModel: () => {},
+            selectThinkingLevel: () => {},
+            selectServiceTier: () => {},
+            goalEnabled: false,
+            toggleGoal: () => {},
+          }}
         />
       ))}
       {streamIsStreaming ? (

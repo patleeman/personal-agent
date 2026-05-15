@@ -1,6 +1,7 @@
 import { type ClipboardEventHandler, type KeyboardEventHandler, type RefObject, useMemo } from 'react';
 
 import type { ComposerDrawingAttachment } from '../../conversation/promptAttachments';
+import { ComposerButtonHost } from '../../extensions/ComposerButtonHost';
 import { ComposerInputToolHost } from '../../extensions/ComposerInputToolHost';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { ModelInfo } from '../../shared/types';
@@ -97,7 +98,7 @@ export function ConversationComposerInputControls({
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
 }) {
-  const { composerButtons = [], composerInputTools } = useExtensionRegistry();
+  const { composerControls = [], composerInputTools } = useExtensionRegistry();
   const visibleComposerInputTools = useMemo(
     () =>
       composerInputTools.filter((tool) => {
@@ -115,10 +116,9 @@ export function ConversationComposerInputControls({
     [composerHasContent, composerInputTools, streamIsStreaming],
   );
 
-  const visibleComposerButtons = useMemo(
+  const visibleComposerControls = useMemo(
     () =>
-      composerButtons.filter((button) => {
-        if (button.placement !== 'afterModelPicker') return false;
+      composerControls.filter((button) => {
         const expr = button.when;
         if (!expr) return true;
         const clauses = expr.split(/\s*&&\s*/).filter(Boolean);
@@ -130,8 +130,28 @@ export function ConversationComposerInputControls({
         }
         return true;
       }),
-    [composerButtons, composerHasContent, streamIsStreaming],
+    [composerControls, composerHasContent, streamIsStreaming],
   );
+  const composerControlContext = {
+    composerDisabled,
+    streamIsStreaming,
+    composerHasContent,
+    openFilePicker: onOpenFilePicker,
+    addFiles: onFilesSelected,
+    insertText: onInsertComposerText,
+    models,
+    currentModel,
+    currentThinkingLevel,
+    currentServiceTier,
+    savingPreference,
+    selectModel: onSelectModel,
+    selectThinkingLevel: onSelectThinkingLevel,
+    selectServiceTier: onSelectServiceTier,
+    goalEnabled,
+    toggleGoal: onToggleGoal,
+  };
+  const visibleLeadingControls = visibleComposerControls.filter((control) => control.slot === 'leading');
+  const visiblePreferenceControls = visibleComposerControls.filter((control) => control.slot === 'preferences');
 
   return (
     <div className="px-3 pt-2.5 pb-2.5">
@@ -187,29 +207,13 @@ export function ConversationComposerInputControls({
 
         <div className="flex flex-nowrap items-center gap-1.5 px-3 py-0.5">
           <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onOpenFilePicker}
-              disabled={composerDisabled}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-              title="Attach image or file"
-              aria-label="Attach image or file"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </button>
-
+            {visibleLeadingControls.map((control) => (
+              <ComposerButtonHost
+                key={`${control.extensionId}:${control.id}`}
+                registration={control}
+                buttonContext={{ ...composerControlContext, renderMode: 'inline' }}
+              />
+            ))}
             {visibleComposerInputTools.map((tool) => (
               <ComposerInputToolHost
                 key={`${tool.extensionId}:${tool.id}`}
@@ -224,23 +228,8 @@ export function ConversationComposerInputControls({
               />
             ))}
             <ConversationPreferencesRow
-              models={models}
-              currentModel={currentModel}
-              currentThinkingLevel={currentThinkingLevel}
-              currentServiceTier={currentServiceTier}
-              savingPreference={savingPreference}
-              composerButtons={visibleComposerButtons}
-              composerButtonContext={{
-                composerDisabled,
-                streamIsStreaming,
-                composerHasContent,
-                goalEnabled,
-                toggleGoal: onToggleGoal,
-                insertText: onInsertComposerText,
-              }}
-              onSelectModel={onSelectModel}
-              onSelectThinkingLevel={onSelectThinkingLevel}
-              onSelectServiceTier={onSelectServiceTier}
+              composerButtons={visiblePreferenceControls}
+              composerButtonContext={composerControlContext}
               inlineLimit={getComposerPreferenceInlineLimit(composerShellWidth)}
             />
           </div>

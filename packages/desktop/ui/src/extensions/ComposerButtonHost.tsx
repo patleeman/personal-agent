@@ -1,3 +1,4 @@
+import type { ComposerControlContext } from '@personal-agent/extensions/composer';
 import { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
@@ -5,21 +6,17 @@ import { ensureExtensionFrontendReactGlobals } from './extensionFrontendReactGlo
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
-import type { ExtensionComposerButtonRegistration } from './useExtensionRegistry';
+import type { ExtensionComposerControlRegistration } from './useExtensionRegistry';
 
-export interface ComposerButtonContext {
-  composerDisabled: boolean;
-  streamIsStreaming: boolean;
-  composerHasContent: boolean;
-  insertText: (text: string) => void;
-}
+export type ComposerButtonContext = ComposerControlContext;
 
 type ComposerButtonComponent = ComponentType<{
   pa: ReturnType<typeof createNativeExtensionClient>;
   buttonContext: ComposerButtonContext;
+  controlContext: ComposerControlContext;
 }>;
 
-function loadButtonModule(registration: ExtensionComposerButtonRegistration, revision: number): Promise<Record<string, unknown>> {
+function loadButtonModule(registration: ExtensionComposerControlRegistration, revision: number): Promise<Record<string, unknown>> {
   ensureExtensionFrontendReactGlobals();
   const systemLoader = systemExtensionModules.get(registration.extensionId);
   if (systemLoader) return systemLoader();
@@ -35,7 +32,7 @@ export function ComposerButtonHost({
   registration,
   buttonContext,
 }: {
-  registration: ExtensionComposerButtonRegistration;
+  registration: ExtensionComposerControlRegistration;
   buttonContext: ComposerButtonContext;
 }) {
   const moduleKey = `${registration.extensionId}:${registration.frontendEntry ?? ''}:${getExtensionRegistryRevision()}`;
@@ -55,7 +52,7 @@ export function ComposerButtonHost({
 
   return (
     <Suspense fallback={null}>
-      <Component pa={pa} buttonContext={buttonContext} />
+      <Component pa={pa} buttonContext={buttonContext} controlContext={buttonContext} />
     </Suspense>
   );
 }

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "id": "system-composer-attachments",
+  "name": "Composer Attachments",
+  "packageType": "system",
+  "description": "Composer attachment controls.",
+  "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "permissions": [],
+  "contributes": {
+    "composerControls": [
+      {
+        "id": "attach-files",
+        "component": "AttachFilesComposerControl",
+        "title": "Attach image or file",
+        "slot": "leading",
+        "priority": 0
+      }
+    ]
+  }
+}

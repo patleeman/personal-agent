@@ -15,12 +15,12 @@
   },
   "permissions": ["conversations:readwrite"],
   "contributes": {
-    "composerButtons": [
+    "composerControls": [
       {
         "id": "goal-mode",
         "component": "GoalModeComposerButton",
         "title": "Goal mode",
-        "placement": "afterModelPicker",
+        "slot": "preferences",
         "priority": 100
       }
     ],

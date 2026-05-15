@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "id": "system-model-picker",
+  "name": "Model Picker",
+  "packageType": "system",
+  "description": "Composer model, thinking, and fast-mode controls.",
+  "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "permissions": [],
+  "contributes": {
+    "composerControls": [
+      {
+        "id": "model-preferences",
+        "component": "ModelPreferencesComposerControl",
+        "title": "Model preferences",
+        "slot": "preferences",
+        "priority": 10
+      }
+    ]
+  }
+}

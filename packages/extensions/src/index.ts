@@ -43,6 +43,9 @@ export type ExtensionPermission =
   | 'runs:read'
   | 'runs:start'
   | 'runs:cancel'
+  | 'executions:read'
+  | 'executions:start'
+  | 'executions:cancel'
   | 'storage:read'
   | 'storage:write'
   | 'storage:readwrite'
@@ -227,11 +230,36 @@ export interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+export type ExtensionComposerControlSlot = 'leading' | 'preferences' | 'actions';
+
+export interface ExtensionComposerControlContribution {
+  id: string;
+  component: string;
+  title?: string;
+  /** Composer row slot. Defaults to the preferences slot. */
+  slot?: ExtensionComposerControlSlot;
+  /** Condition for visibility, e.g. "composerHasContent && !streamIsStreaming" */
+  when?: string;
+  /** Sort priority within slot. Lower renders earlier. Default 0. */
+  priority?: number;
+}
+
+export interface ExtensionComposerSubmitActionContribution {
+  id: string;
+  label: string;
+  handler: string;
+  when?: string;
+  shortcut?: string;
+  default?: boolean;
+  /** Sort priority. Lower wins. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionComposerButtonContribution {
   id: string;
   component: string;
   title?: string;
-  /** Where the control should appear in the composer. Defaults to the right-side action slot. */
+  /** @deprecated Use composerControls[].slot. */
   placement?: 'afterModelPicker' | 'actions';
   /** Condition for visibility, e.g. "composerHasContent && !streamIsStreaming" */
   when?: string;
@@ -429,6 +457,8 @@ export interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  composerControls?: ExtensionComposerControlContribution[];
+  composerSubmitActions?: ExtensionComposerSubmitActionContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
@@ -471,6 +501,7 @@ export interface ExtensionManifest {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  routes?: ExtensionBackendRoute[];
   services?: ExtensionBackendService[];
   startupAction?: string;
   onEnableAction?: string;
@@ -493,6 +524,28 @@ export interface ExtensionBackendAction {
   handler: string;
   title?: string;
   description?: string;
+}
+
+export interface ExtensionBackendRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  handler: string;
+  title?: string;
+  description?: string;
+}
+
+export interface ExtensionRouteRequest {
+  method: string;
+  path: string;
+  query: Record<string, string | string[]>;
+  params: Record<string, string>;
+  body?: unknown;
+}
+
+export interface ExtensionRouteResponse {
+  status?: number;
+  body?: unknown;
+  headers?: Record<string, string>;
 }
 
 export interface ExtensionRenderContext {
@@ -607,6 +660,14 @@ export interface PersonalAgentClient {
     run(taskId: string): Promise<Record<string, unknown>>;
     readLog(taskId: string): Promise<string | Record<string, unknown>>;
   };
+  executions: {
+    start(input: unknown): Promise<ExtensionRunSummary>;
+    get(executionId: string): Promise<unknown>;
+    list(input?: { conversationId?: string | null }): Promise<unknown[]>;
+    readLog(executionId: string, tail?: number): Promise<string | Record<string, unknown>>;
+    cancel(executionId: string): Promise<ExtensionRunSummary | Record<string, unknown>>;
+  };
+  /** @deprecated Use executions. */
   runs: {
     start(input: unknown): Promise<ExtensionRunSummary>;
     get(runId: string): Promise<ExtensionRunSummary>;

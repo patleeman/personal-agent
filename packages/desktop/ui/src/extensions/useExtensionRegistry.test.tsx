@@ -54,12 +54,12 @@ describe('useExtensionRegistry', () => {
                 priority: 100,
               },
             ],
-            composerButtons: [
+            composerControls: [
               {
                 id: 'goal-mode',
                 component: 'GoalModeComposerButton',
                 title: 'Goal mode',
-                placement: 'afterModelPicker',
+                slot: 'preferences',
                 priority: 100,
               },
             ],
@@ -124,17 +124,18 @@ describe('useExtensionRegistry', () => {
         frontendEntry: 'dist/frontend.js',
       },
     ]);
-    expect(result.current.composerButtons).toEqual([
+    expect(result.current.composerControls).toEqual([
       {
         extensionId: 'test-extension',
         id: 'goal-mode',
         component: 'GoalModeComposerButton',
         title: 'Goal mode',
-        placement: 'afterModelPicker',
+        slot: 'preferences',
         priority: 100,
         frontendEntry: 'dist/frontend.js',
       },
     ]);
+    expect(result.current.composerButtons).toEqual(result.current.composerControls);
     expect(result.current.composerInputTools).toEqual([
       {
         extensionId: 'test-extension',
