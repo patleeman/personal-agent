@@ -45,6 +45,17 @@ describe('replySelection', () => {
     expect(readSelectedTextWithinElement(scope, range)).toBe('');
   });
 
+  it('returns empty text when the selection range belongs to another document', () => {
+    document.body.innerHTML = '<section data-selection-reply-scope="assistant-message">inside</section>';
+    const scope = document.querySelector('section') as HTMLElement;
+    const otherDocument = document.implementation.createHTMLDocument('other');
+    otherDocument.body.innerHTML = '<p>outside</p>';
+    const range = otherDocument.createRange();
+    range.selectNodeContents(otherDocument.querySelector('p') as HTMLElement);
+
+    expect(readSelectedTextWithinElement(scope, range)).toBe('');
+  });
+
   it('finds selection start and end scopes with range fallback', () => {
     document.body.innerHTML =
       '<section data-selection-reply-scope="assistant-message">start</section><section data-selection-reply-scope="assistant-message">end</section>';

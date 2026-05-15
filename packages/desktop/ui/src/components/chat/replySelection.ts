@@ -33,15 +33,21 @@ export function findSelectionReplyScopeElements(
   };
 }
 
+function getRangeDocument(range: Range): Document | null {
+  const container = range.commonAncestorContainer;
+  return container.nodeType === Node.DOCUMENT_NODE ? (container as Document) : container.ownerDocument;
+}
+
 export function readSelectedTextWithinElement(element: HTMLElement | null, selectionRange?: Range | null): string {
-  if (!element || typeof window === 'undefined' || typeof document === 'undefined') {
+  if (!element || typeof window === 'undefined') {
     return '';
   }
 
+  const ownerDocument = element.ownerDocument;
   const range =
     selectionRange ??
     (() => {
-      const selection = window.getSelection();
+      const selection = ownerDocument.defaultView?.getSelection() ?? window.getSelection();
       if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
         return null;
       }
@@ -49,11 +55,11 @@ export function readSelectedTextWithinElement(element: HTMLElement | null, selec
       return selection.getRangeAt(0);
     })();
 
-  if (!range) {
+  if (!range || getRangeDocument(range) !== ownerDocument) {
     return '';
   }
 
-  const scopeRange = document.createRange();
+  const scopeRange = ownerDocument.createRange();
   scopeRange.selectNodeContents(element);
 
   if (
