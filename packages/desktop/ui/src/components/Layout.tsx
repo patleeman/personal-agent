@@ -9,7 +9,7 @@ import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSea
 import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
 import { DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
-import { executeExtensionCommand, registerHostCommand, setExtensionCommandContext } from '../extensions/commands';
+import { executeExtensionCommand, setExtensionCommandContext } from '../extensions/commands';
 import { ExtensionModalHost } from '../extensions/ExtensionModalHost';
 import { EXTENSION_REGISTRY_CHANGED_EVENT } from '../extensions/extensionRegistryEvents';
 import { findMatchingExtensionKeybinding } from '../extensions/keybindings';
@@ -1342,58 +1342,43 @@ export function Layout() {
     setExtensionCommandContext('conversation.hasActive', Boolean(activeConversationId));
   }, [activeConversationId, appLayoutMode, location.pathname]);
 
-  useEffect(() => {
-    const disposers = [
-      registerHostCommand({
-        id: 'app.navigate',
-        title: 'Navigate',
-        category: 'App',
-        handler: (args) => {
-          const to = typeof args === 'object' && args && 'to' in args ? String((args as { to: unknown }).to) : '';
-          if (!to) return false;
-          navigate(to);
-          return true;
-        },
-      }),
-      registerHostCommand({
-        id: 'palette.open',
-        title: 'Open Command Palette',
-        category: 'App',
-        handler: (args) => {
-          const scope = typeof args === 'object' && args && 'scope' in args ? String((args as { scope: unknown }).scope) : undefined;
-          window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { scope } }));
-          return true;
-        },
-      }),
-      registerHostCommand({
-        id: 'layout.set',
-        title: 'Set Layout',
-        category: 'App',
-        handler: (args) => {
-          const mode = typeof args === 'object' && args && 'mode' in args ? String((args as { mode: unknown }).mode) : '';
-          if (mode !== 'compact' && mode !== 'workbench') return false;
-          writeAppLayoutMode(mode);
-          setAppLayoutMode(mode);
-          return true;
-        },
-      }),
-      registerHostCommand({
-        id: 'rail.open',
-        title: 'Open Right Rail',
-        category: 'App',
-        handler: (args) => {
-          if (!args || typeof args !== 'object') return false;
-          const { extensionId, surfaceId } = args as { extensionId?: unknown; surfaceId?: unknown };
-          const surface = extensionRightToolPanels.find((candidate) => candidate.extensionId === extensionId && candidate.id === surfaceId);
-          if (!surface) return false;
-          setActiveConversationTool(extensionToolPanelMode(surface));
-          setRailOpen(true);
-          return true;
-        },
-      }),
-    ];
-    return () => disposers.forEach((dispose) => dispose());
-  }, [appLayoutMode, extensionRightToolPanels, location.pathname, navigate, setActiveConversationTool]);
+  const executeCommandOptions = useMemo(
+    () => ({
+      navigate,
+      extensionCommands,
+      context: {
+        route: location.pathname,
+        'layout.mode': appLayoutMode,
+        'conversation.hasActive': Boolean(activeConversationId),
+      },
+      openCommandPalette(scope?: string) {
+        window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { scope } }));
+      },
+      openRightRail(target: string) {
+        const surface = extensionRightToolPanels.find((candidate) => `${candidate.extensionId}/${candidate.id}` === target);
+        if (!surface) return false;
+        setActiveConversationTool(extensionToolPanelMode(surface));
+        setRailOpen(true);
+        return true;
+      },
+      setLayout(mode: 'compact' | 'workbench') {
+        writeAppLayoutMode(mode);
+        setAppLayoutMode(mode);
+      },
+      invokeExtensionCommand(command: ExtensionCommandRegistration, args: unknown) {
+        return api.invokeExtensionAction(command.extensionId, command.action, args ?? {});
+      },
+    }),
+    [
+      activeConversationId,
+      appLayoutMode,
+      extensionCommands,
+      extensionRightToolPanels,
+      location.pathname,
+      navigate,
+      setActiveConversationTool,
+    ],
+  );
 
   const lastWorkbenchRouteRef = useRef<{ pathname: string; search: string }>({ pathname: '/conversations/new', search: '' });
 
@@ -1432,12 +1417,22 @@ export function Layout() {
       if (!match) return;
       event.preventDefault();
       event.stopPropagation();
-      void executeExtensionCommand(match.command, match.args, extensionCommands);
+      void executeExtensionCommand(match.command, match.args, executeCommandOptions);
+    }
+
+    function handleExtensionCommandExecute(event: CustomEvent) {
+      const detail = event.detail as { command?: string; args?: unknown; resolve?: (handled: boolean) => void };
+      if (!detail.command) return;
+      void executeExtensionCommand(detail.command, detail.args, executeCommandOptions).then((handled) => detail.resolve?.(handled));
     }
 
     window.addEventListener('keydown', handleExtensionKeybinding, true);
-    return () => window.removeEventListener('keydown', handleExtensionKeybinding, true);
-  }, [extensionCommands, extensionKeybindings]);
+    window.addEventListener('pa-extension-command-execute', handleExtensionCommandExecute as EventListener);
+    return () => {
+      window.removeEventListener('keydown', handleExtensionKeybinding, true);
+      window.removeEventListener('pa-extension-command-execute', handleExtensionCommandExecute as EventListener);
+    };
+  }, [executeCommandOptions, extensionKeybindings]);
 
   useEffect(() => {
     if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {

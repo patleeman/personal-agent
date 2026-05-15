@@ -1,6 +1,6 @@
 import { api } from '../client/api';
 import { type DesktopWorkbenchBrowserState, getDesktopBridge } from '../desktop/desktopBridge';
-import { executeExtensionCommand, listHostCommands, setExtensionCommandContext } from './commands';
+import { listHostCommands, setExtensionCommandContext } from './commands';
 import { type ExtensionSelectionState, readExtensionSelection, setExtensionSelection, subscribeExtensionSelection } from './selection';
 
 function matchExtensionEventPattern(pattern: string, eventName: string): boolean {
@@ -255,7 +255,9 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
     },
     commands: {
       execute(command, args) {
-        return executeExtensionCommand(command, args);
+        return new Promise<boolean>((resolve) => {
+          window.dispatchEvent(new CustomEvent('pa-extension-command-execute', { detail: { command, args, resolve } }));
+        });
       },
       async list() {
         return [...listHostCommands(), ...(await api.extensionCommands())];
