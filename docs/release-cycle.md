@@ -4,17 +4,17 @@ Desktop releases are built, signed, notarized, and published locally. Pushing a 
 
 ## Current release
 
-**v0.8.0-rc.13** — published 2026-05-15.
+**v0.8.0-rc.14** — published 2026-05-15.
 
-Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.8.0-rc.13
+Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.8.0-rc.14
 
 Highlights:
 
-- Added extension-owned ACP protocol support plus smoke tooling and protocol visibility.
-- Fixed hung ACP prompts with timeout/error propagation.
-- Added the filesystem authority boundary and async backend-based filesystem authority.
-- Unified extension commands in the command palette with command acknowledgements and inspector support.
-- Hardened desktop release packaging for extension backends, runtime channels, background process aborts, and packaged app smoke tests.
+- Added managed extension sidecar processes and packaged the Alleycat sidecar binary.
+- Moved Alleycat and browser work into experimental extension surfaces.
+- Improved Kitty Litter pairing, live PA thread hydration, timestamp handling, and thread list behavior.
+- Hardened subagent tool allowlists, logs, final output capture, and activity-tree navigation.
+- Stabilized release validation for backend module imports, conversation cwd changes, and packaged extension smoke counts.
 
 ## Release Commands
 
