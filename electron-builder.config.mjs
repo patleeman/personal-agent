@@ -91,7 +91,12 @@ const electronBuilderConfig = {
     '!node_modules/better-sqlite3/{deps,src}{,/**/*}',
     '!node_modules/better-sqlite3/build/Release/obj{,/**/*}',
   ],
-  asarUnpack: ['node_modules/better-sqlite3/**/*', 'node_modules/bindings/**/*', 'node_modules/file-uri-to-path/**/*'],
+  asarUnpack: [
+    'server/dist/conversations/conversationInspectWorker.js',
+    'node_modules/better-sqlite3/**/*',
+    'node_modules/bindings/**/*',
+    'node_modules/file-uri-to-path/**/*',
+  ],
   extraMetadata: {
     main: './dist/main.js',
   },

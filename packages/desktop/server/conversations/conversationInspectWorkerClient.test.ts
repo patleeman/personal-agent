@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveConversationInspectWorkerUrlFrom } from './conversationInspectWorkerClient.js';
 
@@ -22,6 +22,8 @@ function touch(path: string): void {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+
   if (previousRepoRoot === undefined) {
     delete process.env.PERSONAL_AGENT_REPO_ROOT;
   } else {
@@ -76,5 +78,21 @@ describe('resolveConversationInspectWorkerUrlFrom', () => {
     const workerUrl = resolveConversationInspectWorkerUrlFrom(pathToFileURL(clientPath).href);
 
     expect(workerUrl.href).toBe(pathToFileURL(bundledWorkerPath).href);
+  });
+
+  it('uses the unpacked worker path in packaged extension builds', () => {
+    const resourcesRoot = makeTempRoot();
+    const appRoot = join(resourcesRoot, 'app.asar');
+    const clientPath = join(resourcesRoot, 'extensions/system-conversation-tools/dist/backend.mjs');
+    const packedWorkerPath = join(appRoot, 'server/dist/conversations/conversationInspectWorker.js');
+    const unpackedWorkerPath = join(resourcesRoot, 'app.asar.unpacked/server/dist/conversations/conversationInspectWorker.js');
+    touch(clientPath);
+    touch(packedWorkerPath);
+    touch(unpackedWorkerPath);
+    vi.stubGlobal('process', { ...process, resourcesPath: resourcesRoot });
+
+    const workerUrl = resolveConversationInspectWorkerUrlFrom(pathToFileURL(clientPath).href);
+
+    expect(workerUrl.href).toBe(pathToFileURL(unpackedWorkerPath).href);
   });
 });

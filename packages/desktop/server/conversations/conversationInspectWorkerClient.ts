@@ -97,9 +97,13 @@ export function resolveConversationInspectWorkerUrlFrom(importMetaUrl: string): 
   const packagedCandidates =
     typeof process.resourcesPath === 'string'
       ? [
-          resolve(process.resourcesPath, 'app.asar/server/dist/conversations/conversationInspectWorker.js'),
+          // Node worker_threads cannot execute JavaScript directly from app.asar.
+          // electron-builder mirrors asarUnpack matches under app.asar.unpacked,
+          // so prefer that real filesystem path in packaged builds.
+          resolve(process.resourcesPath, 'app.asar.unpacked/server/dist/conversations/conversationInspectWorker.js'),
           resolve(process.resourcesPath, 'app/server/dist/conversations/conversationInspectWorker.js'),
           resolve(process.resourcesPath, 'server/dist/conversations/conversationInspectWorker.js'),
+          resolve(process.resourcesPath, 'app.asar/server/dist/conversations/conversationInspectWorker.js'),
         ]
       : [];
 
