@@ -24,7 +24,7 @@ function isTransientCompanionFetchError(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
-async function fetchCompanionWithStartupRetry(url: URL, init: RequestInit): Promise<Response> {
+async function fetchCompanionWithStartupRetry(url: URL, init: RequestInit): Promise<globalThis.Response> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await fetch(url, init);
