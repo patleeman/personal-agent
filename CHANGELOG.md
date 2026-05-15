@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0-rc.12 — 2026-05-15
+
+- fix: package core runtime for extension backends
+
 ## 0.8.0-rc.11 — 2026-05-15
 
 - fix: package backend api lazy modules
