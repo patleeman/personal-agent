@@ -1,6 +1,8 @@
 import { type ChildProcess, execFile, spawn, type SpawnOptions } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { resolveChildProcessEnv } from '@personal-agent/core';
+
 const execFileAsync = promisify(execFile);
 
 export interface ProcessWrapperMetadata {
@@ -61,7 +63,7 @@ export function resolveProcessLaunch(input: {
     command: input.command,
     args: input.args ?? [],
     cwd: input.cwd,
-    env: input.env ?? process.env,
+    env: resolveChildProcessEnv({}, input.env ?? process.env),
     shell: input.shell,
     wrappers: [],
   };
