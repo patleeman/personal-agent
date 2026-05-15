@@ -9,7 +9,6 @@ The daemon is a long-lived background process that owns durable runtime behavior
 | Runs            | Detached agent work, started from conversations, inspected later          |
 | Scheduled tasks | Recurring or one-time automations with cron or natural-language schedules |
 | Wakeups         | Conversation callbacks triggered by completed runs and tasks              |
-| Companion API   | HTTP/WebSocket endpoint for iOS app and remote clients                    |
 | Reminders       | Tell-me-later wakeups that resume a specific conversation                 |
 
 ## Lifecycle
@@ -22,7 +21,6 @@ Desktop app ←──→ Daemon (child process)
                     ├── Runtime DB (SQLite)
                     ├── Automation store
                     ├── Run logs
-                    └── Companion API (HTTP/WebSocket)
 ```
 
 If the daemon crashes or is killed, the desktop app restarts it automatically.
@@ -47,15 +45,6 @@ Subagents and scheduled agent tasks run through the daemon's internal background
 }
 ```
 
-## Companion API
-
-The daemon exposes an HTTP/WebSocket API for external clients. Configured in daemon config:
-
-- **Host** — bind address (default: `127.0.0.1`)
-- **Port** — listen port (default: auto-assigned)
-
-The companion API serves the iOS app.
-
 ## State Storage
 
 The daemon stores its state in `<state-root>/daemon/` by default. If `PERSONAL_AGENT_DAEMON_SOCKET_PATH` is set, daemon runtime files live beside that explicit socket path instead; this lets dev hosts isolate their runtime DB from the desktop app.
@@ -74,13 +63,7 @@ Daemon settings are part of the main config.json:
 
 ```json
 {
-  "daemon": {
-    "companion": {
-      "enabled": true,
-      "host": "127.0.0.1",
-      "port": 0
-    }
-  }
+  "daemon": {}
 }
 ```
 

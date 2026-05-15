@@ -93,7 +93,7 @@ await Promise.all([
     entryPoints: [resolve(packageRoot, 'server/traces/traceWorker.ts')],
     outfile: bundleOutputs[2],
   }),
-  // Daemon barrel used by @personal-agent/daemon and iOS companion dev host.
+  // Daemon barrel used by @personal-agent/daemon.
   build({
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/daemon/index.ts')],

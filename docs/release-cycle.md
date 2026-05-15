@@ -33,14 +33,14 @@ pnpm run release:desktop:major
 
 Runtime identity is centralized as `stable`, `rc`, `dev`, or `test`. The channel owns app presentation, state-root suffixes, ports, and updater support.
 
-| Channel  | App name               | State root suffix | Companion port |         Codex port | Updates  |
-| -------- | ---------------------- | ----------------- | -------------: | -----------------: | -------- |
-| `stable` | Personal Agent         | none              |           3842 |               3846 | enabled  |
-| `rc`     | Personal Agent RC      | `-rc`             |           3843 |               3847 | enabled  |
-| `dev`    | Personal Agent Dev     | `-dev`            |           3844 |               3848 | disabled |
-| `test`   | Personal Agent Testing | `-testing`        |   random (`0`) | random/unset (`0`) | disabled |
+| Channel  | App name               | State root suffix | Updates  |
+| -------- | ---------------------- | ----------------- | -------- |
+| `stable` | Personal Agent         | none              | enabled  |
+| `rc`     | Personal Agent RC      | `-rc`             | enabled  |
+| `dev`    | Personal Agent Dev     | `-dev`            | disabled |
+| `test`   | Personal Agent Testing | `-testing`        | disabled |
 
-Versions with an `-rc` prerelease suffix are packaged as **Personal Agent RC** instead of **Personal Agent**. The RC app uses a separate macOS bundle identifier (`com.personal-agent.desktop.rc`), runtime state root (`personal-agent-rc`), Codex bridge port (`3847`), companion port (`3843`), and artifact prefix (`Personal-Agent-RC-*`), so it can be installed next to the stable app without replacing it.
+Versions with an `-rc` prerelease suffix are packaged as **Personal Agent RC** instead of **Personal Agent**. The RC app uses a separate macOS bundle identifier (`com.personal-agent.desktop.rc`), runtime state root (`personal-agent-rc`), and artifact prefix (`Personal-Agent-RC-*`), so it can be installed next to the stable app without replacing it.
 
 Stable versions keep the existing app name, bundle identifier, and `Personal-Agent-*` artifact names. Dev/test launches disable update checks so local builds do not emit packaged updater metadata warnings.
 
@@ -63,7 +63,7 @@ Each release command performs these steps in order:
 The release script runs an automated smoke test after signing and notarization, before pushing the tag. It launches the built `.app` with:
 
 - An isolated temporary `PERSONAL_AGENT_STATE_ROOT`
-- A dedicated daemon socket and companion port
+- A dedicated daemon socket
 - No interference from an already-running user daemon
 
 The check verifies:

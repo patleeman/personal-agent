@@ -47,7 +47,6 @@ Feature-specific documentation lives beside the owning extension package:
 - [Auto Mode](../extensions/system-auto-mode/README.md)
 - [Automations](../extensions/system-automations/README.md)
 - [Browser](../extensions/system-browser/README.md)
-- [Codex Protocol for Companion App](../experimental-extensions/extensions/system-codex/README.md)
 - [ACP Protocol](../experimental-extensions/extensions/system-acp/README.md)
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)
@@ -77,6 +76,6 @@ Feature-specific documentation lives beside the owning extension package:
 
 **Background Runtime** — daemon lifecycle and runtime operations.
 
-**Connectivity** — iOS companion and runtime connectivity architecture.
+**Connectivity** — runtime connectivity architecture.
 
 **Operations** — development workflow, configuration file format, and release cycle.

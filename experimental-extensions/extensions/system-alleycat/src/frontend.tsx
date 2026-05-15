@@ -99,7 +99,7 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
       <div className={SECTION}>
         <div className={LABEL}>Setup</div>
         <div className={CALLOUT}>
-          <div className="font-medium text-primary">Use the Kitty Litter mobile app — not the Kitty Litter npm host.</div>
+          <div className="font-medium text-primary">Use the Kitty Litter iOS app — not the Kitty Litter npm host.</div>
           <ol className="mt-2 list-decimal space-y-1 pl-4">
             <li>Enable this extension in Personal Agent; the companion host starts automatically.</li>
             <li>Open Kitty Litter on your phone and scan this QR code.</li>

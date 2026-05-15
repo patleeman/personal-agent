@@ -3,7 +3,7 @@ import type { MethodHandler } from '../codexJsonRpcServer.js';
 /**
  * Stub handlers for Codex API methods that don't have PA equivalents.
  * These return empty/not-implemented responses to avoid client errors
- * when companion apps or other Codex clients call them.
+ * when Kitty-compatible clients call them.
  */
 
 function notImplemented(method: string): MethodHandler {

@@ -54,15 +54,6 @@
       ]
     },
     {
-      "title": "Connectivity",
-      "items": [
-        {
-          "title": "iOS Companion",
-          "path": "ios-companion.md"
-        }
-      ]
-    },
-    {
       "title": "Operations",
       "items": [
         {

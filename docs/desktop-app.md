@@ -42,10 +42,7 @@ Electron main process
     │       ├── Runs
     │       ├── Scheduled tasks
     │       ├── Wakeups
-    │       ├── Companion API
     │       └── Reminders
-    │
-    └── Companion API server (HTTP/WebSocket)
 ```
 
 - Electron owns the UI surface through the `personal-agent://app/` protocol

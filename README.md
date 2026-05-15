@@ -1,6 +1,6 @@
 # Personal Agent
 
-**Desktop AI agent with durable state, conversations, knowledge management, and automations.** Ships an Electron desktop app, a background daemon, and an iOS companion.
+**Desktop AI agent with durable state, conversations, knowledge management, and automations.** Ships an Electron desktop app and a background daemon.
 
 [Download the latest release](https://github.com/patleeman/personal-agent/releases/latest) — macOS arm64 only.
 
@@ -30,10 +30,9 @@ Personal Agent is a native macOS app that runs a capable AI agent with durable m
 ### What it ships
 
 - **Electron desktop app** — primary UI for conversations, knowledge, automations, and settings
-- **Background daemon** — runs, scheduled tasks, wakeups, reminders, companion pairing
+- **Background daemon** — runs, scheduled tasks, wakeups, and reminders
 - **Knowledge system** — docs, instruction files, skills, and projects
 - **MCP integration** — external tool server support
-- **iOS companion app** — native phone client for chat, knowledge, and automations
 
 ---
 
@@ -45,8 +44,7 @@ Personal Agent is a native macOS app that runs a capable AI agent with durable m
 | **Knowledge vault**     | Browse/edit durable docs, URL import, git-synced across machines                        |
 | **Automations**         | Scheduled recurring or one-time tasks, durable background runs, reminders               |
 | **Desktop UI**          | Workbench layout with rails for knowledge, files, diffs, artifacts, and browser         |
-| **Background daemon**   | Runs, scheduled tasks, wakeups, reminders, companion API                                |
-| **iOS companion**       | Native phone client paired via QR code — chat, knowledge, share extension               |
+| **Background daemon**   | Runs, scheduled tasks, wakeups, and reminders                                           |
 | **Agent tools**         | Web search, web fetch, apply patch, conversation inspection, checkpoints, browser tools |
 | **Skills system**       | Reusable agent workflow packages stored in the vault                                    |
 | **Model providers**     | OpenAI, Anthropic, Google — configurable API types, keys, base URLs                     |
@@ -74,7 +72,6 @@ All docs are in the [`docs/`](docs/) folder — written for agents first, humans
 - [Knowledge System](docs/knowledge-system.md) — docs, instruction files, skills, projects
 - [Conversations](docs/conversations.md) — conversation model, auto mode, async follow-through
 - [Configuration](docs/configuration.md) — file-based config, env vars, Settings UI
-- [iOS Companion](docs/ios-companion.md)
 - [Repo Layout](docs/repo-layout.md) — where code lives
 - [Release Cycle](docs/release-cycle.md)
 
@@ -101,7 +98,6 @@ Useful dev commands:
 ```bash
 pnpm run desktop:start      # launch the Electron app
 pnpm run desktop:dev        # same dev launcher
-pnpm run ios:dev            # iOS companion against local dev host
 
 # Extension integration validation (run before starting the app)
 pnpm run check:extensions        # full suite (~30s, includes module runtime checks)
@@ -112,7 +108,6 @@ Platform prerequisites:
 
 - **macOS arm64** (the desktop app targets macOS; no Windows or Linux build)
 - **Node.js 20+** and **pnpm 11+** recommended
-- **Xcode** (only needed for iOS companion development)
 
 Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to skip code signing for local Electron builds.
 

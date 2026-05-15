@@ -208,7 +208,6 @@
 
 ## 0.8.0-rc.7 — 2026-05-14
 
-- Add companion app group entitlement for shared container
 - fix: expose companion and codex APIs
 - chore: restore clean check formatting
 - test: lock goal mode loop scenarios
@@ -303,7 +302,6 @@
 - Group experimental extensions in manager
 - Generalize qwen mlx experimental extension
 - Run durable subagents through internal agent runner
-- Rename Codex protocol companion app copy
 - Add smoke coverage for repaired agent tools
 - Fix bash transcript event rendering for agent tool calls
 - Fix extension-backed agent tool regressions
@@ -365,7 +363,6 @@
 - fix: repair desktop dictation controls
 - fix: show archived sessions in activity tree
 - fix: clear workspace file pane on tab close
-- fix: declare iOS companion orientation support
 - fix: keep extension diffs rail active
 - fix: show active thread in activity tree
 - fix: emit activity tree parents as directories
@@ -440,7 +437,6 @@
 - fix: avoid TextKit compatibility switch in composer
 - fix: cap iOS conversation header icons
 - fix: use valid iOS branch icon
-- chore: clean up iOS companion warnings
 - test: correct iOS conversation row fixture
 - fix: align iOS mock knowledge root
 - fix: render transcript markdown blocks on iOS
@@ -486,7 +482,6 @@
 - fix: properly unsubscribe notifier from thread subscriber group in codex protocol
 - fix: use correct cwd field in codex cwd_changed event forwarder
 - fix: notify Codex client on turn/interrupt to avoid hanging turns
-- fix: harden iOS companion live QA flows
 - fix: keep prompts flowing when run db is corrupt
 - Fix duplicate daemon client import
 - fix: stop goal mode no-progress loops
@@ -497,7 +492,6 @@
 - docs: clarify observability migration comments
 - docs: align trace declarations with observability storage
 - fix: namespace observability migrations
-- fix: cap iOS companion transcript snapshots
 - fix: cap unified observability trace tables
 - refactor: route server diagnostics through logger
 - feat: unify observability storage
@@ -507,7 +501,6 @@
 - fix: route desktop companion calls through api proxy
 - fix: cap telemetry and ignore broken pipe logging
 - Wire extension quick check into npm run check pipeline, update AGENTS.md
-- fix: restore iOS companion daemon transport
 - Add visible skip message when QUICK_EXTENSION_CHECK is set
 - fix: proxy companion API from built desktop app
 - Add extension validation commands to README.md dev section

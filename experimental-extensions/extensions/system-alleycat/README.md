@@ -34,7 +34,7 @@ For cwd QA:
 
 ## Current implementation state
 
-The extension runs a PA-owned Rust iroh sidecar and forwards `connect` streams to a local JSONL Personal Agent bridge. It reuses the protocol implementation from `system-codex`:
+The extension runs a PA-owned Rust iroh sidecar and forwards `connect` streams to a local JSONL Personal Agent bridge. Its local bridge implements the Kitty-compatible conversation protocol directly:
 
 - `initialize`
 - `thread/list`

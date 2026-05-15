@@ -14,7 +14,6 @@ Current experiments:
 - `qwen-mlx` — general-purpose local Hugging Face MLX model setup, search, and server controls.
 - `llama-cpp` — local GGUF model runner backed by bundled llama.cpp Metal binaries.
 - `doom` — Doom inside PA. Because obviously.
-- `system-codex` — Codex companion protocol server surface while the protocol is still baking.
 - `system-session-exchange` — import/export flow for conversation session handoff experiments.
 - `system-gateways` — Telegram gateway UI/runtime while gateway routing is still experimental.
 - `system-images` — Image generation tooling while provider behavior and UX are still experimental.
