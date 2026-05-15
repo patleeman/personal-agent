@@ -8,6 +8,7 @@ import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir, getStateRoot, queryAppTelemetryEvents, resolveLocalProfileSettingsFilePath } from '@personal-agent/core';
 import type { Plugin } from 'esbuild';
 
+import { registerFileSystemAuthorityHostEvents } from '../filesystem/filesystemAuthority.js';
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
 import { resolveSecret } from '../secrets/secretStore.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
@@ -21,6 +22,7 @@ import {
 } from './extensionBackendLoadTarget.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
+import { createExtensionFilesystemCapability } from './extensionFilesystem.js';
 import { createExtensionModelsCapability } from './extensionModels.js';
 import { isSystemNotificationAvailable, sendNotifyAsSystemNotification, setExtensionBadge } from './extensionNotifications.js';
 import {
@@ -93,6 +95,7 @@ export interface ExtensionBackendContext {
   models: ReturnType<typeof createExtensionModelsCapability>;
   vault: ReturnType<typeof createExtensionVaultCapability>;
   conversations: ReturnType<typeof createExtensionConversationsCapability>;
+  filesystem: ReturnType<typeof createExtensionFilesystemCapability>;
   workspace: ReturnType<typeof createExtensionWorkspaceCapability>;
   git: ReturnType<typeof createExtensionGitCapability>;
   shell: ReturnType<typeof createExtensionShellCapability>;
@@ -314,6 +317,7 @@ export function createBackendContext(
   toolContext?: ExtensionBackendContext['toolContext'],
   agentToolContext?: unknown,
 ): ExtensionBackendContext {
+  registerFileSystemAuthorityHostEvents();
   const resolvedPiAgentRuntimeDir = getPiAgentRuntimeDir();
   return {
     extensionId,
@@ -338,7 +342,8 @@ export function createBackendContext(
     models: createExtensionModelsCapability(),
     vault: createExtensionVaultCapability(),
     conversations: createExtensionConversationsCapability(serverContext),
-    workspace: createExtensionWorkspaceCapability(),
+    filesystem: createExtensionFilesystemCapability(extensionId, toolContext),
+    workspace: createExtensionWorkspaceCapability(extensionId, toolContext),
     git: createExtensionGitCapability(),
     shell: createExtensionShellCapability(),
     commands: {

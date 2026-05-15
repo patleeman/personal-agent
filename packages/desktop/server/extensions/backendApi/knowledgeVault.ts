@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative } from 'node:path';
 
+import { defaultFileSystemAuthority, type FileAccess, type ScopedFileSystem } from '../../filesystem/filesystemAuthority.js';
 import { callServerModuleExport } from './serverModuleResolver.js';
 const SKIPPED_DIRS = new Set(['.git', 'node_modules', '.DS_Store']);
 const IMAGE_FILE_EXTENSIONS = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
@@ -29,21 +30,32 @@ async function getVaultRoot(): Promise<string> {
   return callServerModuleExport<string>('@personal-agent/core', 'getVaultRoot');
 }
 
-function isInsideRoot(root: string, target: string): boolean {
-  const rel = relative(root, target);
-  return !rel.startsWith('..') && rel !== '..';
+async function vaultRoot(access: FileAccess[], reason: string): Promise<ScopedFileSystem> {
+  const root = await getVaultRoot();
+  return defaultFileSystemAuthority.requestRoot({
+    subject: { type: 'core', id: 'knowledge-vault' },
+    root: { kind: 'vault', id: root, path: root, displayName: 'Knowledge vault' },
+    access,
+    reason,
+  });
 }
 
-async function requireVaultPath(id: string): Promise<string> {
+function normalizeVaultId(id: string): string {
   if (!id || id.includes('\u0000')) throw new Error('invalid path');
   const clean = id.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').trim();
   if (!clean) throw new Error('invalid path');
   const segments = clean.split('/');
   if (segments.some((segment) => segment === '.' || segment === '..')) throw new Error('invalid path');
-  const root = await getVaultRoot();
-  const abs = resolve(root, clean);
-  if (!isInsideRoot(root, abs)) throw new Error('invalid path');
-  return abs;
+  return clean;
+}
+
+async function requireVaultPath(
+  id: string,
+  access: FileAccess[] = ['metadata'],
+): Promise<{ root: ScopedFileSystem; id: string; abs: string }> {
+  const clean = normalizeVaultId(id);
+  const root = await vaultRoot(access, 'knowledge vault path');
+  return { root, id: clean, abs: root.resolvePath(clean) };
 }
 
 function vaultEntryFromStat(root: string, abs: string): VaultEntry {
@@ -211,49 +223,55 @@ export const knowledgeVault: Record<string, unknown> = {
     return { root: vaultRoot, files };
   },
   async tree(input: { dir?: string } = {}) {
-    const vaultRoot = await getVaultRoot();
-    const abs = input.dir ? await requireVaultPath(input.dir) : vaultRoot;
-    return { entries: readVaultDirEntries(vaultRoot, abs) };
+    const vaultRootPath = await getVaultRoot();
+    const abs = input.dir ? (await requireVaultPath(input.dir, ['list', 'metadata'])).abs : vaultRootPath;
+    return { entries: readVaultDirEntries(vaultRootPath, abs) };
   },
   async readFile(input: { id: string }) {
-    const abs = await requireVaultPath(input.id);
-    if (!existsSync(abs) || !statSync(abs).isFile()) throw new Error('file not found');
-    const stats = statSync(abs);
-    return { id: input.id, content: readFileSync(abs, 'utf-8'), updatedAt: new Date(stats.mtimeMs).toISOString() };
+    const { root, id, abs } = await requireVaultPath(input.id, ['read', 'metadata']);
+    return root.runSync('read', { relativePath: id }, () => {
+      if (!existsSync(abs) || !statSync(abs).isFile()) throw new Error('file not found');
+      const stats = statSync(abs);
+      return { id, content: readFileSync(abs, 'utf-8'), updatedAt: new Date(stats.mtimeMs).toISOString() };
+    });
   },
   async writeFile(input: { id: string; content: string }) {
-    const abs = await requireVaultPath(input.id);
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, input.content, 'utf-8');
+    const { root, id, abs } = await requireVaultPath(input.id, ['write', 'metadata']);
+    root.runSync('write', { relativePath: id }, () => {
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, input.content, 'utf-8');
+    });
     await emitChanged();
     return vaultEntryFromStat(await getVaultRoot(), abs);
   },
   async createFolder(input: { id: string }) {
-    const abs = await requireVaultPath(input.id);
-    mkdirSync(abs, { recursive: true });
+    const { root, id, abs } = await requireVaultPath(input.id, ['write', 'metadata']);
+    root.runSync('write', { relativePath: id }, () => mkdirSync(abs, { recursive: true }));
     await emitChanged();
     return vaultEntryFromStat(await getVaultRoot(), abs);
   },
   async deleteFile(input: { id: string }) {
-    const abs = await requireVaultPath(input.id);
-    rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    const { root, id, abs } = await requireVaultPath(input.id, ['delete']);
+    root.runSync('delete', { relativePath: id }, () => rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
     await emitChanged();
     return { ok: true };
   },
   async rename(input: { id: string; newName: string }) {
-    const abs = await requireVaultPath(input.id);
-    const next = await requireVaultPath(join(dirname(input.id), basename(input.newName)));
-    renameSync(abs, next);
+    const source = await requireVaultPath(input.id, ['move', 'metadata']);
+    const target = await requireVaultPath(join(dirname(source.id), basename(input.newName)), ['move', 'metadata']);
+    source.root.runSync('move', { relativePath: source.id, destinationPath: target.id }, () => renameSync(source.abs, target.abs));
     await emitChanged();
-    return vaultEntryFromStat(await getVaultRoot(), next);
+    return vaultEntryFromStat(await getVaultRoot(), target.abs);
   },
   async move(input: { id: string; targetDir: string }) {
-    const abs = await requireVaultPath(input.id);
-    const next = await requireVaultPath(join(input.targetDir || '', basename(input.id)));
-    mkdirSync(dirname(next), { recursive: true });
-    renameSync(abs, next);
+    const source = await requireVaultPath(input.id, ['move', 'metadata']);
+    const target = await requireVaultPath(join(input.targetDir || '', basename(source.id)), ['move', 'metadata']);
+    source.root.runSync('move', { relativePath: source.id, destinationPath: target.id }, () => {
+      mkdirSync(dirname(target.abs), { recursive: true });
+      renameSync(source.abs, target.abs);
+    });
     await emitChanged();
-    return vaultEntryFromStat(await getVaultRoot(), next);
+    return vaultEntryFromStat(await getVaultRoot(), target.abs);
   },
   async backlinks(input: { id: string }) {
     return { backlinks: findVaultBacklinks(input.id, await getVaultRoot()) };
@@ -264,9 +282,11 @@ export const knowledgeVault: Record<string, unknown> = {
   async uploadImage(input: { filename: string; dataUrl: string }) {
     const fileName = buildVaultImageUploadFileName(input.filename, input.dataUrl);
     const id = `_attachments/${fileName}`;
-    const abs = await requireVaultPath(id);
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, decodeVaultImageDataUrl(input.dataUrl));
+    const target = await requireVaultPath(id, ['write']);
+    target.root.runSync('write', { relativePath: target.id }, () => {
+      mkdirSync(dirname(target.abs), { recursive: true });
+      writeFileSync(target.abs, decodeVaultImageDataUrl(input.dataUrl));
+    });
     await emitChanged();
     return { id, url: `/api/vault/asset?id=${encodeURIComponent(id)}` };
   },

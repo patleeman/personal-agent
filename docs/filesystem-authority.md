@@ -49,13 +49,13 @@ FileSystemHooks      ── extension and core interception points
 ScopedFileSystem     ── read/write/list/move/remove/archive APIs
         │
         ▼
-FsSafeBackend        ── @openclaw/fs-safe hardened primitives
+FilesystemBackend    ── current Node backend; fs-safe can be plugged in later
         │
         ▼
 node filesystem
 ```
 
-`@openclaw/fs-safe` is the hardened backend, not the product API. Keeping it behind our interface lets us change backend details, tighten defaults, and expose a stable SDK surface without coupling extension authors to a third-party `0.x` package.
+The backend is deliberately hidden behind our interface. The first implementation uses Node filesystem primitives with a single scoped boundary. `@openclaw/fs-safe` remains a future backend/plugin candidate, not a dependency or public API.
 
 ## Core types
 
@@ -203,9 +203,9 @@ await ctx.filesystem.temp({ reason: 'render preview' });
 
 `ctx.storage` remains SQLite key-value state. `ctx.filesystem.extensionStorage()` is for real files/blobs managed under the extension's private root.
 
-## Backend behavior with fs-safe
+## Backend behavior
 
-The `FsSafeBackend` should use `@openclaw/fs-safe` defaults that match product safety, not maximum compatibility:
+The backend should use defaults that match product safety, not maximum compatibility. Today that means the Node backend owns root scoping, access checks, policy hooks, audit events, and atomic writes where it performs writes. A future fs-safe backend should preserve the same authority contract and can harden these primitives further:
 
 - reject symlinks unless a root kind explicitly allows in-root symlinks;
 - reject hardlinks for writable untrusted roots;
@@ -215,7 +215,7 @@ The `FsSafeBackend` should use `@openclaw/fs-safe` defaults that match product s
 - verify writes land under the scoped root;
 - return typed errors with both policy and operational categories.
 
-If `fs-safe` cannot express a policy cleanly, the authority owns the missing product behavior above it rather than leaking backend quirks upward.
+If a backend cannot express a policy cleanly, the authority owns the missing product behavior above it rather than leaking backend quirks upward.
 
 ## Events, audit, and UI
 

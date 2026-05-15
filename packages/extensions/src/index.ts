@@ -115,6 +115,7 @@ export interface ExtensionCommandContribution {
   id: string;
   title: string;
   action: string;
+  args?: unknown;
   icon?: ExtensionIconName;
   category?: string;
   description?: string;
@@ -753,6 +754,26 @@ export interface PersonalAgentClient {
   };
 }
 
+export interface ExtensionScopedFileSystem {
+  readonly root: { kind: string; id: string; path: string; displayName?: string; labels?: Record<string, string> };
+  readBytes(path: string, options?: { maxBytes?: number }): Promise<Uint8Array>;
+  readText(path: string, options?: { maxBytes?: number }): Promise<string>;
+  writeBytes(path: string, data: Uint8Array, options?: { atomic?: boolean }): Promise<void>;
+  writeText(path: string, data: string, options?: { atomic?: boolean }): Promise<void>;
+  readJson<T>(path: string, options?: { maxBytes?: number }): Promise<T>;
+  writeJson(path: string, value: unknown, options?: { atomic?: boolean }): Promise<void>;
+  list(
+    path?: string,
+    options?: { depth?: number; excludeNames?: string[] },
+  ): Promise<Array<{ name: string; path: string; type: string; size?: number; modifiedAt?: string }>>;
+  stat(path: string): Promise<{ type: string; size: number | null; modifiedAt: string | null }>;
+  move(from: string, to: string, options?: { overwrite?: boolean }): Promise<void>;
+  copyIn(to: string, absoluteSource: string): Promise<void>;
+  remove(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>;
+  createDirectory(path: string): Promise<void>;
+  createTempWorkspace(options?: { prefix?: string }): Promise<ExtensionScopedFileSystem>;
+}
+
 export interface ExtensionBackendContext {
   extensionId: string;
   profile: string;
@@ -783,6 +804,11 @@ export interface ExtensionBackendContext {
     fork(input: ExtensionConversationForkInput): Promise<ExtensionConversationResult>;
     appendTranscriptBlock(input: ExtensionTranscriptBlockWriteInput): Promise<{ blockId: string }>;
     updateTranscriptBlock(input: ExtensionTranscriptBlockWriteInput & { blockId: string }): Promise<{ blockId: string }>;
+  };
+  filesystem: {
+    requestRoot(input: { kind?: 'workspace'; cwd?: string; access?: string[]; reason?: string }): Promise<ExtensionScopedFileSystem>;
+    workspace(input?: { cwd?: string; access?: string[]; reason?: string }): Promise<ExtensionScopedFileSystem>;
+    temp(input?: { access?: string[]; reason?: string; prefix?: string }): Promise<ExtensionScopedFileSystem>;
   };
   workspace: Record<string, (...args: never[]) => Promise<unknown>>;
   git: Record<string, (...args: never[]) => Promise<unknown>>;

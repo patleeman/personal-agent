@@ -20,6 +20,7 @@ import { getVaultRoot } from '@personal-agent/core';
 import type { Express, Response } from 'express';
 import { extension as mimeExtension, lookup as mimeLookup } from 'mime-types';
 
+import { defaultFileSystemAuthority, type FileAccess, type ScopedFileSystem } from '../filesystem/filesystemAuthority.js';
 import { logError } from '../middleware/index.js';
 import { importVaultSharedItem } from './vaultShareImport.js';
 
@@ -31,22 +32,32 @@ function getRoot(): string {
   return resolve(getVaultRoot());
 }
 
-function isInsideRoot(root: string, target: string): boolean {
-  const rel = relative(root, target);
-  return !rel.startsWith('..') && rel !== '..';
+function vaultAuthority(access: FileAccess[] = ['metadata']): ScopedFileSystem {
+  const root = getRoot();
+  return defaultFileSystemAuthority.requestRootSync({
+    subject: { type: 'core', id: 'vault-editor' },
+    root: { kind: 'vault', id: root, path: root, displayName: 'Knowledge vault' },
+    access,
+    reason: 'vault editor route',
+  });
 }
 
-export function safeVaultPath(id: string): string | null {
+function isInsideRoot(root: string, target: string): boolean {
+  return vaultAuthority(['metadata']).relativePath(target) !== null;
+}
+
+export function safeVaultPath(id: string, access: FileAccess[] = ['metadata']): string | null {
   if (!id || id.includes('\u0000')) return null;
   // Normalise slashes and strip leading/trailing separators
   const clean = id.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').trim();
   if (!clean) return null;
   const segments = clean.split('/');
   if (segments.some((s) => s === '.' || s === '..')) return null;
-  const root = getRoot();
-  const abs = resolve(root, clean);
-  if (!isInsideRoot(root, abs)) return null;
-  return abs;
+  try {
+    return vaultAuthority(access).resolvePath(clean);
+  } catch {
+    return null;
+  }
 }
 
 export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
@@ -354,7 +365,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       if (!dirParam) {
         abs = root;
       } else {
-        const resolved = safeVaultPath(dirParam);
+        const resolved = safeVaultPath(dirParam, ['list', 'metadata']);
         if (!resolved) {
           res.status(400).json({ error: 'Invalid path' });
           return;
@@ -376,7 +387,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/file', (req, res) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safeVaultPath(id) : null;
+      const abs = id ? safeVaultPath(id, ['read', 'metadata']) : null;
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -407,13 +418,17 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'content must be a string' });
         return;
       }
-      const abs = safeVaultPath(id.trim());
+      const abs = safeVaultPath(id.trim(), ['write', 'metadata']);
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, content, 'utf-8');
+      const vault = vaultAuthority(['write', 'metadata']);
+      const rel = vault.relativePath(abs) ?? id.trim();
+      vault.runSync('write', { relativePath: rel }, () => {
+        mkdirSync(dirname(abs), { recursive: true });
+        writeFileSync(abs, content, 'utf-8');
+      });
       const stats = statSync(abs);
       const root = getRoot();
       res.json(vaultEntryFromStat(root, abs, stats));
@@ -427,7 +442,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.delete('/api/vault/file', (req, res) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safeVaultPath(id) : null;
+      const abs = id ? safeVaultPath(id, ['read', 'metadata']) : null;
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -457,7 +472,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'newName must be a plain file/folder name' });
         return;
       }
-      const abs = safeVaultPath(id.trim());
+      const abs = safeVaultPath(id.trim(), ['move', 'metadata']);
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -492,7 +507,11 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(409).json({ error: 'A file or folder with that name already exists' });
         return;
       }
-      renameSync(abs, newAbs);
+      vaultAuthority(['move', 'metadata']).runSync(
+        'move',
+        { relativePath: relative(root, abs), destinationPath: relative(root, newAbs) },
+        () => renameSync(abs, newAbs),
+      );
       const stats = statSync(newAbs);
       res.json(vaultEntryFromStat(root, newAbs, stats));
     } catch (err) {
@@ -510,12 +529,14 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'id is required' });
         return;
       }
-      const abs = safeVaultPath(id.trim());
+      const abs = safeVaultPath(id.trim(), ['write', 'metadata']);
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      mkdirSync(abs, { recursive: true });
+      const vault = vaultAuthority(['write', 'metadata']);
+      const rel = vault.relativePath(abs) ?? id.trim();
+      vault.runSync('write', { relativePath: rel }, () => mkdirSync(abs, { recursive: true }));
       const stats = statSync(abs);
       const root = getRoot();
       res.json(vaultEntryFromStat(root, abs, stats));
@@ -624,7 +645,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         return;
       }
       const root = getRoot();
-      const srcAbs = safeVaultPath(id.trim());
+      const srcAbs = safeVaultPath(id.trim(), ['move', 'metadata']);
       if (!srcAbs) {
         res.status(400).json({ error: 'Invalid source id' });
         return;
@@ -651,7 +672,11 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(409).json({ error: 'A file with that name already exists there' });
         return;
       }
-      renameSync(srcAbs, destAbs);
+      vaultAuthority(['move', 'metadata']).runSync(
+        'move',
+        { relativePath: relative(root, srcAbs), destinationPath: relative(root, destAbs) },
+        () => renameSync(srcAbs, destAbs),
+      );
       res.json(vaultEntryFromStat(root, destAbs, statSync(destAbs)));
     } catch (err) {
       logError('vault/move', { message: String(err) });
@@ -682,7 +707,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
       const root = getRoot();
       const directoryId = typeof payload.directoryId === 'string' ? payload.directoryId.trim().replace(/^\/+|\/+$/g, '') : '';
-      const targetDirAbs = directoryId ? safeVaultPath(directoryId) : root;
+      const targetDirAbs = directoryId ? safeVaultPath(directoryId, ['write', 'metadata']) : root;
       if (!targetDirAbs) {
         res.status(400).json({ error: 'Invalid target directory' });
         return;
@@ -734,11 +759,13 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       }
       const root = getRoot();
       const attachDir = join(root, '_attachments');
-      mkdirSync(attachDir, { recursive: true });
       const buf = decodeVaultImageDataUrl(dataUrl);
       const outName = buildVaultImageUploadFileName(filename, dataUrl);
       const outPath = join(attachDir, outName);
-      writeFileSync(outPath, buf);
+      vaultAuthority(['write']).runSync('write', { relativePath: `_attachments/${outName}` }, () => {
+        mkdirSync(attachDir, { recursive: true });
+        writeFileSync(outPath, buf);
+      });
       const id = `_attachments/${outName}`;
       res.json({ id, url: `/api/vault/asset?id=${encodeURIComponent(id)}` });
     } catch (err) {
@@ -755,7 +782,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/asset', (req, res: Response) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safeVaultPath(id) : null;
+      const abs = id ? safeVaultPath(id, ['read', 'metadata']) : null;
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
