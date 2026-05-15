@@ -1250,9 +1250,10 @@ export function Layout() {
       : null;
   const activeWorkbenchCheckpointFromSearch =
     showWorkbench && activeConversationId ? getConversationCheckpointIdFromSearch(location.search) : null;
+  const activeWorkbenchRunFromSearchParam = showWorkbench && activeConversationId ? getConversationRunIdFromSearch(location.search) : null;
   const activeWorkbenchRunFromSearch =
     showWorkbench && activeConversationId
-      ? (getConversationRunIdFromSearch(location.search) ?? selectedRunByConversation[activeConversationId] ?? null)
+      ? (activeWorkbenchRunFromSearchParam ?? selectedRunByConversation[activeConversationId] ?? null)
       : null;
   const activeWorkbenchCheckpointId = activeConversationId
     ? (activeWorkbenchCheckpointFromSearch ?? selectedCheckpointByConversation[activeConversationId] ?? null)
