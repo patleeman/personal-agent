@@ -299,6 +299,8 @@ export const api = {
       `/extensions/commands/${encodeURIComponent(commandId)}/execute`,
       input ?? {},
     ),
+  acknowledgeExtensionCommand: async (requestId: string, handled: boolean) =>
+    post<{ ok: true; acknowledged: boolean }>(`/extensions/commands/acks/${encodeURIComponent(requestId)}`, { handled }),
   extensionKeybindings: async () => get<ExtensionKeybindingRegistration[]>('/extensions/keybindings'),
   updateExtensionKeybinding: async (
     extensionId: string,

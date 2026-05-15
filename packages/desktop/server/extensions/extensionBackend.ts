@@ -20,6 +20,7 @@ import {
   isSourceExtensionBackendEntry,
   resolveExtensionBackendLoadTarget,
 } from './extensionBackendLoadTarget.js';
+import { executeHostCommandInRenderer } from './extensionCommandBridge.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
 import { createExtensionFilesystemCapability } from './extensionFilesystem.js';
@@ -290,6 +291,28 @@ function assertInside(root: string, candidate: string): void {
   }
 }
 
+function isHostCommandAction(action: string): boolean {
+  return (
+    action === 'app.navigate' ||
+    action === 'palette.open' ||
+    action === 'rail.open' ||
+    action === 'layout.set' ||
+    action === 'conversation.new' ||
+    action === 'conversation.open' ||
+    action === 'conversation.next' ||
+    action === 'conversation.previous' ||
+    action === 'composer.focus' ||
+    action === 'sidebar.focus' ||
+    action === 'focus.next' ||
+    action === 'focus.previous' ||
+    action === 'selection.activate' ||
+    action.startsWith('navigate:') ||
+    action.startsWith('commandPalette:') ||
+    action.startsWith('rightRail:') ||
+    action.startsWith('layout:')
+  );
+}
+
 function createStorage(extensionId: string): ExtensionBackendContext['storage'] {
   return {
     async get<T = unknown>(key: string): Promise<T | null> {
@@ -350,10 +373,13 @@ export function createBackendContext(
       execute: async (commandId, args) => {
         const command = findExtensionCommandRegistration(commandId);
         if (command) {
+          if (isHostCommandAction(command.action)) {
+            return executeHostCommandInRenderer({ command: command.action, args: args ?? command.args, sourceExtensionId: extensionId });
+          }
           const actionResult = await invokeExtensionAction(
             command.extensionId,
             command.action,
-            args ?? {},
+            args ?? command.args ?? {},
             serverContext,
             toolContext,
             agentToolContext,
@@ -361,8 +387,7 @@ export function createBackendContext(
           if (!actionResult.ok) throw new Error(actionResult.error);
           return true;
         }
-        publishAppEvent({ type: 'extension_command', command: commandId, args, sourceExtensionId: extensionId });
-        return true;
+        return executeHostCommandInRenderer({ command: commandId, args, sourceExtensionId: extensionId });
       },
       list: async () => listExtensionCommandRegistrations(),
     },

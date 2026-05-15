@@ -431,7 +431,13 @@ describe('extension manifests - structural validation', () => {
       'layout.set',
       'conversation.new',
       'conversation.open',
+      'conversation.next',
+      'conversation.previous',
       'composer.focus',
+      'sidebar.focus',
+      'focus.next',
+      'focus.previous',
+      'selection.activate',
     ]);
 
     for (const ext of summaries) {

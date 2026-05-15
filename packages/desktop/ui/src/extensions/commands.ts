@@ -20,6 +20,11 @@ export interface ExtensionCommandExecutorOptions {
   openRightRail(target: string): boolean;
   setLayout(mode: 'compact' | 'workbench'): void;
   focusComposer?(): void;
+  focusSidebar?(): void;
+  focusNext?(): void;
+  focusPrevious?(): void;
+  activateSelection?(): void;
+  navigateConversation?(direction: 'next' | 'previous'): boolean;
   activeConversationId?: string | null;
   extensionCommands?: ExtensionCommandRegistration[];
   invokeExtensionCommand?(command: ExtensionCommandRegistration, args: unknown): Promise<unknown>;
@@ -77,7 +82,13 @@ export function listHostCommands(): Array<{ id: string; title: string; category?
     { id: 'layout.set', title: 'Set Layout', category: 'App' },
     { id: 'conversation.new', title: 'New Conversation', category: 'Conversation' },
     { id: 'conversation.open', title: 'Open Conversation', category: 'Conversation' },
+    { id: 'conversation.next', title: 'Next Conversation', category: 'Conversation' },
+    { id: 'conversation.previous', title: 'Previous Conversation', category: 'Conversation' },
     { id: 'composer.focus', title: 'Focus Composer', category: 'Conversation' },
+    { id: 'sidebar.focus', title: 'Focus Sidebar', category: 'Focus' },
+    { id: 'focus.next', title: 'Focus Next', category: 'Focus' },
+    { id: 'focus.previous', title: 'Focus Previous', category: 'Focus' },
+    { id: 'selection.activate', title: 'Activate Selection', category: 'Focus' },
   ];
 }
 
@@ -150,11 +161,69 @@ export function createHostCommands(options: ExtensionCommandExecutorOptions): Ho
       },
     },
     {
+      id: 'conversation.next',
+      title: 'Next Conversation',
+      category: 'Conversation',
+      execute() {
+        return options.navigateConversation?.('next') ?? false;
+      },
+      canExecute() {
+        return Boolean(options.activeConversationId);
+      },
+    },
+    {
+      id: 'conversation.previous',
+      title: 'Previous Conversation',
+      category: 'Conversation',
+      execute() {
+        return options.navigateConversation?.('previous') ?? false;
+      },
+      canExecute() {
+        return Boolean(options.activeConversationId);
+      },
+    },
+    {
       id: 'composer.focus',
       title: 'Focus Composer',
       category: 'Conversation',
       execute() {
         options.focusComposer?.();
+        return true;
+      },
+    },
+    {
+      id: 'sidebar.focus',
+      title: 'Focus Sidebar',
+      category: 'Focus',
+      execute() {
+        options.focusSidebar?.();
+        return true;
+      },
+    },
+    {
+      id: 'focus.next',
+      title: 'Focus Next',
+      category: 'Focus',
+      execute() {
+        options.focusNext?.();
+        return true;
+      },
+    },
+    {
+      id: 'focus.previous',
+      title: 'Focus Previous',
+      category: 'Focus',
+      execute() {
+        options.focusPrevious?.();
+        return true;
+      },
+    },
+    {
+      id: 'selection.activate',
+      title: 'Activate Selection',
+      category: 'Focus',
+      execute() {
+        options.activateSelection?.();
         return true;
       },
     },

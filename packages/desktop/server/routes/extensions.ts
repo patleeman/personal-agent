@@ -11,6 +11,7 @@ import {
   reloadExtensionBackend,
   runExtensionSelfTest,
 } from '../extensions/extensionBackend.js';
+import { acknowledgeHostCommand, executeHostCommandInRenderer } from '../extensions/extensionCommandBridge.js';
 import { validateExtensionPackage } from '../extensions/extensionDoctor.js';
 import { listExtensionEventSubscriptions } from '../extensions/extensionEventBus.js';
 import {
@@ -40,7 +41,6 @@ import {
 import { createExtensionRunsCapability } from '../extensions/extensionRuns.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from '../extensions/extensionStorage.js';
 import { logError } from '../middleware/index.js';
-import { publishAppEvent } from '../shared/appEvents.js';
 import type { ServerRouteContext } from './context.js';
 
 async function readExtensionInstallSummariesWithRuntimeState() {
@@ -64,7 +64,13 @@ function isHostCommandAction(action: string): boolean {
     action === 'layout.set' ||
     action === 'conversation.new' ||
     action === 'conversation.open' ||
+    action === 'conversation.next' ||
+    action === 'conversation.previous' ||
     action === 'composer.focus' ||
+    action === 'sidebar.focus' ||
+    action === 'focus.next' ||
+    action === 'focus.previous' ||
+    action === 'selection.activate' ||
     action.startsWith('navigate:') ||
     action.startsWith('commandPalette:') ||
     action.startsWith('rightRail:') ||
@@ -399,19 +405,28 @@ export function registerExtensionRoutes(
     try {
       const command = findExtensionCommandRegistration(req.params.commandId);
       if (!command) {
-        publishAppEvent({ type: 'extension_command', command: req.params.commandId, args: req.body ?? {} });
-        res.json({ ok: true, result: true });
+        const handled = await executeHostCommandInRenderer({ command: req.params.commandId, args: req.body ?? {} });
+        res.json({ ok: true, result: handled });
         return;
       }
       if (isHostCommandAction(command.action)) {
-        publishAppEvent({ type: 'extension_command', command: command.action, args: req.body ?? command.args ?? {} });
-        res.json({ ok: true, result: true });
+        const handled = await executeHostCommandInRenderer({ command: command.action, args: req.body ?? command.args ?? {} });
+        res.json({ ok: true, result: handled });
         return;
       }
       const result = await invokeExtensionAction(command.extensionId, command.action, req.body ?? command.args ?? {}, context);
       res.json({ ok: true, result });
     } catch (err) {
       sendRouteError(res, 'extension command execute error', err);
+    }
+  });
+
+  router.post('/api/extensions/commands/acks/:requestId', (req, res) => {
+    try {
+      const handled = typeof req.body?.handled === 'boolean' ? req.body.handled : false;
+      res.json({ ok: true, acknowledged: acknowledgeHostCommand(req.params.requestId, handled) });
+    } catch (err) {
+      sendRouteError(res, 'extension command ack error', err);
     }
   });
 

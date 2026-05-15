@@ -18,7 +18,7 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
-import { evaluateCommandEnablement, listHostCommands } from '../extensions/commands';
+import { createHostCommands, evaluateCommandEnablement, listHostCommands } from '../extensions/commands';
 import { systemExtensionModules } from '../extensions/systemExtensionModules';
 import type { ExtensionCommandRegistration, ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
@@ -203,16 +203,31 @@ export function CommandPalette() {
   const openConversationItems = useMemo(() => buildConversationItems('open', openThreadSessions), [openThreadSessions]);
   const archivedConversationItems = useMemo(() => buildConversationItems('archived', archivedSessions), [archivedSessions]);
   const commandItems = useMemo<CommandPaletteItem<CommandPaletteAction>[]>(() => {
-    const hostItems = listHostCommands().map((command, index) => ({
-      id: `host-command:${command.id}`,
-      section: 'commands',
-      title: command.title,
-      subtitle: command.id,
-      meta: command.category,
-      keywords: [command.id, command.category],
-      order: index,
-      action: { kind: 'command' as const, command: command.id },
-    }));
+    const hostDefinitions = createHostCommands({
+      navigate,
+      openCommandPalette: () => undefined,
+      openRightRail: () => false,
+      setLayout: () => undefined,
+      activeConversationId: location.pathname.startsWith('/conversations/')
+        ? decodeURIComponent(location.pathname.split('/')[2] ?? '')
+        : null,
+    });
+    const context = { route: location.pathname };
+    const hostItems = listHostCommands().map((command, index) => {
+      const definition = hostDefinitions.find((candidate) => candidate.id === command.id);
+      const disabled = definition?.canExecute ? !definition.canExecute(undefined, context) : false;
+      return {
+        id: `host-command:${command.id}`,
+        section: 'commands',
+        title: command.title,
+        subtitle: command.id,
+        meta: command.category,
+        keywords: [command.id, command.category],
+        order: index,
+        disabled,
+        action: { kind: 'command' as const, command: command.id },
+      };
+    });
     const extensionItems = extensionCommands.map((command, index) => ({
       id: `extension-command:${command.extensionId}:${command.surfaceId}`,
       section: 'commands',
@@ -227,7 +242,7 @@ export function CommandPalette() {
       action: { kind: 'command' as const, command: `${command.extensionId}.${command.surfaceId}`, args: command.args },
     }));
     return [...hostItems, ...extensionItems];
-  }, [extensionCommands, location.pathname]);
+  }, [extensionCommands, location.pathname, navigate]);
   const fileItems = scope === 'commands' ? commandItems : quickOpenItems;
   const searchedFileItems = quickOpenSearchItems;
   const quickOpenScopes = useMemo(

@@ -286,6 +286,19 @@ function writeStoredWorkbenchExplorerOpen(open: boolean, storage: Pick<Storage, 
   }
 }
 
+function getFocusableElements(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])')].filter(
+    (element) => !element.hasAttribute('disabled') && element.tabIndex >= 0 && Boolean(element.offsetParent),
+  );
+}
+
+function moveDocumentFocus(delta: 1 | -1): void {
+  const elements = getFocusableElements();
+  if (elements.length === 0) return;
+  const currentIndex = document.activeElement instanceof HTMLElement ? elements.indexOf(document.activeElement) : -1;
+  elements[(currentIndex + delta + elements.length) % elements.length]?.focus();
+}
+
 export function shouldShowConversationRunsTab(input: {
   runCount: number;
   activeRunId?: string | null;
@@ -1369,6 +1382,29 @@ export function Layout() {
         const textarea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="Message"]');
         textarea?.focus();
       },
+      focusSidebar() {
+        document.querySelector<HTMLElement>('aside a, aside button, nav a, nav button')?.focus();
+      },
+      focusNext() {
+        moveDocumentFocus(1);
+      },
+      focusPrevious() {
+        moveDocumentFocus(-1);
+      },
+      activateSelection() {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) active.click();
+      },
+      navigateConversation(direction: 'next' | 'previous') {
+        if (!activeConversationId) return false;
+        const conversationIds = (sessions ?? []).map((session) => session.id);
+        const currentIndex = conversationIds.indexOf(activeConversationId);
+        if (currentIndex === -1 || conversationIds.length < 2) return false;
+        const delta = direction === 'next' ? 1 : -1;
+        const nextId = conversationIds[(currentIndex + delta + conversationIds.length) % conversationIds.length];
+        navigate(`/conversations/${encodeURIComponent(nextId)}`);
+        return true;
+      },
       activeConversationId,
       invokeExtensionCommand(command: ExtensionCommandRegistration, args: unknown) {
         return api.invokeExtensionAction(command.extensionId, command.action, args ?? {});
@@ -1381,6 +1417,7 @@ export function Layout() {
       extensionRightToolPanels,
       location.pathname,
       navigate,
+      sessions,
       setActiveConversationTool,
     ],
   );
@@ -1426,9 +1463,12 @@ export function Layout() {
     }
 
     function handleExtensionCommandExecute(event: CustomEvent) {
-      const detail = event.detail as { command?: string; args?: unknown; resolve?: (handled: boolean) => void };
+      const detail = event.detail as { command?: string; args?: unknown; requestId?: string; resolve?: (handled: boolean) => void };
       if (!detail.command) return;
-      void executeExtensionCommand(detail.command, detail.args, executeCommandOptions).then((handled) => detail.resolve?.(handled));
+      void executeExtensionCommand(detail.command, detail.args, executeCommandOptions).then((handled) => {
+        detail.resolve?.(handled);
+        if (detail.requestId) void api.acknowledgeExtensionCommand(detail.requestId, handled).catch(() => undefined);
+      });
     }
 
     window.addEventListener('keydown', handleExtensionKeybinding, true);

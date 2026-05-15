@@ -621,9 +621,13 @@ Built-in host commands include:
 - `layout.set` with `{ "mode": "compact" | "workbench" }`
 - `conversation.new`
 - `conversation.open` with `{ "conversationId": "..." }`
+- `conversation.next` / `conversation.previous`
 - `composer.focus`
+- `sidebar.focus`
+- `focus.next` / `focus.previous`
+- `selection.activate`
 
-Extension command contributions may point at a backend action or at a built-in host command via `action`, with default `args` when needed.
+Extension command contributions may point at a backend action or at a built-in host command via `action`, with default `args` when needed. Backend-triggered host commands wait briefly for a renderer acknowledgement and return whether the command was handled.
 
 Legacy string commands still work for compatibility: `navigate:/path`, `commandPalette:threads|files|commands|search`, `rightRail:{extensionId}/{surfaceId}`, and `layout:compact|workbench`.
 

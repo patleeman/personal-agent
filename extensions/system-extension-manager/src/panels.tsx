@@ -26,6 +26,17 @@ interface ExtensionCreateDraft {
   template: ExtensionTemplate;
 }
 
+interface CommandInspectorEntry {
+  id?: string;
+  surfaceId?: string;
+  extensionId?: string;
+  title?: string;
+  category?: string;
+  action?: string;
+  args?: unknown;
+  enablement?: string;
+}
+
 interface LogicalSurfaceSummary {
   id: string;
   title: string;
@@ -484,6 +495,8 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
   const [createDraft, setCreateDraft] = useState<ExtensionCreateDraft | null>(null);
   const [importDraft, setImportDraft] = useState(false);
   const [showExperimental, setShowExperimental] = useState(false);
+  const [commands, setCommands] = useState<CommandInspectorEntry[]>([]);
+  const [showCommands, setShowCommands] = useState(false);
 
   const load = useCallback(async (options: { showLoading?: boolean } = {}) => {
     if (options.showLoading) {
@@ -520,8 +533,16 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
 
   useEffect(() => {
     void load({ showLoading: true });
+    void pa.commands
+      .list()
+      .then((items) => setCommands(items as CommandInspectorEntry[]))
+      .catch(() => setCommands([]));
     const refresh = () => {
       void load({ showLoading: false });
+      void pa.commands
+        .list()
+        .then((items) => setCommands(items as CommandInspectorEntry[]))
+        .catch(() => setCommands([]));
     };
     window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
     return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
@@ -992,6 +1013,54 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
               {notice}
             </div>
           ) : null}
+
+          <section className="space-y-3 border-b border-border-subtle/70 pb-5">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+              onClick={() => setShowCommands((value) => !value)}
+              aria-expanded={showCommands}
+            >
+              <div>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-dim">Command inspector</div>
+                <div className="mt-1 text-[12px] text-secondary">{commands.length} host and extension commands registered.</div>
+              </div>
+              <span className="text-[12px] text-dim">{showCommands ? 'Hide' : 'Show'}</span>
+            </button>
+            {showCommands ? (
+              <div className="overflow-auto rounded-xl bg-surface/30 p-2">
+                <table className="w-full border-collapse text-left text-[12px]">
+                  <thead className="text-[10px] uppercase tracking-[0.14em] text-dim">
+                    <tr>
+                      <th className="px-2 py-1.5 font-semibold">Command</th>
+                      <th className="px-2 py-1.5 font-semibold">Source</th>
+                      <th className="px-2 py-1.5 font-semibold">Action</th>
+                      <th className="px-2 py-1.5 font-semibold">Enablement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {commands.map((command) => {
+                      const id = command.id ?? command.surfaceId ?? 'unknown';
+                      const source = command.extensionId ?? 'host';
+                      return (
+                        <tr key={`${source}:${id}`} className="border-t border-border-subtle/60 text-secondary">
+                          <td className="px-2 py-1.5 text-primary">
+                            <div>{command.title ?? id}</div>
+                            <div className="font-mono text-[11px] text-dim">
+                              {command.extensionId ? `${command.extensionId}.${id}` : id}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5">{source}</td>
+                          <td className="px-2 py-1.5 font-mono text-[11px]">{command.action ?? 'host'}</td>
+                          <td className="px-2 py-1.5 font-mono text-[11px]">{command.enablement ?? '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </section>
 
           {extensions.length === 0 ? (
             <EmptyState title="No extensions installed" body="Ask an agent to create one under the runtime extensions directory." />

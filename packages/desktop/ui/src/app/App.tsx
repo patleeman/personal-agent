@@ -286,7 +286,12 @@ export function App() {
         case 'extension_command':
           window.dispatchEvent(
             new CustomEvent('pa-extension-command-execute', {
-              detail: { command: payload.command, args: payload.args, sourceExtensionId: payload.sourceExtensionId },
+              detail: {
+                command: payload.command,
+                args: payload.args,
+                sourceExtensionId: payload.sourceExtensionId,
+                requestId: payload.requestId,
+              },
             }),
           );
           return;
