@@ -104,6 +104,20 @@ function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolea
   return toolResults.length === 0;
 }
 
+function readEventType(event: unknown): string | null {
+  return isRecord(event) && typeof event.type === 'string' ? event.type : null;
+}
+
+function isOverflowCompactionStart(event: unknown): boolean {
+  return isRecord(event) && event.type === 'compaction_start' && event.reason === 'overflow';
+}
+
+function isOverflowCompactionRetry(event: unknown): boolean {
+  return (
+    isRecord(event) && event.type === 'compaction_end' && event.reason === 'overflow' && event.aborted !== true && event.willRetry === true
+  );
+}
+
 // ── Tool parameter schemas ───────────────────────────────────────────────────
 
 const SetGoalParams = Type.Object({
@@ -124,6 +138,7 @@ const UpdateGoalParams = Type.Object({
 export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     let pendingContinuationTimer: ReturnType<typeof setTimeout> | null = null;
+    let overflowRecoveryActive = false;
 
     const clearPendingContinuation = () => {
       if (pendingContinuationTimer) {
@@ -276,11 +291,40 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
     });
 
+    // ── Compaction lifecycle: overflow recovery owns its retry ────────
+    pi.on('compaction_start', async (event) => {
+      if (!isOverflowCompactionStart(event)) {
+        return;
+      }
+      overflowRecoveryActive = true;
+      clearPendingContinuation();
+    });
+
+    pi.on('compaction_end', async (event) => {
+      if (!isRecord(event) || event.reason !== 'overflow') {
+        return;
+      }
+      overflowRecoveryActive = isOverflowCompactionRetry(event);
+      clearPendingContinuation();
+    });
+
+    pi.on('agent_start', async (event) => {
+      if (overflowRecoveryActive && readEventType(event) === 'agent_start') {
+        overflowRecoveryActive = false;
+      }
+    });
+
     // ── Agent end: schedule one continuation if goal is still active ───
     pi.on('agent_end', async (_event, ctx) => {
       const state = readGoalState(ctx.sessionManager);
       if (state.status !== 'active') {
         clearPendingContinuation();
+        return;
+      }
+
+      // Overflow recovery compaction owns the automatic retry. Goal mode must
+      // wait for that retry to run and complete before it can continue again.
+      if (overflowRecoveryActive) {
         return;
       }
 
@@ -304,7 +348,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         if (latest.status !== 'active' || latest.objective !== scheduledObjective || latest.updatedAt !== scheduledUpdatedAt) {
           return;
         }
-        if (ctx.hasPendingMessages()) {
+        if (overflowRecoveryActive || ctx.hasPendingMessages()) {
           return;
         }
         pi.sendMessage(

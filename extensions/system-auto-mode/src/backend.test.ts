@@ -77,7 +77,10 @@ function createHarness(initialEntries: unknown[] = []) {
     setGoal: registeredTools.find((tool) => tool.name === 'set_goal')!,
     updateGoal: registeredTools.find((tool) => tool.name === 'update_goal')!,
     turnEnd: handlers.get('turn_end')?.[0] as AgentEventHandler,
+    agentStart: handlers.get('agent_start')?.[0] as AgentEventHandler,
     agentEnd: handlers.get('agent_end')?.[0] as AgentEventHandler,
+    compactionStart: handlers.get('compaction_start')?.[0] as AgentEventHandler,
+    compactionEnd: handlers.get('compaction_end')?.[0] as AgentEventHandler,
     ctx,
   };
 }
@@ -335,6 +338,31 @@ describe('system-goal-mode extension', () => {
     await flushTimers();
 
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('lets overflow recovery own the retry before scheduling another goal continuation', async () => {
+    const harness = createHarness([activeGoal('ship it')]);
+    const { agentStart, agentEnd, compactionStart, compactionEnd, sendMessage, ctx } = harness;
+
+    await agentEnd({}, ctx);
+    await compactionStart({ type: 'compaction_start', reason: 'overflow' }, ctx);
+    await flushTimers();
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    await compactionEnd({ type: 'compaction_end', reason: 'overflow', aborted: false, willRetry: true }, ctx);
+    await agentEnd({}, ctx);
+    await flushTimers();
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    await agentStart({ type: 'agent_start' }, ctx);
+    await agentEnd({}, ctx);
+    await flushTimers();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customType: 'goal-continuation', content: expect.stringContaining('Objective: ship it') }),
+      { deliverAs: 'followUp', triggerTurn: true },
+    );
   });
 
   it('disables goal mode after two consecutive active turns with no tool calls', async () => {

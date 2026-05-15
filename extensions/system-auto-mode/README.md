@@ -66,6 +66,7 @@ The `set_goal` / `update_goal` tools are the legacy goal-mode path. They are har
 
 - turn-end events update progress counters but never enqueue continuations;
 - only one continuation timer can be pending at a time, and it is scheduled from `agent_end` after the active run is fully done;
+- overflow recovery compaction owns its automatic retry, so goal continuations are suppressed until the retry starts and finishes;
 - the timer re-reads the latest goal state before it sends;
 - changing, clearing, pausing, or completing the goal cancels any queued continuation;
 - repeated `update_goal { status: "complete" }` calls are idempotent no-ops.
