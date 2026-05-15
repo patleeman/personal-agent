@@ -804,11 +804,81 @@ await ctx.conversations.searchIndex(sessionIds);
 
 **Permission required:** `conversations:readwrite` for write operations.
 
+The `conversations` capability also exposes first-class lifecycle helpers:
+
+```typescript
+const created = await ctx.conversations.create({ title: 'Research thread', cwd, initialPrompt: 'Start here' });
+const forked = await ctx.conversations.fork({ conversationId, title: 'Bug bash branch' });
+```
+
 **Limitations:**
 
-- Write operations require the conversation to be live (in-memory).
-- Creating new conversations via the API is not yet supported.
-- Fork operations are not yet available.
+- Most mutating operations still require the source conversation to be live (in-memory).
+
+## Selection actions, transcript blocks, services, and subscriptions
+
+Extensions can declare selection-aware actions for selected text, files, messages, or transcript ranges:
+
+```json
+{
+  "contributes": {
+    "selectionActions": [{ "id": "send-selection", "title": "Send to Board", "action": "sendSelection", "kinds": ["text", "messages"] }]
+  }
+}
+```
+
+Extensions can declare custom durable transcript block renderers and write extension-authored blocks from backend code:
+
+```json
+{
+  "contributes": {
+    "transcriptBlocks": [{ "id": "approval", "component": "ApprovalBlock", "schemaVersion": 1 }]
+  }
+}
+```
+
+```typescript
+await ctx.conversations.appendTranscriptBlock({ conversationId, blockType: 'approval', data: { status: 'pending' } });
+await ctx.conversations.updateTranscriptBlock({ conversationId, blockId, blockType: 'approval', data: { status: 'approved' } });
+```
+
+Long-lived backend services are declared under `backend.services` so the host can own lifecycle, health, and restart policy:
+
+```json
+{
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "services": [{ "id": "sync", "handler": "startSync", "healthCheck": "checkSync", "restart": "on-failure" }],
+    "onDisableAction": "stopSync",
+    "onUninstallAction": "cleanup"
+  }
+}
+```
+
+Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes:
+
+```json
+{
+  "contributes": {
+    "subscriptions": [{ "id": "watch-notes", "source": "vaultFiles", "pattern": "notes/**", "handler": "onVaultChange" }]
+  }
+}
+```
+
+Secrets are public manifest API, not an internal convention:
+
+```json
+{
+  "contributes": {
+    "secrets": {
+      "apiKey": { "label": "API key", "env": "MY_EXTENSION_API_KEY" }
+    }
+  },
+  "permissions": ["secrets:read"]
+}
+```
+
+Resolve them in backend code with `ctx.secrets.get('apiKey')`. Environment variables declared by the extension take precedence over stored values.
 
 ## Inter-extension Communication
 

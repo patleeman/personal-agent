@@ -74,6 +74,38 @@ export async function createSession(...args: unknown[]) {
   return callModuleExport('../../conversations/liveSessions.js', 'createSession', ...args);
 }
 
+export async function createConversation(...args: unknown[]) {
+  const capability = await callModuleExport<Record<string, (...methodArgs: unknown[]) => Promise<unknown>>>(
+    '../extensionConversations.js',
+    'createExtensionConversationsCapability',
+  );
+  return capability.create?.(...args);
+}
+
+export async function forkConversation(...args: unknown[]) {
+  const capability = await callModuleExport<Record<string, (...methodArgs: unknown[]) => Promise<unknown>>>(
+    '../extensionConversations.js',
+    'createExtensionConversationsCapability',
+  );
+  return capability.fork?.(...args);
+}
+
+export async function appendTranscriptBlock(...args: unknown[]) {
+  const capability = await callModuleExport<Record<string, (...methodArgs: unknown[]) => Promise<unknown>>>(
+    '../extensionConversations.js',
+    'createExtensionConversationsCapability',
+  );
+  return capability.appendTranscriptBlock?.(...args);
+}
+
+export async function updateTranscriptBlock(...args: unknown[]) {
+  const capability = await callModuleExport<Record<string, (...methodArgs: unknown[]) => Promise<unknown>>>(
+    '../extensionConversations.js',
+    'createExtensionConversationsCapability',
+  );
+  return capability.updateTranscriptBlock?.(...args);
+}
+
 export async function renameSession(...args: unknown[]) {
   return callModuleExport('../../conversations/liveSessions.js', 'renameSession', ...args);
 }

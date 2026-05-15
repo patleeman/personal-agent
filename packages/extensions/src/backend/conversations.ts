@@ -21,6 +21,10 @@ export const readConversationSessionMetaCapability = (..._args: any[]): any => h
 export const readConversationSessionsCapability = (..._args: any[]): any => hostResolved();
 export const readConversationSessionSearchIndexCapability = (..._args: any[]): any => hostResolved();
 export const createSession = (..._args: any[]): any => hostResolved();
+export const createConversation = (..._args: any[]): any => hostResolved();
+export const forkConversation = (..._args: any[]): any => hostResolved();
+export const appendTranscriptBlock = (..._args: any[]): any => hostResolved();
+export const updateTranscriptBlock = (..._args: any[]): any => hostResolved();
 export const renameSession = (..._args: any[]): any => hostResolved();
 export const requestConversationWorkingDirectoryChange = (..._args: any[]): any => hostResolved();
 export const resumeSession = (..._args: any[]): any => hostResolved();

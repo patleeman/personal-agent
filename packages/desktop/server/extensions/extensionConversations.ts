@@ -127,7 +127,9 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
      * Create a new conversation (live session).
      * Returns the bootstrap response when a prompt is provided, or session metadata otherwise.
      */
-    async create(input?: ExtensionConversationCreateOptions): Promise<{ id: string }> {
+    async create(
+      input?: ExtensionConversationCreateOptions & { title?: string; initialPrompt?: string },
+    ): Promise<{ id: string; conversationId: string }> {
       const cwd = input?.cwd?.trim() || process.cwd();
       const options: Record<string, unknown> = {};
       if (input?.model) options.initialModel = input.model;
@@ -136,16 +138,24 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
 
       const created = await createSession(cwd, options);
 
-      if (input?.prompt?.trim()) {
-        // Send the initial prompt
+      const initialPrompt = input?.prompt?.trim() || input?.initialPrompt?.trim();
+      if (input?.title?.trim()) {
         const entry = liveSessionRegistry.get(created.id);
         if (entry) {
-          await entry.session.followUp(input.prompt.trim());
+          try {
+            entry.session.setSessionName(input.title.trim());
+          } catch {
+            entry.title = input.title.trim();
+          }
         }
+      }
+      if (initialPrompt) {
+        const entry = liveSessionRegistry.get(created.id);
+        if (entry) await entry.session.followUp(initialPrompt);
       }
 
       invalidateAppTopics('sessions');
-      return { id: created.id };
+      return { id: created.id, conversationId: created.id };
     },
 
     /**
@@ -238,16 +248,58 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
      * Creates a new session in the specified cwd (or same cwd) with the full history.
      * Returns the new conversation id.
      */
-    async fork(conversationId: string, targetCwd?: string): Promise<{ id: string }> {
+    async fork(
+      input: string | { conversationId: string; targetCwd?: string; cwd?: string; title?: string },
+    ): Promise<{ id: string; conversationId: string }> {
+      const conversationId = typeof input === 'string' ? input : input.conversationId;
       const entry = findLiveEntry(conversationId);
       const sessionManager = (entry.session as unknown as { sessionManager: { getSessionFile(): string | undefined } }).sessionManager;
       const sessionFile = sessionManager.getSessionFile();
       if (!sessionFile) throw new Error('Source session has no persisted file');
 
+      const targetCwd = typeof input === 'string' ? undefined : (input.targetCwd ?? input.cwd);
       const cwd = targetCwd?.trim() || entry.cwd;
       const result = await createSessionFromExisting(sessionFile, cwd);
+      const forked = liveSessionRegistry.get(result.id);
+      if (forked && typeof input !== 'string' && input.title?.trim()) {
+        try {
+          forked.session.setSessionName(input.title.trim());
+        } catch {
+          forked.title = input.title.trim();
+        }
+      }
       invalidateAppTopics('sessions');
-      return { id: result.id };
+      return { id: result.id, conversationId: result.id };
+    },
+
+    async appendTranscriptBlock(input: {
+      conversationId: string;
+      blockType: string;
+      data: unknown;
+      title?: string;
+      blockId?: string;
+    }): Promise<{ blockId: string }> {
+      const content = input.title ?? input.blockType;
+      await appendVisibleLiveSessionCustomMessage(input.conversationId, input.blockType, content, input.data);
+      invalidateAppTopics('sessions');
+      return { blockId: input.blockId ?? `${input.blockType}:${Date.now()}` };
+    },
+
+    async updateTranscriptBlock(input: {
+      conversationId: string;
+      blockType: string;
+      data: unknown;
+      title?: string;
+      blockId: string;
+    }): Promise<{ blockId: string }> {
+      // Current runtime supports append-only custom transcript entries; expose the stable API now
+      // and preserve the caller's block id so renderers can coalesce updates client-side.
+      await appendVisibleLiveSessionCustomMessage(input.conversationId, input.blockType, input.title ?? input.blockType, {
+        ...(typeof input.data === 'object' && input.data !== null ? (input.data as Record<string, unknown>) : { value: input.data }),
+        updatesBlockId: input.blockId,
+      });
+      invalidateAppTopics('sessions');
+      return { blockId: input.blockId };
     },
 
     /**

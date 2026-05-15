@@ -37,10 +37,17 @@ describe('extension manifest schema constants', () => {
         ],
         nav: [{ id: 'nav', label: 'Agent Board', route: '/ext/agent-board', icon: 'kanban' }],
         composerInputTools: [{ id: 'draw', component: 'DrawButton', title: 'Draw', when: '!streamIsStreaming' }],
+        selectionActions: [{ id: 'send-selection', title: 'Send Selection', action: 'sendSelection', kinds: ['text', 'messages'] }],
+        transcriptBlocks: [{ id: 'approval', component: 'ApprovalBlock', schemaVersion: 1 }],
+        subscriptions: [{ id: 'watch-notes', source: 'vaultFiles', pattern: 'notes/**', handler: 'onVaultChange' }],
+        secrets: { apiKey: { label: 'API key', env: 'AGENT_BOARD_API_KEY' } },
       },
       backend: {
         entry: 'dist/backend.mjs',
         actions: [{ id: 'syncRunStatuses', handler: 'syncRunStatuses' }],
+        services: [{ id: 'sync', handler: 'startSync', healthCheck: 'checkSync', restart: 'on-failure' }],
+        onDisableAction: 'stopSync',
+        onUninstallAction: 'cleanup',
       },
       permissions: ['runs:start', 'storage:readwrite'],
     };

@@ -310,11 +310,53 @@ export interface ExtensionContextMenuContribution {
   title: string;
   action: string;
   /** Which context menu this item appears in. */
-  surface: 'message' | 'conversationList';
+  surface: 'message' | 'conversationList' | 'selection' | 'fileSelection' | 'transcriptSelection';
   /** Show a separator above this item. */
   separator?: boolean;
   /** Context condition, e.g. "selectedText" or "role:assistant" */
   when?: string;
+}
+
+export type ExtensionSelectionKind = 'text' | 'messages' | 'files' | 'transcriptRange';
+
+export interface ExtensionSelectionActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  kinds: ExtensionSelectionKind[];
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionTranscriptBlockContribution {
+  id: string;
+  component: string;
+  title?: string;
+  schemaVersion?: number;
+}
+
+export interface ExtensionSubscriptionContribution {
+  id: string;
+  handler: string;
+  source: 'workspaceFiles' | 'vaultFiles' | 'settings' | 'conversation' | 'route' | 'selection' | string;
+  pattern?: string;
+  debounceMs?: number;
+}
+
+export interface ExtensionSecretContribution {
+  label: string;
+  description?: string;
+  env?: string;
+  placeholder?: string;
+  order?: number;
+}
+
+export interface ExtensionSecretBackendContribution {
+  id: string;
+  label: string;
+  description?: string;
+  handler: string;
+  order?: number;
 }
 
 export type ExtensionSettingType = 'string' | 'boolean' | 'number' | 'select';
@@ -391,6 +433,9 @@ export interface ExtensionContributions {
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  selectionActions?: ExtensionSelectionActionContribution[];
+  transcriptBlocks?: ExtensionTranscriptBlockContribution[];
+  subscriptions?: ExtensionSubscriptionContribution[];
   threadHeaderActions?: ExtensionThreadHeaderActionContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
@@ -398,6 +443,8 @@ export interface ExtensionContributions {
   activityTreeItemElements?: ExtensionActivityTreeItemElementContribution[];
   activityTreeItemStyles?: ExtensionActivityTreeItemStyleContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
+  secrets?: Record<string, ExtensionSecretContribution>;
+  secretBackends?: ExtensionSecretBackendContribution[];
   settingsComponent?: ExtensionSettingsComponentContribution;
 }
 
@@ -417,9 +464,21 @@ export interface ExtensionManifest {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  services?: ExtensionBackendService[];
   startupAction?: string;
   onEnableAction?: string;
+  onDisableAction?: string;
+  onUninstallAction?: string;
   agentExtension?: string;
+}
+
+export interface ExtensionBackendService {
+  id: string;
+  handler: string;
+  title?: string;
+  description?: string;
+  healthCheck?: string;
+  restart?: 'never' | 'on-failure' | 'always';
 }
 
 export interface ExtensionBackendAction {
@@ -447,28 +506,80 @@ export interface ExtensionSurfaceProps<Params = Record<string, string>> {
   params: Params;
 }
 
+export interface ExtensionAutomationSummary {
+  id: string;
+  title?: string;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ExtensionRunSummary {
+  id: string;
+  status?: string;
+  title?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export interface ExtensionBrowserState {
+  tabs?: Array<{ id: string; url?: string; title?: string; active?: boolean; [key: string]: unknown }>;
+  activeTabId?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ExtensionConversationCreateInput {
+  title?: string;
+  cwd?: string;
+  initialPrompt?: string;
+  model?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ExtensionConversationForkInput {
+  conversationId: string;
+  atBlockId?: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ExtensionConversationResult {
+  conversationId: string;
+  title?: string;
+  route?: string;
+  [key: string]: unknown;
+}
+
+export interface ExtensionTranscriptBlockWriteInput {
+  conversationId: string;
+  blockType: string;
+  data: unknown;
+  title?: string;
+  blockId?: string;
+}
+
 export interface PersonalAgentClient {
   extension: {
-    invoke(actionId: string, input?: unknown): Promise<unknown>;
-    getManifest(): Promise<unknown>;
-    listSurfaces(): Promise<unknown>;
+    invoke<T = unknown>(actionId: string, input?: unknown): Promise<T>;
+    getManifest(): Promise<ExtensionManifest>;
+    listSurfaces(): Promise<ExtensionViewContribution[]>;
   };
   automations: {
-    list(): Promise<unknown>;
-    readSchedulerHealth(): Promise<unknown>;
-    get(taskId: string): Promise<unknown>;
-    create(input: unknown): Promise<unknown>;
-    update(taskId: string, input: unknown): Promise<unknown>;
-    delete(taskId: string): Promise<unknown>;
-    run(taskId: string): Promise<unknown>;
-    readLog(taskId: string): Promise<unknown>;
+    list(): Promise<ExtensionAutomationSummary[]>;
+    readSchedulerHealth(): Promise<Record<string, unknown>>;
+    get(taskId: string): Promise<ExtensionAutomationSummary>;
+    create(input: unknown): Promise<ExtensionAutomationSummary>;
+    update(taskId: string, input: unknown): Promise<ExtensionAutomationSummary>;
+    delete(taskId: string): Promise<{ ok: true } | Record<string, unknown>>;
+    run(taskId: string): Promise<Record<string, unknown>>;
+    readLog(taskId: string): Promise<string | Record<string, unknown>>;
   };
   runs: {
-    start(input: unknown): Promise<unknown>;
-    get(runId: string): Promise<unknown>;
-    list(): Promise<unknown>;
-    readLog(runId: string, tail?: number): Promise<unknown>;
-    cancel(runId: string): Promise<unknown>;
+    start(input: unknown): Promise<ExtensionRunSummary>;
+    get(runId: string): Promise<ExtensionRunSummary>;
+    list(): Promise<ExtensionRunSummary[]>;
+    readLog(runId: string, tail?: number): Promise<string | Record<string, unknown>>;
+    cancel(runId: string): Promise<ExtensionRunSummary | Record<string, unknown>>;
   };
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
@@ -494,13 +605,13 @@ export interface PersonalAgentClient {
   };
   browser: {
     isAvailable(): boolean;
-    getState(input?: { tabId?: string | null }): Promise<unknown>;
-    open(input: { url: string; tabId?: string | null }): Promise<unknown>;
-    goBack(input?: { tabId?: string | null }): Promise<unknown>;
-    goForward(input?: { tabId?: string | null }): Promise<unknown>;
-    reload(input?: { tabId?: string | null }): Promise<unknown>;
-    stop(input?: { tabId?: string | null }): Promise<unknown>;
-    snapshot(input?: { tabId?: string | null }): Promise<unknown>;
+    getState(input?: { tabId?: string | null }): Promise<ExtensionBrowserState>;
+    open(input: { url: string; tabId?: string | null }): Promise<ExtensionBrowserState>;
+    goBack(input?: { tabId?: string | null }): Promise<ExtensionBrowserState>;
+    goForward(input?: { tabId?: string | null }): Promise<ExtensionBrowserState>;
+    reload(input?: { tabId?: string | null }): Promise<ExtensionBrowserState>;
+    stop(input?: { tabId?: string | null }): Promise<ExtensionBrowserState>;
+    snapshot(input?: { tabId?: string | null }): Promise<Record<string, unknown>>;
   };
   ui: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;
@@ -554,7 +665,12 @@ export interface ExtensionBackendContext {
   runs: Record<string, (...args: never[]) => Promise<unknown>>;
   automations: Record<string, (...args: never[]) => Promise<unknown>>;
   vault: Record<string, (...args: never[]) => Promise<unknown>>;
-  conversations: Record<string, (...args: never[]) => Promise<unknown>>;
+  conversations: Record<string, (...args: never[]) => Promise<unknown>> & {
+    create(input?: ExtensionConversationCreateInput): Promise<ExtensionConversationResult>;
+    fork(input: ExtensionConversationForkInput): Promise<ExtensionConversationResult>;
+    appendTranscriptBlock(input: ExtensionTranscriptBlockWriteInput): Promise<{ blockId: string }>;
+    updateTranscriptBlock(input: ExtensionTranscriptBlockWriteInput & { blockId: string }): Promise<{ blockId: string }>;
+  };
   workspace: Record<string, (...args: never[]) => Promise<unknown>>;
   git: Record<string, (...args: never[]) => Promise<unknown>>;
   shell: {
