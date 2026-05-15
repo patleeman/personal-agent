@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
+import { execFileSync } from 'node:child_process';
 import { cpSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +38,7 @@ rmSync(join(packageRoot, 'dist'), { recursive: true, force: true });
 mkdirSync(join(packageRoot, 'dist'), { recursive: true });
 
 const buildOutputs = [];
+buildNativeSidecarIfPresent();
 copyStaticDirectoryIfPresent('bin', buildOutputs);
 
 const frontendSource = join(packageRoot, 'src', 'frontend.tsx');
@@ -120,6 +122,33 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
 }
 
 writeBuildManifest(buildOutputs);
+
+function platformBinarySuffix() {
+  const platform = process.platform === 'darwin' ? 'macos' : process.platform;
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  return `${platform}-${arch}`;
+}
+
+function readCargoPackageName(cargoToml) {
+  const text = readFileSync(cargoToml, 'utf8');
+  const match = text.match(/^name\s*=\s*"([^"]+)"/m);
+  return match?.[1] ?? null;
+}
+
+function buildNativeSidecarIfPresent() {
+  const cargoToml = join(packageRoot, 'sidecar', 'Cargo.toml');
+  if (!existsSync(cargoToml)) return;
+  const packageName = readCargoPackageName(cargoToml);
+  if (!packageName) throw new Error(`Unable to read sidecar package name from ${cargoToml}`);
+
+  execFileSync('cargo', ['build', '--release', '--manifest-path', cargoToml], { cwd: packageRoot, stdio: 'inherit' });
+
+  const source = join(packageRoot, 'sidecar', 'target', 'release', packageName);
+  if (!existsSync(source)) throw new Error(`Built sidecar binary is missing: ${source}`);
+  const destination = join(packageRoot, 'bin', `${packageName}-${platformBinarySuffix()}`);
+  mkdirSync(dirname(destination), { recursive: true });
+  copyFileSync(source, destination);
+}
 
 function copyStaticDirectoryIfPresent(name, buildOutputs) {
   const source = join(packageRoot, name);
