@@ -231,7 +231,20 @@ async function withTimeout<T>(label: string, promise: Promise<T>, timeoutMs = WO
   }
 }
 
+function assertBrowserCommandTargetReady(webContents: WebContents): void {
+  const url = webContents.getURL();
+  if (!url || url === 'about:blank') {
+    throw new Error('Workbench Browser is not ready: current page is about:blank. Navigate to a real page before using browser tools.');
+  }
+  if (webContents.isLoadingMainFrame()) {
+    throw new Error(
+      `Workbench Browser is not ready: ${url} is still loading. Wait for navigation to finish or press stop, then try again.`,
+    );
+  }
+}
+
 async function withCdp<T>(webContents: WebContents, callback: (send: CdpCommand) => Promise<T>): Promise<T> {
+  assertBrowserCommandTargetReady(webContents);
   if (!webContents.debugger.isAttached()) {
     webContents.debugger.attach('1.3');
   }

@@ -22,6 +22,15 @@ describe('workbench browser validation', () => {
     expect(source).toContain('function cdpEvaluate(webContents');
   });
 
+  it('guards CDP-backed browser tools against blank or loading pages', () => {
+    const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
+
+    expect(source).toContain('function assertBrowserCommandTargetReady');
+    expect(source).toContain("url === 'about:blank'");
+    expect(source).toContain('webContents.isLoadingMainFrame()');
+    expect(source).toContain('assertBrowserCommandTargetReady(webContents);');
+  });
+
   it('bounds CDP commands so browser tools cannot hang forever', () => {
     const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
 
