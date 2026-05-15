@@ -8,9 +8,20 @@
 
 import { Worker } from 'node:worker_threads';
 
+import {
+  writeTraceAutoMode,
+  writeTraceCompaction,
+  writeTraceContext,
+  writeTraceContextPointerInspect,
+  writeTraceStats,
+  writeTraceSuggestedContext,
+  writeTraceToolCall,
+} from '@personal-agent/core';
+
 import type { TraceWorkerMessage } from './traceWorker.js';
 
 let workerInstance: Worker | null = null;
+let useDirectWrites = false;
 
 function getOrCreateWorker(): Worker {
   if (workerInstance) {
@@ -23,13 +34,17 @@ function getOrCreateWorker(): Worker {
 
   const worker = new Worker(workerUrl);
 
-  worker.on('error', () => {
+  worker.on('error', (error) => {
+    console.error('[telemetry] trace worker failed; falling back to direct trace writes', error);
     workerInstance = null;
+    useDirectWrites = true;
   });
 
   worker.on('exit', (code) => {
     if (code !== 0) {
+      console.error('[telemetry] trace worker exited unexpectedly; falling back to direct trace writes', { code });
       workerInstance = null;
+      useDirectWrites = true;
     }
   });
 
@@ -37,11 +52,50 @@ function getOrCreateWorker(): Worker {
   return worker;
 }
 
+function writeDirect(msg: TraceWorkerMessage): void {
+  setImmediate(() => {
+    try {
+      switch (msg.type) {
+        case 'stats':
+          writeTraceStats(msg);
+          break;
+        case 'tool_call':
+          writeTraceToolCall(msg);
+          break;
+        case 'context':
+          writeTraceContext(msg);
+          break;
+        case 'compaction':
+          writeTraceCompaction(msg);
+          break;
+        case 'auto_mode':
+          writeTraceAutoMode(msg);
+          break;
+        case 'suggested_context':
+          writeTraceSuggestedContext(msg);
+          break;
+        case 'context_pointer_inspect':
+          writeTraceContextPointerInspect(msg);
+          break;
+      }
+    } catch (error) {
+      console.error('[telemetry] direct trace write failed', error);
+    }
+  });
+}
+
 function send(msg: TraceWorkerMessage): void {
+  if (useDirectWrites) {
+    writeDirect(msg);
+    return;
+  }
+
   try {
     getOrCreateWorker().postMessage(msg);
-  } catch {
-    // Fire-and-forget: drop the write if the worker is unavailable
+  } catch (error) {
+    console.error('[telemetry] trace worker unavailable; falling back to direct trace write', error);
+    useDirectWrites = true;
+    writeDirect(msg);
   }
 }
 
