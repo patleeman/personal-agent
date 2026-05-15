@@ -49,6 +49,8 @@ function toThreadResponse(
   const name = (detail?.title as string) || null;
   const preview = (detail?.preview as string) || name || '';
   const cwd = absoluteCwd(detail?.cwd, ctx);
+  const createdAt = epochSeconds(detail?.createdAt ?? detail?.timestamp ?? detail?.lastActivityAt);
+  const updatedAt = epochSeconds(detail?.updatedAt ?? detail?.lastActivityAt ?? detail?.timestamp ?? detail?.createdAt);
 
   return {
     id,
@@ -57,8 +59,8 @@ function toThreadResponse(
     preview,
     ephemeral: false,
     modelProvider: (detail?.modelProvider as string) || 'personal-agent',
-    createdAt: epochSeconds(detail?.createdAt),
-    updatedAt: epochSeconds(detail?.updatedAt),
+    createdAt,
+    updatedAt,
     status: detail?.status && typeof detail.status === 'object' ? detail.status : threadStatus(detail),
     path: cwd,
     cwd,

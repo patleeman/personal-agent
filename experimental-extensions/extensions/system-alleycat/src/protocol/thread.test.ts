@@ -66,9 +66,9 @@ describe('system-alleycat thread protocol', () => {
   it('filters and sorts thread/list by cwd, search term, and updated time', async () => {
     const ctx = makeContext({
       list: vi.fn().mockResolvedValue([
-        { id: 'a', title: 'Alpha', cwd: '/repo/a', updatedAt: '2026-01-01T00:00:10.000Z' },
-        { id: 'b', title: 'Beta needle', cwd: '/repo/b', updatedAt: '2026-01-01T00:00:30.000Z', isLive: true },
-        { id: 'c', title: 'Gamma needle', cwd: '/repo/b', updatedAt: '2026-01-01T00:00:20.000Z' },
+        { id: 'a', title: 'Alpha', cwd: '/repo/a', lastActivityAt: '2026-01-01T00:00:10.000Z' },
+        { id: 'b', title: 'Beta needle', cwd: '/repo/b', lastActivityAt: '2026-01-01T00:00:30.000Z', isLive: true },
+        { id: 'c', title: 'Gamma needle', cwd: '/repo/b', timestamp: '2026-01-01T00:00:20.000Z' },
       ]),
     });
 
