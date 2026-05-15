@@ -52,7 +52,7 @@ export function createExtensionShellCapability() {
         args: input.args ?? [],
         cwd: input.cwd,
         env: input.env ? { ...process.env, ...input.env } : process.env,
-        options: { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
+        options: { detached: false, stdio: ['ignore', 'pipe', 'pipe'] },
       });
       child.stdout?.on('data', (chunk: Buffer) => input.onStdout?.(chunk.toString('utf8')));
       child.stderr?.on('data', (chunk: Buffer) => input.onStderr?.(chunk.toString('utf8')));
