@@ -161,14 +161,16 @@ async function readVaultDirEntriesScoped(vault: ScopedFileSystem, id = ''): Prom
   const entries = await vault.list(id, { depth: 0, excludeNames: [...SKIPPED_DIRS] });
   return entries
     .filter((entry) => (entry.type === 'file' || entry.type === 'directory') && (!entry.name.startsWith('.') || entry.type === 'directory'))
-    .map((entry) => ({
-      id: entry.type === 'directory' ? `${entry.path}/` : entry.path,
-      kind: entry.type === 'directory' ? 'folder' : 'file',
-      name: entry.name,
-      path: entry.path,
-      sizeBytes: entry.type === 'file' ? (entry.size ?? 0) : 0,
-      updatedAt: entry.modifiedAt ?? new Date().toISOString(),
-    }))
+    .map(
+      (entry): VaultEntry => ({
+        id: entry.type === 'directory' ? `${entry.path}/` : entry.path,
+        kind: entry.type === 'directory' ? 'folder' : 'file',
+        name: entry.name,
+        path: entry.path,
+        sizeBytes: entry.type === 'file' ? (entry.size ?? 0) : 0,
+        updatedAt: entry.modifiedAt ?? new Date().toISOString(),
+      }),
+    )
     .sort((a, b) => {
       if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
       return a.name.localeCompare(b.name);
