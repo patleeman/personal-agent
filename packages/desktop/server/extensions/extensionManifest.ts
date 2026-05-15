@@ -81,6 +81,13 @@ export interface ExtensionManifest {
   surfaces?: ExtensionSurface[];
   backend?: ExtensionBackend;
   permissions?: ExtensionPermission[];
+  dependsOn?: Array<string | ExtensionDependencyContribution>;
+}
+
+export interface ExtensionDependencyContribution {
+  id: string;
+  optional?: boolean;
+  version?: string;
 }
 
 export interface ExtensionFrontend {

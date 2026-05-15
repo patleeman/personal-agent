@@ -817,7 +817,7 @@ const forked = await ctx.conversations.fork({ conversationId, title: 'Bug bash b
 
 ## Selection actions, transcript blocks, services, and subscriptions
 
-Extensions can declare selection-aware actions for selected text, files, messages, or transcript ranges:
+Extensions can declare selection-aware actions for selected text, files, messages, or transcript ranges. The frontend SDK exposes `pa.selection.get()`, `pa.selection.set(...)`, and `pa.selection.subscribe(...)`; hosts and extensions publish the current selection through the same shared model.
 
 ```json
 {
@@ -827,7 +827,7 @@ Extensions can declare selection-aware actions for selected text, files, message
 }
 ```
 
-Extensions can declare custom durable transcript block renderers and write extension-authored blocks from backend code:
+Extensions can declare custom durable transcript block renderers and write extension-authored blocks from backend code. Blocks get stable `extensionBlockId` metadata; updates mutate the live transcript block and fail if the block id is not found.
 
 ```json
 {
@@ -842,7 +842,7 @@ await ctx.conversations.appendTranscriptBlock({ conversationId, blockType: 'appr
 await ctx.conversations.updateTranscriptBlock({ conversationId, blockId, blockType: 'approval', data: { status: 'approved' } });
 ```
 
-Long-lived backend services are declared under `backend.services` so the host can own lifecycle, health, and restart policy:
+Long-lived backend services are declared under `backend.services` so the host can own lifecycle, health, and restart policy. Enabled extension services are started during extension startup; a service handler may return a stop function that the host calls on shutdown/disable.
 
 ```json
 {
@@ -855,7 +855,7 @@ Long-lived backend services are declared under `backend.services` so the host ca
 }
 ```
 
-Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes:
+Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes. The host dispatches these through the extension event bus as `host:{source}` events; `pattern` narrows the event name.
 
 ```json
 {
@@ -879,6 +879,16 @@ Secrets are public manifest API, not an internal convention:
 ```
 
 Resolve them in backend code with `ctx.secrets.get('apiKey')`. Environment variables declared by the extension take precedence over stored values.
+
+Extensions can declare dependencies on other extensions:
+
+```json
+{
+  "dependsOn": ["system-knowledge", { "id": "agent-board", "optional": true, "version": "^1.0.0" }]
+}
+```
+
+Missing required dependencies are surfaced in Extension Manager diagnostics. Optional dependencies are documentation/discovery contracts and should be checked with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before use.
 
 ## Inter-extension Communication
 

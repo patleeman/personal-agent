@@ -96,25 +96,67 @@ export async function appendVisibleLiveSessionCustomMessage<TEntry extends LiveS
     broadcastSnapshot: (entry: TEntry) => void;
     publishSessionMetaChanged: (sessionId: string) => void;
   },
-): Promise<void> {
+  options: { blockId?: string } = {},
+): Promise<string | null> {
   if (entry.session.isStreaming) {
     throw new Error(`Session ${entry.sessionId} is currently streaming`);
   }
 
   const message = content.trim();
   if (!message) {
-    return;
+    return null;
   }
 
+  const blockId = options.blockId ?? `${customType}:${Date.now()}`;
   const customMessage = {
     customType,
     content: message,
     display: true,
-    details,
+    details: { ...(isRecord(details) ? details : { value: details }), extensionBlockId: blockId },
   };
   await entry.session.sendCustomMessage(customMessage);
   callbacks.broadcastSnapshot(entry);
   callbacks.publishSessionMetaChanged(entry.sessionId);
+  return blockId;
+}
+
+export function updateVisibleLiveSessionCustomMessage<TEntry extends LiveSessionMessageAppendHost>(
+  entry: TEntry,
+  blockId: string,
+  customType: string,
+  content: string,
+  details: unknown,
+  callbacks: {
+    broadcastSnapshot: (entry: TEntry) => void;
+    publishSessionMetaChanged: (sessionId: string) => void;
+  },
+): boolean {
+  if (entry.session.isStreaming) {
+    throw new Error(`Session ${entry.sessionId} is currently streaming`);
+  }
+
+  const message = content.trim();
+  if (!message) return false;
+
+  let updated = false;
+  entry.session.state.messages = entry.session.state.messages.map((candidate) => {
+    if (!isRecord(candidate) || candidate.role !== 'custom' || candidate.customType !== customType) return candidate;
+    const candidateDetails = isRecord(candidate.details) ? candidate.details : {};
+    if (candidateDetails.extensionBlockId !== blockId) return candidate;
+    updated = true;
+    return {
+      ...candidate,
+      content: message,
+      details: { ...(isRecord(details) ? details : { value: details }), extensionBlockId: blockId },
+      timestamp: Date.now(),
+    };
+  });
+
+  if (updated) {
+    callbacks.broadcastSnapshot(entry);
+    callbacks.publishSessionMetaChanged(entry.sessionId);
+  }
+  return updated;
 }
 
 export async function appendParallelImportedLiveSessionMessage<TEntry extends LiveSessionMessageAppendHost>(

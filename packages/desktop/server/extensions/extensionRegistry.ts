@@ -467,10 +467,25 @@ function validateExtensionSkillContribution(entry: ExtensionRegistryEntry, skill
   return null;
 }
 
+function normalizeExtensionDependency(dependency: string | { id: string; optional?: boolean; version?: string }): {
+  id: string;
+  optional: boolean;
+} {
+  return typeof dependency === 'string'
+    ? { id: dependency, optional: false }
+    : { id: dependency.id, optional: Boolean(dependency.optional) };
+}
+
 function listExtensionContributionDiagnostics(entry: ExtensionRegistryEntry): string[] {
-  return (entry.manifest.contributes?.skills ?? [])
+  const skillDiagnostics = (entry.manifest.contributes?.skills ?? [])
     .map((skill) => validateExtensionSkillContribution(entry, skill))
     .filter((diagnostic): diagnostic is string => diagnostic !== null);
+  const installed = new Set(listExtensionEntries().map((candidate) => candidate.manifest.id));
+  const dependencyDiagnostics = (entry.manifest.dependsOn ?? [])
+    .map(normalizeExtensionDependency)
+    .filter((dependency) => !dependency.optional && !installed.has(dependency.id))
+    .map((dependency) => `Missing required extension dependency: ${dependency.id}`);
+  return [...skillDiagnostics, ...dependencyDiagnostics];
 }
 
 function buildExtensionSkillRegistrations(entry: ExtensionRegistryEntry): ExtensionSkillRegistration[] {
@@ -1232,6 +1247,20 @@ export function parseExtensionManifest(value: unknown): ExtensionManifest {
   }
   validateOptionalString(value.description, 'description');
   validateOptionalString(value.version, 'version');
+  if (value.dependsOn !== undefined) {
+    for (const [index, dependency] of assertArray(value.dependsOn, 'dependsOn').entries()) {
+      if (typeof dependency === 'string') {
+        requireString(dependency, `dependsOn[${index}]`);
+        continue;
+      }
+      if (!isRecord(dependency)) throw new Error(`Extension manifest dependsOn[${index}] must be a string or object.`);
+      requireString(dependency.id, `dependsOn[${index}].id`);
+      if (dependency.optional !== undefined && typeof dependency.optional !== 'boolean') {
+        throw new Error(`Extension manifest dependsOn[${index}].optional must be a boolean.`);
+      }
+      validateOptionalString(dependency.version, `dependsOn[${index}].version`);
+    }
+  }
   if (value.frontend !== undefined) {
     if (!isRecord(value.frontend)) throw new Error('Extension manifest frontend must be an object.');
     requireString(value.frontend.entry, 'frontend.entry');

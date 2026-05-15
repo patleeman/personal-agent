@@ -235,6 +235,18 @@ Tool prompt rules:
 
 Skill files need Agent Skills frontmatter and enough procedural detail to operate from the built app.
 
+### Selection, transcript blocks, services, subscriptions, and dependencies
+
+Use `selectionActions` for selected text/messages/files/transcript ranges, and use `pa.selection.get/set/subscribe` from frontend code for shared selection state.
+
+Use `transcriptBlocks` plus `ctx.conversations.appendTranscriptBlock/updateTranscriptBlock` for extension-owned visible transcript blocks with stable block ids.
+
+Use `backend.services` for long-lived backend services. A service handler can return a stop function; declare `healthCheck` and `restart` for host diagnostics/restart policy.
+
+Use `contributes.subscriptions` for host event sources like workspace files, vault files, settings, conversations, routes, and selection changes.
+
+Use top-level `dependsOn` for extension dependencies, e.g. `["system-knowledge", { "id": "agent-board", "optional": true }]`. Check optional dependencies with `pa.extensions.getStatus(...)` or `ctx.extensions.getStatus(...)` before calling them.
+
 ## Frontend source pattern
 
 ```tsx

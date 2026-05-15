@@ -63,6 +63,7 @@ import {
   appendParallelImportedLiveSessionMessage,
   appendVisibleLiveSessionCustomMessage,
   queueLiveSessionPromptContext,
+  updateVisibleLiveSessionCustomMessage,
 } from './liveSessionMessageAppend.js';
 import {
   buildConversationServiceTierPreferenceInput,
@@ -614,10 +615,45 @@ export async function appendDetachedUserMessage(sessionId: string, text: string)
   });
 }
 
-export async function appendVisibleCustomMessage(sessionId: string, customType: string, content: string, details?: unknown): Promise<void> {
+export async function appendVisibleCustomMessage(
+  sessionId: string,
+  customType: string,
+  content: string,
+  details?: unknown,
+  options?: { blockId?: string },
+): Promise<string | null> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  await appendVisibleLiveSessionCustomMessage(entry, customType, content, details, {
+  return appendVisibleLiveSessionCustomMessage(
+    entry,
+    customType,
+    content,
+    details,
+    {
+      broadcastSnapshot: (entry) =>
+        broadcastSnapshot(entry, {
+          buildLiveSessionSnapshot: (() => {
+            const fn = buildLiveSessionSnapshot;
+            return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+          })(),
+          ensureStaleTurnState,
+        }),
+      publishSessionMetaChanged,
+    },
+    options,
+  );
+}
+
+export function updateVisibleCustomMessage(
+  sessionId: string,
+  blockId: string,
+  customType: string,
+  content: string,
+  details?: unknown,
+): boolean {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  return updateVisibleLiveSessionCustomMessage(entry, blockId, customType, content, details, {
     broadcastSnapshot: (entry) =>
       broadcastSnapshot(entry, {
         buildLiveSessionSnapshot: (() => {

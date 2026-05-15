@@ -84,6 +84,7 @@ Supported top-level fields:
 - `frontend`: native React bundle entry and optional styles.
 - `backend`: backend module entry, backend actions, and optional agent lifecycle factory.
 - `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, transcript blocks, selection actions, subscriptions, themes, topBarElements, messageActions, composerShelves, toolbarActions, conversationDecorators, contextMenus, statusBarItems, secrets, and settings metadata.
+- `dependsOn`: required or optional extension dependencies surfaced by diagnostics and available for runtime discovery.
 - `permissions`: declared capability intent.
 
 Minimal example:
@@ -353,7 +354,7 @@ await pa.extension.invoke('createTask', { title: 'Write docs' });
 
 Do not import backend handlers directly into frontend components. Browser/Node boundary lies are expensive and stupid.
 
-Backend actions receive capability namespaces through `ctx`, including extension storage and backend-only capabilities such as workspace, git, shell, runs, automations, conversations, transcript block writing, and secrets where available. Use those seams instead of importing app internals.
+Backend actions receive capability namespaces through `ctx`, including extension storage and backend-only capabilities such as workspace, git, shell, runs, automations, conversations, transcript block writing, and secrets where available. Use those seams instead of importing app internals. Frontend surfaces also receive `pa.selection` for shared text/message/file/transcript-range selection state.
 
 ## Composer slash commands
 

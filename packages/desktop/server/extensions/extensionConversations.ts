@@ -10,6 +10,7 @@ import {
   registry as liveSessionRegistry,
   resumeSession,
   subscribe as subscribeLiveSession,
+  updateVisibleCustomMessage as updateVisibleLiveSessionCustomMessage,
 } from '../conversations/liveSessions.js';
 import { resolveStableSessionTitle } from '../conversations/liveSessionTitle.js';
 import type { ServerRouteContext } from '../routes/context.js';
@@ -280,9 +281,11 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
       blockId?: string;
     }): Promise<{ blockId: string }> {
       const content = input.title ?? input.blockType;
-      await appendVisibleLiveSessionCustomMessage(input.conversationId, input.blockType, content, input.data);
+      const blockId = await appendVisibleLiveSessionCustomMessage(input.conversationId, input.blockType, content, input.data, {
+        blockId: input.blockId,
+      });
       invalidateAppTopics('sessions');
-      return { blockId: input.blockId ?? `${input.blockType}:${Date.now()}` };
+      return { blockId: blockId ?? input.blockId ?? `${input.blockType}:${Date.now()}` };
     },
 
     async updateTranscriptBlock(input: {
@@ -292,12 +295,14 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
       title?: string;
       blockId: string;
     }): Promise<{ blockId: string }> {
-      // Current runtime supports append-only custom transcript entries; expose the stable API now
-      // and preserve the caller's block id so renderers can coalesce updates client-side.
-      await appendVisibleLiveSessionCustomMessage(input.conversationId, input.blockType, input.title ?? input.blockType, {
-        ...(typeof input.data === 'object' && input.data !== null ? (input.data as Record<string, unknown>) : { value: input.data }),
-        updatesBlockId: input.blockId,
-      });
+      const updated = updateVisibleLiveSessionCustomMessage(
+        input.conversationId,
+        input.blockId,
+        input.blockType,
+        input.title ?? input.blockType,
+        input.data,
+      );
+      if (!updated) throw new Error(`Transcript block "${input.blockId}" was not found.`);
       invalidateAppTopics('sessions');
       return { blockId: input.blockId };
     },

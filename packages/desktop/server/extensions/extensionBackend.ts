@@ -290,7 +290,7 @@ function createStorage(extensionId: string): ExtensionBackendContext['storage'] 
 type ExtensionBackendServerContext = Pick<ServerRouteContext, 'getCurrentProfile'> &
   Partial<Pick<ServerRouteContext, 'buildLiveSessionResourceOptions' | 'getRepoRoot'>>;
 
-function createBackendContext(
+export function createBackendContext(
   extensionId: string,
   serverContext?: ExtensionBackendServerContext,
   toolContext?: ExtensionBackendContext['toolContext'],
@@ -964,6 +964,10 @@ export async function startExtensionStartupActions(
     }
   }
 
+  const { installExtensionSubscriptions } = await import('./extensionSubscriptions.js');
+  await installExtensionSubscriptions(serverContext);
+  const { startExtensionServices } = await import('./extensionServices.js');
+  await startExtensionServices(serverContext);
   return results;
 }
 

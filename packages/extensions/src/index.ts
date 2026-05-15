@@ -448,6 +448,12 @@ export interface ExtensionContributions {
   settingsComponent?: ExtensionSettingsComponentContribution;
 }
 
+export interface ExtensionDependencyContribution {
+  id: string;
+  optional?: boolean;
+  version?: string;
+}
+
 export interface ExtensionManifest {
   schemaVersion: typeof EXTENSION_MANIFEST_VERSION;
   id: string;
@@ -459,6 +465,7 @@ export interface ExtensionManifest {
   contributes?: ExtensionContributions;
   backend?: ExtensionBackend;
   permissions?: ExtensionPermission[];
+  dependsOn?: Array<string | ExtensionDependencyContribution>;
 }
 
 export interface ExtensionBackend {
@@ -526,6 +533,17 @@ export interface ExtensionBrowserState {
   tabs?: Array<{ id: string; url?: string; title?: string; active?: boolean; [key: string]: unknown }>;
   activeTabId?: string | null;
   [key: string]: unknown;
+}
+
+export interface ExtensionSelectionState {
+  kind: ExtensionSelectionKind;
+  text?: string;
+  messageBlockIds?: string[];
+  files?: Array<{ cwd: string; path: string }>;
+  transcriptRange?: { conversationId: string; startBlockId: string; endBlockId: string };
+  conversationId?: string | null;
+  cwd?: string | null;
+  updatedAt: string;
 }
 
 export interface ExtensionConversationCreateInput {
@@ -631,6 +649,11 @@ export interface PersonalAgentClient {
     publish(event: string, payload: unknown): Promise<void>;
     /** Subscribe to events matching a pattern. Supports '*' (all) and 'namespace:*' (prefix). */
     subscribe(pattern: string, handler: (event: { event: string; payload: unknown }) => void): { unsubscribe: () => void };
+  };
+  selection: {
+    get(): ExtensionSelectionState | null;
+    set(selection: Omit<ExtensionSelectionState, 'updatedAt'> | null): void;
+    subscribe(handler: (selection: ExtensionSelectionState | null) => void): { unsubscribe: () => void };
   };
   /** List and call actions on other extensions. */
   extensions: {

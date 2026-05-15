@@ -201,9 +201,35 @@ interface ExtensionContextMenuContribution {
   id: string;
   title: string;
   action: string;
-  surface: 'message' | 'conversationList';
+  surface: 'message' | 'conversationList' | 'selection' | 'fileSelection' | 'transcriptSelection';
   separator?: boolean;
   when?: string;
+}
+
+type ExtensionSelectionKind = 'text' | 'messages' | 'files' | 'transcriptRange';
+
+interface ExtensionSelectionActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  kinds: ExtensionSelectionKind[];
+  when?: string;
+  priority?: number;
+}
+
+interface ExtensionTranscriptBlockContribution {
+  id: string;
+  component: string;
+  title?: string;
+  schemaVersion?: number;
+}
+
+interface ExtensionSubscriptionContribution {
+  id: string;
+  handler: string;
+  source: string;
+  pattern?: string;
+  debounceMs?: number;
 }
 
 interface ExtensionThreadHeaderActionContribution {
@@ -265,6 +291,9 @@ interface ExtensionContributions {
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  selectionActions?: ExtensionSelectionActionContribution[];
+  transcriptBlocks?: ExtensionTranscriptBlockContribution[];
+  subscriptions?: ExtensionSubscriptionContribution[];
   threadHeaderActions?: ExtensionThreadHeaderActionContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
@@ -339,9 +368,11 @@ export interface ExtensionManifest {
   contributes?: ExtensionContributions;
   surfaces?: ExtensionSurface[];
   permissions?: string[];
+  dependsOn?: Array<string | { id: string; optional?: boolean; version?: string }>;
   backend?: {
     entry: string;
     actions?: ExtensionBackendActionSummary[];
+    services?: Array<{ id: string; handler: string; title?: string; description?: string; healthCheck?: string; restart?: string }>;
   };
 }
 

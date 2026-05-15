@@ -1,5 +1,6 @@
 import { api } from '../client/api';
 import { type DesktopWorkbenchBrowserState, getDesktopBridge } from '../desktop/desktopBridge';
+import { type ExtensionSelectionState, readExtensionSelection, setExtensionSelection, subscribeExtensionSelection } from './selection';
 
 function matchExtensionEventPattern(pattern: string, eventName: string): boolean {
   if (pattern === '*') return true;
@@ -66,6 +67,11 @@ export interface NativeExtensionClient {
       Array<{ extensionId: string; extensionName: string; actions: Array<{ id: string; title?: string; description?: string }> }>
     >;
     getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
+  };
+  selection: {
+    get(): ExtensionSelectionState | null;
+    set(selection: Omit<ExtensionSelectionState, 'updatedAt'> | null): void;
+    subscribe(handler: (selection: ExtensionSelectionState | null) => void): { unsubscribe: () => void };
   };
   ui: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;
@@ -245,6 +251,11 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       async getStatus(targetExtensionId) {
         return api.extensionStatus(targetExtensionId);
       },
+    },
+    selection: {
+      get: readExtensionSelection,
+      set: setExtensionSelection,
+      subscribe: subscribeExtensionSelection,
     },
     ui: {
       toast(message, type) {
