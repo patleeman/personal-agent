@@ -192,7 +192,7 @@ describe('conversation scroll helpers', () => {
     ).toBe('text:2026-03-21T10:00:00.000Z');
   });
 
-  it('auto-scrolls while the streaming tail continues to grow in place', () => {
+  it('auto-scrolls streaming only when the tail block changes', () => {
     const previousTailKey = 'text:2026-03-21T10:00:00.000Z';
 
     expect(
@@ -201,7 +201,7 @@ describe('conversation scroll helpers', () => {
         ts: '2026-03-21T10:00:00.000Z',
         text: 'Longer streamed text',
       }),
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
       shouldAutoScrollToStreamingTail('thinking:2026-03-21T10:00:01.000Z', {
@@ -209,7 +209,7 @@ describe('conversation scroll helpers', () => {
         ts: '2026-03-21T10:00:01.000Z',
         text: 'More reasoning',
       }),
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
       shouldAutoScrollToStreamingTail('tool_use:tool-call-1', {
@@ -221,7 +221,7 @@ describe('conversation scroll helpers', () => {
         status: 'running',
         _toolCallId: 'tool-call-1',
       }),
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
       shouldAutoScrollToStreamingTail(previousTailKey, {

@@ -121,11 +121,11 @@ export function shouldAutoScrollToStreamingTail(previousTailKey: string | null, 
     return false;
   }
 
-  if (nextTailKey !== previousTailKey) {
-    return true;
-  }
-
-  return nextTailBlock?.type === 'text' || nextTailBlock?.type === 'thinking' || nextTailBlock?.type === 'tool_use';
+  // Streaming token updates can arrive every few milliseconds. Treating each
+  // content mutation as a fresh bottom-scroll request makes the viewport fight
+  // the user. Only auto-scroll when the tail block itself changes; explicit
+  // actions and the stream-end settle still re-pin when appropriate.
+  return nextTailKey !== previousTailKey;
 }
 
 export function shouldShowScrollToBottomControl(messageCount: number, atBottom: boolean): boolean {
