@@ -54,7 +54,7 @@ function toThreadResponse(
     createdAt: epochSeconds(detail?.createdAt),
     updatedAt: epochSeconds(detail?.updatedAt),
     status: detail?.status && typeof detail.status === 'object' ? detail.status : threadStatus(detail),
-    path: null,
+    path: cwd,
     cwd,
     cliVersion: '0.125.0',
     source: 'appServer',
@@ -313,7 +313,7 @@ export const thread = {
               {
                 ...session,
                 title: (session.title as string) ?? '',
-                status: isLiveOrRunning(session) ? { type: 'idle' } : { type: 'notLoaded' },
+                status: { type: 'idle' },
               },
               [],
               ctx,

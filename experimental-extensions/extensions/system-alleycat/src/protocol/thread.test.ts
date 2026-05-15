@@ -81,7 +81,8 @@ describe('system-alleycat thread protocol', () => {
 
     expect(result.data.map((item) => item.id)).toEqual(['b', 'c']);
     expect(result.data[0].status.type).toBe('idle');
-    expect(result.data[1].status.type).toBe('notLoaded');
+    expect(result.data[1].status.type).toBe('idle');
+    expect(result.data[0].path).toBe('/repo/b');
   });
 
   it('treats Kitty mobile /root cwd as global and reports live loaded threads', async () => {
