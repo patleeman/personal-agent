@@ -35,6 +35,7 @@ describe('registerCompanionProxyRoutes', () => {
   beforeEach(() => {
     getCompanionUrlMock.mockReset();
     logErrorMock.mockReset();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -106,6 +107,55 @@ describe('registerCompanionProxyRoutes', () => {
     const res = createResponse();
     await handlers['GET /api/companion/v1/*']!({ method: 'GET', originalUrl: '/api/companion/v1/hello', get: () => undefined }, res);
 
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Companion server is not available.' });
+  });
+
+  it('waits through the companion startup race before proxying', async () => {
+    vi.useFakeTimers();
+    const handlers = createHarness();
+    getCompanionUrlMock.mockResolvedValue('http://127.0.0.1:3843');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+    const res = createResponse();
+    const pending = handlers['GET /api/companion/v1/*']!(
+      { method: 'GET', originalUrl: '/api/companion/v1/hello', get: () => undefined },
+      res,
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+    await pending;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.send).toHaveBeenCalledWith(expect.any(ArrayBuffer));
+  });
+
+  it('reports companion startup fetch failures as unavailable after retries', async () => {
+    vi.useFakeTimers();
+    const handlers = createHarness();
+    getCompanionUrlMock.mockResolvedValue('http://127.0.0.1:3843');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+
+    const res = createResponse();
+    const pending = handlers['GET /api/companion/v1/*']!(
+      { method: 'GET', originalUrl: '/api/companion/v1/hello', get: () => undefined },
+      res,
+    );
+
+    await vi.runAllTimersAsync();
+    await pending;
+
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(logErrorMock).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({ error: 'Companion server is not available.' });
   });
