@@ -692,7 +692,7 @@ If a page needs a style that fights these defaults, first ask whether it should 
 ## Backend (Server-side)
 
 The backend runs in the Node.js server process. It exposes actions
-that the frontend can call via `pa.extension.invoke()`. A backend can also declare `onEnableAction` in `extension.json` to run an action immediately after the user enables the extension.
+that the frontend can call via `pa.extension.invoke()`. A backend can also declare namespaced routes under `backend.routes`, mounted at `/api/extensions/{extensionId}/routes/*`. A backend can also declare `onEnableAction` in `extension.json` to run an action immediately after the user enables the extension.
 
 ```typescript
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
@@ -700,6 +700,25 @@ import type { ExtensionBackendContext } from '@personal-agent/extensions';
 export async function ping(_input: unknown, ctx: ExtensionBackendContext) {
   ctx.log.info('ping received');
   return { ok: true, at: new Date().toISOString() };
+}
+```
+
+Backend route handlers receive a safe request object and backend context. Routes are extension-namespaced; do not add global product routes for extension-owned features.
+
+```json
+{
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "routes": [{ "method": "GET", "path": "/status", "handler": "status" }]
+  }
+}
+```
+
+```typescript
+import type { ExtensionBackendContext, ExtensionRouteRequest, ExtensionRouteResponse } from '@personal-agent/extensions';
+
+export async function status(req: ExtensionRouteRequest, ctx: ExtensionBackendContext): Promise<ExtensionRouteResponse> {
+  return { status: 200, body: { ok: true, extensionId: ctx.extensionId, query: req.query } };
 }
 ```
 
@@ -1241,7 +1260,7 @@ See the system extensions in `extensions/` for practical examples:
 - **`system-artifacts`** — Tools + views + transcript renderer + skills
 - **`system-browser`** — Browser automation tool + views
 - **`system-automations`** — Scheduled tasks, reminders, conversation queues, and the Automations page
-- **`system-images`** — Image generation and probing tools
+- **`system-images`** — Experimental image generation tool (`experimental-extensions/extensions/system-images`)
 - **`system-conversation-tools`** — Agent lifecycle hooks + contextMenus
 - **`system-extension-manager`** — Extension management UI + nav
 - **`system-runs`** — Background runs + composer shelf (ActivityShelf)

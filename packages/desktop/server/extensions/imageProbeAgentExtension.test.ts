@@ -21,7 +21,7 @@ vi.mock('../../../../packages/desktop/server/extensions/imageProbeAttachmentStor
   getImageProbeAttachmentsById: getImageProbeAttachmentsByIdMock,
 }));
 
-import { createImageProbeAgentExtension } from '../../../../extensions/system-images/src/probeImageTool.js';
+import { createImageProbeAgentExtension } from '../../../../experimental-extensions/extensions/system-images/src/probeImageTool.js';
 
 type RegisteredTool = Parameters<Parameters<typeof createImageProbeAgentExtension>[0]>[0] extends never
   ? never

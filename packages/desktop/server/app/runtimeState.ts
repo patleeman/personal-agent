@@ -182,10 +182,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
           extensionId: 'system-conversation-tools',
           message: 'Backend build failed — source files not found in bundled app (stub)',
         },
-        {
-          extensionId: 'system-images',
-          message: 'Backend build failed — dependency @sinclair/typebox could not be resolved (stub)',
-        },
       ];
       for (const err of stubErrors) {
         logger.warn('extension load error', err);

@@ -30,7 +30,7 @@ vi.mock('../ui/settingsPersistence.js', () => ({
   DEFAULT_RUNTIME_SETTINGS_FILE: '/runtime/settings.json',
 }));
 
-import { createImageProbeAgentExtension } from '../../../../extensions/system-images/src/probeImageTool.js';
+import { createImageProbeAgentExtension } from '../../../../experimental-extensions/extensions/system-images/src/probeImageTool.js';
 import { clearImageProbeAttachmentCacheForTests } from '../extensions/imageProbeAttachmentStore.js';
 import { runPromptOnLiveEntry } from './liveSessionPromptOps.js';
 

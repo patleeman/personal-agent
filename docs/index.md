@@ -53,7 +53,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Host view components](host-view-components.md)
 - [File Explorer](../extensions/system-files/README.md)
 - [Telegram Gateway](../experimental-extensions/extensions/system-gateways/README.md)
-- [Images](../extensions/system-images/README.md)
+- [Images](../experimental-extensions/extensions/system-images/README.md)
 - [Knowledge](../extensions/system-knowledge/README.md)
 - [Local Dictation](../extensions/system-local-dictation/README.md)
 - [MCP](../extensions/system-mcp/README.md)
