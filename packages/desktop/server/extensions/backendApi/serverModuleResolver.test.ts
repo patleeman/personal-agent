@@ -40,7 +40,7 @@ describe('resolveServerModuleSpecifierFrom', () => {
   it('resolves known backend package specifiers to packaged entries when present', () => {
     const resourcesRoot = makeTempRoot();
     const cwdRoot = makeTempRoot();
-    const corePath = join(resourcesRoot, 'app.asar/packages/core/dist/index.js');
+    const corePath = join(resourcesRoot, 'app.asar/server/dist/core/index.js');
     touch(corePath);
     delete process.env.PERSONAL_AGENT_REPO_ROOT;
     process.chdir(cwdRoot);

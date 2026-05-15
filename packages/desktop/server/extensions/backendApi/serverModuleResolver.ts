@@ -32,7 +32,12 @@ function packageEntryCandidates(specifier: string, resourcesPath: string | undef
   };
 
   if (specifier === '@personal-agent/core') {
+    pushRepoPath('packages/desktop/server/dist/core/index.js');
+    pushRepoPath('packages/desktop/dist/server/core/index.js');
     pushRepoPath('packages/core/dist/index.js');
+    pushResourcePath('server/dist/core/index.js');
+    pushResourcePath('packages/desktop/server/dist/core/index.js');
+    pushResourcePath('packages/desktop/dist/server/core/index.js');
     pushResourcePath('packages/core/dist/index.js');
   } else if (specifier === '@personal-agent/daemon') {
     pushRepoPath('packages/desktop/server/dist/daemon/index.js');

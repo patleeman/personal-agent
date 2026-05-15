@@ -42,6 +42,7 @@ const bundleOutputs = [
   resolve(outdir, 'traces/traceWorker.js'),
   resolve(outdir, 'daemon/index.js'),
   resolve(outdir, 'daemon/background-agent-runner.js'),
+  resolve(outdir, 'core/index.js'),
 ];
 
 const backendApiLazyModuleEntries = [
@@ -101,6 +102,17 @@ await Promise.all([
     ...sharedEsbuildOptions,
     entryPoints: [resolve(packageRoot, 'server/daemon/background-agent-runner.ts')],
     outfile: bundleOutputs[4],
+    banner: {
+      js: createRequireBanner,
+    },
+  }),
+  // Package the core runtime behind a stable app.asar path so prebuilt extension
+  // backends can resolve @personal-agent/core without relying on workspace
+  // node_modules symlinks that do not exist in signed apps.
+  build({
+    ...sharedEsbuildOptions,
+    entryPoints: [resolve(packageRoot, '..', 'core/src/index.ts')],
+    outfile: bundleOutputs[5],
     banner: {
       js: createRequireBanner,
     },
