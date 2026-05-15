@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.8.0-rc.13 — 2026-05-15
+
+- fix: timeout hung ACP prompts
+- fix: reject browser tools on blank pages
+- fix: bound workbench browser tool calls
+- fix: match telemetry route payloads to UI
+- feat: make filesystem authority async backend based
+- feat: add command acknowledgements and inspector
+- feat: unify extension commands in palette
+- fix: await extension route dispatch in local api
+- fix: honor parallel composer button clicks
+- feat: add filesystem authority boundary
+- docs: design filesystem authority boundary
+- fix: stop streaming token autoscroll hammering
+- fix: terminate background process groups
+- fix: kill shell process groups on abort
+- fix: propagate abort signal to shell tools
+- feat: bridge backend extension commands to UI
+- fix: load conversation inspect worker from unpacked app
+- feat: add extension command execution surface
+- fix: scope dangling tool-call recovery to tail
+- feat: add extension command substrate
+- fix: use fetch response type in companion proxy
+- fix: wait for companion startup in proxy
+- feat: add ACP smoke tooling and protocol visibility
+- feat: add extension-owned ACP protocol support
+- fix: restore dictation composer insertion
+- fix: include dev desktop launch mode type
+- feat: separate desktop runtime channels
+- test: cover extension backend route dispatch
+- fix: restore workbench run search param state
+- fix: hydrate centralized process launch env
+- fix: restore extension build
+- chore: checkpoint extension tool cleanup
+- feat: split web search tools
+- feat: serve telemetry through extension routes
+- fix: remove unwired composer submit actions api
+- chore: move images extension to experimental
+- feat: add execution product layer for background work
+- feat: make composer controls extension-owned
+- chore: move telegram gateway to experimental extensions
+- refactor: remove trace sqlite storage
+- refactor: aggregate trace telemetry from jsonl
+- feat: harden extension API lifecycle
+- fix: persist trace telemetry to jsonl first
+- fix: preserve trace telemetry when worker fails
+- fix: remove related background shelf from trace clusters
+- fix: clear stale runs pane on conversation switch
+- test: guard packaged backend lazy modules
+- feat: migrate telegram gateway to service
+- fix: package automation backend modules
+
 ## 0.8.0-rc.12 — 2026-05-15
 
 - fix: package core runtime for extension backends
