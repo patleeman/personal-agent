@@ -103,6 +103,10 @@
       "types": "./dist/backend/extensions.d.ts",
       "default": "./dist/backend/extensions.js"
     },
+    "./backend/gateways": {
+      "types": "./dist/backend/gateways.d.ts",
+      "default": "./dist/backend/gateways.js"
+    },
     "./backend/images": {
       "types": "./dist/backend/images.d.ts",
       "default": "./dist/backend/images.js"

@@ -18,6 +18,10 @@ export function listRunningExtensionServices(): RunningExtensionService[] {
   return [...runningServices.values()];
 }
 
+export function isExtensionServiceRunning(extensionId: string, serviceId: string): boolean {
+  return runningServices.has(serviceKey(extensionId, serviceId));
+}
+
 export async function stopExtensionServices(extensionId: string): Promise<void> {
   for (const service of [...runningServices.values()].filter((candidate) => candidate.extensionId === extensionId)) {
     runningServices.delete(serviceKey(service.extensionId, service.serviceId));

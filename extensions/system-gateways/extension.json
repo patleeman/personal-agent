@@ -9,6 +9,19 @@
     "entry": "dist/frontend.js",
     "styles": []
   },
+  "backend": {
+    "entry": "src/backend.ts",
+    "services": [
+      {
+        "id": "telegram-runtime",
+        "handler": "startTelegramGateway",
+        "title": "Telegram gateway runtime",
+        "description": "Polls Telegram and routes messages to attached Personal Agent conversations.",
+        "healthCheck": "telegramGatewayStatus",
+        "restart": "on-failure"
+      }
+    ]
+  },
   "contributes": {
     "views": [
       {

@@ -382,6 +382,28 @@ function formatBackendActionSummary(extension: ExtensionInstallSummary): string 
     : 'None';
 }
 
+function formatServiceSummary(extension: ExtensionInstallSummary): string {
+  return extension.services?.length
+    ? extension.services.map((service) => `${service.id} → ${service.handler}${service.restart ? ` (${service.restart})` : ''}`).join(', ')
+    : 'None';
+}
+
+function formatSubscriptionSummary(extension: ExtensionInstallSummary): string {
+  return extension.subscriptions?.length
+    ? extension.subscriptions
+        .map((subscription) => `${subscription.id}: ${subscription.source}${subscription.pattern ? `:${subscription.pattern}` : ''}`)
+        .join(', ')
+    : 'None';
+}
+
+function formatDependencySummary(extension: ExtensionInstallSummary): string {
+  return extension.dependsOn?.length
+    ? extension.dependsOn
+        .map((dependency) => (typeof dependency === 'string' ? dependency : `${dependency.id}${dependency.optional ? ' (optional)' : ''}`))
+        .join(', ')
+    : 'None';
+}
+
 function formatAgentHookSummary(extension: ExtensionInstallSummary): string {
   return extension.manifest?.backend?.agentExtension ?? 'None';
 }
@@ -1324,7 +1346,12 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
                     value={`Tools: ${formatToolSummary(extension)} · Hook: ${formatAgentHookSummary(extension)} · Skills: ${formatSkillSummary(extension)}`}
                   />
                   <DetailRow label="Shortcuts" value={formatKeybindingSummary(extension)} />
-                  <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(extension)}`} />
+                  <DetailRow
+                    label="Backend"
+                    value={`Actions: ${formatBackendActionSummary(extension)} · Services: ${formatServiceSummary(extension)}`}
+                  />
+                  <DetailRow label="Subscriptions" value={formatSubscriptionSummary(extension)} />
+                  <DetailRow label="Dependencies" value={formatDependencySummary(extension)} />
                   <DetailRow label="Permissions" value={formatPermissionSummary(extension)} />
                 </dl>
               </DetailBlock>

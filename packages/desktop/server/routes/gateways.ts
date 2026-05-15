@@ -75,7 +75,7 @@ function liveSessionContext(context: ServerRouteContext) {
   };
 }
 
-function ensureTelegramRuntime(): TelegramGatewayRuntime {
+export function ensureTelegramRuntime(): TelegramGatewayRuntime {
   if (!routeContext) {
     throw new Error('Gateway routes are not initialized');
   }
@@ -136,6 +136,26 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+export function startTelegramGatewayRuntime(): { running: boolean } {
+  const initialTelegramState = readGatewayState(currentGatewayContext()).connections.find(
+    (connection) => connection.provider === 'telegram',
+  );
+  if (initialTelegramState?.enabled && readTelegramBotToken(getAuthFileFn(), getStateRootFn())) {
+    ensureTelegramRuntime().start();
+    return { running: true };
+  }
+  return { running: false };
+}
+
+export function stopTelegramGatewayRuntime(): { running: false } {
+  telegramRuntime?.stop();
+  return { running: false };
+}
+
+export function readTelegramGatewayRuntimeStatus(): { running: boolean } {
+  return { running: telegramRuntime !== null };
+}
+
 function readLatestAssistantText(conversationId: string): string | null {
   const detail = readSessionBlocks(conversationId, { tailBlocks: 20 });
   const block = [...(detail?.blocks ?? [])].reverse().find((candidate) => candidate.type === 'text');
@@ -153,12 +173,7 @@ function handleGatewayError(res: Response, err: unknown): void {
 export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>, context: ServerRouteContext): void {
   initializeGatewayRoutesContext(context);
 
-  const initialTelegramState = readGatewayState(currentGatewayContext()).connections.find(
-    (connection) => connection.provider === 'telegram',
-  );
-  if (initialTelegramState?.enabled && readTelegramBotToken(getAuthFileFn(), getStateRootFn())) {
-    ensureTelegramRuntime().start();
-  }
+  startTelegramGatewayRuntime();
   router.get('/api/gateways', (_req, res) => {
     try {
       res.json(readGatewayState(currentGatewayContext()));

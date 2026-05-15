@@ -124,6 +124,9 @@ export interface ExtensionInstallSummary {
   permissions: ExtensionManifest['permissions'];
   surfaces: ExtensionSurface[];
   backendActions: NonNullable<ExtensionManifest['backend']>['actions'];
+  services: NonNullable<ExtensionManifest['backend']>['services'];
+  subscriptions: NonNullable<NonNullable<ExtensionManifest['contributes']>['subscriptions']>;
+  dependsOn: NonNullable<ExtensionManifest['dependsOn']>;
   skills: ExtensionSkillRegistration[];
   mentions: ExtensionMentionRegistration[];
   tools: ExtensionToolRegistration[];
@@ -1388,6 +1391,9 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       permissions: manifest.permissions ?? [],
       surfaces,
       backendActions: manifest.backend?.actions ?? [],
+      services: manifest.backend?.services ?? [],
+      subscriptions: manifest.contributes?.subscriptions ?? [],
+      dependsOn: manifest.dependsOn ?? [],
       skills: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionSkillRegistrations(entry) : [],
       mentions: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionMentionRegistrations(entry) : [],
       tools: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionToolRegistrations(entry) : [],
@@ -1415,6 +1421,9 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
         permissions: [],
         surfaces: [],
         backendActions: [],
+        services: [],
+        subscriptions: [],
+        dependsOn: [],
         skills: [],
         mentions: [],
         tools: [],

@@ -8,6 +8,7 @@ export * from './checkpoints.js';
 export * from './conversations.js';
 export { publishAppEvent } from './events.js';
 export * from './extensions.js';
+export * from './gateways.js';
 export * from './images.js';
 export * from './knowledge.js';
 export * from './knowledgeVault.js';

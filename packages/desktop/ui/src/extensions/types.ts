@@ -449,6 +449,9 @@ export interface ExtensionInstallSummary {
   permissions?: string[];
   surfaces: ExtensionSurface[];
   backendActions?: ExtensionBackendActionSummary[];
+  services?: Array<{ id: string; handler: string; title?: string; description?: string; healthCheck?: string; restart?: string }>;
+  subscriptions?: Array<{ id: string; handler: string; source: string; pattern?: string; debounceMs?: number }>;
+  dependsOn?: Array<string | { id: string; optional?: boolean; version?: string }>;
   skills?: ExtensionSkillRegistration[];
   mentions?: ExtensionMentionRegistration[];
   tools?: ExtensionToolRegistration[];
