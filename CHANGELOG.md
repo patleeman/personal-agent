@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0-rc.11 — 2026-05-15
+
+- fix: package backend api lazy modules
+- fix: prevent duplicate desktop app instances
+- fix: clean extension dist before rebuild
+- fix: surface extension bundle issues in doctor
+- fix: smoke test extension frontend bundles
+- fix: raise transcript tail load cap
+- fix: share React runtime with extension bundles
+- fix: resolve packaged extension backend modules
+- fix: quiet missing artifact errors
+- Fix packaged backend module resolution
+- fix: contain overflowing chat markdown
+- refactor: centralize backend module resolution
+- fix: simplify background callback prompts
+- fix: keep conversation inspect on bundled worker
+- fix: collapse run callbacks in user messages
+- fix: summarize queued background followups
+
 ## 0.8.0-rc.10 — 2026-05-14
 
 - chore: sync patched dependency lockfile
