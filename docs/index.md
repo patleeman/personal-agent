@@ -26,6 +26,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Development workflow](development.md) — validation, UI QA, checkpoints, and secret scanning
 - [Daemon](daemon.md) — background process and runtime lifecycle
 - [Sandboxing](sandboxing.md) — shared process execution launcher, wrapper extensions, and direct process API policy
+- [Filesystem Authority](filesystem-authority.md) — shared scoped filesystem boundary, fs-safe backend direction, policy hooks, and command-sandbox root grants
 - [Activity tree](activity-tree.md) — shared model for conversations, runs, and future sidebar sub-items
 - [Performance diagnostics](performance-diagnostics.md) — renderer timing tripwires for conversation load and API latency
 - [Telemetry](telemetry.md) — local JSONL telemetry logs, SQLite observability indexes, exports, and runtime producers

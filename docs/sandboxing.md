@@ -1,6 +1,6 @@
 # Sandboxing and Process Execution
 
-Personal Agent routes host-owned process execution through a shared process launcher so sandboxing extensions can wrap commands consistently.
+Personal Agent routes host-owned process execution through a shared process launcher so sandboxing extensions can wrap commands consistently. Filesystem access should converge on the same authority model through the [Filesystem Authority](filesystem-authority.md): direct file APIs and command sandboxes should share scoped root grants instead of inventing separate policy vocabularies.
 
 ## Execution boundary
 
@@ -33,6 +33,10 @@ export function mySandboxAgentExtension(pi) {
 ```
 
 The wrapper receives `{ command, args, cwd, env, shell, wrappers }` and returns the launch context to execute. Wrappers are applied in registration order. Use stable extension ids for wrapper ids.
+
+## Filesystem root grants
+
+Process wrappers should eventually receive the Filesystem Authority grants for the subject they are launching for. That lets a sandbox wrapper mount or expose the same roots that direct file APIs would allow: workspace read/write, extension private storage, artifact output, temp workspaces, vault access, or secrets. The process launcher remains the execution boundary; the Filesystem Authority owns root identity, grants, policy decisions, and audit vocabulary.
 
 ## Extension process API policy
 

@@ -795,6 +795,7 @@ Extensions have two storage mechanisms for different purposes:
 - Use **settings** for values the user configures through the Settings UI.
 - Use **storage** (`ctx.storage` / `pa.storage`) for internal state like
   cached API responses, session tokens, or counter values.
+- Use the [Filesystem Authority](filesystem-authority.md) for extension-owned files/blobs, workspace files, temp workspaces, artifacts, and any path addressed by a user, agent, archive, or external protocol.
 - Settings are discoverable (all extensions contribute to a unified schema);
   storage is private to each extension.
 
@@ -802,21 +803,22 @@ Extensions have two storage mechanisms for different purposes:
 
 The `ExtensionBackendContext` provides:
 
-| Property            | Purpose                                                  |
-| ------------------- | -------------------------------------------------------- |
-| `ctx.storage`       | Persistent key-value store per extension (SQLite-backed) |
-| `ctx.automations`   | Scheduled task management                                |
-| `ctx.runs`          | Background run management                                |
-| `ctx.conversations` | Conversation read/write operations                       |
-| `ctx.workspace`     | Workspace file operations (read, write, list)            |
-| `ctx.vault`         | Knowledge vault operations                               |
-| `ctx.git`           | Git status, diff, log                                    |
-| `ctx.shell`         | Shell command execution                                  |
-| `ctx.notify`        | Toast, system notifications, badge (see below)           |
-| `ctx.events`        | Inter-extension event pub/sub                            |
-| `ctx.extensions`    | Call actions on other extensions                         |
-| `ctx.ui`            | Invalidate UI state topics                               |
-| `ctx.log`           | Structured logging                                       |
+| Property            | Purpose                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `ctx.storage`       | Persistent key-value store per extension (SQLite-backed)                                                |
+| `ctx.automations`   | Scheduled task management                                                                               |
+| `ctx.runs`          | Background run management                                                                               |
+| `ctx.conversations` | Conversation read/write operations                                                                      |
+| `ctx.filesystem`    | Scoped filesystem authority for workspace, extension file storage, temp, artifact, and other host roots |
+| `ctx.workspace`     | Workspace file operations (read, write, list); convenience wrapper over the filesystem authority        |
+| `ctx.vault`         | Knowledge vault operations                                                                              |
+| `ctx.git`           | Git status, diff, log                                                                                   |
+| `ctx.shell`         | Shell command execution                                                                                 |
+| `ctx.notify`        | Toast, system notifications, badge (see below)                                                          |
+| `ctx.events`        | Inter-extension event pub/sub                                                                           |
+| `ctx.extensions`    | Call actions on other extensions                                                                        |
+| `ctx.ui`            | Invalidate UI state topics                                                                              |
+| `ctx.log`           | Structured logging                                                                                      |
 
 ## Conversation Write API
 
