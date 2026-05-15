@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.8.0-rc.14 — 2026-05-15
+
+- fix: stabilize release validation
+- refactor: move browser extension to experimental
+- fix: open subagent thread from activity tree
+- fix: harden subagent tool allowlists and logs
+- fix: capture subagent final output
+- fix: map PA session timestamps to Kitty thread times
+- refactor: remove hidden env behavior flags
+- fix: preserve PA ISO timestamps for Kitty sorting
+- fix: avoid page search scroll lock
+- revert: remove ineffective Kitty live thread announcement
+- fix: send live thread announcements after initialize response
+- fix: stop forcing thread tree height
+- fix: announce live PA threads to Kitty on connect
+- fix: keep Kitty loaded list live-only
+- fix: seed Kitty home list from recent PA threads
+- fix: preserve pinned streaming scroll position
+- fix: make Alleycat thread list items visible
+- fix: reset and persist Alleycat managed sidecar logs
+- fix: remove companion settings surface
+- fix: require managed spawn for Alleycat sidecar
+- fix: tolerate older extension runtimes without shell.spawn
+- fix: keep extension sidecars attached to app process
+- docs: remove stale companion port guidance
+- feat: add managed extension sidecar processes
+- chore: remove legacy iOS and codex companion code
+- chore: remove legacy iOS and codex companion code
+- fix: stop stale Alleycat sidecars before restart
+- fix: persist Kitty Litter pairing identity across dev reloads
+- chore: log Alleycat thread RPC diagnostics
+- fix: expose live PA threads to Kitty Litter
+- fix: show native compaction notice by default
+- fix: suppress goal continuations during overflow recovery
+- feat: hydrate Alleycat threads from PA transcripts
+- fix: compile Alleycat sidecar during extension build
+- fix: resolve Alleycat sidecar from dev builds
+- fix: self-heal Kitty Litter host status
+- fix: keep Kitty Litter pairing settings-only
+- fix: balance sidebar thread density
+- fix: autostart Kitty Litter companion host
+- fix: package Alleycat sidecar binary in dist
+- fix: tighten sidebar thread rows
+- fix: mark Kitty Litter pairing as user extension
+- feat: add command remapping and execution forms
+- feat: improve Kitty Litter pairing UX
+- feat: move Alleycat to experimental and improve cwd handling
+- Fix vault entry kind typing
+- chore: block raw fs in scoped filesystem surfaces
+- feat: add PA Alleycat iroh sidecar
+- refactor: route vault editor through filesystem authority
+- docs: capture network authority follow-up
+- feat: scaffold PA Alleycat extension
+- fix: guard reply selection ranges by document
+- fix: derive telemetry metrics from context events
+- docs: update current RC release
+
 ## 0.8.0-rc.13 — 2026-05-15
 
 - fix: timeout hung ACP prompts
