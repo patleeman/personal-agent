@@ -55,7 +55,7 @@ export function createChangeWorkingDirectoryAgentExtension(options: {
       parameters: ChangeWorkingDirectoryToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = readRequiredString(ctx.sessionManager.getSessionId?.(), 'conversationId');
-        const nextCwd = resolveRequestedCwd(readRequiredString(params.cwd, 'cwd'), ctx.cwd);
+        const nextCwd = await resolveRequestedCwd(readRequiredString(params.cwd, 'cwd'), ctx.cwd);
         if (!nextCwd) {
           throw new Error('cwd is required.');
         }

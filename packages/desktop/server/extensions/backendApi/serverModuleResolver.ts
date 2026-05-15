@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+const dynamicImport = <T>(specifier: string): Promise<T> => import(specifier) as Promise<T>;
 
 interface ResolveServerModuleSpecifierOptions {
   importMetaUrl: string;
