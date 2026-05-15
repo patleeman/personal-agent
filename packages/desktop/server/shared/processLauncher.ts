@@ -101,7 +101,7 @@ export function spawnProcess(input: {
   return { child, launch };
 }
 
-function terminateProcessGroup(child: ChildProcess): void {
+export function terminateProcessGroup(child: ChildProcess): void {
   if (!child.pid) return;
   try {
     process.kill(-child.pid, 'SIGTERM');

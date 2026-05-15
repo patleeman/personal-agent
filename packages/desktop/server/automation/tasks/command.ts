@@ -1,4 +1,4 @@
-import { spawnProcess } from '../../shared/processLauncher.js';
+import { spawnProcess, terminateProcessGroup } from '../../shared/processLauncher.js';
 
 export interface CommandResult {
   code: number;
@@ -22,7 +22,7 @@ export async function runCommand(command: string, args: string[], timeoutMs = DE
     const { child } = spawnProcess({
       command,
       args,
-      options: { stdio: ['ignore', 'pipe', 'pipe'] },
+      options: { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
     });
 
     let stdout = '';
@@ -39,11 +39,11 @@ export async function runCommand(command: string, args: string[], timeoutMs = DE
     };
 
     const timeoutHandle = setTimeout(() => {
-      child.kill('SIGTERM');
+      terminateProcessGroup(child);
       // Force kill if process doesn't exit gracefully
       killTimer = setTimeout(() => {
         if (!settled) {
-          child.kill('SIGKILL');
+          terminateProcessGroup(child);
         }
       }, GRACEFUL_SHUTDOWN_MS);
       finalize(() => reject(new Error(`${command} timed out after ${normalizedTimeoutMs}ms`)));

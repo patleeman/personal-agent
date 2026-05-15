@@ -27,7 +27,7 @@ import {
   summarizeScannedDurableRuns,
 } from '../runs/store.js';
 import { listRecoverableWebLiveConversationRuns, saveWebLiveConversationRunState } from '../runs/web-live-conversations.js';
-import { spawnProcess } from '../shared/processLauncher.js';
+import { spawnProcess, terminateProcessGroup } from '../shared/processLauncher.js';
 import {
   closeAllDbs,
   pruneStaleRecoveryFiles,
@@ -995,14 +995,14 @@ export class PersonalAgentDaemon {
           args: spawnInput.argv.slice(1),
           cwd: input.cwd,
           env: childEnv,
-          options: { stdio: ['ignore', 'pipe', 'pipe'] },
+          options: { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
         })
       : spawnProcess({
           command: 'sh',
           args: ['-lc', spawnInput.shellCommand as string],
           cwd: input.cwd,
           env: childEnv,
-          options: { stdio: ['ignore', 'pipe', 'pipe'] },
+          options: { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
         });
 
     child.stdout?.on('data', (chunk: Buffer | string) => {
@@ -1172,11 +1172,11 @@ export class PersonalAgentDaemon {
         reason,
       });
       if (!active.child.killed) {
-        active.child.kill('SIGTERM');
+        terminateProcessGroup(active.child);
       }
       active.forceKillTimer = setTimeout(() => {
         if (!active.settled) {
-          active.child.kill('SIGKILL');
+          terminateProcessGroup(active.child);
         }
       }, 5000);
       active.forceKillTimer.unref();
