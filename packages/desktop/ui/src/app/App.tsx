@@ -154,6 +154,7 @@ export function App() {
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
+  const [executions, setExecutionsState] = useState<import('../shared/types').ExecutionListResult | null>(null);
   const [daemon, setDaemonState] = useState<DaemonState | null>(null);
   const openedOnceRef = useRef(false);
   // Session meta requests can resolve out of order during fast run transitions.
@@ -228,6 +229,10 @@ export function App() {
     setRunsState(result);
   }, []);
 
+  const setExecutions = useCallback((result: import('../shared/types').ExecutionListResult) => {
+    setExecutionsState(result);
+  }, []);
+
   const setDaemon = useCallback((state: DaemonState) => {
     setDaemonState(state);
   }, []);
@@ -289,6 +294,16 @@ export function App() {
                 // Keep the last known snapshot until the next app event or manual refresh.
               });
           }
+          if (payload.topics.includes('executions')) {
+            void api
+              .executions()
+              .then((result) => {
+                setExecutions(result);
+              })
+              .catch(() => {
+                // Keep the last known snapshot until the next app event or manual refresh.
+              });
+          }
           setEventVersions((prev) => {
             const next = { ...prev };
             for (const topic of payload.topics) {
@@ -304,7 +319,7 @@ export function App() {
           return;
       }
     },
-    [bumpConversationVersion, refreshSessionMeta, setDaemon, setSessions, setTasks, setTitle],
+    [bumpConversationVersion, refreshSessionMeta, setDaemon, setExecutions, setSessions, setTasks, setTitle],
   );
 
   const bootstrapSnapshots = useCallback(() => {
@@ -329,6 +344,15 @@ export function App() {
       .runs()
       .then((result) => {
         setRuns(result);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
+
+    void api
+      .executions()
+      .then((result) => {
+        setExecutions(result);
       })
       .catch(() => {
         // Keep waiting for SSE or a later retry.
@@ -460,7 +484,9 @@ export function App() {
     <AppErrorBoundary>
       <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
         <SseConnectionContext.Provider value={{ status: sseStatus }}>
-          <AppDataContext.Provider value={{ projects, sessions, tasks, runs, setProjects, setSessions, setTasks, setRuns }}>
+          <AppDataContext.Provider
+            value={{ projects, sessions, tasks, runs, executions, setProjects, setSessions, setTasks, setRuns, setExecutions }}
+          >
             <SystemStatusContext.Provider value={{ daemon, setDaemon }}>
               <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
                 <ThemeProvider>

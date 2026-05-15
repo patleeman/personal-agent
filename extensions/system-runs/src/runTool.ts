@@ -365,7 +365,7 @@ export function createRunAgentExtension(options: {
                 status: 202,
                 metadata: { taskSlug, cwd, logPath: result.logPath, deliverResultToConversation, kind: 'shell' },
               });
-              invalidateAppTopics('runs');
+              invalidateAppTopics('executions', 'runs');
               return {
                 content: [
                   {
@@ -555,7 +555,7 @@ export function createRunAgentExtension(options: {
                 status: 202,
                 metadata: { taskSlug, cwd, model, logPath: result.logPath, loop, deliverResultToConversation },
               });
-              invalidateAppTopics('runs');
+              invalidateAppTopics('executions', 'runs');
 
               let message = `Started subagent ${result.runId} for ${taskSlug}`;
               if (loop) {
@@ -608,7 +608,7 @@ export function createRunAgentExtension(options: {
                 status: 202,
                 metadata: { sourceRunId: runId, logPath: result.logPath },
               });
-              invalidateAppTopics('runs');
+              invalidateAppTopics('executions', 'runs');
               return {
                 content: [{ type: 'text' as const, text: `Started rerun ${result.runId} from ${runId}.` }],
                 details: {
@@ -645,7 +645,7 @@ export function createRunAgentExtension(options: {
                 status: 202,
                 metadata: { sourceRunId: runId, promptLength: prompt.length, logPath: result.logPath },
               });
-              invalidateAppTopics('runs');
+              invalidateAppTopics('executions', 'runs');
               return {
                 content: [{ type: 'text' as const, text: `Started follow-up run ${result.runId} from ${runId}.` }],
                 details: {
@@ -675,7 +675,7 @@ export function createRunAgentExtension(options: {
               }
 
               recordTelemetryEvent({ source: 'agent', category: 'durable_run', name: 'cancel', runId, status: 200 });
-              invalidateAppTopics('runs');
+              invalidateAppTopics('executions', 'runs');
               return {
                 content: [{ type: 'text' as const, text: `Cancelled background work ${runId}.` }],
                 details: {

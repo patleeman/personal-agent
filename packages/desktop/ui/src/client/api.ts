@@ -800,6 +800,17 @@ export const api = {
 
     return post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`);
   },
+  executions: async () => get<import('../shared/types').ExecutionListResult>('/executions'),
+  conversationExecutions: async (conversationId: string) =>
+    get<import('../shared/types').ConversationExecutionsResult>(`/conversations/${encodeURIComponent(conversationId)}/executions`),
+  execution: async (id: string) => get<import('../shared/types').ExecutionDetailResult>(`/executions/${encodeURIComponent(id)}`),
+  executionLog: async (id: string, tail?: number) => {
+    const normalizedTail = normalizeDurableRunLogTailParam(tail);
+    return get<{ log: string; path: string }>(
+      `/executions/${encodeURIComponent(id)}/log${normalizedTail ? `?tail=${encodeURIComponent(String(normalizedTail))}` : ''}`,
+    );
+  },
+  cancelExecution: async (id: string) => post<{ cancelled: boolean; runId: string }>(`/executions/${encodeURIComponent(id)}/cancel`),
 
   // ── Workspace helpers ────────────────────────────────────────────────────
   pickFolder: async (input?: string | { cwd?: string | null; prompt?: string | null }) => {

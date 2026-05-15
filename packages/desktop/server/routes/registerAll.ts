@@ -4,6 +4,7 @@ import type { RegisterServerRoutesInput } from './context.js';
 import { registerConversationRoutes } from './conversations.js';
 import { registerConversationStateRoutes } from './conversationState.js';
 import { registerDaemonRoutes } from './daemon.js';
+import { registerExecutionRoutes } from './executions.js';
 import { registerExtensionRoutes } from './extensions.js';
 import { registerFilePickerRoutes } from './filePicker.js';
 import { registerFolderPickerRoutes } from './folderPicker.js';
@@ -18,7 +19,6 @@ import { registerSettingsRoutes } from './settings.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
-import { registerTraceRoutes } from './traces.js';
 import { registerUiPreferenceRoutes } from './uiPreferences.js';
 import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerWorkspaceExplorerRoutes } from './workspaceExplorer.js';
@@ -54,6 +54,8 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
 
   registerLiveSessionRoutes(app, context);
 
+  registerExecutionRoutes(app);
+
   registerRunAppRoutes(app, context);
 
   registerMemoryNotesRoutes(app, context);
@@ -65,6 +67,4 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerVaultEditorRoutes(app);
 
   registerRunsOpsRoutes(app);
-
-  registerTraceRoutes(app);
 }

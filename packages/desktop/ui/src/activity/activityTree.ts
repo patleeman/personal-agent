@@ -1,6 +1,6 @@
-import type { DurableRunRecord, SessionMeta } from '../shared/types';
+import type { ExecutionRecord, SessionMeta } from '../shared/types';
 
-export type ActivityTreeItemKind = 'conversation' | 'run' | 'terminal' | 'artifact' | 'checkpoint' | 'group';
+export type ActivityTreeItemKind = 'conversation' | 'execution' | 'run' | 'terminal' | 'artifact' | 'checkpoint' | 'group';
 export type ActivityTreeItemStatus = 'idle' | 'running' | 'queued' | 'failed' | 'done';
 
 export interface ActivityTreeItem {
@@ -19,7 +19,7 @@ export interface ActivityTreeItem {
 
 export interface BuildActivityTreeInput {
   conversations: readonly SessionMeta[];
-  runs?: readonly DurableRunRecord[];
+  executions?: readonly ExecutionRecord[];
 }
 
 export function buildConversationActivityId(conversationId: string): string {
@@ -27,10 +27,14 @@ export function buildConversationActivityId(conversationId: string): string {
 }
 
 export function buildRunActivityId(runId: string): string {
-  return `run:${runId}`;
+  return buildExecutionActivityId(runId);
 }
 
-export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivityTreeInput): ActivityTreeItem[] {
+export function buildExecutionActivityId(executionId: string): string {
+  return `execution:${executionId}`;
+}
+
+export function buildActivityTreeItems({ conversations, executions = [] }: BuildActivityTreeInput): ActivityTreeItem[] {
   const conversationIds = new Set(conversations.map((session) => session.id));
   const items: ActivityTreeItem[] = conversations.map((session) => ({
     id: buildConversationActivityId(session.id),
@@ -43,7 +47,7 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
     subtitle: session.cwd || undefined,
     status: session.isRunning ? 'running' : 'idle',
     route: `/conversations/${encodeURIComponent(session.id)}`,
-    updatedAt: session.updatedAt ?? session.createdAt,
+    updatedAt: session.timestamp,
     metadata: {
       conversationId: session.id,
       cwd: session.cwd,
@@ -52,36 +56,26 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
     },
   }));
 
-  for (const run of runs) {
-    if (isLiveConversationRun(run)) {
-      continue;
-    }
-
-    const parentConversationId = getRunConversationId(run);
-    if (!parentConversationId || !conversationIds.has(parentConversationId)) {
+  for (const execution of executions) {
+    const parentConversationId = execution.conversationId;
+    if (!parentConversationId || !conversationIds.has(parentConversationId) || execution.visibility === 'hidden') {
       continue;
     }
 
     items.push({
-      id: buildRunActivityId(run.runId),
-      kind: 'run',
+      id: buildExecutionActivityId(execution.id),
+      kind: 'execution',
       parentId: buildConversationActivityId(parentConversationId),
-      title: getRunTitle(run),
-      subtitle: run.status?.lastError || run.manifest?.kind || undefined,
-      status: normalizeRunStatus(run.status?.status),
-      route: `/conversations/${encodeURIComponent(parentConversationId)}?run=${encodeURIComponent(run.runId)}`,
-      updatedAt: run.status?.updatedAt ?? run.manifest?.createdAt,
-      metadata: { runId: run.runId, conversationId: parentConversationId },
+      title: execution.title || execution.id,
+      subtitle: execution.kind,
+      status: normalizeRunStatus(execution.status),
+      route: `/conversations/${encodeURIComponent(parentConversationId)}?run=${encodeURIComponent(execution.id)}`,
+      updatedAt: execution.updatedAt ?? execution.startedAt ?? execution.createdAt,
+      metadata: { executionId: execution.id, runId: execution.id, conversationId: parentConversationId },
     });
   }
 
   return items;
-}
-
-function isLiveConversationRun(run: DurableRunRecord): boolean {
-  return (
-    run.manifest?.kind === 'conversation' || run.manifest?.spec?.mode === 'web-live-session' || run.runId.startsWith('conversation-live-')
-  );
 }
 
 function normalizeRunStatus(status: string | undefined): ActivityTreeItemStatus {
@@ -101,31 +95,4 @@ function normalizeRunStatus(status: string | undefined): ActivityTreeItemStatus 
     default:
       return 'idle';
   }
-}
-
-function getRunTitle(run: DurableRunRecord): string {
-  const spec = run.manifest?.spec;
-  const title = getStringField(spec, 'title') ?? getStringField(spec, 'taskSlug') ?? getStringField(spec, 'command');
-  return title?.trim() || run.runId;
-}
-
-function getRunConversationId(run: DurableRunRecord): string | undefined {
-  const spec = run.manifest?.spec;
-  return (
-    getStringField(spec, 'conversationId') ??
-    getStringField(spec, 'threadConversationId') ??
-    getSourceConversationId(run.manifest?.source) ??
-    getStringField(run.result, 'conversationId') ??
-    getStringField(run.checkpoint?.payload, 'conversationId')
-  );
-}
-
-function getSourceConversationId(source: { type: string; id?: string } | undefined): string | undefined {
-  if (!source?.id) return undefined;
-  return source.type === 'conversation' || source.type === 'thread' ? source.id : undefined;
-}
-
-function getStringField(source: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = source?.[key];
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }

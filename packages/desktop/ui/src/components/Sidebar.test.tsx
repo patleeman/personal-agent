@@ -10,7 +10,7 @@ import {
   PINNED_SESSION_IDS_STORAGE_KEY,
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
 } from '../local/localSettings.js';
-import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
+import type { DurableRunListResult, ExecutionListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { Sidebar } from './Sidebar.js';
 
 const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
@@ -91,6 +91,7 @@ describe('Sidebar', () => {
       tasks?: ScheduledTaskSummary[];
       liveTitles?: Map<string, string>;
       runs?: DurableRunListResult;
+      executions?: ExecutionListResult;
     },
   ) {
     return renderToString(
@@ -117,10 +118,12 @@ describe('Sidebar', () => {
               sessions: options?.sessions ?? [createSession()],
               tasks: options?.tasks ?? null,
               runs: options?.runs ?? null,
+              executions: options?.executions ?? null,
               setProjects: () => {},
               setSessions: () => {},
               setTasks: () => {},
               setRuns: () => {},
+              setExecutions: () => {},
             }}
           >
             <LiveTitlesContext.Provider value={{ titles: options?.liveTitles ?? new Map(), setTitle: () => {} }}>

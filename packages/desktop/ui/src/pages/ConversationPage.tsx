@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
-import type { RunPresentationLookups } from '../automation/runPresentation';
 import { api } from '../client/api';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
 import { buildSlashMenuItems, parseSlashInput } from '../commands/slashMenu';
@@ -82,7 +81,6 @@ import {
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
   replaceConversationTitleInSessionList,
-  resolveConversationBackgroundRunState,
   resolveConversationComposerRunState,
   resolveConversationCwdChangeAction,
   resolveConversationInitialHistoricalWarmupTarget,
@@ -248,8 +246,10 @@ import { closeConversationTab, ensureConversationTabOpen } from '../session/sess
 import type {
   ConversationAttachmentSummary,
   ConversationContextDocRef,
+  ConversationExecutionsResult,
   DeferredResumeSummary,
   DurableRunRecord,
+  ExecutionRecord,
   LiveSessionContext,
   MemoryData,
   MessageBlock,
@@ -536,6 +536,24 @@ export async function applyGoalModeToggleAction(
   }
 }
 
+function isActiveExecution(execution: ExecutionRecord): boolean {
+  return (
+    execution.status === 'queued' || execution.status === 'waiting' || execution.status === 'running' || execution.status === 'recovering'
+  );
+}
+
+function executionSortTimestamp(execution: ExecutionRecord): string {
+  return execution.updatedAt ?? execution.startedAt ?? execution.createdAt ?? '';
+}
+
+function buildBackgroundExecutionIndicatorText(executions: ExecutionRecord[]): string {
+  if (executions.length === 0) return 'No background work';
+  const latest = executions[0];
+  if (!latest) return 'No background work';
+  if (executions.length === 1) return `${latest.status} · ${latest.title}`;
+  return `${executions.length} active · latest ${latest.title}`;
+}
+
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { id: routeId } = useParams<{ id?: string }>();
   const id = draft ? undefined : routeId;
@@ -550,6 +568,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const artifactOpensInWorkbenchPane = appLayoutMode === 'workbench';
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns, setSessions } = useAppData();
+  const [conversationExecutions, setConversationExecutions] = useState<ConversationExecutionsResult | null>(null);
   const conversationEventVersion = useConversationEventVersion(id);
   const openArtifact = useCallback(
     (artifactId: string) => {
@@ -1885,10 +1904,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       setCancellingBackgroundRunIds((current) => new Set(current).add(normalizedRunId));
       void api
-        .cancelDurableRun(normalizedRunId)
-        .then(() => api.runs())
+        .cancelExecution(normalizedRunId)
+        .then(() => (id ? api.conversationExecutions(id) : Promise.resolve(null)))
         .then((result) => {
-          setRuns(result);
+          if (result) setConversationExecutions(result);
         })
         .catch(() => {})
         .finally(() => {
@@ -1899,7 +1918,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           });
         });
     },
-    [setRuns],
+    [id],
   );
 
   useEffect(() => {
@@ -2163,7 +2182,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setAttachedContextDocs(currentSessionMeta?.attachedContextDocs ?? []);
   }, [currentSessionMeta?.attachedContextDocs, draft, id]);
-  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const currentCwd = useMemo(
     () => (draft ? draftCwdValue || null : (liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null)),
     [draft, draftCwdValue, liveSessionContext?.cwd, currentSessionMeta?.cwd],
@@ -2505,18 +2523,35 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [deferredResumeNowMs, deferredResumes, isLiveSession, savedConversationSessionFile],
   );
   const orderedDeferredResumes = deferredResumePresentation.orderedResumes;
-  const backgroundRunState = useMemo(
+  useEffect(() => {
+    if (!id || draft) {
+      setConversationExecutions(null);
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .conversationExecutions(id)
+      .then((result) => {
+        if (!cancelled) setConversationExecutions(result);
+      })
+      .catch(() => {
+        if (!cancelled) setConversationExecutions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, id, versions.executions]);
+
+  const activeConversationBackgroundExecutions = useMemo(
     () =>
-      resolveConversationBackgroundRunState({
-        conversationId: id,
-        runs,
-        lookups: runLookups,
-        excludeConversationRunId: conversationRunId,
-      }),
-    [conversationRunId, id, runLookups, runs],
+      [...(conversationExecutions?.primary ?? [])]
+        .filter((execution) => execution.id !== conversationRunId)
+        .filter(isActiveExecution)
+        .sort((left, right) => executionSortTimestamp(right).localeCompare(executionSortTimestamp(left))),
+    [conversationExecutions?.primary, conversationRunId],
   );
-  const activeConversationBackgroundRuns = backgroundRunState.activeRuns;
-  const backgroundRunIndicatorText = backgroundRunState.indicatorText;
+  const backgroundExecutionIndicatorText = buildBackgroundExecutionIndicatorText(activeConversationBackgroundExecutions);
   const showActiveBackgroundRunDetails = showBackgroundRunDetails;
   const hasReadyDeferredResumes = deferredResumePresentation.hasReadyResumes;
   const deferredResumeAutoResumeKey = deferredResumePresentation.autoResumeKey;
@@ -5353,7 +5388,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draftMentionItems.length > 0 ||
     pendingQueue.length > 0 ||
     parallelJobs.length > 0 ||
-    activeConversationBackgroundRuns.length > 0 ||
+    activeConversationBackgroundExecutions.length > 0 ||
     (!draft && orderedDeferredResumes.length > 0) ||
     pendingBrowserComments.length > 0 ||
     Boolean(pendingAskUserQuestion && composerActiveQuestion);
@@ -5996,10 +6031,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
                   {!draft && (
                     <ConversationActivityShelf
-                      backgroundRuns={activeConversationBackgroundRuns}
-                      backgroundRunIndicatorText={backgroundRunIndicatorText}
+                      backgroundExecutions={activeConversationBackgroundExecutions}
+                      backgroundExecutionIndicatorText={backgroundExecutionIndicatorText}
                       showBackgroundRunDetails={showActiveBackgroundRunDetails}
-                      runLookups={runLookups}
                       cancellingBackgroundRunIds={cancellingBackgroundRunIds}
                       onToggleBackgroundRunDetails={() => {
                         setShowBackgroundRunDetails((open) => !open);

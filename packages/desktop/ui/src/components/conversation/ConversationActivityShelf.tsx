@@ -1,18 +1,22 @@
-import { getRunHeadline, getRunTargetCommand, type RunPresentationLookups } from '../../automation/runPresentation';
-import { formatConversationBackgroundRunStatusLabel } from '../../conversation/conversationPageState';
 import { describeDeferredResumeStatus, formatDeferredResumeWhen } from '../../deferred-resume/deferredResumeIndicator';
-import type { DeferredResumeSummary, DurableRunRecord } from '../../shared/types';
+import type { DeferredResumeSummary, ExecutionRecord } from '../../shared/types';
 import { cx } from '../ui';
 
-function isRunBash(run: DurableRunRecord): boolean {
-  return run.manifest?.kind === 'raw-shell' || Boolean(getRunTargetCommand(run));
+function formatExecutionStatusLabel(status: string | undefined): string {
+  if (status === 'queued') return 'queued';
+  if (status === 'waiting') return 'waiting';
+  if (status === 'recovering') return 'recovering';
+  return status ?? 'running';
+}
+
+function isExecutionCommand(execution: ExecutionRecord): boolean {
+  return execution.kind === 'background-command';
 }
 
 export function ConversationActivityShelf({
-  backgroundRuns,
-  backgroundRunIndicatorText,
+  backgroundExecutions,
+  backgroundExecutionIndicatorText,
   showBackgroundRunDetails,
-  runLookups,
   cancellingBackgroundRunIds,
   onToggleBackgroundRunDetails,
   onCancelBackgroundRun,
@@ -29,10 +33,9 @@ export function ConversationActivityShelf({
   onFireDeferredResumeNow,
   onCancelDeferredResume,
 }: {
-  backgroundRuns: DurableRunRecord[];
-  backgroundRunIndicatorText: string;
+  backgroundExecutions: ExecutionRecord[];
+  backgroundExecutionIndicatorText: string;
   showBackgroundRunDetails: boolean;
-  runLookups: RunPresentationLookups;
   cancellingBackgroundRunIds?: Set<string>;
   onToggleBackgroundRunDetails: () => void;
   onCancelBackgroundRun?: (runId: string) => void;
@@ -51,7 +54,7 @@ export function ConversationActivityShelf({
 }) {
   return (
     <>
-      {backgroundRuns.length > 0 && (
+      {backgroundExecutions.length > 0 && (
         <>
           <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
             <div className="min-w-0 flex items-center gap-2">
@@ -59,7 +62,7 @@ export function ConversationActivityShelf({
                 <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
               </span>
               <span className="shrink-0 text-secondary">Background Work</span>
-              <span className="truncate text-dim">{backgroundRunIndicatorText}</span>
+              <span className="truncate text-dim">{backgroundExecutionIndicatorText}</span>
             </div>
             <div className="flex shrink-0 items-center gap-3 text-[11px]">
               <button type="button" onClick={onToggleBackgroundRunDetails} className="text-dim transition-colors hover:text-primary">
@@ -70,57 +73,54 @@ export function ConversationActivityShelf({
 
           {showBackgroundRunDetails && (
             <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
-              {backgroundRuns.map((run) => {
-                const headline = getRunHeadline(run, runLookups);
-                const summary =
-                  headline.summary === 'Agent task' || headline.summary === 'Shell command' ? `Run ${run.runId}` : headline.summary;
-                const statusLabel = formatConversationBackgroundRunStatusLabel(run.status?.status);
+              {backgroundExecutions.map((execution) => {
+                const statusLabel = formatExecutionStatusLabel(execution.status);
                 const statusClass =
-                  run.status?.status === 'recovering'
+                  execution.status === 'recovering'
                     ? 'text-warning'
-                    : run.status?.status === 'queued' || run.status?.status === 'waiting'
+                    : execution.status === 'queued' || execution.status === 'waiting'
                       ? 'text-dim'
                       : 'text-accent';
-                const cancelling = cancellingBackgroundRunIds?.has(run.runId) ?? false;
+                const cancelling = cancellingBackgroundRunIds?.has(execution.id) ?? false;
+                const command = isExecutionCommand(execution);
+                const summary = execution.command ?? execution.prompt ?? `Execution ${execution.id}`;
 
                 return (
-                  <div key={run.runId} className="flex items-start gap-2 text-[12px]">
-                    <span className={cx('mt-1 shrink-0 font-mono text-[10px]', isRunBash(run) ? 'text-accent/60' : 'text-accent')}>
-                      {isRunBash(run) ? '$' : '✦'}
+                  <div key={execution.id} className="flex items-start gap-2 text-[12px]">
+                    <span className={cx('mt-1 shrink-0 font-mono text-[10px]', command ? 'text-accent/60' : 'text-accent')}>
+                      {command ? '$' : '✦'}
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        onOpenBackgroundRun?.(run.runId);
+                        onOpenBackgroundRun?.(execution.id);
                       }}
                       className="min-w-0 flex-1 text-left transition-colors hover:text-primary disabled:pointer-events-none"
                       disabled={!onOpenBackgroundRun}
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span className={cx('shrink-0 font-medium', statusClass)}>{statusLabel}</span>
-                        <span className="truncate text-primary">{headline.title}</span>
-                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-dim/60">
-                          {isRunBash(run) ? 'Bash' : 'Agent'}
-                        </span>
+                        <span className="truncate text-primary">{execution.title}</span>
+                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-dim/60">{command ? 'Bash' : 'Agent'}</span>
                       </div>
-                      <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
+                      <div className="mt-0.5 truncate text-[11px] text-dim">{summary}</div>
                     </button>
                     {onOpenBackgroundRun && (
                       <button
                         type="button"
                         onClick={() => {
-                          onOpenBackgroundRun(run.runId);
+                          onOpenBackgroundRun(execution.id);
                         }}
                         className="shrink-0 text-[11px] text-accent transition-colors hover:text-accent/80"
                       >
                         open
                       </button>
                     )}
-                    {onCancelBackgroundRun && (
+                    {onCancelBackgroundRun && execution.capabilities.canCancel && (
                       <button
                         type="button"
                         onClick={() => {
-                          onCancelBackgroundRun(run.runId);
+                          onCancelBackgroundRun(execution.id);
                         }}
                         className="shrink-0 text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
                         disabled={cancelling}

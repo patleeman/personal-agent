@@ -409,6 +409,55 @@ export interface DurableRunDetailResult {
   run: DurableRunRecord;
 }
 
+export type ExecutionKind = 'background-command' | 'subagent' | 'scheduled-task' | 'deferred-resume' | 'conversation' | 'unknown';
+export type ExecutionVisibility = 'primary' | 'system' | 'hidden';
+
+export interface ExecutionRecord {
+  id: string;
+  kind: ExecutionKind;
+  visibility: ExecutionVisibility;
+  conversationId?: string;
+  sessionFile?: string;
+  parentExecutionId?: string;
+  rootExecutionId?: string;
+  title: string;
+  subtitle?: string;
+  status: string;
+  cwd?: string;
+  command?: string;
+  prompt?: string;
+  model?: string;
+  taskId?: string;
+  createdAt?: string;
+  startedAt?: string;
+  updatedAt?: string;
+  completedAt?: string;
+  attention?: { required: boolean; reason?: string; dismissed?: boolean };
+  capabilities: {
+    canCancel: boolean;
+    canRerun: boolean;
+    canFollowUp: boolean;
+    hasLog: boolean;
+    hasResult: boolean;
+  };
+}
+
+export interface ExecutionListResult {
+  executions: ExecutionRecord[];
+}
+
+export interface ConversationExecutionsResult {
+  conversationId: string;
+  primary: ExecutionRecord[];
+  system: ExecutionRecord[];
+  hidden: ExecutionRecord[];
+  executions: ExecutionRecord[];
+}
+
+export interface ExecutionDetailResult {
+  execution: ExecutionRecord;
+}
+
 interface LogTail {
   path?: string;
   lines: string[];
@@ -668,6 +717,8 @@ export type AppEventTopic =
   | 'extensions'
   | 'tasks'
   | 'runs'
+  | 'executions'
+  | 'automation'
   | 'daemon'
   | 'workspace'
   | 'knowledgeBase';
@@ -1066,7 +1117,6 @@ export interface ModelInfo {
   context: number;
   input?: Array<'text' | 'image'>;
   supportedServiceTiers?: ModelServiceTier[];
-  input?: Array<'text' | 'image'>;
   reasoning?: boolean;
 }
 

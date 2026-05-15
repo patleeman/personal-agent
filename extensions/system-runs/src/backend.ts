@@ -120,7 +120,7 @@ async function executeRegisteredTool(factory: RunAgentExtensionFactory, input: u
 
 async function executeRunInput(input: unknown, ctx: NativeBackendContext, toolName: string) {
   const result = (await executeRegisteredTool(await loadRunAgentExtensionFactory(), input, ctx, toolName)) as ToolExecutionResult;
-  ctx.ui.invalidate(['runs', 'tasks']);
+  ctx.ui.invalidate(['executions', 'runs', 'tasks']);
   const text = Array.isArray(result?.content)
     ? result.content.map((item) => (item.type === 'text' ? (item.text ?? '') : JSON.stringify(item))).join('\n')
     : JSON.stringify(result, null, 2);
@@ -206,7 +206,7 @@ async function startBackgroundCommand(input: unknown, ctx: NativeBackendContext)
     throw new Error(result.reason ?? `Could not start durable run for ${taskSlug}.`);
   }
 
-  ctx.ui.invalidate(['runs', 'tasks']);
+  ctx.ui.invalidate(['executions', 'runs', 'tasks']);
   return {
     text: `Started background command ${result.runId} for ${taskSlug}.`,
     details: {
@@ -294,14 +294,14 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
 
   if (action === 'cancel') {
     const result = await cancelDurableRun(runId);
-    ctx.ui.invalidate(['runs', 'tasks']);
+    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
     if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel run ${runId}.`);
     return { text: `Cancelled background work ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
   }
 
   if (action === 'rerun') {
     const result = await rerunDurableRun(runId);
-    ctx.ui.invalidate(['runs', 'tasks']);
+    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
     if (!result.accepted) throw new Error(result.reason ?? `Could not rerun ${runId}.`);
     return { text: `Rerun started ${result.runId} from ${runId}.`, details: { action: 'rerun', runId: result.runId, sourceRunId: runId } };
   }

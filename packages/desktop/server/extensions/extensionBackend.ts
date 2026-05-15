@@ -30,7 +30,7 @@ import {
   setExtensionEnabled,
   setExtensionHealthError,
 } from './extensionRegistry.js';
-import { createExtensionRunsCapability } from './extensionRuns.js';
+import { createExtensionExecutionsCapability, createExtensionRunsCapability } from './extensionRuns.js';
 import { createExtensionGitCapability, createExtensionShellCapability } from './extensionShell.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
 import { createExtensionVaultCapability } from './extensionVault.js';
@@ -86,6 +86,7 @@ export interface ExtensionBackendContext {
   };
   automations: ReturnType<typeof createExtensionAutomationsCapability>;
   runs: ReturnType<typeof createExtensionRunsCapability>;
+  executions: ReturnType<typeof createExtensionExecutionsCapability>;
   models: ReturnType<typeof createExtensionModelsCapability>;
   vault: ReturnType<typeof createExtensionVaultCapability>;
   conversations: ReturnType<typeof createExtensionConversationsCapability>;
@@ -316,6 +317,7 @@ export function createBackendContext(
     storage: createStorage(extensionId),
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
+    executions: createExtensionExecutionsCapability(extensionId),
     models: createExtensionModelsCapability(),
     vault: createExtensionVaultCapability(),
     conversations: createExtensionConversationsCapability(serverContext),
@@ -787,6 +789,48 @@ export async function loadExtensionAgentFactory(extensionId: string, exportName 
   }
 
   return candidate as ExtensionFactory;
+}
+
+export interface ExtensionRouteRequest {
+  method: string;
+  path: string;
+  query: Record<string, string | string[]>;
+  params: Record<string, string>;
+  body?: unknown;
+}
+
+export interface ExtensionRouteResponse {
+  status?: number;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+export async function invokeExtensionRoute(
+  extensionId: string,
+  method: string,
+  routePath: string,
+  request: ExtensionRouteRequest,
+  serverContext?: ExtensionBackendServerContext,
+): Promise<ExtensionRouteResponse> {
+  const entry = findExtensionEntry(extensionId);
+  if (!entry || entry.status !== 'enabled') {
+    return { status: 404, body: { error: 'Extension route not found.' } };
+  }
+  const route = entry.manifest.backend?.routes?.find((candidate) => candidate.method === method && candidate.path === routePath);
+  if (!route) return { status: 404, body: { error: 'Extension route not found.' } };
+  const backend = await loadExtensionBackend(extensionId);
+  const handler = backend[route.handler];
+  if (typeof handler !== 'function') {
+    return { status: 500, body: { error: `Extension route handler not found: ${route.handler}` } };
+  }
+  const result = await (handler as (request: ExtensionRouteRequest, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
+    request,
+    createBackendContext(extensionId, serverContext),
+  );
+  if (result && typeof result === 'object' && ('body' in result || 'status' in result || 'headers' in result)) {
+    return result as ExtensionRouteResponse;
+  }
+  return { status: 200, body: result };
 }
 
 export async function invokeExtensionAction(

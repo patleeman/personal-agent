@@ -18,6 +18,13 @@ export interface NativeExtensionClient {
     listSurfaces(): Promise<unknown>;
   };
   automations: typeof api.automations;
+  executions: {
+    start(input: unknown): Promise<unknown>;
+    get(executionId: string): Promise<unknown>;
+    list(input?: { conversationId?: string | null }): Promise<unknown>;
+    readLog(executionId: string, tail?: number): Promise<unknown>;
+    cancel(executionId: string): Promise<unknown>;
+  };
   runs: {
     start(input: unknown): Promise<unknown>;
     get(runId: string): Promise<unknown>;
@@ -118,6 +125,23 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
     },
     automations: api.automations,
+    executions: {
+      start(input) {
+        return api.startExtensionRun(extensionId, input);
+      },
+      get(executionId) {
+        return api.execution(executionId);
+      },
+      list(input) {
+        return input?.conversationId ? api.conversationExecutions(input.conversationId) : api.executions();
+      },
+      readLog(executionId, tail) {
+        return api.executionLog(executionId, tail);
+      },
+      cancel(executionId) {
+        return api.cancelExecution(executionId);
+      },
+    },
     runs: {
       start(input) {
         return api.startExtensionRun(extensionId, input);
@@ -138,7 +162,7 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
     storage: {
       async get<T = unknown>(key: string): Promise<T | null> {
         try {
-          const document = await api.extensionState<T>(extensionId, key);
+          const document = (await api.extensionState(extensionId, key)) as { value: T | null };
           return document.value;
         } catch (error) {
           if (error instanceof Error && /404|not found/i.test(error.message)) return null;
@@ -152,8 +176,8 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
         return api.deleteExtensionState(extensionId, key);
       },
       async list<T = unknown>(prefix = '') {
-        const documents = await api.extensionStateList<T>(extensionId, prefix);
-        return documents.map((document) => ({ key: document.key, value: document.value }));
+        const documents = (await api.extensionStateList(extensionId, prefix)) as Array<{ key: string; value: T }>;
+        return documents.map((document: { key: string; value: T }) => ({ key: document.key, value: document.value }));
       },
     },
     workspace: {

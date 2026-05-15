@@ -28,6 +28,7 @@ export type AppEventTopic =
   | 'extensions'
   | 'tasks'
   | 'runs'
+  | 'executions'
   | 'automation'
   | 'daemon'
   | 'workspace'
@@ -82,6 +83,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'extensions',
   'tasks',
   'runs',
+  'executions',
   'automation',
   'daemon',
   'workspace',
@@ -217,6 +219,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: `${options.taskStateFile}-shm`, kind: 'file' },
     ],
     runs: [{ path: runsRoot, kind: 'directory' }],
+    executions: [],
     extensions: [],
     automation: [],
     daemon: [
@@ -508,7 +511,7 @@ export function invalidateAppTopics(...topics: AppEventTopic[]): void {
     return;
   }
 
-  if (uniqueTopics.includes('runs')) {
+  if (uniqueTopics.includes('runs') || uniqueTopics.includes('executions')) {
     clearDurableRunsListCache();
   }
 

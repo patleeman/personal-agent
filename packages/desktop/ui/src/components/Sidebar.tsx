@@ -1835,7 +1835,7 @@ export function Sidebar() {
   const location = useLocation();
   const { versions } = useAppEvents();
   const { titles: liveTitles } = useLiveTitles();
-  const { sessions, tasks, runs } = useAppData();
+  const { sessions, tasks, executions } = useAppData();
   const extensionRegistry = useExtensionRegistry();
   const {
     pinnedIds,
@@ -2268,7 +2268,7 @@ export function Sidebar() {
     const pinnedIdSet = new Set(pinnedIds);
     const flatItems = buildActivityTreeItems({
       conversations: activityTreeSessions,
-      runs: runs?.runs ?? [],
+      executions: executions?.executions ?? [],
     }).map((item) => {
       const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
       return conversationId && pinnedIdSet.has(conversationId) ? { ...item, metadata: { ...item.metadata, isPinned: true } } : item;
@@ -2311,7 +2311,7 @@ export function Sidebar() {
       );
 
     return [...groupItems, ...groupedItems];
-  }, [activityTreeSessions, groupedConversationRows, pinnedIds, runs, threadsFilterMode, threadsOrganizeMode]);
+  }, [activityTreeSessions, executions, groupedConversationRows, pinnedIds, threadsFilterMode, threadsOrganizeMode]);
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const collapsedActivityTreeGroupItemIds = useMemo(

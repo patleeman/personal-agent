@@ -14,8 +14,6 @@ import {
   getRunTimeline,
   getRunWorkingDirectory,
   isRunActive,
-  listConnectedConversationBackgroundRuns,
-  listRecentConversationBackgroundRuns,
   type RunPresentationLookups,
 } from '../automation/runPresentation';
 import { formatTaskSchedule } from '../automation/taskSchedule';
@@ -42,7 +40,13 @@ import {
 } from '../navigation/capabilitiesSelection';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { ensureConversationTabOpen } from '../session/sessionTabs';
-import type { AgentToolInfo, DurableRunDetailResult, ScheduledTaskSummary } from '../shared/types';
+import type {
+  AgentToolInfo,
+  ConversationExecutionsResult,
+  DurableRunDetailResult,
+  ExecutionRecord,
+  ScheduledTaskSummary,
+} from '../shared/types';
 import { timeAgo } from '../shared/utils';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
@@ -170,8 +174,9 @@ interface ConversationRelatedWorkMention {
 
 interface ConversationRelatedWorkCard {
   mention: ConversationRelatedWorkMention;
-  record?: DurableRunDetailResult['run'];
-  headline: ReturnType<typeof getRunHeadline> | null;
+  execution?: ExecutionRecord;
+  title: string;
+  summary: string;
   status: { text: string; cls: string };
   activityAt?: string;
 }
@@ -229,6 +234,26 @@ function formatConversationRailRunSummary(input: {
     parts.push(`${input.reviewCount} need review`);
   }
   return parts.join(' · ');
+}
+
+function executionStatusText(execution: ExecutionRecord): { text: string; cls: string } {
+  const status = execution.status;
+  if (status === 'running') return { text: 'running', cls: 'text-accent' };
+  if (status === 'queued' || status === 'waiting') return { text: status, cls: 'text-dim' };
+  if (status === 'recovering' || execution.attention?.required) return { text: status ?? 'needs attention', cls: 'text-warning' };
+  if (status === 'failed' || status === 'interrupted') return { text: status, cls: 'text-danger' };
+  if (status === 'completed') return { text: 'completed', cls: 'text-success' };
+  if (status === 'cancelled') return { text: 'cancelled', cls: 'text-dim' };
+  return { text: status ?? 'unknown', cls: 'text-dim' };
+}
+
+function isRefreshingExecution(execution: ExecutionRecord | null | undefined): boolean {
+  return (
+    execution?.status === 'queued' ||
+    execution?.status === 'waiting' ||
+    execution?.status === 'running' ||
+    execution?.status === 'recovering'
+  );
 }
 
 function runStatusText(detail: DurableRunDetailResult['run']): { text: string; cls: string } {
@@ -911,36 +936,32 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
-  const { tasks, sessions, runs, setRuns } = useAppData();
+  const { sessions } = useAppData();
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
   const [runsExpanded, setRunsExpanded] = useState(false);
+  const [conversationExecutions, setConversationExecutions] = useState<ConversationExecutionsResult | null>(null);
 
   useEffect(() => {
-    if (runs !== null) {
-      return;
-    }
-
     let cancelled = false;
-    void api
-      .runs()
-      .then((nextRuns) => {
-        if (!cancelled) {
-          setRuns(nextRuns);
-        }
+    api
+      .conversationExecutions(id)
+      .then((result: ConversationExecutionsResult) => {
+        if (!cancelled) setConversationExecutions(result);
       })
       .catch(() => {
-        // Leave the connected-runs section in loading state until the next retry.
+        if (!cancelled) setConversationExecutions(null);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [runs, setRuns]);
+  }, [id, versions.executions]);
 
-  const runRecordsById = useMemo(() => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)), [runs]);
-  const runsLoading = runs === null;
+  const executionsById = useMemo(
+    () => new Map((conversationExecutions?.executions ?? []).map((execution) => [execution.id, execution] as const)),
+    [conversationExecutions?.executions],
+  );
+  const runsLoading = conversationExecutions === null;
   const runsError = null;
-  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
   const runMentionsLastFetchedAtRef = useRef(0);
   const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
@@ -997,50 +1018,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id]);
 
   const selectedRunId = getConversationRunIdFromSearch(location.search);
-  const connectedBackgroundRuns = useMemo(
-    () =>
-      listConnectedConversationBackgroundRuns({
-        conversationId: id,
-        runs,
-        lookups: runLookups,
-      }),
-    [id, runLookups, runs],
-  );
-  const recentBackgroundRuns = useMemo(
-    () =>
-      listRecentConversationBackgroundRuns({
-        conversationId: id,
-        runs,
-        lookups: runLookups,
-        limit: 5,
-      }),
-    [id, runLookups, runs],
+  const connectedBackgroundExecutions = conversationExecutions?.primary ?? [];
+  const recentBackgroundExecutions = useMemo(
+    () => connectedBackgroundExecutions.filter((execution) => !isRefreshingExecution(execution)).slice(0, 5),
+    [connectedBackgroundExecutions],
   );
   const visibleRunMentions = useMemo(() => {
     const next: ConversationRelatedWorkMention[] = [];
     const seen = new Set<string>();
 
     const push = (runId: string, label: string, meta: string, source: ConversationRelatedWorkGroupKey) => {
-      if (seen.has(runId)) {
-        return;
-      }
-
+      if (seen.has(runId)) return;
       seen.add(runId);
-      next.push({
-        runId,
-        label,
-        meta,
-        selected: selectedRunId === runId,
-        source,
-      });
+      next.push({ runId, label, meta, selected: selectedRunId === runId, source });
     };
 
-    for (const run of connectedBackgroundRuns) {
-      push(run.runId, 'Background work', 'Started from this conversation.', 'background');
+    for (const execution of connectedBackgroundExecutions) {
+      push(execution.id, 'Background work', 'Started from this conversation.', 'background');
     }
 
-    for (const run of recentBackgroundRuns) {
-      push(run.runId, 'Recent run', 'Completed recently in this conversation.', 'other');
+    for (const execution of recentBackgroundExecutions) {
+      push(execution.id, 'Recent execution', 'Completed recently in this conversation.', 'other');
     }
 
     for (const mention of detectedRunMentions) {
@@ -1052,31 +1050,29 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     return next;
-  }, [connectedBackgroundRuns, detectedRunMentions, selectedRunId]);
+  }, [connectedBackgroundExecutions, detectedRunMentions, recentBackgroundExecutions, selectedRunId]);
 
   const visibleRunCards = useMemo<ConversationRelatedWorkCard[]>(() => {
     return visibleRunMentions.map((mention) => {
-      const record = runRecordsById.get(mention.runId);
-      const headline = record ? getRunHeadline(record, runLookups) : null;
-      const status = record ? runStatusText(record) : { text: 'unresolved', cls: 'text-dim' };
-      const activityAt =
-        record?.status?.completedAt ?? record?.status?.updatedAt ?? record?.status?.startedAt ?? record?.manifest?.createdAt;
+      const execution = executionsById.get(mention.runId);
+      const status = execution ? executionStatusText(execution) : { text: 'unresolved', cls: 'text-dim' };
+      const activityAt = execution?.completedAt ?? execution?.updatedAt ?? execution?.startedAt ?? execution?.createdAt;
 
       return {
         mention,
-        record,
-        headline,
+        execution,
+        title: execution?.title ?? mention.label,
+        summary: execution?.command ?? execution?.prompt ?? mention.meta,
         status,
         activityAt,
       };
     });
-  }, [runLookups, runRecordsById, visibleRunMentions]);
+  }, [executionsById, visibleRunMentions]);
 
   const groupedRunCards = useMemo(() => groupConversationRailRunCards(visibleRunCards), [visibleRunCards]);
-  const activeRunCount = visibleRunCards.reduce((count, { record }) => (record && isRefreshingRun(record) ? count + 1 : count), 0);
-  const runIssueCount = visibleRunCards.reduce((count, { record }) => (record && record.problems.length > 0 ? count + 1 : count), 0);
-  const unresolvedRunCount = visibleRunCards.reduce((count, { record }) => (!record ? count + 1 : count), 0);
-  const reviewRunCount = runIssueCount + unresolvedRunCount;
+  const activeRunCount = visibleRunCards.reduce((count, { execution }) => (isRefreshingExecution(execution) ? count + 1 : count), 0);
+  const unresolvedRunCount = visibleRunCards.reduce((count, { execution }) => (!execution ? count + 1 : count), 0);
+  const reviewRunCount = unresolvedRunCount;
   const runSummary = useMemo(
     () =>
       formatConversationRailRunSummary({
@@ -1084,7 +1080,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         totalCount: visibleRunCards.length,
         activeCount: activeRunCount,
         reviewCount: reviewRunCount,
-        hasOnlyUnresolvedCards: visibleRunCards.every(({ record }) => !record),
+        hasOnlyUnresolvedCards: visibleRunCards.every(({ execution }) => !execution),
       }),
     [activeRunCount, reviewRunCount, runsLoading, visibleRunCards],
   );
@@ -1094,14 +1090,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       return;
     }
 
-    const hasActiveConnectedRun = connectedBackgroundRuns.some((run) => isRefreshingRun(run));
+    const hasActiveConnectedRun = connectedBackgroundExecutions.some((execution) => isRefreshingExecution(execution));
     if (!hasActiveConnectedRun) {
       return;
     }
 
     autoExpandedConnectedRunsConversationIdRef.current = id;
     setRunsExpanded(true);
-  }, [connectedBackgroundRuns, id, runsExpanded, selectedRunId]);
+  }, [connectedBackgroundExecutions, id, runsExpanded, selectedRunId]);
 
   function openRun(runId: string) {
     navigate({
@@ -1134,7 +1130,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
         {runsExpanded && (
           <div id={`conversation-runs-${id}`} className="space-y-3 border-t border-border-subtle/70 pt-3">
-            {runsLoading && visibleRunCards.every(({ record }) => !record) && (
+            {runsLoading && visibleRunCards.every(({ execution }) => !execution) && (
               <p className="text-[11px] text-dim animate-pulse">Refreshing background work…</p>
             )}
             {runsError && <p className="text-[11px] text-danger/80">{runsError}</p>}
@@ -1147,17 +1143,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                       <span className="text-[10px] text-dim">{group.items.length}</span>
                     </div>
                     <div className="divide-y divide-border-subtle/70">
-                      {group.items.map(({ mention, record, headline, status, activityAt }) => {
+                      {group.items.map(({ mention, execution, title, summary, status, activityAt }) => {
                         const isSelected = mention.selected;
-                        const rawTitle = headline?.title ?? mention.label;
-                        const title =
-                          record && (rawTitle === record.runId || rawTitle.startsWith('run-') || rawTitle.startsWith('conversation-'))
-                            ? mention.label
-                            : rawTitle;
-                        const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
-                        const showSummary = Boolean(summary && summary !== title);
-                        const issueCount = record?.problems.length ?? 0;
-                        const showRecovery = record && record.recoveryAction !== 'none';
+                        const displayTitle = execution && (title === execution.id || title.startsWith('run-')) ? mention.label : title;
+                        const compactSummary = compactRunCardSummary(summary, displayTitle, id);
+                        const showSummary = Boolean(compactSummary && compactSummary !== displayTitle);
                         const timeLabel = activityAt ? timeAgo(activityAt) : null;
 
                         return (
@@ -1171,8 +1161,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                             )}
                           >
                             <div className="min-w-0">
-                              <p className="truncate text-[12px] font-medium text-primary">{title}</p>
-                              {showSummary && <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>}
+                              <p className="truncate text-[12px] font-medium text-primary">{displayTitle}</p>
+                              {showSummary && <p className="mt-0.5 truncate text-[11px] text-secondary">{compactSummary}</p>}
                               <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
                                 <span className={status.cls}>{status.text}</span>
                                 {timeLabel && (
@@ -1181,18 +1171,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                                     <span className="text-dim">{timeLabel}</span>
                                   </>
                                 )}
-                                {showRecovery && record && (
+                                {execution?.attention?.required && (
                                   <>
                                     <span className="opacity-35">·</span>
-                                    <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
-                                  </>
-                                )}
-                                {issueCount > 0 && (
-                                  <>
-                                    <span className="opacity-35">·</span>
-                                    <span className="text-danger">
-                                      {issueCount} issue{issueCount === 1 ? '' : 's'}
-                                    </span>
+                                    <span className="text-warning">needs attention</span>
                                   </>
                                 )}
                               </div>

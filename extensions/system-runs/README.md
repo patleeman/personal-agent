@@ -2,6 +2,8 @@
 
 This extension owns the UI and compatibility tool for detached background work.
 
+Product-facing UI is moving to the **Execution** model. A durable run is the daemon/runtime storage record; an execution is the app-level projection used by routes, extension APIs, and conversation-scoped UI. Do not add new product UI that filters raw `/api/runs` records directly.
+
 Background work has two user-facing shapes:
 
 | Type               | Description                                                                                             |
@@ -28,4 +30,4 @@ Created -> Queued -> Running -> Completed
 
 ## UI
 
-The conversation rail is titled **Background work** and groups records into **Background commands** and **Subagents**. The backend may still store both as durable run records; that storage detail should not leak into product copy.
+The conversation rail is titled **Background work** and groups execution records into **Background commands** and **Subagents**. It should consume the conversation-scoped executions API (`/api/conversations/:id/executions`) instead of loading the global durable run list and inferring relationships in the renderer. The backend may still store executions as durable run records; that storage detail should not leak into product copy.
