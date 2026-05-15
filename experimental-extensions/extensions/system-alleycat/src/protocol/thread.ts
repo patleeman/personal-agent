@@ -26,7 +26,7 @@ function isMobileDefaultCwd(value: unknown): boolean {
   return value === '/root' || value === '~' || value === '~/';
 }
 
-export function isLiveOrRunning(session: Record<string, unknown>): boolean {
+function isLiveOrRunning(session: Record<string, unknown>): boolean {
   return session.running === true || session.isRunning === true || session.isLive === true;
 }
 
@@ -34,7 +34,7 @@ function threadStatus(detail?: Record<string, unknown>) {
   return detail?.running ? { type: 'active', activeFlags: [] } : { type: 'idle' };
 }
 
-export function toThreadResponse(
+function toThreadResponse(
   id: string,
   detail?: Record<string, unknown>,
   turns: unknown[] = [],
