@@ -190,12 +190,12 @@ describe('extension manifests - structural validation', () => {
     }
   });
 
-  it('startupAction and onEnableAction reference valid backend action ids', () => {
+  it('lifecycle actions and services reference valid backend exports', () => {
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
       const manifest = ext.manifest;
 
-      // startupAction and onEnableAction must reference existing backend actions
+      // startupAction/onEnableAction/onDisableAction must reference existing backend actions.
       if (manifest.backend?.startupAction) {
         const actionIds = new Set((manifest.backend.actions ?? []).map((a) => a.id));
         expect(
@@ -210,11 +210,23 @@ describe('extension manifests - structural validation', () => {
           `${ext.id}: onEnableAction "${manifest.backend.onEnableAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
         ).toBe(true);
       }
+      if (manifest.backend?.onDisableAction) {
+        const actionIds = new Set((manifest.backend.actions ?? []).map((a) => a.id));
+        expect(
+          actionIds.has(manifest.backend.onDisableAction),
+          `${ext.id}: onDisableAction "${manifest.backend.onDisableAction}" not found in backend actions [${[...actionIds].join(', ')}]`,
+        ).toBe(true);
+      }
+      for (const service of manifest.backend?.services ?? []) {
+        expect(service.handler, `${ext.id}: service "${service.id}" must declare a handler`).toBeTruthy();
+      }
 
-      // Extensions without a backend entry must not declare startup/onEnable actions
+      // Extensions without a backend entry must not declare lifecycle actions/services.
       if (!manifest.backend?.entry) {
         expect(!manifest.backend?.startupAction, `${ext.id}: declares startupAction but has no backend entry`).toBe(true);
         expect(!manifest.backend?.onEnableAction, `${ext.id}: declares onEnableAction but has no backend entry`).toBe(true);
+        expect(!manifest.backend?.onDisableAction, `${ext.id}: declares onDisableAction but has no backend entry`).toBe(true);
+        expect(!manifest.backend?.services?.length, `${ext.id}: declares services but has no backend entry`).toBe(true);
       }
     }
   });

@@ -30,6 +30,13 @@ export async function start(_input: unknown, ctx: ExtensionBackendContext): Prom
   }
 }
 
+export async function startService(_input: unknown, ctx: ExtensionBackendContext): Promise<() => Promise<void>> {
+  await start(_input, ctx);
+  return async () => {
+    await stop();
+  };
+}
+
 export async function stop(): Promise<{ ok: true }> {
   if (server) {
     server.stop();

@@ -462,8 +462,16 @@ export function registerExtensionRoutes(
         return;
       }
       setExtensionEnabled(entry.manifest.id, enabled);
-      const onEnableAction = enabled ? entry.manifest.backend?.onEnableAction : undefined;
+      if (!enabled) {
+        const { stopExtensionServices } = await import('../extensions/extensionServices.js');
+        await stopExtensionServices(entry.manifest.id);
+      }
+      const onEnableAction = enabled ? entry.manifest.backend?.onEnableAction : entry.manifest.backend?.onDisableAction;
       const actionResult = onEnableAction ? await invokeExtensionAction(entry.manifest.id, onEnableAction, {}, context) : undefined;
+      if (enabled) {
+        const { startExtensionServices } = await import('../extensions/extensionServices.js');
+        await startExtensionServices(context);
+      }
       res.json({
         ok: true,
         extension: listExtensionInstallSummaries().find((extension) => extension.id === entry.manifest.id),

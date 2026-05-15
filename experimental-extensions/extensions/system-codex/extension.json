@@ -12,7 +12,16 @@
   },
   "backend": {
     "entry": "src/backend.ts",
-    "startupAction": "start",
+    "services": [
+      {
+        "id": "server",
+        "handler": "startService",
+        "title": "Codex protocol server",
+        "description": "Runs the Codex App Server WebSocket protocol for companion clients.",
+        "healthCheck": "status",
+        "restart": "on-failure"
+      }
+    ],
     "actions": [
       {
         "id": "start",
