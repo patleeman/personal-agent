@@ -187,6 +187,11 @@ const smokes = {
     const result = await module.conversationQueue({ action: 'list' }, ctx);
     assert(result.action === 'list', 'conversation queue list did not return list action');
   },
+  async 'system-alleycat'() {
+    const result = await module.status({}, ctx);
+    assert(result.running === false, 'alleycat status should not auto-start service');
+    assert(result.agents.length === 1 && result.agents[0].name === 'personal-agent', 'alleycat should advertise only Personal Agent');
+  },
   async 'system-browser'() {
     await smokeAgentFactory('createWorkbenchBrowserAgentExtension');
     const snapshot = registeredTools.find((tool) => tool.name === 'browser_snapshot');
@@ -241,6 +246,10 @@ const smokes = {
   async 'system-suggested-context'() {
     const result = await module.warmPointers({ prompt: 'smoke test prompt', currentConversationId: 'smoke-conversation', currentCwd: cwd }, ctx);
     assert(result.ok === true && typeof result.pointerCount === 'number', 'warmPointers failed');
+  },
+  async 'system-telemetry'() {
+    const result = await module.summary({ query: {} });
+    assert(result.status === 200 && result.body, 'telemetry summary failed');
   },
   async 'system-web-tools'() {
     const result = await module.webFetch({ url: 'data:text/plain,smoke' }, ctx);
