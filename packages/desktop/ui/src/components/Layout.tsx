@@ -1474,16 +1474,14 @@ export function Layout() {
     }));
     // Restore incoming conversation state
     if (activeConversationId && activeWorkbenchTool !== 'browser') {
-      // Restore tool: prefer saved per-conversation state; fall back to
-      // knowledge unless we were on runs (reset to avoid stale run context).
+      // Restore tool: prefer saved per-conversation state unless it would keep
+      // stale run detail visible after moving to a different conversation.
       const savedTool = selectedToolByConversation[activeConversationId];
-      if (savedTool) {
-        setActiveWorkbenchTool(savedTool);
-      } else if (
+      if (
         shouldResetWorkbenchRunsOnConversationChange({
           previousConversationId,
           activeConversationId,
-          activeTool: activeWorkbenchTool,
+          activeTool: savedTool ?? activeWorkbenchTool,
           activeRunId: activeWorkbenchRunFromSearch,
         })
       ) {
@@ -1496,6 +1494,8 @@ export function Layout() {
           },
           { replace: true },
         );
+      } else if (savedTool) {
+        setActiveWorkbenchTool(savedTool);
       } else {
         setActiveWorkbenchTool('files');
       }
@@ -1508,6 +1508,7 @@ export function Layout() {
     activeWorkbenchTool,
     activeWorkspaceCwd,
     selectedToolByConversation,
+    setSearchParams,
   ]);
 
   useEffect(() => {
@@ -1523,12 +1524,12 @@ export function Layout() {
   }, [activeConversationId, activeWorkbenchCheckpointFromSearch, systemDiffsExtensionSurface]);
 
   useEffect(() => {
-    if (!activeConversationId || !activeWorkbenchRunFromSearch) {
+    if (!activeConversationId || !activeWorkbenchRunFromSearchParam) {
       return;
     }
 
     setActiveConversationTool(resolveWorkbenchRailMode('runs', systemRunsExtensionSurface));
-  }, [activeConversationId, activeWorkbenchRunFromSearch, setActiveConversationTool, systemRunsExtensionSurface]);
+  }, [activeConversationId, activeWorkbenchRunFromSearchParam, setActiveConversationTool, systemRunsExtensionSurface]);
 
   useEffect(() => {
     if (!activeWorkbenchKnowledgeFileId) {
