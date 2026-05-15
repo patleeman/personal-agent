@@ -10,9 +10,47 @@ function requireHost(): WorkbenchBrowserToolHost {
   return host;
 }
 
+const BROWSER_TOOL_TIMEOUT_MS = 10_000;
+
+class BrowserToolAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BrowserToolAbortError';
+  }
+}
+
 function tabIdFromSessionKey(sessionKey: string): string {
   const prefix = '@global:tab-';
   return sessionKey.startsWith(prefix) ? sessionKey.slice(prefix.length) : sessionKey;
+}
+
+async function withBrowserToolDeadline<T>(label: string, signal: AbortSignal | undefined, operation: Promise<T>): Promise<T> {
+  if (signal?.aborted) {
+    throw new BrowserToolAbortError(`${label} cancelled.`);
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let abortHandler: (() => void) | undefined;
+
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(
+      () => reject(new BrowserToolAbortError(`${label} timed out after ${BROWSER_TOOL_TIMEOUT_MS / 1000}s.`)),
+      BROWSER_TOOL_TIMEOUT_MS,
+    );
+    abortHandler = () => reject(new BrowserToolAbortError(`${label} cancelled.`));
+    signal?.addEventListener('abort', abortHandler, { once: true });
+  });
+
+  try {
+    return await Promise.race([operation, deadline]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    if (abortHandler) {
+      signal?.removeEventListener('abort', abortHandler);
+    }
+  }
 }
 
 function formatSnapshot(snapshot: unknown, tabs: Array<{ sessionKey: string; url: string; title: string }>, targetTabId?: string): string {
@@ -133,13 +171,13 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         "Use Workbench Browser tools only for the user's visible shared browser; start with browser_snapshot and use agent-browser CLI for autonomous dev/QA.",
       ],
       parameters: SnapshotParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
           const host = requireHost();
-          const tabs = await host.listTabs();
+          const tabs = await withBrowserToolDeadline('Browser tab listing', signal, host.listTabs());
           const tabId = (params as { tabId?: string }).tabId;
-          const snapshot = await host.snapshot(conversationId, tabId);
+          const snapshot = await withBrowserToolDeadline('Browser snapshot', signal, host.snapshot(conversationId, tabId));
           return {
             content: [{ type: 'text' as const, text: formatSnapshot(snapshot, tabs, tabId) }],
             details: { snapshot, tabs } as Record<string, unknown>,
@@ -165,15 +203,19 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         'browser_cdp controls the shared Workbench Browser; get tabId from browser_snapshot, batch multiple CDP commands in one call, and use agent-browser CLI for dev/QA automation.',
       ],
       parameters: CdpParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const result = await requireHost().cdp({
-            conversationId,
-            command: params.command,
-            ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
-            ...((params as { tabId?: string }).tabId ? { tabId: (params as { tabId: string }).tabId } : {}),
-          });
+          const result = await withBrowserToolDeadline(
+            'Browser CDP command',
+            signal,
+            requireHost().cdp({
+              conversationId,
+              command: params.command,
+              ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
+              ...((params as { tabId?: string }).tabId ? { tabId: (params as { tabId: string }).tabId } : {}),
+            }),
+          );
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
             details: result as Record<string, unknown>,
@@ -204,12 +246,12 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         'browser_screenshot captures the shared Workbench Browser for user-facing visual context; use agent-browser CLI for product-under-test screenshots.',
       ],
       parameters: ScreenshotParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
           const host = requireHost();
           const tabId = (params as { tabId?: string }).tabId;
-          const screenshot = (await host.screenshot(conversationId, tabId)) as {
+          const screenshot = (await withBrowserToolDeadline('Browser screenshot', signal, host.screenshot(conversationId, tabId))) as {
             dataBase64?: string;
             mimeType?: string;
             url?: string;

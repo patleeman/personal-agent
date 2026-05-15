@@ -55,6 +55,10 @@ Workbench Browser is not active for this conversation.
 Open the Browser workbench panel before using browser tools.
 ```
 
+### Tool cancellation and timeouts
+
+Browser tool calls are abortable through the normal conversation stop control. Snapshot, screenshot, tab listing, and CDP calls also have a hard 10 second deadline so a stuck Electron/CDP operation returns a clean tool error instead of freezing the agent turn indefinitely.
+
 ### CDP commands
 
 The `browser_cdp` tool accepts any valid CDP command:

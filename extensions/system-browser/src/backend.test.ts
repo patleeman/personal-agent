@@ -84,6 +84,36 @@ describe('workbench browser agent extension', () => {
     setWorkbenchBrowserToolHost(null);
   });
 
+  it('cancels browser tool calls when the tool abort signal fires', async () => {
+    setWorkbenchBrowserToolHost({
+      isActive: async () => true,
+      listTabs: async () => [],
+      snapshot: () => new Promise(() => undefined),
+      cdp: async () => ({}),
+      screenshot: async () => ({}),
+    });
+
+    const tools = collectTools();
+    const controller = new AbortController();
+    const pending = tools[0]!.execute(
+      'tool-1' as never,
+      {} as never,
+      controller.signal as never,
+      undefined as never,
+      ctx as never,
+    ) as Promise<{
+      isError?: boolean;
+      content?: Array<{ text?: string }>;
+    }>;
+    controller.abort();
+
+    const result = await pending;
+    expect(result.isError).toBe(true);
+    expect(result.content?.[0]?.text).toContain('Browser snapshot failed: Browser snapshot cancelled.');
+
+    setWorkbenchBrowserToolHost(null);
+  });
+
   it('does not watch browser panel state to mutate the active tool set', () => {
     const { pi } = collectExtension();
 

@@ -22,6 +22,14 @@ describe('workbench browser validation', () => {
     expect(source).toContain('function cdpEvaluate(webContents');
   });
 
+  it('bounds CDP commands so browser tools cannot hang forever', () => {
+    const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
+
+    expect(source).toContain('WORKBENCH_BROWSER_CDP_TIMEOUT_MS');
+    expect(source).toContain('CDP ${method}');
+    expect(source).toContain('timed out after');
+  });
+
   it('keeps closed browser views deactivated across late load events', () => {
     const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
 

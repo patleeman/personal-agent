@@ -210,15 +210,32 @@ function getState(webContents: WebContents, entry?: WorkbenchBrowserViewEntry): 
   };
 }
 
+const WORKBENCH_BROWSER_CDP_TIMEOUT_MS = 10_000;
+
 async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTimeout<T>(label: string, promise: Promise<T>, timeoutMs = WORKBENCH_BROWSER_CDP_TIMEOUT_MS): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs / 1000}s.`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, deadline]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 async function withCdp<T>(webContents: WebContents, callback: (send: CdpCommand) => Promise<T>): Promise<T> {
   if (!webContents.debugger.isAttached()) {
     webContents.debugger.attach('1.3');
   }
-  return callback((method, params) => webContents.debugger.sendCommand(method, params));
+  return callback((method, params) => withTimeout(`CDP ${method}`, webContents.debugger.sendCommand(method, params)));
 }
 
 function cdpRuntimeValue(raw: unknown): unknown {
