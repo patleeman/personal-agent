@@ -44,6 +44,24 @@ const bundleOutputs = [
   resolve(outdir, 'daemon/background-agent-runner.js'),
 ];
 
+const backendApiLazyModuleEntries = [
+  ['conversations/conversationAutoTitle.js', 'server/conversations/conversationAutoTitle.ts'],
+  ['conversations/conversationCwd.js', 'server/conversations/conversationCwd.ts'],
+  ['conversations/conversationInspectWorkerClient.js', 'server/conversations/conversationInspectWorkerClient.ts'],
+  ['conversations/conversationSearchIndex.js', 'server/conversations/conversationSearchIndex.ts'],
+  ['conversations/conversationService.js', 'server/conversations/conversationService.ts'],
+  ['conversations/conversationSessionCapability.js', 'server/conversations/conversationSessionCapability.ts'],
+  ['conversations/conversationSummaries.js', 'server/conversations/conversationSummaries.ts'],
+  ['conversations/liveSessions.js', 'server/conversations/liveSessions.ts'],
+  ['conversations/sessionExchange.js', 'server/conversations/sessionExchange.ts'],
+  ['conversations/sessions.js', 'server/conversations/sessions.ts'],
+  ['knowledge/vaultFiles.js', 'server/knowledge/vaultFiles.ts'],
+  ['routes/vaultShareImport.js', 'server/routes/vaultShareImport.ts'],
+  ['shared/appEvents.js', 'server/shared/appEvents.ts'],
+  ['traces/tracePersistence.js', 'server/traces/tracePersistence.ts'],
+  ['extensions/runtimeAgentHooks.js', 'server/extensions/runtimeAgentHooks.ts'],
+];
+
 await Promise.all([
   // Main server bundle
   build({
@@ -87,7 +105,19 @@ await Promise.all([
       js: createRequireBanner,
     },
   }),
+  ...backendApiLazyModuleEntries.map(([outfile, entryPoint]) =>
+    build({
+      ...sharedEsbuildOptions,
+      entryPoints: [resolve(packageRoot, entryPoint)],
+      outfile: resolve(outdir, outfile),
+      banner: {
+        js: createRequireBanner,
+      },
+    }),
+  ),
 ]);
+
+bundleOutputs.push(...backendApiLazyModuleEntries.map(([outfile]) => resolve(outdir, outfile)));
 
 // jiti's bundled Babel copy contains a duplicate TypeScript heritage switch case. When
 // another esbuild pass parses our server bundle, it reports a noisy duplicate-case warning.
