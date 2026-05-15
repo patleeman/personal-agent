@@ -5,7 +5,8 @@
  * handlers calculate dashboard view models from recent trace events on demand.
  */
 
-import { queryAppTelemetryEvents, readTraceTelemetryLogEvents, type TraceTelemetryLogEvent } from '@personal-agent/core';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 interface ExtensionRouteRequest {
   query: Record<string, string | string[]>;
@@ -13,6 +14,42 @@ interface ExtensionRouteRequest {
 interface ExtensionRouteResponse {
   status?: number;
   body?: unknown;
+}
+
+type TraceTelemetryLogEventType =
+  | 'stats'
+  | 'tool_call'
+  | 'context'
+  | 'compaction'
+  | 'auto_mode'
+  | 'suggested_context'
+  | 'context_pointer_inspect';
+
+interface TraceTelemetryLogEvent {
+  schemaVersion: 1;
+  id: string;
+  ts: string;
+  type: TraceTelemetryLogEventType;
+  sessionId: string;
+  runId: string | null;
+  profile: string;
+  payload: Record<string, unknown>;
+}
+
+interface AppTelemetryEventRow {
+  id: string;
+  ts: string;
+  source: string;
+  category: string;
+  name: string;
+  sessionId: string | null;
+  runId: string | null;
+  route: string | null;
+  status: number | null;
+  durationMs: number | null;
+  count: number | null;
+  value: number | null;
+  metadataJson: string | null;
 }
 
 function parseRangeParam(range: unknown): string {
@@ -30,11 +67,105 @@ function parseRangeParam(range: unknown): string {
   return new Date(now - ms[selected]).toISOString();
 }
 
+function telemetryLogDir(stateRoot = process.env.PERSONAL_AGENT_STATE_ROOT): string {
+  return join(stateRoot ?? join(process.env.HOME ?? '.', '.local', 'state', 'personal-agent'), 'logs', 'telemetry');
+}
+
+function parseTraceTelemetryLogEvent(line: string): TraceTelemetryLogEvent | null {
+  try {
+    const parsed = JSON.parse(line) as Partial<TraceTelemetryLogEvent>;
+    if (parsed.schemaVersion !== 1 || !parsed.id || !parsed.ts || !parsed.type || !parsed.sessionId) return null;
+    return {
+      schemaVersion: 1,
+      id: String(parsed.id),
+      ts: String(parsed.ts),
+      type: parsed.type as TraceTelemetryLogEventType,
+      sessionId: String(parsed.sessionId),
+      runId: parsed.runId == null ? null : String(parsed.runId),
+      profile: parsed.profile == null ? '' : String(parsed.profile),
+      payload: parsed.payload && typeof parsed.payload === 'object' && !Array.isArray(parsed.payload) ? parsed.payload : {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readTraceTelemetryLogEvents(input: { since: string; limit?: number }): TraceTelemetryLogEvent[] {
+  const dir = telemetryLogDir();
+  if (!existsSync(dir)) return [];
+  const limit = input.limit ?? 50_000;
+  const events: TraceTelemetryLogEvent[] = [];
+  try {
+    const files = readdirSync(dir)
+      .filter((fileName) => fileName.startsWith('trace-telemetry-') && fileName.endsWith('.jsonl'))
+      .sort((left, right) => right.localeCompare(left));
+    for (const fileName of files) {
+      const lines = readFileSync(join(dir, fileName), 'utf-8').split('\n').filter(Boolean).reverse();
+      for (const line of lines) {
+        const event = parseTraceTelemetryLogEvent(line);
+        if (!event || event.ts < input.since) continue;
+        events.push(event);
+        if (events.length >= limit) return events.sort((a, b) => a.ts.localeCompare(b.ts));
+      }
+    }
+  } catch {
+    return events.sort((a, b) => a.ts.localeCompare(b.ts));
+  }
+  return events.sort((a, b) => a.ts.localeCompare(b.ts));
+}
+
+function parseAppTelemetryLogEvent(line: string): AppTelemetryEventRow | null {
+  try {
+    const parsed = JSON.parse(line) as Record<string, unknown>;
+    if (parsed.schemaVersion !== 1 || !parsed.id || !parsed.ts || !parsed.source || !parsed.category || !parsed.name) return null;
+    return {
+      id: String(parsed.id),
+      ts: String(parsed.ts),
+      source: String(parsed.source),
+      category: String(parsed.category),
+      name: String(parsed.name),
+      sessionId: parsed.sessionId == null ? null : String(parsed.sessionId),
+      runId: parsed.runId == null ? null : String(parsed.runId),
+      route: parsed.route == null ? null : String(parsed.route),
+      status: typeof parsed.status === 'number' && Number.isFinite(parsed.status) ? parsed.status : null,
+      durationMs: typeof parsed.durationMs === 'number' && Number.isFinite(parsed.durationMs) ? parsed.durationMs : null,
+      count: typeof parsed.count === 'number' && Number.isFinite(parsed.count) ? parsed.count : null,
+      value: typeof parsed.value === 'number' && Number.isFinite(parsed.value) ? parsed.value : null,
+      metadataJson: parsed.metadata && typeof parsed.metadata === 'object' ? JSON.stringify(parsed.metadata) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function queryAppTelemetryEvents(input: { since: string; limit?: number }): AppTelemetryEventRow[] {
+  const dir = telemetryLogDir();
+  if (!existsSync(dir)) return [];
+  const events: AppTelemetryEventRow[] = [];
+  const limit = Math.max(1, Math.min(input.limit ?? 200, 1000));
+  try {
+    const files = readdirSync(dir)
+      .filter((fileName) => fileName.startsWith('app-telemetry-') && fileName.endsWith('.jsonl'))
+      .sort((left, right) => right.localeCompare(left));
+    for (const fileName of files) {
+      const lines = readFileSync(join(dir, fileName), 'utf-8').split('\n').filter(Boolean).reverse();
+      for (const line of lines) {
+        const event = parseAppTelemetryLogEvent(line);
+        if (!event || event.ts < input.since) continue;
+        events.push(event);
+        if (events.length >= limit) return events.sort((a, b) => b.ts.localeCompare(a.ts));
+      }
+    }
+  } catch {
+    return events.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit);
+  }
+  return events.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit);
+}
+
 function eventsSince(since: string): TraceTelemetryLogEvent[] {
-  const stateRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
-  const events = readTraceTelemetryLogEvents({ since, limit: 100_000, stateRoot });
+  const events = readTraceTelemetryLogEvents({ since, limit: 100_000 });
   if (events.length > 0) return events;
-  return readTraceTelemetryLogEvents({ since: '1970-01-01T00:00:00.000Z', limit: 100_000, stateRoot });
+  return readTraceTelemetryLogEvents({ since: '1970-01-01T00:00:00.000Z', limit: 100_000 });
 }
 
 function numberValue(value: unknown): number {

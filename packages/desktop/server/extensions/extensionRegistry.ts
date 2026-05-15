@@ -294,7 +294,7 @@ export interface ExtensionContextMenuRegistration {
   packageType: ExtensionManifest['packageType'];
   title: string;
   action: string;
-  surface: 'message' | 'conversationList';
+  surface: 'message' | 'conversationList' | 'selection' | 'fileSelection' | 'transcriptSelection';
   separator?: boolean;
   when?: string;
 }
@@ -1081,8 +1081,8 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(action.id, `contributes.selectionActions[${index}].id`);
       requireString(action.title, `contributes.selectionActions[${index}].title`);
       requireString(action.action, `contributes.selectionActions[${index}].action`);
-      requireStringArray(action.kinds, `contributes.selectionActions[${index}].kinds`);
-      for (const [kindIndex, kind] of action.kinds.entries()) {
+      const kinds = requireStringArray(action.kinds, `contributes.selectionActions[${index}].kinds`);
+      for (const [kindIndex, kind] of kinds.entries()) {
         validateEnum(kind, ['text', 'messages', 'files', 'transcriptRange'], `contributes.selectionActions[${index}].kinds[${kindIndex}]`);
       }
       validateOptionalString(action.when, `contributes.selectionActions[${index}].when`);

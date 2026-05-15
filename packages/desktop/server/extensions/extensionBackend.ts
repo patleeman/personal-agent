@@ -26,6 +26,7 @@ import { isSystemNotificationAvailable, sendNotifyAsSystemNotification, setExten
 import {
   clearExtensionHealthError,
   findExtensionEntry,
+  isExtensionEnabled,
   listExtensionInstallSummaries,
   setExtensionEnabled,
   setExtensionHealthError,
@@ -288,7 +289,7 @@ function createStorage(extensionId: string): ExtensionBackendContext['storage'] 
   };
 }
 
-type ExtensionBackendServerContext = Pick<ServerRouteContext, 'getCurrentProfile'> &
+export type ExtensionBackendServerContext = Pick<ServerRouteContext, 'getCurrentProfile'> &
   Partial<Pick<ServerRouteContext, 'buildLiveSessionResourceOptions' | 'getRepoRoot'>>;
 
 export function createBackendContext(
@@ -813,7 +814,7 @@ export async function invokeExtensionRoute(
   serverContext?: ExtensionBackendServerContext,
 ): Promise<ExtensionRouteResponse> {
   const entry = findExtensionEntry(extensionId);
-  if (!entry || entry.status !== 'enabled') {
+  if (!entry || !isExtensionEnabled(extensionId)) {
     return { status: 404, body: { error: 'Extension route not found.' } };
   }
   const route = entry.manifest.backend?.routes?.find((candidate) => candidate.method === method && candidate.path === routePath);
