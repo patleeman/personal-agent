@@ -82,6 +82,130 @@ function toThreadSessionResponse(thread: ReturnType<typeof toThreadResponse>) {
   return { thread, ...threadSessionFields(thread) };
 }
 
+function tsMs(value: unknown): number {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return value > 10_000_000_000 ? value : value * 1000;
+  return Date.now();
+}
+
+function textContent(text: string) {
+  return [{ type: 'text', text, text_elements: [], textElements: [] }];
+}
+
+function blockId(block: Record<string, unknown>, fallback: string): string {
+  return typeof block.id === 'string' && block.id ? block.id : fallback;
+}
+
+function contentItemsFromText(text: unknown): Array<Record<string, unknown>> {
+  if (typeof text !== 'string' || !text) return [];
+  return [{ type: 'text', text }];
+}
+
+function blockToCodexItem(block: Record<string, unknown>, index: number): Record<string, unknown> | null {
+  const id = blockId(block, `item-${index}`);
+  switch (block.type) {
+    case 'user':
+      return { id, type: 'userMessage', content: textContent(typeof block.text === 'string' ? block.text : '') };
+    case 'text':
+      return { id, type: 'agentMessage', text: typeof block.text === 'string' ? block.text : '' };
+    case 'thinking':
+      return { id, type: 'reasoning', summary: [], content: typeof block.text === 'string' && block.text ? [block.text] : [] };
+    case 'summary':
+      return { id, type: 'contextCompaction' };
+    case 'context':
+      return {
+        id,
+        type: 'hookPrompt',
+        fragments: [{ type: 'text', text: typeof block.text === 'string' ? block.text : '', title: block.customType ?? 'context' }],
+      };
+    case 'tool_use':
+      return {
+        id: typeof block._toolCallId === 'string' && block._toolCallId ? block._toolCallId : id,
+        type: 'dynamicToolCall',
+        namespace: 'personal-agent',
+        tool: typeof block.tool === 'string' ? block.tool : 'tool',
+        arguments: block.input && typeof block.input === 'object' ? block.input : {},
+        status: block.status === 'running' ? 'inProgress' : 'completed',
+        contentItems: contentItemsFromText(block.output),
+        success: block.error === true ? false : true,
+        durationMs: typeof block.durationMs === 'number' ? block.durationMs : null,
+      };
+    case 'error':
+      return {
+        id,
+        type: 'dynamicToolCall',
+        namespace: 'personal-agent',
+        tool: typeof block.tool === 'string' ? block.tool : 'error',
+        arguments: {},
+        status: 'completed',
+        contentItems: contentItemsFromText(block.message),
+        success: false,
+      };
+    case 'image': {
+      const path = typeof block.src === 'string' ? block.src : typeof block.alt === 'string' ? block.alt : id;
+      return { id, type: 'imageView', path };
+    }
+    default:
+      return null;
+  }
+}
+
+function readBlocksPayload(payload: unknown): Record<string, unknown>[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const record = payload as Record<string, unknown>;
+  const candidates = [
+    record.blocks,
+    (record.sessionDetail as Record<string, unknown> | undefined)?.blocks,
+    (record.stream as Record<string, unknown> | undefined)?.blocks,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate))
+      return candidate.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
+  }
+  return [];
+}
+
+function blocksToTurns(blocks: Record<string, unknown>[]): unknown[] {
+  const turns: Array<Record<string, unknown>> = [];
+  let current: Record<string, unknown> | null = null;
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (block.type === 'user' || current == null) {
+      if (current && Array.isArray(current.items) && current.items.length > 0) turns.push(current);
+      current = {
+        id: `turn-${blockId(block, String(index))}`,
+        items: [],
+        itemsView: 'full',
+        status: 'completed',
+        error: null,
+        startedAt: Math.floor(tsMs(block.ts) / 1000),
+        completedAt: null,
+        durationMs: null,
+      };
+    }
+    const item = blockToCodexItem(block, index);
+    if (item && current) (current.items as unknown[]).push(item);
+  }
+  if (current && Array.isArray(current.items) && current.items.length > 0) turns.push(current);
+  for (const turn of turns) {
+    const lastItem = (turn.items as unknown[]).at(-1) as Record<string, unknown> | undefined;
+    const sourceBlock = lastItem
+      ? blocks.find((block) => blockId(block, '') === lastItem.id || block._toolCallId === lastItem.id)
+      : undefined;
+    turn.completedAt = Math.floor(tsMs(sourceBlock?.ts) / 1000);
+  }
+  return turns;
+}
+
+async function readTurns(threadId: string, ctx: Parameters<MethodHandler>[1]): Promise<unknown[]> {
+  const payload = await ctx.conversations.getBlocks(threadId).catch(() => null);
+  return blocksToTurns(readBlocksPayload(payload));
+}
+
 // ── Goal storage key helper ─────────────────────────────────────────────────
 
 function goalKey(threadId: string): string {
@@ -158,25 +282,46 @@ export const thread = {
     const p = params as Record<string, unknown> | undefined;
     const limit = typeof p?.limit === 'number' ? Math.min(p.limit, 100) : 25;
 
+    const searchTerm = typeof p?.searchTerm === 'string' ? p.searchTerm.trim().toLowerCase() : '';
+    const requestedCwds = (() => {
+      const cwd = p?.cwd;
+      if (typeof cwd === 'string' && cwd.trim()) return new Set([absoluteCwd(cwd, ctx)]);
+      if (Array.isArray(cwd))
+        return new Set(cwd.filter((item): item is string => typeof item === 'string').map((item) => absoluteCwd(item, ctx)));
+      return null;
+    })();
+
     const sessions = await ctx.conversations.list();
-    const data = Array.isArray(sessions)
-      ? sessions.slice(0, limit).map((s: unknown) => {
-          const session = s as Record<string, unknown>;
-          const id = String(session.id ?? session.sessionId ?? '');
-          return toThreadResponse(
-            id,
-            {
-              ...session,
-              title: (session.title as string) ?? '',
-              status: { type: 'notLoaded' },
-            },
-            [],
-            ctx,
-          );
-        })
+    const all = Array.isArray(sessions)
+      ? sessions
+          .map((s: unknown) => {
+            const session = s as Record<string, unknown>;
+            const id = String(session.id ?? session.sessionId ?? '');
+            if (!id) return null;
+            return toThreadResponse(
+              id,
+              {
+                ...session,
+                title: (session.title as string) ?? '',
+                status: session.running === true ? { type: 'active', activeFlags: [] } : { type: 'notLoaded' },
+              },
+              [],
+              ctx,
+            );
+          })
+          .filter((item): item is ReturnType<typeof toThreadResponse> => item != null)
       : [];
 
-    return { data, nextCursor: null, backwardsCursor: null };
+    const filtered = all
+      .filter((item) => (requestedCwds ? requestedCwds.has(item.cwd) : true))
+      .filter((item) => (searchTerm ? `${item.name ?? ''} ${item.preview ?? ''}`.toLowerCase().includes(searchTerm) : true))
+      .sort((a, b) => {
+        const key = p?.sortKey === 'created_at' || p?.sortKey === 'createdAt' ? 'createdAt' : 'updatedAt';
+        const direction = p?.sortDirection === 'asc' ? 1 : -1;
+        return ((a[key] as number) - (b[key] as number)) * direction;
+      });
+
+    return { data: filtered.slice(0, limit), nextCursor: null, backwardsCursor: null };
   }) as MethodHandler,
 
   /** `thread/loaded/list` — list currently loaded (live) thread ids */
@@ -186,9 +331,10 @@ export const thread = {
       ? sessions
           .filter((s: unknown) => {
             const session = s as Record<string, unknown>;
-            return session.running === true || session.id != null;
+            return session.running === true;
           })
           .map((s: unknown) => (s as Record<string, unknown>).id as string)
+          .filter(Boolean)
       : [];
     return { data: loaded, nextCursor: null };
   }) as MethodHandler,
@@ -203,20 +349,7 @@ export const thread = {
     const meta = await ctx.conversations.getMeta(threadId).catch(() => null);
     const detail = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
 
-    const turns: unknown[] = includeTurns
-      ? [
-          {
-            id: `turn-${threadId}-0`,
-            items: [],
-            itemsView: 'full',
-            status: 'completed',
-            error: null,
-            startedAt: null,
-            completedAt: null,
-            durationMs: null,
-          },
-        ]
-      : [];
+    const turns: unknown[] = includeTurns ? await readTurns(threadId, ctx) : [];
 
     // Attach stored metadata
     const storedMeta = await ctx.storage.get<Record<string, unknown>>(metaKey(threadId)).catch(() => null);
@@ -235,7 +368,7 @@ export const thread = {
   }) as MethodHandler,
 
   /** `thread/unarchive` */
-  unarchive: (async (params) => {
+  unarchive: (async (params, ctx) => {
     const threadId = (params as Record<string, unknown> | undefined)?.threadId as string | undefined;
     if (!threadId) throw new Error('threadId is required');
     return { thread: toThreadResponse(threadId, undefined, [], ctx) };

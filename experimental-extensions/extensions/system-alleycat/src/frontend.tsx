@@ -144,31 +144,38 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
 
       {status?.pairPayload && pairPayloadReady ? (
         <div className={SECTION}>
-          <div className={LABEL}>Pair payload</div>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
             <div>
-              <textarea
-                readOnly
-                className={`${MONO} min-h-[9rem] resize-none`}
-                value={pairPayloadJson}
-                onClick={(event) => event.currentTarget.select()}
-              />
+              <div className={LABEL}>Pairing QR</div>
+              {qrCodeUrl ? (
+                <img
+                  src={qrCodeUrl}
+                  alt="Alleycat pairing QR code"
+                  className="h-[180px] w-[180px] rounded-lg border border-border-subtle"
+                />
+              ) : null}
               <p className={NOTE}>
                 Node {shortNodeId(status.pairPayload.node_id)} · relay {status.pairPayload.relay ?? 'default'}
               </p>
             </div>
-            {qrCodeUrl ? (
-              <img src={qrCodeUrl} alt="Alleycat pairing QR code" className="h-[180px] w-[180px] rounded-lg border border-border-subtle" />
-            ) : null}
+            <details className="self-start">
+              <summary className="cursor-pointer text-[12px] font-medium text-secondary hover:text-primary">Pair payload</summary>
+              <textarea
+                readOnly
+                className={`${MONO} mt-2 min-h-[9rem] resize-none`}
+                value={pairPayloadJson}
+                onClick={(event) => event.currentTarget.select()}
+              />
+            </details>
           </div>
         </div>
       ) : null}
 
       {status?.logs?.length ? (
-        <div className={SECTION}>
-          <div className={LABEL}>Host logs</div>
-          <pre className={`${MONO} max-h-40 overflow-auto whitespace-pre-wrap`}>{status.logs.slice(-12).join('\n')}</pre>
-        </div>
+        <details className={SECTION}>
+          <summary className="cursor-pointer text-[12px] font-medium text-secondary hover:text-primary">Host logs</summary>
+          <pre className={`${MONO} mt-2 max-h-40 overflow-auto whitespace-pre-wrap`}>{status.logs.slice(-12).join('\n')}</pre>
+        </details>
       ) : null}
 
       <div className={SECTION}>

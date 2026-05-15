@@ -1,0 +1,86 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { thread } from './thread.js';
+
+function makeContext(overrides: Record<string, unknown> = {}) {
+  return {
+    runtime: { getRepoRoot: () => '/repo' },
+    storage: {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockResolvedValue({ ok: true }),
+      delete: vi.fn().mockResolvedValue({ ok: true, deleted: true }),
+    },
+    conversations: {
+      list: vi.fn().mockResolvedValue([]),
+      getMeta: vi.fn().mockResolvedValue({ id: 'thread-1', title: 'Test thread', cwd: '/repo', updatedAt: 1_700_000_001_000 }),
+      getBlocks: vi.fn().mockResolvedValue({
+        blocks: [
+          { type: 'user', id: 'u1', ts: '2026-05-15T10:00:00.000Z', text: 'hello' },
+          { type: 'thinking', id: 'r1', ts: '2026-05-15T10:00:01.000Z', text: 'thinking' },
+          { type: 'tool_use', id: 't1', ts: '2026-05-15T10:00:02.000Z', tool: 'read', input: { path: 'README.md' }, output: 'contents' },
+          { type: 'text', id: 'a1', ts: '2026-05-15T10:00:03.000Z', text: 'done' },
+          { type: 'user', id: 'u2', ts: '2026-05-15T10:01:00.000Z', text: 'next' },
+          { type: 'error', id: 'e1', ts: '2026-05-15T10:01:01.000Z', message: 'boom' },
+        ],
+      }),
+      ...overrides,
+    },
+  };
+}
+
+describe('system-alleycat thread protocol', () => {
+  it('hydrates thread/read turns from PA transcript blocks', async () => {
+    const ctx = makeContext();
+    const result = (await thread.read(
+      { threadId: 'thread-1', includeTurns: true },
+      ctx as never,
+      { initialized: true, subscribedThreads: new Set(), activeTurnThreads: new Set() },
+      vi.fn(),
+    )) as { thread: { turns: Array<{ items: Array<Record<string, unknown>> }> } };
+
+    expect(result.thread.turns).toHaveLength(2);
+    expect(result.thread.turns[0].items).toMatchObject([
+      { type: 'userMessage', content: [{ type: 'text', text: 'hello' }] },
+      { type: 'reasoning', content: ['thinking'] },
+      {
+        type: 'dynamicToolCall',
+        namespace: 'personal-agent',
+        tool: 'read',
+        arguments: { path: 'README.md' },
+        contentItems: [{ type: 'text', text: 'contents' }],
+      },
+      { type: 'agentMessage', text: 'done' },
+    ]);
+    expect(result.thread.turns[1].items).toMatchObject([
+      { type: 'userMessage', content: [{ type: 'text', text: 'next' }] },
+      {
+        type: 'dynamicToolCall',
+        namespace: 'personal-agent',
+        tool: 'error',
+        success: false,
+        contentItems: [{ type: 'text', text: 'boom' }],
+      },
+    ]);
+  });
+
+  it('filters and sorts thread/list by cwd, search term, and updated time', async () => {
+    const ctx = makeContext({
+      list: vi.fn().mockResolvedValue([
+        { id: 'a', title: 'Alpha', cwd: '/repo/a', updatedAt: 10 },
+        { id: 'b', title: 'Beta needle', cwd: '/repo/b', updatedAt: 30, running: true },
+        { id: 'c', title: 'Gamma needle', cwd: '/repo/b', updatedAt: 20 },
+      ]),
+    });
+
+    const result = (await thread.list(
+      { cwd: '/repo/b', searchTerm: 'needle', sortKey: 'updated_at', sortDirection: 'desc', limit: 10 },
+      ctx as never,
+      { initialized: true, subscribedThreads: new Set(), activeTurnThreads: new Set() },
+      vi.fn(),
+    )) as { data: Array<{ id: string; status: { type: string } }> };
+
+    expect(result.data.map((item) => item.id)).toEqual(['b', 'c']);
+    expect(result.data[0].status.type).toBe('active');
+    expect(result.data[1].status.type).toBe('notLoaded');
+  });
+});
