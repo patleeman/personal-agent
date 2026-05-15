@@ -19,6 +19,7 @@ import {
 } from './observability-db.js';
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite.js';
 import type { Migration } from './sqlite-migrations.js';
+import { closeTraceTelemetryLogs, writeTraceTelemetryLogEvent } from './trace-telemetry-log.js';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,7 @@ export function closeTraceDbs(): void {
     db.close();
   }
   dbCache.clear();
+  closeTraceTelemetryLogs();
 }
 
 function resolveTraceDbPath(stateRoot?: string): string {
@@ -540,6 +542,14 @@ function tokenCount(value: unknown): number {
   return Math.trunc(parsed);
 }
 
+function finiteNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function writeTraceLogFirst(event: Parameters<typeof writeTraceTelemetryLogEvent>[0]): void {
+  writeTraceTelemetryLogEvent(event);
+}
+
 // ── Writers (fire-and-forget) ─────────────────────────────────────────────────
 
 export function writeTraceStats(params: {
@@ -556,6 +566,44 @@ export function writeTraceStats(params: {
   durationMs?: number;
   profile?: string;
 }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const row = {
+    id,
+    sessionId: params.sessionId,
+    runId: params.runId ?? null,
+    modelId: params.modelId ?? null,
+    profile: params.profile ?? '',
+    ts,
+    tokensInput: tokenCount(params.tokensInput),
+    tokensOutput: tokenCount(params.tokensOutput),
+    tokensCachedInput: tokenCount(params.tokensCachedInput),
+    tokensCachedWrite: tokenCount(params.tokensCachedWrite),
+    cost: finiteNumber(params.cost),
+    turnCount: tokenCount(params.turnCount),
+    stepCount: tokenCount(params.stepCount),
+    durationMs: tokenCount(params.durationMs),
+  };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'stats',
+    sessionId: row.sessionId,
+    runId: row.runId,
+    profile: row.profile,
+    payload: {
+      modelId: row.modelId,
+      tokensInput: row.tokensInput,
+      tokensOutput: row.tokensOutput,
+      tokensCachedInput: row.tokensCachedInput,
+      tokensCachedWrite: row.tokensCachedWrite,
+      cost: row.cost,
+      turnCount: row.turnCount,
+      stepCount: row.stepCount,
+      durationMs: row.durationMs,
+    },
+  });
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
@@ -563,23 +611,23 @@ export function writeTraceStats(params: {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
-      generateId(),
-      params.sessionId,
-      params.runId ?? null,
-      params.modelId ?? null,
-      params.profile ?? '',
-      timestamp(),
-      tokenCount(params.tokensInput),
-      tokenCount(params.tokensOutput),
-      tokenCount(params.tokensCachedInput),
-      tokenCount(params.tokensCachedWrite),
-      params.cost,
-      params.turnCount ?? 0,
-      params.stepCount ?? 0,
-      params.durationMs ?? 0,
+      row.id,
+      row.sessionId,
+      row.runId,
+      row.modelId,
+      row.profile,
+      row.ts,
+      row.tokensInput,
+      row.tokensOutput,
+      row.tokensCachedInput,
+      row.tokensCachedWrite,
+      row.cost,
+      row.turnCount,
+      row.stepCount,
+      row.durationMs,
     );
   } catch (err) {
-    // Fire-and-forget: silently ignore write failures
+    logTraceStorageError('failed to index trace stats in SQLite', err);
   }
 }
 
@@ -595,30 +643,67 @@ export function writeTraceToolCall(params: {
   conversationTitle?: string;
   profile?: string;
 }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const bashCommand = readBashCommand(params.toolName, params.toolInput, params.bashCommand);
+  const toolInputJson = stringifyToolInput(params.toolInput);
+  const row = {
+    id,
+    sessionId: params.sessionId,
+    runId: params.runId ?? null,
+    profile: params.profile ?? '',
+    ts,
+    toolName: params.toolName,
+    toolInputJson,
+    bashCommand,
+    bashCommandLabel: parseBashCommandLabel(bashCommand),
+    durationMs: typeof params.durationMs === 'number' && Number.isFinite(params.durationMs) ? params.durationMs : null,
+    status: params.status,
+    errorMessage: params.errorMessage ?? null,
+    conversationTitle: params.conversationTitle ?? null,
+  };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'tool_call',
+    sessionId: row.sessionId,
+    runId: row.runId,
+    profile: row.profile,
+    payload: {
+      toolName: row.toolName,
+      toolInputJson: row.toolInputJson,
+      bashCommand: row.bashCommand,
+      bashCommandLabel: row.bashCommandLabel,
+      durationMs: row.durationMs,
+      status: row.status,
+      errorMessage: row.errorMessage,
+      conversationTitle: row.conversationTitle,
+    },
+  });
   try {
     const db = getTraceDb();
-    const bashCommand = readBashCommand(params.toolName, params.toolInput, params.bashCommand);
     const stmt = db.prepare(`
       INSERT INTO trace_tool_calls (id, session_id, run_id, profile, ts, tool_name, tool_input_json, bash_command, bash_command_label, duration_ms, status, error_message, conversation_title)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
-      generateId(),
-      params.sessionId,
-      params.runId ?? null,
-      params.profile ?? '',
-      timestamp(),
-      params.toolName,
-      stringifyToolInput(params.toolInput),
-      bashCommand,
-      parseBashCommandLabel(bashCommand),
-      params.durationMs ?? null,
-      params.status,
-      params.errorMessage ?? null,
-      params.conversationTitle ?? null,
+      row.id,
+      row.sessionId,
+      row.runId,
+      row.profile,
+      row.ts,
+      row.toolName,
+      row.toolInputJson,
+      row.bashCommand,
+      row.bashCommandLabel,
+      row.durationMs,
+      row.status,
+      row.errorMessage,
+      row.conversationTitle,
     );
   } catch (err) {
-    // Fire-and-forget
+    logTraceStorageError('failed to index trace tool call in SQLite', err);
   }
 }
 
@@ -636,6 +721,34 @@ export function writeTraceContext(params: {
   systemPromptTokens?: number;
   profile?: string;
 }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const row = {
+    id,
+    sessionId: params.sessionId,
+    profile: params.profile ?? '',
+    ts,
+    modelId: params.modelId ?? null,
+    totalTokens: tokenCount(params.totalTokens),
+    contextWindow: tokenCount(params.contextWindow),
+    pct: finiteNumber(params.pct),
+    segSystem: tokenCount(params.segSystem),
+    segUser: tokenCount(params.segUser),
+    segAssistant: tokenCount(params.segAssistant),
+    segTool: tokenCount(params.segTool),
+    segSummary: tokenCount(params.segSummary),
+    systemPromptTokens: tokenCount(params.systemPromptTokens),
+  };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'context',
+    sessionId: row.sessionId,
+    runId: null,
+    profile: row.profile,
+    payload: { ...row, id: undefined, sessionId: undefined, profile: undefined, ts: undefined },
+  });
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
@@ -643,23 +756,23 @@ export function writeTraceContext(params: {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
-      generateId(),
-      params.sessionId,
-      params.profile ?? '',
-      timestamp(),
-      params.modelId ?? null,
-      params.totalTokens,
-      params.contextWindow,
-      params.pct,
-      params.segSystem ?? 0,
-      params.segUser ?? 0,
-      params.segAssistant ?? 0,
-      params.segTool ?? 0,
-      params.segSummary ?? 0,
-      params.systemPromptTokens ?? 0,
+      row.id,
+      row.sessionId,
+      row.profile,
+      row.ts,
+      row.modelId,
+      row.totalTokens,
+      row.contextWindow,
+      row.pct,
+      row.segSystem,
+      row.segUser,
+      row.segAssistant,
+      row.segTool,
+      row.segSummary,
+      row.systemPromptTokens,
     );
   } catch (err) {
-    // Fire-and-forget
+    logTraceStorageError('failed to index trace context in SQLite', err);
   }
 }
 
@@ -671,51 +784,98 @@ export function writeTraceCompaction(params: {
   tokensSaved: number;
   profile?: string;
 }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const row = {
+    id,
+    sessionId: params.sessionId,
+    profile: params.profile ?? '',
+    ts,
+    reason: params.reason,
+    tokensBefore: tokenCount(params.tokensBefore),
+    tokensAfter: tokenCount(params.tokensAfter),
+    tokensSaved: tokenCount(params.tokensSaved),
+  };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'compaction',
+    sessionId: row.sessionId,
+    runId: null,
+    profile: row.profile,
+    payload: { reason: row.reason, tokensBefore: row.tokensBefore, tokensAfter: row.tokensAfter, tokensSaved: row.tokensSaved },
+  });
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
       INSERT INTO trace_compactions (id, session_id, profile, ts, reason, tokens_before, tokens_after, tokens_saved)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(
-      generateId(),
-      params.sessionId,
-      params.profile ?? '',
-      timestamp(),
-      params.reason,
-      params.tokensBefore,
-      params.tokensAfter,
-      params.tokensSaved,
-    );
+    stmt.run(row.id, row.sessionId, row.profile, row.ts, row.reason, row.tokensBefore, row.tokensAfter, row.tokensSaved);
   } catch (err) {
-    // Fire-and-forget
+    logTraceStorageError('failed to index trace compaction in SQLite', err);
   }
 }
 
 export function writeTraceAutoMode(params: { sessionId: string; enabled: boolean; stopReason?: string | null; profile?: string }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const row = {
+    id,
+    sessionId: params.sessionId,
+    profile: params.profile ?? '',
+    ts,
+    enabled: params.enabled ? 1 : 0,
+    stopReason: params.stopReason ?? null,
+  };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'auto_mode',
+    sessionId: row.sessionId,
+    runId: null,
+    profile: row.profile,
+    payload: { enabled: row.enabled, stopReason: row.stopReason },
+  });
   try {
     const db = getTraceDb();
     db.prepare(`INSERT INTO trace_auto_mode (id, session_id, profile, ts, enabled, stop_reason) VALUES (?, ?, ?, ?, ?, ?)`).run(
-      generateId(),
-      params.sessionId,
-      params.profile ?? '',
-      timestamp(),
-      params.enabled ? 1 : 0,
-      params.stopReason ?? null,
+      row.id,
+      row.sessionId,
+      row.profile,
+      row.ts,
+      row.enabled,
+      row.stopReason,
     );
-  } catch {
-    // Fire-and-forget
+  } catch (err) {
+    logTraceStorageError('failed to index trace auto-mode event in SQLite', err);
   }
 }
 
 export function writeTraceSuggestedContext(params: { sessionId: string; pointerIds: string[]; profile?: string }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const pointerIds = params.pointerIds.join(',');
+  const row = { id, sessionId: params.sessionId, profile: params.profile ?? '', ts, pointerIds, pointerCount: params.pointerIds.length };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'suggested_context',
+    sessionId: row.sessionId,
+    runId: null,
+    profile: row.profile,
+    payload: { pointerIds: row.pointerIds, pointerCount: row.pointerCount },
+  });
   try {
     const db = getTraceDb();
     db.prepare(
       `INSERT INTO trace_suggested_context (id, session_id, profile, ts, pointer_ids, pointer_count) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(generateId(), params.sessionId, params.profile ?? '', timestamp(), params.pointerIds.join(','), params.pointerIds.length);
-  } catch {
-    // Fire-and-forget
+    ).run(row.id, row.sessionId, row.profile, row.ts, row.pointerIds, row.pointerCount);
+  } catch (err) {
+    logTraceStorageError('failed to index suggested context trace in SQLite', err);
   }
 }
 
@@ -725,13 +885,33 @@ export function writeTraceContextPointerInspect(params: {
   wasSuggested: boolean;
   profile?: string;
 }): void {
+  const id = generateId();
+  const ts = timestamp();
+  const row = {
+    id,
+    sessionId: params.sessionId,
+    profile: params.profile ?? '',
+    ts,
+    inspectedConversationId: params.inspectedConversationId,
+    wasSuggested: params.wasSuggested ? 1 : 0,
+  };
+  writeTraceLogFirst({
+    schemaVersion: 1,
+    id,
+    ts,
+    type: 'context_pointer_inspect',
+    sessionId: row.sessionId,
+    runId: null,
+    profile: row.profile,
+    payload: { inspectedConversationId: row.inspectedConversationId, wasSuggested: row.wasSuggested },
+  });
   try {
     const db = getTraceDb();
     db.prepare(
       `INSERT INTO trace_context_pointer_inspect (id, session_id, profile, ts, inspected_conversation_id, was_suggested) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(generateId(), params.sessionId, params.profile ?? '', timestamp(), params.inspectedConversationId, params.wasSuggested ? 1 : 0);
-  } catch {
-    // Fire-and-forget
+    ).run(row.id, row.sessionId, row.profile, row.ts, row.inspectedConversationId, row.wasSuggested);
+  } catch (err) {
+    logTraceStorageError('failed to index context pointer inspect trace in SQLite', err);
   }
 }
 

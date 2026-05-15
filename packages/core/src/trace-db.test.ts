@@ -2,10 +2,11 @@
  * Tests for trace-db.ts
  */
 
-import { randomUUID } from 'crypto';
-import { cpSync, existsSync, mkdirSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { randomUUID } from 'node:crypto';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 // We test the query functions by writing data and reading it back.
@@ -40,7 +41,8 @@ import {
   writeTraceStats,
   writeTraceSuggestedContext,
   writeTraceToolCall,
-} from './trace-db.js';
+} from './trace-db.ts';
+import { resolveTraceTelemetryLogDir } from './trace-telemetry-log.js';
 
 describe('trace-db', () => {
   // Use a temp directory for trace DB during tests
@@ -85,6 +87,17 @@ describe('trace-db', () => {
 
   function countRows(table: string): number {
     return readSingleValue<number>(`SELECT COUNT(*) AS value FROM ${table}`);
+  }
+
+  function readTraceLogEvents(): Array<{ type: string; sessionId: string; payload: Record<string, unknown> }> {
+    const dir = resolveTraceTelemetryLogDir(testDir);
+    const files = readdirSync(dir).filter((fileName) => fileName.startsWith('trace-telemetry-') && fileName.endsWith('.jsonl'));
+    return files.flatMap((fileName) =>
+      readFileSync(join(dir, fileName), 'utf-8')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { type: string; sessionId: string; payload: Record<string, unknown> }),
+    );
   }
 
   beforeEach(() => {
@@ -154,6 +167,31 @@ describe('trace-db', () => {
 
     writeTraceCompaction({ sessionId, reason: 'overflow', tokensBefore: 120000, tokensAfter: 52000, tokensSaved: 68000 });
     writeTraceCompaction({ sessionId: 'session-2', reason: 'threshold', tokensBefore: 90000, tokensAfter: 45000, tokensSaved: 45000 });
+  });
+
+  it('writes trace JSONL before indexing SQLite', () => {
+    const events = readTraceLogEvents();
+    expect(events.some((event) => event.type === 'stats' && event.sessionId === sessionId && event.payload.tokensInput === 1000)).toBe(
+      true,
+    );
+    expect(events.some((event) => event.type === 'tool_call' && event.sessionId === sessionId && event.payload.toolName === 'bash')).toBe(
+      true,
+    );
+    expect(events.some((event) => event.type === 'context' && event.sessionId === sessionId && event.payload.totalTokens === 5000)).toBe(
+      true,
+    );
+  });
+
+  it('keeps trace JSONL when SQLite indexing fails', () => {
+    closeTraceDbs();
+    rmSync(join(testDir, 'logs'), { recursive: true, force: true });
+    rmSync(join(testDir, 'observability'), { recursive: true, force: true });
+    mkdirSync(resolveObservabilityDbPath(testDir), { recursive: true });
+
+    writeTraceStats({ sessionId: 'jsonl-survives-sqlite-failure', modelId: 'gpt-4o', tokensInput: 42, tokensOutput: 1, cost: 0.01 });
+
+    const events = readTraceLogEvents();
+    expect(events.some((event) => event.type === 'stats' && event.sessionId === 'jsonl-survives-sqlite-failure')).toBe(true);
   });
 
   it('redacts stale suggested-context pointer ids while preserving aggregate counts', () => {

@@ -14,20 +14,21 @@ Telemetry explains where Personal Agent stores local observability data, which p
 
 Telemetry is local to the active state root. The default state root is `~/.local/state/personal-agent`, or `$PERSONAL_AGENT_STATE_ROOT` when set.
 
-| Data                          | Location                                                                                  | Role                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Raw app telemetry             | `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD[.N].jsonl`                          | Source of truth for generic app events. Append-only JSONL. |
-| Telemetry export bundles      | `<state-root>/exports/telemetry/app-telemetry-<timestamp>.jsonl`                          | Bug-report bundles generated from Settings.                |
-| Query index and trace metrics | `<state-root>/observability/observability.db`                                             | SQLite index for UI queries plus structured trace tables.  |
-| Legacy trace DBs              | `<state-root>/pi-agent/state/trace/*.db` or `<state-root>/sync/pi-agent/state/trace/*.db` | Imported once when present, then deleted after success.    |
+| Data                          | Location                                                                                  | Role                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Raw app telemetry             | `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD[.N].jsonl`                          | Source of truth for generic app events. Append-only JSONL.      |
+| Raw trace telemetry           | `<state-root>/logs/telemetry/trace-telemetry-YYYY-MM-DD[.N].jsonl`                        | Source of truth for structured trace events. Append-only JSONL. |
+| Telemetry export bundles      | `<state-root>/exports/telemetry/app-telemetry-<timestamp>.jsonl`                          | Bug-report bundles generated from Settings.                     |
+| Query index and trace metrics | `<state-root>/observability/observability.db`                                             | SQLite index for UI queries plus structured trace tables.       |
+| Legacy trace DBs              | `<state-root>/pi-agent/state/trace/*.db` or `<state-root>/sync/pi-agent/state/trace/*.db` | Imported once when present, then deleted after success.         |
 
-The important bit: **raw app telemetry lives in JSONL first**. SQLite is a derived index for convenient filtering and charts. If SQLite is locked, migrating, or corrupt, telemetry writes should still preserve the raw event in the log file.
+The important bit: **raw telemetry lives in JSONL first**. SQLite is a derived index for convenient filtering and charts. If SQLite is locked, migrating, or corrupt, telemetry writes should still preserve the raw event in the log file.
 
 ## What gets recorded
 
 There are two related telemetry streams:
 
-1. **Trace metrics** — structured records for model usage, token/cost stats, context pressure, compactions, tool calls, tool latency, and agent-loop health. These are written to `observability/observability.db` because the Telemetry page mostly reads aggregates.
+1. **Trace metrics** — structured records for model usage, token/cost stats, context pressure, compactions, tool calls, tool latency, and agent-loop health. These are written to trace JSONL first, then indexed into `observability/observability.db` because the Telemetry page mostly reads aggregates.
 2. **Application telemetry** — generic runtime events that are useful before they have first-class charts. These are written to JSONL first, then indexed into SQLite best-effort.
 
 Current app telemetry producers include server API request timing, `Server-Timing` headers, server warnings/errors, server app events, renderer route views/leaves, visibility changes, renderer crashes/rejections, conversation stream lifecycle events, prompt submissions, tool execution detail, extension action telemetry, queue drops, and agent-loop lifecycle/latency/outcome events.
@@ -64,7 +65,7 @@ The main app telemetry seam is `writeAppTelemetryEvent` in `packages/core/src/ap
 Write flow:
 
 1. Normalize and bound the event fields.
-2. Append the event to `<state-root>/logs/telemetry/app-telemetry-YYYY-MM-DD[.N].jsonl`.
+2. Append the event to `<state-root>/logs/telemetry/*-telemetry-YYYY-MM-DD[.N].jsonl`.
 3. Try to insert the same event into `observability/observability.db` as a derived index.
 4. Log telemetry storage failures to stderr/server logs, but do not break app behavior.
 
