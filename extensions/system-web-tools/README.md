@@ -1,24 +1,37 @@
 # Web Tools Extension
 
-This extension owns the product behavior documented below. Keep extension-specific user and agent docs here so the implementation and documentation move together.
+This extension owns web content tools for agent conversations.
 
----
+## Tools
 
-<!-- Source: docs/web-search-fetch.md -->
+| Tool                | Parameters                          | Description                                    |
+| ------------------- | ----------------------------------- | ---------------------------------------------- |
+| `web_fetch`         | `url`, `raw?`                       | Fetch a URL and extract readable markdown.     |
+| `exa_search`        | `query`, `count?` (max 20), `page?` | Search the web using Exa. Requires an API key. |
+| `duckduckgo_search` | `query`, `count?` (max 20), `page?` | Scrape DuckDuckGo HTML search results.         |
 
-# Web Search & Fetch
+## Web Fetch
 
-The agent can search the web and read URL content using built-in tools from the web-tools extension.
+Reads a URL and extracts clean markdown content with Mozilla Readability.
 
-## Web Search
+```bash
+web_fetch(url: "https://example.com/docs/api")
+```
 
-Searches the web using Exa API (primary) or DuckDuckGo (fallback).
+Set `raw: true` to return raw HTML/text instead of extracted markdown. Non-HTML responses are returned as raw text.
 
-### Exa API
+### Content limits
 
-The primary search backend. Provides high-quality search results with snippets, summaries, and metadata.
+| Limit      | Default | Description            |
+| ---------- | ------- | ---------------------- |
+| `maxBytes` | 50 KB   | Maximum response size  |
+| `maxLines` | 2000    | Maximum response lines |
 
-**API key setup:**
+Content beyond these limits is truncated, and the tool reports truncation details.
+
+## Exa Search
+
+Uses the Exa API for web search. Results include titles, URLs, and snippets derived from Exa text/highlights/summary fields.
 
 Set `Web tools → Exa API key` in Settings → Security, or export it for the process:
 
@@ -28,65 +41,14 @@ export EXA_API_KEY=your-key-here
 
 When both are set, the environment variable takes precedence.
 
-### DuckDuckGo fallback
+## DuckDuckGo Search
 
-Used automatically when no Exa API key is configured. No authentication needed. Results include titles, URLs, and snippets.
+Scrapes `https://html.duckduckgo.com/html/` and returns titles, URLs, and snippets. No authentication needed.
 
-### Search results
-
-Each result contains:
-
-| Field        | Description                         |
-| ------------ | ----------------------------------- |
-| `title`      | Page title                          |
-| `url`        | Page URL                            |
-| `snippet`    | Text snippet from the page          |
-| `highlights` | Matching text highlights (Exa only) |
-| `summary`    | Generated summary (Exa only)        |
-
-## Web Fetch
-
-Reads a URL and extracts clean markdown content. Uses Mozilla's Readability for article extraction.
-
-```bash
-# The agent fetches a URL
-web_fetch(url: "https://example.com/docs/api")
-```
-
-### Content limits
-
-| Limit      | Default | Description            |
-| ---------- | ------- | ---------------------- |
-| `maxBytes` | 50 KB   | Maximum response size  |
-| `maxLines` | 2000    | Maximum response lines |
-
-Content beyond these limits is truncated. The tool reports the original size so the agent knows if content was cut off.
-
-## Tools Reference
-
-| Tool         | Parameters                                      | Description                   |
-| ------------ | ----------------------------------------------- | ----------------------------- |
-| `web_search` | `query`, `count?` (max 20), `page?`             | Search the web                |
-| `web_fetch`  | `url`, `raw?` (return HTML instead of markdown) | Fetch and extract URL content |
-
-### web_search parameters
+## Search parameters
 
 | Parameter | Type   | Default  | Description                |
 | --------- | ------ | -------- | -------------------------- |
 | `query`   | string | required | Search query               |
 | `count`   | number | 5        | Number of results (max 20) |
 | `page`    | number | 1        | Page number for pagination |
-
-### web_fetch parameters
-
-| Parameter | Type    | Default  | Description                                   |
-| --------- | ------- | -------- | --------------------------------------------- |
-| `url`     | string  | required | URL to fetch                                  |
-| `raw`     | boolean | false    | Return raw HTML instead of extracted markdown |
-
-## Rate Limits
-
-- Exa API: depends on your Exa plan
-- DuckDuckGo: no formal rate limits, but excessive usage may be throttled
-
-Both tools handle rate limiting and network errors gracefully, returning clear error messages.

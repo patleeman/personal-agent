@@ -13,7 +13,7 @@ vi.mock('@personal-agent/extensions/backend/webContent', () => ({
   ),
 }));
 
-import { webFetch, webSearch } from './backend.js';
+import { duckDuckGoSearch, exaSearch, webFetch } from './backend.js';
 
 describe('system-web-tools backend', () => {
   afterEach(() => {
@@ -84,11 +84,36 @@ describe('system-web-tools backend', () => {
     });
   });
 
-  describe('webSearch', () => {
-    it('uses DuckDuckGo fallback when Exa API key is absent', async () => {
+  describe('exaSearch', () => {
+    it('requires an Exa API key', async () => {
       const envBackup = process.env.EXA_API_KEY;
       delete process.env.EXA_API_KEY;
 
+      await expect(exaSearch({ query: 'test query' })).rejects.toThrow('Exa API key is not configured');
+
+      if (envBackup) process.env.EXA_API_KEY = envBackup;
+    });
+
+    it('uses Exa when an API key is configured', async () => {
+      const envBackup = process.env.EXA_API_KEY;
+      process.env.EXA_API_KEY = 'test-key';
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ results: [{ title: 'Exa Title', url: 'https://example.org/exa', text: 'Exa snippet' }] }),
+      } as unknown as Response);
+
+      const result = await exaSearch({ query: 'test query' }, { secrets: { get: () => process.env.EXA_API_KEY } } as never);
+      expect(result.source).toBe('exa');
+      expect(result.text).toContain('Exa Title');
+
+      if (envBackup) process.env.EXA_API_KEY = envBackup;
+      else delete process.env.EXA_API_KEY;
+    });
+  });
+
+  describe('duckDuckGoSearch', () => {
+    it('searches DuckDuckGo HTML results', async () => {
       const mockHtml = `<html><body>
         <div class="result">
           <a class="result__a" href="https://example.com?uddg=https%3A%2F%2Fexample.org%2Fpage">Example Title</a>
@@ -97,59 +122,41 @@ describe('system-web-tools backend', () => {
         </div>
       </body></html>`;
 
-      const mockResponse = {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(mockHtml),
-      };
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse as unknown as Response);
+      } as unknown as Response);
 
-      const result = await webSearch({ query: 'test query' });
+      const result = await duckDuckGoSearch({ query: 'test query' });
       expect(result.source).toBe('duckduckgo');
       expect(result.count).toBeGreaterThanOrEqual(0);
-
-      if (envBackup) process.env.EXA_API_KEY = envBackup;
     });
 
     it('handles DuckDuckGo fetch failure', async () => {
-      const envBackup = process.env.EXA_API_KEY;
-      delete process.env.EXA_API_KEY;
-
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('DDG failed'));
 
-      await expect(webSearch({ query: 'test' })).rejects.toThrow();
-
-      if (envBackup) process.env.EXA_API_KEY = envBackup;
+      await expect(duckDuckGoSearch({ query: 'test' })).rejects.toThrow();
     });
 
     it('uses sensible defaults for count and page', async () => {
-      const envBackup = process.env.EXA_API_KEY;
-      delete process.env.EXA_API_KEY;
-
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('<html><body></body></html>'),
       } as unknown as Response);
 
-      const result = await webSearch({ query: 'test' });
+      const result = await duckDuckGoSearch({ query: 'test' });
       expect(result.count).toBe(0);
       expect(result.page).toBe(1);
-
-      if (envBackup) process.env.EXA_API_KEY = envBackup;
     });
 
     it('clamps count to maximum of 20', async () => {
-      const envBackup = process.env.EXA_API_KEY;
-      delete process.env.EXA_API_KEY;
-
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('<html><body></body></html>'),
       } as unknown as Response);
 
-      const result = await webSearch({ query: 'test', count: 100 });
+      const result = await duckDuckGoSearch({ query: 'test', count: 100 });
       expect(result.count).toBe(0); // no results found, but count was clamped
-
-      if (envBackup) process.env.EXA_API_KEY = envBackup;
     });
   });
 

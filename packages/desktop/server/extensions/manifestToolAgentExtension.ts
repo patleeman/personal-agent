@@ -19,7 +19,19 @@ export interface ManifestToolFactoryOptions {
  * This list prevents accidental or malicious replacement of critical infrastructure
  * while still allowing well-intentioned overrides of the primary coding tools.
  */
-const OVERRIDABLE_TOOLS = new Set(['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls', 'notify', 'web_fetch', 'web_search']);
+const OVERRIDABLE_TOOLS = new Set([
+  'bash',
+  'read',
+  'write',
+  'edit',
+  'grep',
+  'find',
+  'ls',
+  'notify',
+  'web_fetch',
+  'exa_search',
+  'duckduckgo_search',
+]);
 
 function isOverridableTool(toolName: string): boolean {
   return OVERRIDABLE_TOOLS.has(toolName);

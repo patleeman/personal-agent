@@ -264,7 +264,19 @@ describe('extension manifests - structural validation', () => {
   });
 
   it('no tool declares a replaces field that references a non-existent built-in tool', () => {
-    const validBuiltInTools = ['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls', 'notify', 'web_fetch', 'web_search'];
+    const validBuiltInTools = [
+      'bash',
+      'read',
+      'write',
+      'edit',
+      'grep',
+      'find',
+      'ls',
+      'notify',
+      'web_fetch',
+      'exa_search',
+      'duckduckgo_search',
+    ];
     for (const ext of summaries) {
       if (ext.packageType !== 'system') continue;
       const tools = ext.manifest.contributes?.tools ?? [];
