@@ -25,8 +25,10 @@ import { createExtensionModelsCapability } from './extensionModels.js';
 import { isSystemNotificationAvailable, sendNotifyAsSystemNotification, setExtensionBadge } from './extensionNotifications.js';
 import {
   clearExtensionHealthError,
+  findExtensionCommandRegistration,
   findExtensionEntry,
   isExtensionEnabled,
+  listExtensionCommandRegistrations,
   listExtensionInstallSummaries,
   setExtensionEnabled,
   setExtensionHealthError,
@@ -94,6 +96,10 @@ export interface ExtensionBackendContext {
   workspace: ReturnType<typeof createExtensionWorkspaceCapability>;
   git: ReturnType<typeof createExtensionGitCapability>;
   shell: ReturnType<typeof createExtensionShellCapability>;
+  commands: {
+    execute(command: string, args?: unknown): Promise<boolean>;
+    list(): Promise<unknown[]>;
+  };
   /** Notification and UI capabilities. */
   notify: {
     /** Show an in-app toast notification. */
@@ -335,6 +341,23 @@ export function createBackendContext(
     workspace: createExtensionWorkspaceCapability(),
     git: createExtensionGitCapability(),
     shell: createExtensionShellCapability(),
+    commands: {
+      execute: async (commandId, args) => {
+        const command = findExtensionCommandRegistration(commandId);
+        if (!command) return false;
+        const actionResult = await invokeExtensionAction(
+          command.extensionId,
+          command.action,
+          args ?? {},
+          serverContext,
+          toolContext,
+          agentToolContext,
+        );
+        if (!actionResult.ok) throw new Error(actionResult.error);
+        return true;
+      },
+      list: async () => listExtensionCommandRegistrations(),
+    },
     notify: {
       toast: (message, type = 'info') => {
         logInfo('extension notification', { extensionId, type, message });

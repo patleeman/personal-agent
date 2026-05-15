@@ -23,6 +23,7 @@ import {
 import { getAggregatedBadgeCount } from '../extensions/extensionNotifications.js';
 import {
   clearBuildError,
+  findExtensionCommandRegistration,
   findExtensionEntry,
   listExtensionCommandRegistrations,
   listExtensionInstallSummaries,
@@ -374,6 +375,20 @@ export function registerExtensionRoutes(
       res.json(listExtensionCommandRegistrations());
     } catch (err) {
       sendRouteError(res, 'extensions commands error', err);
+    }
+  });
+
+  router.post('/api/extensions/commands/:commandId/execute', async (req, res) => {
+    try {
+      const command = findExtensionCommandRegistration(req.params.commandId);
+      if (!command) {
+        res.status(404).json({ ok: false, error: 'Command not found.' });
+        return;
+      }
+      const result = await invokeExtensionAction(command.extensionId, command.action, req.body ?? {}, context);
+      res.json({ ok: true, result });
+    } catch (err) {
+      sendRouteError(res, 'extension command execute error', err);
     }
   });
 

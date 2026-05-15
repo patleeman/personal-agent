@@ -75,6 +75,9 @@ interface ExtensionCommandContribution {
   title: string;
   action: string;
   icon?: ExtensionIconName;
+  category?: string;
+  description?: string;
+  enablement?: string;
 }
 
 interface ExtensionKeybindingContribution {
@@ -82,6 +85,7 @@ interface ExtensionKeybindingContribution {
   title: string;
   keys: string[];
   command: string;
+  args?: unknown;
   when?: string;
   scope?: 'global' | 'surface';
 }
@@ -483,6 +487,9 @@ export interface ExtensionCommandRegistration {
   title: string;
   action: string;
   icon?: string;
+  category?: string;
+  description?: string;
+  enablement?: string;
 }
 
 export interface ExtensionKeybindingRegistration {
@@ -492,6 +499,7 @@ export interface ExtensionKeybindingRegistration {
   title: string;
   keys: string[];
   command: string;
+  args?: unknown;
   when?: string;
   scope: 'global' | 'surface';
   defaultKeys: string[];

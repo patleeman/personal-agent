@@ -116,6 +116,9 @@ export interface ExtensionCommandContribution {
   title: string;
   action: string;
   icon?: ExtensionIconName;
+  category?: string;
+  description?: string;
+  enablement?: string;
 }
 
 export interface ExtensionKeybindingContribution {
@@ -123,6 +126,7 @@ export interface ExtensionKeybindingContribution {
   title: string;
   keys: string[];
   command: string;
+  args?: unknown;
   when?: string;
   scope?: 'global' | 'surface';
 }
@@ -715,6 +719,11 @@ export interface PersonalAgentClient {
       size?: 'default' | 'fullscreen';
     }): Promise<unknown>;
   };
+  commands: {
+    execute(command: string, args?: unknown): Promise<boolean>;
+    list(): Promise<unknown[]>;
+    setContext(key: string, value: string | number | boolean | null | undefined): void;
+  };
   /** Inter-extension communication. */
   events: {
     /** Publish an event that other extensions can receive. */
@@ -793,6 +802,10 @@ export interface ExtensionBackendContext {
       stderr: string;
       executionWrappers: Array<{ id: string; label?: string }>;
     }>;
+  };
+  commands: {
+    execute(command: string, args?: unknown): Promise<boolean>;
+    list(): Promise<unknown[]>;
   };
   notify: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;

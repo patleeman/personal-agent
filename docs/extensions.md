@@ -106,36 +106,36 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                         | Purpose                                                     | Docs                                                                  |
-| ----------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
-| `views`                       | UI surfaces (pages, panels)                                 | See `docs/views.md`                                                   |
-| `nav`                         | Left sidebar navigation items                               |                                                                       |
-| `commands`                    | Extension actions invokable by command IDs                  |                                                                       |
-| `keybindings`                 | Keyboard shortcuts                                          |                                                                       |
-| `slashCommands`               | `/command` in composer                                      |                                                                       |
-| `tools`                       | Agent-callable tools                                        |                                                                       |
-| `mentions`                    | @-mention providers                                         |                                                                       |
-| `skills`                      | Agent Skills (markdown)                                     |                                                                       |
-| `themes`                      | Color themes                                                |                                                                       |
-| `backend.protocolEntrypoints` | Extension-owned stdio protocols launched by the host CLI    | [See below](#protocol-entrypoints-backendprotocolentrypoints)         |
-| `transcriptRenderers`         | Custom tool result rendering                                |                                                                       |
-| `promptReferences`            | @-mention resolvers                                         |                                                                       |
-| `quickOpen`                   | Command palette surfaces/tabs backed by extension providers | [See below](#quick-open-surfaces-quickopen)                           |
-| `settings`                    | Settings schema contributions                               | [See below](#settings)                                                |
-| `settingsComponent`           | Component panel in Settings                                 | [See below](#settings-component-settingscomponent)                    |
-| `topBarElements`              | Top bar indicator icons                                     | [See below](#top-bar-elements-topbarelements)                         |
-| `conversationHeaderElements`  | Badges in conversation header                               | [See below](#conversation-header-elements-conversationheaderelements) |
-| `messageActions`              | Hover buttons on messages                                   | [See below](#message-actions-messageactions)                          |
-| `composerShelves`             | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                        |
-| `newConversationPanels`       | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)           |
-| `composerControls`            | Component controls in the composer bottom row               | [See below](#composer-controls-composercontrols)                      |
-| `composerButtons`             | Legacy composer controls                                    | [See below](#composer-buttons-composerbuttons)                        |
-| `composerInputTools`          | Component tools beside composer controls                    | [See below](#composer-input-tools-composerinputtools)                 |
-| `toolbarActions`              | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                          |
-| `conversationDecorators`      | Badges on conversation list items                           | [See below](#conversation-decorators-conversationdecorators)          |
-| `contextMenus`                | Right-click menu items                                      | [See below](#context-menus-contextmenus)                              |
-| `threadHeaderActions`         | Component buttons in the Threads header                     | [See below](#thread-header-actions-threadheaderactions)               |
-| `statusBarItems`              | Labels in the composer status bar                           | [See below](#status-bar-items-statusbaritems)                         |
+| Field                         | Purpose                                                     | Docs                                                                                      |
+| ----------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `views`                       | UI surfaces (pages, panels)                                 | See `docs/views.md`                                                                       |
+| `nav`                         | Left sidebar navigation items                               |                                                                                           |
+| `commands`                    | Extension actions invokable by command IDs                  | See [Commands and keybindings](../packages/extensions/README.md#commands-and-keybindings) |
+| `keybindings`                 | Keyboard shortcuts that execute commands                    | See [Commands and keybindings](../packages/extensions/README.md#commands-and-keybindings) |
+| `slashCommands`               | `/command` in composer                                      |                                                                                           |
+| `tools`                       | Agent-callable tools                                        |                                                                                           |
+| `mentions`                    | @-mention providers                                         |                                                                                           |
+| `skills`                      | Agent Skills (markdown)                                     |                                                                                           |
+| `themes`                      | Color themes                                                |                                                                                           |
+| `backend.protocolEntrypoints` | Extension-owned stdio protocols launched by the host CLI    | [See below](#protocol-entrypoints-backendprotocolentrypoints)                             |
+| `transcriptRenderers`         | Custom tool result rendering                                |                                                                                           |
+| `promptReferences`            | @-mention resolvers                                         |                                                                                           |
+| `quickOpen`                   | Command palette surfaces/tabs backed by extension providers | [See below](#quick-open-surfaces-quickopen)                                               |
+| `settings`                    | Settings schema contributions                               | [See below](#settings)                                                                    |
+| `settingsComponent`           | Component panel in Settings                                 | [See below](#settings-component-settingscomponent)                                        |
+| `topBarElements`              | Top bar indicator icons                                     | [See below](#top-bar-elements-topbarelements)                                             |
+| `conversationHeaderElements`  | Badges in conversation header                               | [See below](#conversation-header-elements-conversationheaderelements)                     |
+| `messageActions`              | Hover buttons on messages                                   | [See below](#message-actions-messageactions)                                              |
+| `composerShelves`             | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                                            |
+| `newConversationPanels`       | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)                               |
+| `composerControls`            | Component controls in the composer bottom row               | [See below](#composer-controls-composercontrols)                                          |
+| `composerButtons`             | Legacy composer controls                                    | [See below](#composer-buttons-composerbuttons)                                            |
+| `composerInputTools`          | Component tools beside composer controls                    | [See below](#composer-input-tools-composerinputtools)                                     |
+| `toolbarActions`              | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                                              |
+| `conversationDecorators`      | Badges on conversation list items                           | [See below](#conversation-decorators-conversationdecorators)                              |
+| `contextMenus`                | Right-click menu items                                      | [See below](#context-menus-contextmenus)                                                  |
+| `threadHeaderActions`         | Component buttons in the Threads header                     | [See below](#thread-header-actions-threadheaderactions)                                   |
+| `statusBarItems`              | Labels in the composer status bar                           | [See below](#status-bar-items-statusbaritems)                                             |
 
 ### Views
 
@@ -266,7 +266,7 @@ Provider items can omit `section`; omitted values are assigned to the contributi
 Items with a different section are ignored by that tab. Providers may expose `list()` for default results and `search(query, limit)` for content-backed search.
 `order` is optional and controls tab ordering after the built-in Threads tab.
 
-Keybindings can open a quick-open surface directly with `commandPalette:<section>`, for example `commandPalette:knowledge`.
+Keybindings can open a quick-open surface directly with legacy `commandPalette:<section>` or the first-class command form `command: "palette.open", args: { "scope": "knowledge" }`.
 
 ### Settings Component (`settingsComponent`)
 

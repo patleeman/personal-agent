@@ -383,6 +383,9 @@ export interface ExtensionCommandContribution {
   title: string;
   action: string;
   icon?: ExtensionIconName;
+  category?: string;
+  description?: string;
+  enablement?: string;
 }
 
 export interface ExtensionKeybindingContribution {
@@ -390,6 +393,7 @@ export interface ExtensionKeybindingContribution {
   title: string;
   keys: string[];
   command: string;
+  args?: unknown;
   when?: string;
   scope?: 'global' | 'surface';
 }

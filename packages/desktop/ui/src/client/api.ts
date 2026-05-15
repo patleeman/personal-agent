@@ -294,6 +294,11 @@ export const api = {
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
+  executeExtensionCommand: async (commandId: string, input?: unknown) =>
+    post<{ ok: true; result: unknown } | { ok: false; error: string }>(
+      `/extensions/commands/${encodeURIComponent(commandId)}/execute`,
+      input ?? {},
+    ),
   extensionKeybindings: async () => get<ExtensionKeybindingRegistration[]>('/extensions/keybindings'),
   updateExtensionKeybinding: async (
     extensionId: string,

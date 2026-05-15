@@ -584,16 +584,47 @@ Right-rail views may point at a paired workbench detail view with `detailView`:
 }
 ```
 
-## Keybindings
+## Commands and keybindings
 
-Extensions register shortcuts with `contributes.keybindings`. The manifest owns the default binding; the host owns listening, conflict handling, user remapping, and dispatch.
+Commands are the shared action substrate for app navigation, hardware controls, command palette entries, and extension-owned actions. Extensions contribute user-facing commands with metadata, then keybindings or code execute those command ids.
 
-Supported host command targets include:
+```json
+{
+  "contributes": {
+    "commands": [
+      {
+        "id": "toggleDictation",
+        "title": "Toggle Dictation",
+        "category": "SpeechMike",
+        "action": "toggleDictation",
+        "enablement": "speechmic.connected"
+      }
+    ],
+    "keybindings": [
+      {
+        "id": "new-chat",
+        "title": "New chat",
+        "keys": ["ctrl+alt+n"],
+        "command": "app.navigate",
+        "args": { "to": "/conversations/new" }
+      }
+    ]
+  }
+}
+```
 
-- `navigate:/path` — navigate to a route.
-- `commandPalette:threads|files|commands|search` — open the command palette in a scope.
-- `rightRail:{extensionId}/{surfaceId}` — open a right-rail extension surface.
-- `layout:compact|workbench` — switch layout mode.
+Built-in host commands include:
+
+- `app.navigate` with `{ "to": "/path" }`
+- `palette.open` with `{ "scope": "threads" }`
+- `rail.open` with `{ "extensionId": "...", "surfaceId": "..." }`
+- `layout.set` with `{ "mode": "compact" | "workbench" }`
+
+Legacy string commands still work for compatibility: `navigate:/path`, `commandPalette:threads|files|commands|search`, `rightRail:{extensionId}/{surfaceId}`, and `layout:compact|workbench`.
+
+Frontend extensions can call `pa.commands.execute(id, args)`, `pa.commands.list()`, and `pa.commands.setContext(key, value)`. Backend actions can call `ctx.commands.execute(id, args)` for extension-contributed commands.
+
+Enablement is intentionally tiny: a command can set `enablement` to a context key (`speechmic.connected`), negated key (`!conversation.isStreaming`), equality (`layout.mode == workbench`), or inequality. Frontend `setContext` namespaces keys under the extension id.
 
 Do not install global `window` listeners for app-level shortcuts.
 

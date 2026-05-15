@@ -153,6 +153,9 @@ export interface ExtensionCommandRegistration {
   title: string;
   action: string;
   icon?: string;
+  category?: string;
+  description?: string;
+  enablement?: string;
 }
 
 export interface ExtensionKeybindingRegistration {
@@ -162,6 +165,7 @@ export interface ExtensionKeybindingRegistration {
   title: string;
   keys: string[];
   command: string;
+  args?: unknown;
   when?: string;
   scope: 'global' | 'surface';
   defaultKeys: string[];
@@ -870,6 +874,9 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(command.title, `contributes.commands[${index}].title`);
       requireString(command.action, `contributes.commands[${index}].action`);
       if (command.icon !== undefined) validateEnum(command.icon, EXTENSION_ICON_NAMES, `contributes.commands[${index}].icon`);
+      validateOptionalString(command.category, `contributes.commands[${index}].category`);
+      validateOptionalString(command.description, `contributes.commands[${index}].description`);
+      validateOptionalString(command.enablement, `contributes.commands[${index}].enablement`);
     }
   }
 
@@ -1627,6 +1634,9 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
       title: command.title,
       action: command.action,
       ...(command.icon ? { icon: command.icon } : {}),
+      ...(command.category ? { category: command.category } : {}),
+      ...(command.description ? { description: command.description } : {}),
+      ...(command.enablement ? { enablement: command.enablement } : {}),
     })),
   );
   return [...legacy, ...native];
@@ -1656,6 +1666,7 @@ export function listExtensionKeybindingRegistrations(stateRoot: string = getStat
           title,
           keys,
           command,
+          ...(keybinding.args !== undefined ? { args: keybinding.args } : {}),
           ...(keybinding.when ? { when: keybinding.when } : {}),
           scope: keybinding.scope ?? 'global',
           defaultKeys,
@@ -1663,6 +1674,12 @@ export function listExtensionKeybindingRegistrations(stateRoot: string = getStat
         },
       ];
     }),
+  );
+}
+
+export function findExtensionCommandRegistration(commandId: string): ExtensionCommandRegistration | undefined {
+  return listExtensionCommandRegistrations().find(
+    (command) => `${command.extensionId}.${command.surfaceId}` === commandId || command.surfaceId === commandId,
   );
 }
 

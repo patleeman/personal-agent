@@ -1,5 +1,6 @@
 import { api } from '../client/api';
 import { type DesktopWorkbenchBrowserState, getDesktopBridge } from '../desktop/desktopBridge';
+import { executeExtensionCommand, listHostCommands, setExtensionCommandContext } from './commands';
 import { type ExtensionSelectionState, readExtensionSelection, setExtensionSelection, subscribeExtensionSelection } from './selection';
 
 function matchExtensionEventPattern(pattern: string, eventName: string): boolean {
@@ -63,6 +64,11 @@ export interface NativeExtensionClient {
     reload(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
     stop(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
     snapshot(input?: { tabId?: string | null }): Promise<unknown>;
+  };
+  commands: {
+    execute(command: string, args?: unknown): Promise<boolean>;
+    list(): Promise<unknown[]>;
+    setContext(key: string, value: string | number | boolean | null | undefined): void;
   };
   events: {
     publish(event: string, payload: unknown): void;
@@ -245,6 +251,17 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
       snapshot(input) {
         return requireDesktopBridge().snapshotWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+    },
+    commands: {
+      execute(command, args) {
+        return executeExtensionCommand(command, args);
+      },
+      async list() {
+        return [...listHostCommands(), ...(await api.extensionCommands())];
+      },
+      setContext(key, value) {
+        setExtensionCommandContext(`${extensionId}.${key}`, value);
       },
     },
     events: {
