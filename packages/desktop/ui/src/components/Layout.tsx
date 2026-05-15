@@ -27,6 +27,7 @@ import {
   type NativeExtensionViewSummary,
 } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
+import { useConversations } from '../hooks/useConversations';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { routeIsKnowledge, routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
@@ -1157,6 +1158,7 @@ export function Layout() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { sessions } = useAppData();
+  const { pinnedSessions, tabs } = useConversations();
   const { versions } = useAppEvents();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
@@ -1397,7 +1399,7 @@ export function Layout() {
       },
       navigateConversation(direction: 'next' | 'previous') {
         if (!activeConversationId) return false;
-        const conversationIds = (sessions ?? []).map((session) => session.id);
+        const conversationIds = [...pinnedSessions, ...tabs].map((session) => session.id);
         const currentIndex = conversationIds.indexOf(activeConversationId);
         if (currentIndex === -1 || conversationIds.length < 2) return false;
         const delta = direction === 'next' ? 1 : -1;
@@ -1417,8 +1419,10 @@ export function Layout() {
       extensionRightToolPanels,
       location.pathname,
       navigate,
+      pinnedSessions,
       sessions,
       setActiveConversationTool,
+      tabs,
     ],
   );
 

@@ -34,7 +34,18 @@ interface CommandInspectorEntry {
   category?: string;
   action?: string;
   args?: unknown;
+  argsSchema?: unknown;
   enablement?: string;
+}
+
+interface KeybindingInspectorEntry {
+  extensionId: string;
+  surfaceId: string;
+  title: string;
+  keys: string[];
+  defaultKeys: string[];
+  command: string;
+  enabled: boolean;
 }
 
 interface LogicalSurfaceSummary {
@@ -496,7 +507,10 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
   const [importDraft, setImportDraft] = useState(false);
   const [showExperimental, setShowExperimental] = useState(false);
   const [commands, setCommands] = useState<CommandInspectorEntry[]>([]);
+  const [keybindings, setKeybindings] = useState<KeybindingInspectorEntry[]>([]);
   const [showCommands, setShowCommands] = useState(false);
+  const [commandArgsDraft, setCommandArgsDraft] = useState<Record<string, string>>({});
+  const [keybindingDraft, setKeybindingDraft] = useState<Record<string, string>>({});
 
   const load = useCallback(async (options: { showLoading?: boolean } = {}) => {
     if (options.showLoading) {
@@ -531,22 +545,86 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
     [pa],
   );
 
-  useEffect(() => {
-    void load({ showLoading: true });
+  const loadCommandInspector = useCallback(() => {
     void pa.commands
       .list()
       .then((items) => setCommands(items as CommandInspectorEntry[]))
       .catch(() => setCommands([]));
+    void api
+      .extensionKeybindings()
+      .then((items) => setKeybindings(items as KeybindingInspectorEntry[]))
+      .catch(() => setKeybindings([]));
+  }, [pa]);
+
+  useEffect(() => {
+    void load({ showLoading: true });
+    loadCommandInspector();
     const refresh = () => {
       void load({ showLoading: false });
-      void pa.commands
-        .list()
-        .then((items) => setCommands(items as CommandInspectorEntry[]))
-        .catch(() => setCommands([]));
+      loadCommandInspector();
     };
     window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
     return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
-  }, [load]);
+  }, [load, loadCommandInspector]);
+
+  const executeInspectorCommand = useCallback(
+    async (command: CommandInspectorEntry) => {
+      const id =
+        command.extensionId && command.surfaceId ? `${command.extensionId}.${command.surfaceId}` : (command.id ?? command.surfaceId);
+      if (!id) return;
+      try {
+        const raw = commandArgsDraft[id]?.trim();
+        const args = raw ? JSON.parse(raw) : (command.args ?? {});
+        const handled = await pa.commands.execute(id, args);
+        showActionNotice(`${handled ? 'Handled' : 'Did not handle'} ${id}`);
+      } catch (err) {
+        showActionError(`Failed to execute ${id}`, err instanceof Error ? err.message : String(err));
+      }
+    },
+    [commandArgsDraft, pa, showActionError, showActionNotice],
+  );
+
+  const saveKeybinding = useCallback(
+    async (keybinding: KeybindingInspectorEntry) => {
+      const key = `${keybinding.extensionId}:${keybinding.surfaceId}`;
+      const keys = (keybindingDraft[key] ?? keybinding.keys.join(', '))
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      try {
+        await api.updateExtensionKeybinding(keybinding.extensionId, keybinding.surfaceId, { keys });
+        showActionNotice(`Updated ${keybinding.title}`);
+        loadCommandInspector();
+      } catch (err) {
+        showActionError(`Failed to update ${keybinding.title}`, err instanceof Error ? err.message : String(err));
+      }
+    },
+    [keybindingDraft, loadCommandInspector, showActionError, showActionNotice],
+  );
+
+  const toggleKeybinding = useCallback(
+    async (keybinding: KeybindingInspectorEntry) => {
+      try {
+        await api.updateExtensionKeybinding(keybinding.extensionId, keybinding.surfaceId, { enabled: !keybinding.enabled });
+        loadCommandInspector();
+      } catch (err) {
+        showActionError(`Failed to toggle ${keybinding.title}`, err instanceof Error ? err.message : String(err));
+      }
+    },
+    [loadCommandInspector, showActionError],
+  );
+
+  const resetKeybinding = useCallback(
+    async (keybinding: KeybindingInspectorEntry) => {
+      try {
+        await api.updateExtensionKeybinding(keybinding.extensionId, keybinding.surfaceId, { reset: true });
+        loadCommandInspector();
+      } catch (err) {
+        showActionError(`Failed to reset ${keybinding.title}`, err instanceof Error ? err.message : String(err));
+      }
+    },
+    [loadCommandInspector, showActionError],
+  );
 
   const reload = useCallback(() => {
     setNotice(null);
@@ -1028,36 +1106,102 @@ export function ExtensionManagerPage({ pa }: ExtensionSurfaceProps) {
               <span className="text-[12px] text-dim">{showCommands ? 'Hide' : 'Show'}</span>
             </button>
             {showCommands ? (
-              <div className="overflow-auto rounded-xl bg-surface/30 p-2">
-                <table className="w-full border-collapse text-left text-[12px]">
-                  <thead className="text-[10px] uppercase tracking-[0.14em] text-dim">
-                    <tr>
-                      <th className="px-2 py-1.5 font-semibold">Command</th>
-                      <th className="px-2 py-1.5 font-semibold">Source</th>
-                      <th className="px-2 py-1.5 font-semibold">Action</th>
-                      <th className="px-2 py-1.5 font-semibold">Enablement</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {commands.map((command) => {
-                      const id = command.id ?? command.surfaceId ?? 'unknown';
-                      const source = command.extensionId ?? 'host';
-                      return (
-                        <tr key={`${source}:${id}`} className="border-t border-border-subtle/60 text-secondary">
-                          <td className="px-2 py-1.5 text-primary">
-                            <div>{command.title ?? id}</div>
-                            <div className="font-mono text-[11px] text-dim">
-                              {command.extensionId ? `${command.extensionId}.${id}` : id}
-                            </div>
-                          </td>
-                          <td className="px-2 py-1.5">{source}</td>
-                          <td className="px-2 py-1.5 font-mono text-[11px]">{command.action ?? 'host'}</td>
-                          <td className="px-2 py-1.5 font-mono text-[11px]">{command.enablement ?? '—'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                <div className="overflow-auto rounded-xl bg-surface/30 p-2">
+                  <table className="w-full border-collapse text-left text-[12px]">
+                    <thead className="text-[10px] uppercase tracking-[0.14em] text-dim">
+                      <tr>
+                        <th className="px-2 py-1.5 font-semibold">Command</th>
+                        <th className="px-2 py-1.5 font-semibold">Source</th>
+                        <th className="px-2 py-1.5 font-semibold">Action</th>
+                        <th className="px-2 py-1.5 font-semibold">Args / Run</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {commands.map((command) => {
+                        const id = command.id ?? command.surfaceId ?? 'unknown';
+                        const commandId = command.extensionId ? `${command.extensionId}.${id}` : id;
+                        const source = command.extensionId ?? 'host';
+                        return (
+                          <tr key={`${source}:${id}`} className="border-t border-border-subtle/60 text-secondary align-top">
+                            <td className="px-2 py-1.5 text-primary">
+                              <div>{command.title ?? id}</div>
+                              <div className="font-mono text-[11px] text-dim">{commandId}</div>
+                              {command.enablement ? (
+                                <div className="mt-1 font-mono text-[11px] text-dim">when {command.enablement}</div>
+                              ) : null}
+                              {command.argsSchema ? <div className="mt-1 font-mono text-[11px] text-dim">args schema available</div> : null}
+                            </td>
+                            <td className="px-2 py-1.5">{source}</td>
+                            <td className="px-2 py-1.5 font-mono text-[11px]">{command.action ?? 'host'}</td>
+                            <td className="px-2 py-1.5">
+                              <div className="flex min-w-64 gap-1.5">
+                                <input
+                                  value={commandArgsDraft[commandId] ?? (command.args ? JSON.stringify(command.args) : '')}
+                                  onChange={(event) => setCommandArgsDraft((current) => ({ ...current, [commandId]: event.target.value }))}
+                                  placeholder="JSON args"
+                                  className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-base px-2 py-1 font-mono text-[11px] text-primary outline-none focus:border-accent/50"
+                                />
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-surface px-2 py-1 text-[11px] text-secondary hover:text-primary"
+                                  onClick={() => void executeInspectorCommand(command)}
+                                >
+                                  Run
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="overflow-auto rounded-xl bg-surface/30 p-2">
+                  <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">Keybindings</div>
+                  <table className="w-full border-collapse text-left text-[12px]">
+                    <tbody>
+                      {keybindings.map((keybinding) => {
+                        const key = `${keybinding.extensionId}:${keybinding.surfaceId}`;
+                        return (
+                          <tr key={key} className="border-t border-border-subtle/60 text-secondary">
+                            <td className="px-2 py-1.5 text-primary">
+                              <div>{keybinding.title}</div>
+                              <div className="font-mono text-[11px] text-dim">{keybinding.command}</div>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                value={keybindingDraft[key] ?? keybinding.keys.join(', ')}
+                                onChange={(event) => setKeybindingDraft((current) => ({ ...current, [key]: event.target.value }))}
+                                className="w-64 rounded-lg border border-border-subtle bg-base px-2 py-1 font-mono text-[11px] text-primary outline-none focus:border-accent/50"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 text-right">
+                              <button
+                                className="px-2 py-1 text-[11px] text-secondary hover:text-primary"
+                                onClick={() => void saveKeybinding(keybinding)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="px-2 py-1 text-[11px] text-secondary hover:text-primary"
+                                onClick={() => void toggleKeybinding(keybinding)}
+                              >
+                                {keybinding.enabled ? 'Disable' : 'Enable'}
+                              </button>
+                              <button
+                                className="px-2 py-1 text-[11px] text-secondary hover:text-primary"
+                                onClick={() => void resetKeybinding(keybinding)}
+                              >
+                                Reset
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : null}
           </section>

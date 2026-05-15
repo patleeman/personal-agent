@@ -627,7 +627,9 @@ Built-in host commands include:
 - `focus.next` / `focus.previous`
 - `selection.activate`
 
-Extension command contributions may point at a backend action or at a built-in host command via `action`, with default `args` when needed. Backend-triggered host commands wait briefly for a renderer acknowledgement and return whether the command was handled.
+Extension command contributions may point at a backend action or at a built-in host command via `action`, with default `args` and optional `argsSchema` when needed. Backend-triggered host commands wait briefly for a renderer acknowledgement and return whether the command was handled. Command executions are recorded as renderer telemetry under `commands/execute` for debugging keybindings, palette invocations, and hardware integrations.
+
+The Extension Manager includes a command inspector for listing commands, running them with JSON args, and editing/resetting contributed keybindings.
 
 Legacy string commands still work for compatibility: `navigate:/path`, `commandPalette:threads|files|commands|search`, `rightRail:{extensionId}/{surfaceId}`, and `layout:compact|workbench`.
 

@@ -383,6 +383,7 @@ export interface ExtensionCommandContribution {
   title: string;
   action: string;
   args?: unknown;
+  argsSchema?: Record<string, unknown>;
   icon?: ExtensionIconName;
   category?: string;
   description?: string;

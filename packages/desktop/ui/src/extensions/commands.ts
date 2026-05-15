@@ -1,5 +1,6 @@
 import type { NavigateFunction } from 'react-router-dom';
 
+import { recordRendererTelemetry } from '../telemetry/appTelemetry';
 import type { ExtensionCommandRegistration } from './types';
 
 export type ExtensionCommandArgs = Record<string, unknown> | undefined;
@@ -10,6 +11,7 @@ export interface HostCommandDefinition {
   id: string;
   title: string;
   category?: string;
+  argsSchema?: Record<string, unknown>;
   execute(args: ExtensionCommandArgs): boolean | Promise<boolean>;
   canExecute?(args: ExtensionCommandArgs, context: ExtensionCommandContext): boolean;
 }
@@ -74,14 +76,34 @@ function compareContextValue(value: ExtensionCommandContextValue, operator: stri
   return operator === '!=' ? !matches : matches;
 }
 
-export function listHostCommands(): Array<{ id: string; title: string; category?: string }> {
+export function listHostCommands(): Array<{ id: string; title: string; category?: string; argsSchema?: Record<string, unknown> }> {
   return [
-    { id: 'app.navigate', title: 'Navigate', category: 'App' },
-    { id: 'palette.open', title: 'Open Command Palette', category: 'App' },
-    { id: 'rail.open', title: 'Open Right Rail', category: 'App' },
-    { id: 'layout.set', title: 'Set Layout', category: 'App' },
+    { id: 'app.navigate', title: 'Navigate', category: 'App', argsSchema: { type: 'object', properties: { to: { type: 'string' } } } },
+    {
+      id: 'palette.open',
+      title: 'Open Command Palette',
+      category: 'App',
+      argsSchema: { type: 'object', properties: { scope: { type: 'string' } } },
+    },
+    {
+      id: 'rail.open',
+      title: 'Open Right Rail',
+      category: 'App',
+      argsSchema: { type: 'object', properties: { extensionId: { type: 'string' }, surfaceId: { type: 'string' } } },
+    },
+    {
+      id: 'layout.set',
+      title: 'Set Layout',
+      category: 'App',
+      argsSchema: { type: 'object', properties: { mode: { enum: ['compact', 'workbench'] } } },
+    },
     { id: 'conversation.new', title: 'New Conversation', category: 'Conversation' },
-    { id: 'conversation.open', title: 'Open Conversation', category: 'Conversation' },
+    {
+      id: 'conversation.open',
+      title: 'Open Conversation',
+      category: 'Conversation',
+      argsSchema: { type: 'object', properties: { conversationId: { type: 'string' } } },
+    },
     { id: 'conversation.next', title: 'Next Conversation', category: 'Conversation' },
     { id: 'conversation.previous', title: 'Previous Conversation', category: 'Conversation' },
     { id: 'composer.focus', title: 'Focus Composer', category: 'Conversation' },
@@ -247,22 +269,36 @@ function isHostCommandString(command: string): boolean {
 }
 
 export async function executeExtensionCommand(command: string, args: unknown, options: ExtensionCommandExecutorOptions): Promise<boolean> {
+  const startedAt = performance.now();
   const invocation = normalizeLegacyCommand(command);
   const commandArgs = (args ?? invocation.args) as ExtensionCommandArgs;
-  const hostCommand = createHostCommands(options).find((candidate) => candidate.id === invocation.command);
-  if (hostCommand) {
-    if (hostCommand.canExecute && !hostCommand.canExecute(commandArgs, options.context ?? {})) return false;
-    return Boolean(await hostCommand.execute(commandArgs));
+  let handled = false;
+  try {
+    const hostCommand = createHostCommands(options).find((candidate) => candidate.id === invocation.command);
+    if (hostCommand) {
+      if (hostCommand.canExecute && !hostCommand.canExecute(commandArgs, options.context ?? {})) return false;
+      handled = Boolean(await hostCommand.execute(commandArgs));
+      return handled;
+    }
+    const extensionCommand = options.extensionCommands?.find(
+      (candidate) => candidate.surfaceId === invocation.command || `${candidate.extensionId}.${candidate.surfaceId}` === invocation.command,
+    );
+    if (!extensionCommand) return false;
+    if (!evaluateCommandEnablement(extensionCommand.enablement, options.context)) return false;
+    const effectiveArgs = commandArgs ?? (extensionCommand.args as ExtensionCommandArgs);
+    if (isHostCommandString(extensionCommand.action)) {
+      handled = await executeExtensionCommand(extensionCommand.action, effectiveArgs, options);
+      return handled;
+    }
+    await options.invokeExtensionCommand?.(extensionCommand, effectiveArgs ?? {});
+    handled = true;
+    return true;
+  } finally {
+    recordRendererTelemetry({
+      category: 'commands',
+      name: 'execute',
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      metadata: { command: invocation.command, originalCommand: command, handled },
+    });
   }
-  const extensionCommand = options.extensionCommands?.find(
-    (candidate) => candidate.surfaceId === invocation.command || `${candidate.extensionId}.${candidate.surfaceId}` === invocation.command,
-  );
-  if (!extensionCommand) return false;
-  if (!evaluateCommandEnablement(extensionCommand.enablement, options.context)) return false;
-  const effectiveArgs = commandArgs ?? (extensionCommand.args as ExtensionCommandArgs);
-  if (isHostCommandString(extensionCommand.action)) {
-    return executeExtensionCommand(extensionCommand.action, effectiveArgs, options);
-  }
-  await options.invokeExtensionCommand?.(extensionCommand, effectiveArgs ?? {});
-  return true;
 }

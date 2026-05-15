@@ -1627,20 +1627,34 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
         ]
       : [],
   );
-  const native = snapshot.extensions.flatMap((extension) =>
-    (extension.contributes?.commands ?? []).map((command) => ({
+  const native = snapshot.extensions.flatMap((extension) => {
+    const explicitCommandIds = new Set((extension.contributes?.commands ?? []).map((command) => command.id));
+    const contributed = (extension.contributes?.commands ?? []).map((command) => ({
       extensionId: extension.id,
       surfaceId: command.id,
       packageType: extension.packageType ?? 'user',
       title: command.title,
       action: command.action,
       ...(command.args !== undefined ? { args: command.args } : {}),
+      ...(command.argsSchema !== undefined ? { argsSchema: command.argsSchema } : {}),
       ...(command.icon ? { icon: command.icon } : {}),
       ...(command.category ? { category: command.category } : {}),
       ...(command.description ? { description: command.description } : {}),
       ...(command.enablement ? { enablement: command.enablement } : {}),
-    })),
-  );
+    }));
+    const backendActions = (extension.backend?.actions ?? [])
+      .filter((action) => !explicitCommandIds.has(action.id))
+      .map((action) => ({
+        extensionId: extension.id,
+        surfaceId: action.id,
+        packageType: extension.packageType ?? 'user',
+        title: action.title ?? action.id,
+        action: action.id,
+        category: extension.name,
+        ...(action.description ? { description: action.description } : {}),
+      }));
+    return [...contributed, ...backendActions];
+  });
   return [...legacy, ...native];
 }
 
