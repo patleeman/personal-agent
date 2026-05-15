@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -93,6 +93,13 @@ function rememberLog(line: string): void {
   if (!trimmed) return;
   sidecarLogs.push(trimmed);
   if (sidecarLogs.length > 200) sidecarLogs = sidecarLogs.slice(-200);
+  if (sidecarLogPath) {
+    try {
+      appendFileSync(sidecarLogPath, `${trimmed}\n`);
+    } catch {
+      // Best-effort diagnostics only.
+    }
+  }
 }
 
 function sidecarBinaryPath(): { binary: string | null; searched: string[] } {
@@ -206,6 +213,11 @@ async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
   const logPath = join(ctx.runtimeDir, 'alleycat-sidecar.log');
   sidecarLogPath = logPath;
   sidecarLogs = [];
+  try {
+    writeFileSync(logPath, '');
+  } catch {
+    // Best-effort diagnostics only.
+  }
 
   const env = {
     ...process.env,
