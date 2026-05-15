@@ -213,6 +213,7 @@ function sourceEntryPath(extensionDir, relativePath) {
 
 function isBuildManifestStale(buildManifestPath, sourcePaths) {
   if (!existsSync(buildManifestPath)) return true;
+  if (packagedAppResourcesRoot) return false;
   const buildManifestMtime = statSync(buildManifestPath).mtimeMs;
   return sourcePaths.filter(Boolean).some((sourcePath) => existsSync(sourcePath) && statSync(sourcePath).mtimeMs > buildManifestMtime);
 }
