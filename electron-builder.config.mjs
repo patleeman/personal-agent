@@ -106,12 +106,12 @@ const electronBuilderConfig = {
     {
       from: 'extensions',
       to: 'extensions',
-      filter: ['**/*', '!**/*.map', '!**/src/**/*.test.*', '!**/src/**/__tests__{,/**/*}'],
+      filter: ['**/*', '!**/*.map', '!**/src{,/**/*}'],
     },
     {
       from: 'experimental-extensions/extensions',
       to: 'experimental-extensions/extensions',
-      filter: ['**/*', '!**/*.map', '!**/src/**/*.test.*', '!**/src/**/__tests__{,/**/*}'],
+      filter: ['**/*', '!**/*.map', '!**/src{,/**/*}'],
     },
     {
       from: 'docs',
