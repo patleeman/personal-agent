@@ -218,11 +218,21 @@ function emptySummary() {
   };
 }
 
+function latestContextBySession(events: TraceTelemetryLogEvent[]): TraceTelemetryLogEvent[] {
+  const latest = new Map<string, TraceTelemetryLogEvent>();
+  for (const event of contextEvents(events)) {
+    const current = latest.get(event.sessionId);
+    if (!current || event.ts > current.ts) latest.set(event.sessionId, event);
+  }
+  return [...latest.values()];
+}
+
 function querySummaryFromEvents(events: TraceTelemetryLogEvent[]) {
   const summary = emptySummary();
   const sessions = new Set<string>();
   const runs = new Set<string>();
-  for (const event of statsEvents(events)) {
+  const stats = statsEvents(events);
+  for (const event of stats) {
     sessions.add(event.sessionId);
     if (event.runId) runs.add(event.runId);
     summary.tokensInput += numberValue(event.payload.tokensInput);
@@ -232,8 +242,16 @@ function querySummaryFromEvents(events: TraceTelemetryLogEvent[]) {
     summary.totalCost += numberValue(event.payload.cost);
   }
   for (const event of toolEvents(events)) {
+    sessions.add(event.sessionId);
+    if (event.runId) runs.add(event.runId);
     summary.toolCalls += 1;
     if (event.payload.status === 'error') summary.toolErrors += 1;
+  }
+  if (stats.length === 0) {
+    for (const event of latestContextBySession(events)) {
+      sessions.add(event.sessionId);
+      summary.tokensInput += numberValue(event.payload.totalTokens);
+    }
   }
   summary.activeSessions = sessions.size;
   summary.runsToday = runs.size;
@@ -258,9 +276,11 @@ function queryModelUsageFromEvents(events: TraceTelemetryLogEvent[]) {
     }
   >();
   const throughput = new Map<string, { ts: string; tokens: number; cost: number; calls: number }>();
-  for (const event of statsEvents(events)) {
+  const stats = statsEvents(events);
+  const sourceEvents = stats.length > 0 ? stats : latestContextBySession(events);
+  for (const event of sourceEvents) {
     const modelId = stringValue(event.payload.modelId) ?? 'unknown';
-    const tokensInput = numberValue(event.payload.tokensInput);
+    const tokensInput = stats.length > 0 ? numberValue(event.payload.tokensInput) : numberValue(event.payload.totalTokens);
     const tokensOutput = numberValue(event.payload.tokensOutput);
     const tokensCached = numberValue(event.payload.tokensCachedInput);
     const tokensCachedWrite = numberValue(event.payload.tokensCachedWrite);
@@ -514,14 +534,19 @@ export function agentLoop(req: ExtensionRouteRequest): ExtensionRouteResponse {
 
 export function tokensDaily(req: ExtensionRouteRequest): ExtensionRouteResponse {
   const buckets = new Map<string, { date: string; tokens: number; cost: number; calls: number }>();
-  for (const event of statsEvents(eventsSince(parseRangeParam(req.query.range)))) {
+  const events = eventsSince(parseRangeParam(req.query.range));
+  const stats = statsEvents(events);
+  const sourceEvents = stats.length > 0 ? stats : latestContextBySession(events);
+  for (const event of sourceEvents) {
     const date = dayKey(event.ts);
     const bucket = buckets.get(date) ?? { date, tokens: 0, cost: 0, calls: 0 };
     bucket.tokens +=
-      numberValue(event.payload.tokensInput) +
-      numberValue(event.payload.tokensOutput) +
-      numberValue(event.payload.tokensCachedInput) +
-      numberValue(event.payload.tokensCachedWrite);
+      stats.length > 0
+        ? numberValue(event.payload.tokensInput) +
+          numberValue(event.payload.tokensOutput) +
+          numberValue(event.payload.tokensCachedInput) +
+          numberValue(event.payload.tokensCachedWrite)
+        : numberValue(event.payload.totalTokens);
     bucket.cost += numberValue(event.payload.cost);
     bucket.calls += 1;
     buckets.set(date, bucket);
