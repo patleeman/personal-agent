@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +37,7 @@ rmSync(join(packageRoot, 'dist'), { recursive: true, force: true });
 mkdirSync(join(packageRoot, 'dist'), { recursive: true });
 
 const buildOutputs = [];
+copyStaticDirectoryIfPresent('bin', buildOutputs);
 
 const frontendSource = join(packageRoot, 'src', 'frontend.tsx');
 if (manifest.frontend?.entry && existsSync(frontendSource)) {
@@ -119,6 +120,14 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
 }
 
 writeBuildManifest(buildOutputs);
+
+function copyStaticDirectoryIfPresent(name, buildOutputs) {
+  const source = join(packageRoot, name);
+  if (!existsSync(source)) return;
+  const destination = join(packageRoot, 'dist', name);
+  cpSync(source, destination, { recursive: true });
+  buildOutputs.push({ path: relativeToPackage(destination), bytes: 0, imports: [] });
+}
 
 function createFrontendRawCssPlugin() {
   return {

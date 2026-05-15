@@ -93,8 +93,14 @@ function sidecarBinaryPath(): string | null {
   const here = dirname(fileURLToPath(import.meta.url));
   const platform = process.platform === 'darwin' ? 'macos' : process.platform;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  const candidate = join(here, '..', 'bin', `pa-alleycat-host-${platform}-${arch}`);
-  return existsSync(candidate) ? candidate : null;
+  const binaryName = `pa-alleycat-host-${platform}-${arch}`;
+  const candidates = [
+    // Built/imported extension packages copy static binaries into dist/bin.
+    join(here, 'bin', binaryName),
+    // Source-tree development keeps binaries at extension-root/bin while backend.mjs is in dist/.
+    join(here, '..', 'bin', binaryName),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 
 async function ensureSecretKey(ctx: ExtensionBackendContext): Promise<string> {
