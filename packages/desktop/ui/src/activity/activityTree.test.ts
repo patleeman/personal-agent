@@ -12,6 +12,7 @@ function session(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' | 'tit
     updatedAt: overrides.updatedAt ?? '2026-05-12T10:00:00.000Z',
     isRunning: overrides.isRunning ?? false,
     parentSessionId: overrides.parentSessionId,
+    sourceRunId: overrides.sourceRunId,
   } as SessionMeta;
 }
 
@@ -97,6 +98,25 @@ describe('buildActivityTreeItems', () => {
       }),
     ]);
     expect(buildRunActivityId('run-1')).toBe(buildExecutionActivityId('run-1'));
+  });
+
+  it('opens subagent executions at their captured conversation when available', () => {
+    const items = buildActivityTreeItems({
+      conversations: [
+        session({ id: 'conv-1', title: 'Build the thing' }),
+        session({ id: 'subagent-conv', title: 'Subagent smoke test', parentSessionId: 'conv-1', sourceRunId: 'run-1' }),
+      ],
+      executions: [
+        execution({ id: 'run-1', kind: 'subagent', conversationId: 'conv-1', title: 'Subagent smoke test', status: 'completed' }),
+      ],
+    });
+
+    expect(items.find((item) => item.id === buildExecutionActivityId('run-1'))).toEqual(
+      expect.objectContaining({
+        route: '/conversations/subagent-conv',
+        metadata: expect.objectContaining({ conversationId: 'subagent-conv' }),
+      }),
+    );
   });
 
   it('skips hidden and unlinked executions', () => {

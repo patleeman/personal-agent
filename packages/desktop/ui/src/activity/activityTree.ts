@@ -36,6 +36,9 @@ export function buildExecutionActivityId(executionId: string): string {
 
 export function buildActivityTreeItems({ conversations, executions = [] }: BuildActivityTreeInput): ActivityTreeItem[] {
   const conversationIds = new Set(conversations.map((session) => session.id));
+  const conversationIdBySourceRunId = new Map(
+    conversations.flatMap((session) => (session.sourceRunId ? [[session.sourceRunId, session.id] as const] : [])),
+  );
   const items: ActivityTreeItem[] = conversations.map((session) => ({
     id: buildConversationActivityId(session.id),
     kind: 'conversation',
@@ -62,6 +65,9 @@ export function buildActivityTreeItems({ conversations, executions = [] }: Build
       continue;
     }
 
+    const sourceConversationId = execution.kind === 'subagent' ? conversationIdBySourceRunId.get(execution.id) : undefined;
+    const routeConversationId = sourceConversationId ?? parentConversationId;
+
     items.push({
       id: buildExecutionActivityId(execution.id),
       kind: 'execution',
@@ -69,9 +75,11 @@ export function buildActivityTreeItems({ conversations, executions = [] }: Build
       title: execution.title || execution.id,
       subtitle: execution.kind,
       status: normalizeRunStatus(execution.status),
-      route: `/conversations/${encodeURIComponent(parentConversationId)}?run=${encodeURIComponent(execution.id)}`,
+      route: sourceConversationId
+        ? `/conversations/${encodeURIComponent(sourceConversationId)}`
+        : `/conversations/${encodeURIComponent(parentConversationId)}?run=${encodeURIComponent(execution.id)}`,
       updatedAt: execution.updatedAt ?? execution.startedAt ?? execution.createdAt,
-      metadata: { executionId: execution.id, runId: execution.id, conversationId: parentConversationId },
+      metadata: { executionId: execution.id, runId: execution.id, conversationId: routeConversationId },
     });
   }
 
