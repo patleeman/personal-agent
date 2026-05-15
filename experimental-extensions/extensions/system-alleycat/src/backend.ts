@@ -88,19 +88,26 @@ function rememberLog(line: string): void {
   if (sidecarLogs.length > 200) sidecarLogs = sidecarLogs.slice(-200);
 }
 
-function sidecarBinaryPath(): string | null {
-  if (process.env.PERSONAL_AGENT_ALLEYCAT_SIDECAR) return process.env.PERSONAL_AGENT_ALLEYCAT_SIDECAR;
+function sidecarBinaryPath(): { binary: string | null; searched: string[] } {
+  if (process.env.PERSONAL_AGENT_ALLEYCAT_SIDECAR) return { binary: process.env.PERSONAL_AGENT_ALLEYCAT_SIDECAR, searched: [] };
   const here = dirname(fileURLToPath(import.meta.url));
   const platform = process.platform === 'darwin' ? 'macos' : process.platform;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const binaryName = `pa-alleycat-host-${platform}-${arch}`;
+  const roots = [process.env.PERSONAL_AGENT_REPO_ROOT, process.cwd()].filter((root): root is string => Boolean(root));
   const candidates = [
     // Built/imported extension packages copy static binaries into dist/bin.
     join(here, 'bin', binaryName),
     // Source-tree development keeps binaries at extension-root/bin while backend.mjs is in dist/.
     join(here, '..', 'bin', binaryName),
+    // Dev backend builds may run from a cache directory, so import.meta.url is
+    // not always under the extension package. Search the repo checkout too.
+    ...roots.flatMap((root) => [
+      join(root, 'experimental-extensions', 'extensions', 'system-alleycat', 'dist', 'bin', binaryName),
+      join(root, 'experimental-extensions', 'extensions', 'system-alleycat', 'bin', binaryName),
+    ]),
   ];
-  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+  return { binary: candidates.find((candidate) => existsSync(candidate)) ?? null, searched: [...new Set(candidates)] };
 }
 
 async function ensureSecretKey(ctx: ExtensionBackendContext): Promise<string> {
@@ -149,9 +156,10 @@ async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
   if (!codexServer) throw new Error('Codex JSONL server must be running before Alleycat sidecar starts');
   if (sidecarPid && (await isPidRunning(ctx, sidecarPid))) return;
 
-  const binary = sidecarBinaryPath();
+  const { binary, searched } = sidecarBinaryPath();
   if (!binary) {
-    rememberLog('sidecar binary missing; set PERSONAL_AGENT_ALLEYCAT_SIDECAR or package bin/pa-alleycat-host-*');
+    rememberLog(`sidecar binary missing; searched: ${searched.join(', ')}`);
+    rememberLog('set PERSONAL_AGENT_ALLEYCAT_SIDECAR or rebuild/reimport the extension so dist/bin/pa-alleycat-host-* is packaged');
     return;
   }
 
