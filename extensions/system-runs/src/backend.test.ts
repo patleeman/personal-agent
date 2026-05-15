@@ -99,8 +99,29 @@ describe('system-runs backend', () => {
       const ctx = createCtx();
       const result = await bash({ command: 'echo hi' }, ctx);
 
-      expect(ctx.shell.exec).toHaveBeenCalledWith({ command: 'sh', args: ['-lc', 'echo hi'], cwd: '/tmp/repo', timeoutMs: undefined });
+      expect(ctx.shell.exec).toHaveBeenCalledWith({
+        command: 'sh',
+        args: ['-lc', 'echo hi'],
+        cwd: '/tmp/repo',
+        timeoutMs: undefined,
+        signal: undefined,
+      });
       expect(result.text).toBe('ok');
+    });
+
+    it('passes the active tool abort signal to foreground shell commands', async () => {
+      const signal = new AbortController().signal;
+      const ctx = createCtx({ agentToolContext: { signal } });
+
+      await bash({ command: 'sleep 10' }, ctx);
+
+      expect(ctx.shell.exec).toHaveBeenCalledWith({
+        command: 'sh',
+        args: ['-lc', 'sleep 10'],
+        cwd: '/tmp/repo',
+        timeoutMs: undefined,
+        signal,
+      });
     });
 
     it('starts background commands through the host runs backend API', async () => {

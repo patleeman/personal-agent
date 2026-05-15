@@ -13,9 +13,10 @@ type RunAgentExtensionFactory = (api: RegisterToolApi) => void;
 
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
+  agentToolContext?: { signal?: AbortSignal };
   ui: { invalidate(topics: string | string[]): void };
   shell: {
-    exec(input: { command: string; args?: string[]; cwd?: string; timeoutMs?: number }): Promise<{
+    exec(input: { command: string; args?: string[]; cwd?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<{
       stdout?: string;
       stderr?: string;
       executionWrappers?: Array<{ id: string; label?: string }>;
@@ -71,6 +72,7 @@ async function runForegroundBash(
       args: ['-lc', command],
       cwd,
       timeoutMs: timeoutSeconds ? timeoutSeconds * 1000 : undefined,
+      signal: ctx.agentToolContext?.signal,
     });
     const output = [result.stdout?.trimEnd(), result.stderr?.trimEnd()].filter(Boolean).join('\n');
     return {

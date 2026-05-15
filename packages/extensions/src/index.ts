@@ -794,6 +794,7 @@ export interface ExtensionBackendContext {
       timeoutMs?: number;
       maxBuffer?: number;
       env?: Record<string, string>;
+      signal?: AbortSignal;
     }): Promise<{
       command: string;
       args: string[];

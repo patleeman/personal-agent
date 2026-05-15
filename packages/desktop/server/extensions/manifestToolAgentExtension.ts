@@ -56,7 +56,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             ? { promptGuidelines: [`This tool replaces the built-in "${registerName}" tool.`] }
             : {}),
         parameters: tool.inputSchema,
-        async execute(_toolCallId, params, _signal, onUpdate: any, ctx: any) {
+        async execute(_toolCallId, params, signal, onUpdate: any, ctx: any) {
           const invokeResult = await invokeExtensionAction(
             tool.extensionId,
             tool.action,
@@ -78,7 +78,11 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             },
             // Forward the streaming callback so backend handlers can
             // send progress updates during tool execution.
-            { onUpdate, toolContext: ctx } satisfies { onUpdate?: AgentToolUpdateCallback; toolContext: unknown },
+            { onUpdate, signal, toolContext: ctx } satisfies {
+              onUpdate?: AgentToolUpdateCallback;
+              signal?: AbortSignal;
+              toolContext: unknown;
+            },
           );
 
           // Handle backend invocation error (build failure, not found, etc.)

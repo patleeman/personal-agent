@@ -111,6 +111,7 @@ export async function execFileProcess(input: {
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   maxBuffer?: number;
+  signal?: AbortSignal;
 }): Promise<{ launch: ProcessLaunchResult; stdout: string; stderr: string }> {
   const launch = resolveProcessLaunch({ command: input.command, args: input.args, cwd: input.cwd, env: input.env });
   const result = await execFileAsync(launch.command, launch.args, {
@@ -119,6 +120,7 @@ export async function execFileProcess(input: {
     timeout: input.timeoutMs,
     maxBuffer: input.maxBuffer,
     shell: launch.shell,
+    signal: input.signal,
   });
   return { launch, stdout: result.stdout, stderr: result.stderr };
 }

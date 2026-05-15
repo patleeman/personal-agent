@@ -9,6 +9,7 @@ export function createExtensionShellCapability() {
       timeoutMs?: number;
       maxBuffer?: number;
       env?: Record<string, string>;
+      signal?: AbortSignal;
     }): Promise<{
       command: string;
       args: string[];
@@ -25,6 +26,7 @@ export function createExtensionShellCapability() {
         timeoutMs: input.timeoutMs ?? 30_000,
         maxBuffer: input.maxBuffer ?? 1024 * 1024,
         env: input.env ? { ...process.env, ...input.env } : process.env,
+        signal: input.signal,
       });
       return {
         command: input.command,
