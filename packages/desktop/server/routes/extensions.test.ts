@@ -10,7 +10,7 @@ import { registerExtensionRoutes } from './extensions.js';
 const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
 
 type Handler = (
-  req: { params?: Record<string, string>; body?: unknown; query?: Record<string, string> },
+  req: { method?: string; params?: Record<string, string>; body?: unknown; query?: Record<string, string> },
   res: ReturnType<typeof createResponse>,
 ) => void | Promise<void>;
 
@@ -19,6 +19,7 @@ function createResponse() {
     json: vi.fn(),
     send: vi.fn(),
     sendFile: vi.fn(),
+    setHeader: vi.fn(),
     status: vi.fn().mockReturnThis(),
     type: vi.fn().mockReturnThis(),
   };
@@ -121,6 +122,37 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: 'ConversationRunDetailPanel' }),
       ]),
     );
+  });
+
+  it('dispatches namespaced extension backend routes', async () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'dist'), { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'agent-board',
+        name: 'Agent Board',
+        enabled: true,
+        backend: { entry: 'dist/backend.mjs', routes: [{ method: 'GET', path: '/status', handler: 'status' }] },
+      }),
+    );
+    writeFileSync(
+      join(extensionRoot, 'dist', 'backend.mjs'),
+      'export function status(req) { return { status: 201, body: { ok: true, q: req.query.q } }; }',
+    );
+    const harness = createHarness();
+
+    const res = createResponse();
+    harness.getHandler('/api/extensions/:id/routes/*')(
+      { method: 'GET', params: { id: 'agent-board', 0: 'status' }, query: { q: 'hello' } },
+      res,
+    );
+    await vi.waitFor(() => expect(res.status).toHaveBeenCalledWith(201));
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, q: 'hello' });
   });
 
   it('serves per-extension manifest and surfaces', () => {
