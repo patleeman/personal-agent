@@ -112,6 +112,31 @@ describe('resolveServerModuleSpecifierFrom', () => {
     expect(resolved).toBe(pathToFileURL(bundledPath).href);
   });
 
+  it('resolves packaged Extension Manager helper modules from server output', () => {
+    const resourcesRoot = makeTempRoot();
+    const cwdRoot = makeTempRoot();
+    const backendPath = join(resourcesRoot, 'app.asar/server/dist/extensions/extensionBackend.js');
+    const doctorPath = join(resourcesRoot, 'app.asar/server/dist/extensions/extensionDoctor.js');
+    touch(backendPath);
+    touch(doctorPath);
+    delete process.env.PERSONAL_AGENT_REPO_ROOT;
+    process.chdir(cwdRoot);
+
+    for (const [specifier, expected] of [
+      ['../extensionBackend.js', backendPath],
+      ['../extensionDoctor.js', doctorPath],
+    ] as const) {
+      const resolved = resolveServerModuleSpecifierFrom({
+        importMetaUrl: pathToFileURL(join(resourcesRoot, 'extensions/system-extension-manager/dist/backend.mjs')).href,
+        relativeSpecifier: specifier,
+        normalize: normalizeServerExtensionModuleSpecifier,
+        resourcesPath: resourcesRoot,
+      });
+
+      expect(resolved).toBe(pathToFileURL(expected).href);
+    }
+  });
+
   it('resolves packaged server modules inside app.asar before falling back to extension siblings', () => {
     const resourcesRoot = makeTempRoot();
     const cwdRoot = makeTempRoot();

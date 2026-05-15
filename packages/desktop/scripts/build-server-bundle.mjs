@@ -65,6 +65,10 @@ const backendApiLazyModuleEntries = [
   ['routes/vaultShareImport.js', 'server/routes/vaultShareImport.ts'],
   ['shared/appEvents.js', 'server/shared/appEvents.ts'],
   ['traces/tracePersistence.js', 'server/traces/tracePersistence.ts'],
+  ['extensions/extensionBackend.js', 'server/extensions/extensionBackend.ts'],
+  ['extensions/extensionDoctor.js', 'server/extensions/extensionDoctor.ts'],
+  ['extensions/extensionLifecycle.js', 'server/extensions/extensionLifecycle.ts'],
+  ['extensions/extensionRegistry.js', 'server/extensions/extensionRegistry.ts'],
   ['extensions/runtimeAgentHooks.js', 'server/extensions/runtimeAgentHooks.ts'],
 ];
 
