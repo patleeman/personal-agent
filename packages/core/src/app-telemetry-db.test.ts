@@ -127,7 +127,7 @@ describe('app-telemetry-db', () => {
 
     expect(appResult).toMatchObject({ maxEvents: 1000, remainingRows: 1000, vacuumed: true });
     expect(appResult.deletedRows).toBeGreaterThanOrEqual(250);
-    expect(traceResult.vacuumed).toBe(true);
+    expect(traceResult.vacuumed).toBe(false);
   });
 
   it('deletes legacy app telemetry DB after successful import', () => {
@@ -164,23 +164,18 @@ describe('app-telemetry-db', () => {
     expect(queryAppTelemetryEvents({ since: new Date(Date.now() - 60_000).toISOString() })).toHaveLength(0);
   });
 
-  it('stores app telemetry and traces in the same observability database', () => {
+  it('keeps trace maintenance separate from app telemetry indexing', () => {
     writeAppTelemetryEvent({ source: 'server', category: 'api', name: 'request', route: '/health' });
-    writeTraceStats({ sessionId: 'shared-db-session', modelId: 'shared-model', tokensInput: 1, tokensOutput: 2, cost: 0.01 });
+    writeTraceStats({ sessionId: 'shared-log-session', modelId: 'shared-model', tokensInput: 1, tokensOutput: 2, cost: 0.01 });
     closeAppTelemetryDbs();
     closeTraceDbs();
 
     const db = openSqliteDatabase(join(testDir, 'observability', 'observability.db'));
     const telemetry = db.prepare('SELECT COUNT(*) AS count FROM app_telemetry_events').get() as { count: number };
-    const traces = db.prepare('SELECT COUNT(*) AS count FROM trace_stats').get() as { count: number };
-    const namespaces = db.prepare('SELECT namespace FROM observability_schema_versions ORDER BY namespace').all() as Array<{
-      namespace: string;
-    }>;
     db.close();
 
     expect(telemetry.count).toBe(1);
-    expect(traces.count).toBe(1);
-    expect(namespaces.map((row) => row.namespace)).toEqual(['trace']);
+    expect(maintainTraceDb(testDir).deletedRows).toEqual({});
   });
 
   it('caps stored telemetry events', () => {

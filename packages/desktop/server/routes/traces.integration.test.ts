@@ -213,8 +213,8 @@ describe('traces API integration', () => {
   it('tool-flow returns transitions and trajectories', async () => {
     const res = await call('GET', '/api/traces/tool-flow');
     expect(res.status).toBe(200);
-    expect(res.body.sequences).toBeInstanceOf(Array);
-    expect(res.body.edges).toBeInstanceOf(Array);
+    expect(res.body.transitions).toBeInstanceOf(Array);
+    expect(res.body.failureTrajectories).toBeInstanceOf(Array);
   });
 
   it('session-integrity returns app telemetry from JSONL telemetry logs', async () => {

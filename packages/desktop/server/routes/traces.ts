@@ -161,6 +161,33 @@ function queryModelUsageFromEvents(events: TraceTelemetryLogEvent[]) {
   };
 }
 
+function bashCommand(event: TraceTelemetryLogEvent): string | null {
+  return stringValue(event.payload.bashCommand) ?? stringValue(event.payload.bashCommandLabel);
+}
+
+function bashLabel(event: TraceTelemetryLogEvent): string | null {
+  return stringValue(event.payload.bashCommandLabel) ?? bashCommand(event)?.trim().split(/\s+/)[0] ?? null;
+}
+
+function bashComplexityScore(command: string): { score: number; shape: string; commandCount: number } {
+  const commandCount = command.split(/&&|\|\||\||;/).filter((part) => part.trim()).length;
+  const score =
+    commandCount +
+    (command.includes('|') ? 2 : 0) +
+    (command.includes('&&') || command.includes('||') ? 2 : 0) +
+    (/[<>]/.test(command) ? 1 : 0) +
+    (command.includes('\n') ? 2 : 0) +
+    (/\$\(|`/.test(command) ? 2 : 0);
+  const shape = command.includes('|')
+    ? 'pipeline'
+    : command.includes('&&') || command.includes('||')
+      ? 'chain'
+      : commandCount > 1
+        ? 'compound'
+        : 'simple';
+  return { score, shape, commandCount };
+}
+
 function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
   const grouped = new Map<string, Array<TraceTelemetryLogEvent>>();
   for (const event of toolEvents(events)) {
@@ -171,6 +198,41 @@ function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
     .map(([toolName, rows]) => {
       const latencies = rows.map((event) => numberValue(event.payload.durationMs)).filter((value) => value > 0);
       const errors = rows.filter((event) => event.payload.status === 'error').length;
+      const bashRows = toolName === 'bash' ? rows : [];
+      const byCommand = new Map<string, Array<TraceTelemetryLogEvent>>();
+      for (const row of bashRows) {
+        const label = bashLabel(row) ?? 'unknown';
+        byCommand.set(label, [...(byCommand.get(label) ?? []), row]);
+      }
+      const bashBreakdown = [...byCommand.entries()].map(([command, commandRows]) => {
+        const commandLatencies = commandRows.map((event) => numberValue(event.payload.durationMs)).filter((value) => value > 0);
+        const commandErrors = commandRows.filter((event) => event.payload.status === 'error').length;
+        return {
+          command,
+          calls: commandRows.length,
+          errors: commandErrors,
+          errorRate: commandRows.length > 0 ? (commandErrors / commandRows.length) * 100 : 0,
+          p95LatencyMs: percentile(commandLatencies, 0.95),
+        };
+      });
+      const complexities = bashRows.map((event) => bashComplexityScore(bashCommand(event) ?? bashLabel(event) ?? ''));
+      const shapeCounts = new Map<string, number>();
+      for (const complexity of complexities) shapeCounts.set(complexity.shape, (shapeCounts.get(complexity.shape) ?? 0) + 1);
+      const bashComplexity =
+        toolName === 'bash'
+          ? {
+              avgScore: complexities.length ? complexities.reduce((total, row) => total + row.score, 0) / complexities.length : 0,
+              maxScore: complexities.length ? Math.max(...complexities.map((row) => row.score)) : 0,
+              maxCommandCount: complexities.length ? Math.max(...complexities.map((row) => row.commandCount)) : 0,
+              pipelineCalls: bashRows.filter((event) => bashCommand(event)?.includes('|')).length,
+              chainCalls: bashRows.filter((event) => /&&|\|\|/.test(bashCommand(event) ?? '')).length,
+              redirectCalls: bashRows.filter((event) => /[<>]/.test(bashCommand(event) ?? '')).length,
+              multilineCalls: bashRows.filter((event) => bashCommand(event)?.includes('\n')).length,
+              shellCalls: bashRows.filter((event) => /\b(sh|bash|zsh)\b/.test(bashCommand(event) ?? '')).length,
+              substitutionCalls: bashRows.filter((event) => /\$\(|`/.test(bashCommand(event) ?? '')).length,
+              shapeBreakdown: [...shapeCounts.entries()].map(([shape, calls]) => ({ shape, calls })),
+            }
+          : null;
       return {
         toolName,
         calls: rows.length,
@@ -178,11 +240,58 @@ function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
         avgLatencyMs: latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0,
         p95LatencyMs: percentile(latencies, 0.95),
         maxLatencyMs: latencies.length ? Math.max(...latencies) : 0,
-        bashBreakdown: [],
-        bashComplexity: null,
+        bashBreakdown,
+        bashComplexity,
       };
     })
     .sort((a, b) => b.calls - a.calls);
+}
+
+function queryAgentLoopFromEvents(events: TraceTelemetryLogEvent[]) {
+  const stats = statsEvents(events);
+  const durations = stats.map((event) => numberValue(event.payload.durationMs)).filter((value) => value > 0);
+  const steps = stats.map((event) => numberValue(event.payload.stepCount));
+  const runs = new Set(stats.map((event) => event.runId).filter(Boolean));
+  return {
+    turns: stats.length,
+    turnsPerRun: runs.size > 0 ? stats.length / runs.size : stats.length,
+    avgDurationMs: durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,
+    maxDurationMs: durations.length ? Math.max(...durations) : 0,
+    avgSteps: steps.length ? steps.reduce((a, b) => a + b, 0) / steps.length : 0,
+    errors: toolEvents(events).filter((event) => event.payload.status === 'error').length,
+    recent: stats.slice(-20).reverse(),
+  };
+}
+
+function queryToolFlowFromEvents(events: TraceTelemetryLogEvent[]) {
+  const bySession = new Map<string, TraceTelemetryLogEvent[]>();
+  for (const event of toolEvents(events)) bySession.set(event.sessionId, [...(bySession.get(event.sessionId) ?? []), event]);
+  const transitions = new Map<string, { fromTool: string; toTool: string; count: number }>();
+  const failureTrajectories: Array<{ sessionId: string; failedTool: string; previousCalls: string[]; errorMessage: string | null }> = [];
+  for (const [sessionId, rows] of bySession.entries()) {
+    const sorted = rows.sort((a, b) => a.ts.localeCompare(b.ts));
+    const labels = sorted.map((event) =>
+      stringValue(event.payload.toolName) === 'bash'
+        ? `bash:${bashLabel(event) ?? 'unknown'}`
+        : (stringValue(event.payload.toolName) ?? 'unknown'),
+    );
+    for (let index = 1; index < labels.length; index += 1) {
+      const key = `${labels[index - 1]}→${labels[index]}`;
+      const current = transitions.get(key) ?? { fromTool: labels[index - 1], toTool: labels[index], count: 0 };
+      current.count += 1;
+      transitions.set(key, current);
+    }
+    sorted.forEach((event, index) => {
+      if (event.payload.status !== 'error') return;
+      failureTrajectories.push({
+        sessionId,
+        failedTool: labels[index],
+        previousCalls: labels.slice(Math.max(0, index - 5), index),
+        errorMessage: stringValue(event.payload.errorMessage),
+      });
+    });
+  }
+  return { transitions: [...transitions.values()], failureTrajectories };
 }
 
 export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
@@ -264,14 +373,7 @@ export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patc
 
   router.get('/api/traces/agent-loop', (req, res) => {
     try {
-      res.json({
-        turns: statsEvents(eventsSince(parseRangeParam(req.query.range))).length,
-        avgDurationMs: 0,
-        maxDurationMs: 0,
-        avgSteps: 0,
-        errors: 0,
-        recent: [],
-      });
+      res.json(queryAgentLoopFromEvents(eventsSince(parseRangeParam(req.query.range))));
     } catch (err) {
       logError('traces agent-loop error', { message: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ error: String(err) });
@@ -300,7 +402,7 @@ export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patc
     }
   });
 
-  router.get('/api/traces/tool-flow', (_req, res) => res.json({ sequences: [], edges: [] }));
+  router.get('/api/traces/tool-flow', (req, res) => res.json(queryToolFlowFromEvents(eventsSince(parseRangeParam(req.query.range)))));
   router.get('/api/traces/cache-efficiency', (req, res) => {
     const summary = querySummaryFromEvents(eventsSince(parseRangeParam(req.query.range)));
     res.json({
