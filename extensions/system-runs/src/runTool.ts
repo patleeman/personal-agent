@@ -17,6 +17,8 @@ import {
 import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemetry';
 import { Type } from '@sinclair/typebox';
 
+import { ALLOWED_TOOLS_DESCRIPTION, COMMON_AGENT_TOOL_NAMES, normalizeAllowedTools } from './allowedTools.js';
+
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
 
 type RunAction = (typeof RUN_ACTION_VALUES)[number];
@@ -117,19 +119,6 @@ function readOptionalPositiveInteger(value: unknown, label: string): number | un
   }
 
   return value;
-}
-
-function normalizeAllowedTools(value: unknown): string[] | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (Array.isArray(value)) {
-    const tools = value.map((t) => String(t).trim()).filter((t) => t.length > 0);
-    return tools.length > 0 ? tools : undefined;
-  }
-  const tools = String(value)
-    .split(',')
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-  return tools.length > 0 ? tools : undefined;
 }
 
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?(Z|[+-]\d{2}:\d{2})$/;
@@ -730,6 +719,7 @@ export function createRunAgentExtension(options: {
       promptSnippet: 'Use subagent for delegated agent work that should run durably outside the current turn.',
       promptGuidelines: [
         'Use subagent for durable delegated agent work; use background_command for shell and scheduled_task for recurring automation.',
+        `allowedTools must contain agent tool names, not shell commands. Common names: ${COMMON_AGENT_TOOL_NAMES}. For rg/grep/find/ls, allow bash and run the command inside bash.`,
       ],
       parameters: Type.Object({
         action: Type.Union(['list', 'get', 'logs', 'start', 'rerun', 'follow_up', 'cancel'].map((value) => Type.Literal(value))),
@@ -744,7 +734,10 @@ export function createRunAgentExtension(options: {
         loopDelay: Type.Optional(Type.String({ description: 'Default delay between loop iterations, for example 1h.' })),
         loopMaxIterations: Type.Optional(Type.Number({ description: 'Maximum number of loop iterations.' })),
         allowedTools: Type.Optional(
-          Type.Union([Type.String({ description: 'Comma-separated allowed tool names.' }), Type.Array(Type.String())]),
+          Type.Union([
+            Type.String({ description: ALLOWED_TOOLS_DESCRIPTION }),
+            Type.Array(Type.String({ description: ALLOWED_TOOLS_DESCRIPTION })),
+          ]),
         ),
       }),
       execute(toolCallId: string, params: RunToolExecutionParams, signal: unknown, onUpdate: unknown, ctx: RunToolExecutionContext) {

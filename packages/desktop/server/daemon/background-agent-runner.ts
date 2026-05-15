@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { AuthStorage, SessionManager } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir, getProfilesRoot, getStateRoot } from '@personal-agent/core';
@@ -90,7 +91,7 @@ function parseArgs(argv: string[]): RunnerArgs {
   };
 }
 
-function writeRunnerResult(summary: string): void {
+export function writeRunnerResult(summary: string): void {
   const resultPath = process.env.PERSONAL_AGENT_RUN_RESULT_PATH?.trim();
   if (!resultPath) {
     return;
@@ -103,7 +104,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function extractTextContent(content: unknown): string {
+export function extractTextContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   return content
@@ -116,11 +117,22 @@ function extractTextContent(content: unknown): string {
     .join('\n');
 }
 
-function collectAssistantTexts(session: { messages?: unknown[] }): string[] {
+export function collectAssistantTexts(session: { messages?: unknown[] }): string[] {
   const messages = Array.isArray(session.messages) ? session.messages : [];
   return messages
     .filter((message) => isRecord(message) && message.role === 'assistant')
     .map((message) => extractTextContent((message as { content?: unknown }).content).trim())
+    .filter(Boolean);
+}
+
+export function collectAssistantErrorMessages(session: { messages?: unknown[] }): string[] {
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  return messages
+    .filter((message) => isRecord(message) && message.role === 'assistant')
+    .map((message) => {
+      const record = message as { errorMessage?: unknown };
+      return typeof record.errorMessage === 'string' ? record.errorMessage.trim() : '';
+    })
     .filter(Boolean);
 }
 
@@ -129,7 +141,7 @@ function readParentSessionFile(): string | undefined {
   return value ? value : undefined;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const agentDir = getPiAgentRuntimeDir();
   const resourceOptions = buildLiveSessionResourceOptionsForRuntime();
@@ -182,6 +194,9 @@ async function main(): Promise<void> {
   });
 
   try {
+    console.warn(
+      `[background-agent] starting cwd=${args.cwd} model=${args.model ?? '(default)'} allowedTools=${args.allowedTools?.join(',') ?? '(default)'}`,
+    );
     const streamedChunks: string[] = [];
     session.subscribe((event) => {
       if (event.type === 'message_update') {
@@ -197,19 +212,33 @@ async function main(): Promise<void> {
     await session.prompt(args.prompt);
     const streamedText = streamedChunks.join('').trim();
     const finalText = collectAssistantTexts(session).at(-1)?.trim() || '';
+    const assistantErrors = collectAssistantErrorMessages(session);
+    if (assistantErrors.length > 0) {
+      const message = assistantErrors.at(-1) as string;
+      console.error(`[background-agent] assistant error: ${message}`);
+      writeRunnerResult(message);
+      process.exitCode = 1;
+      return;
+    }
     if (!streamedText && finalText) {
+      console.warn('[background-agent] no streamed text captured; writing final assistant message from session state.');
       process.stdout.write(finalText);
     }
+    if (!streamedText && !finalText) {
+      console.warn('[background-agent] completed with no captured assistant output.');
+    }
     process.stdout.write('\n');
-    writeRunnerResult(finalText || streamedText || 'Background agent completed successfully.');
+    writeRunnerResult(finalText || streamedText || 'Background agent completed with no captured assistant output.');
   } finally {
     session.dispose();
   }
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  writeRunnerResult(message);
-  process.exitCode = 1;
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    writeRunnerResult(message);
+    process.exitCode = 1;
+  });
+}
