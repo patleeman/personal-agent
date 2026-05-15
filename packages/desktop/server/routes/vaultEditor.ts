@@ -2,8 +2,7 @@
  * Vault editor routes — file CRUD for the knowledge base UI.
  */
 
-import { type Dirent, existsSync, readdirSync, readFileSync, rmSync, type Stats, statSync } from 'node:fs';
-import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
 
 import { getVaultRoot } from '@personal-agent/core';
 import type { Express, Response } from 'express';
@@ -11,7 +10,7 @@ import { extension as mimeExtension, lookup as mimeLookup } from 'mime-types';
 
 import { defaultFileSystemAuthority, type FileAccess, type ScopedFileSystem } from '../filesystem/filesystemAuthority.js';
 import { logError } from '../middleware/index.js';
-import { importVaultSharedItem } from './vaultShareImport.js';
+import { importVaultSharedItemToFilesystem } from './vaultShareImport.js';
 
 // ── Path safety ───────────────────────────────────────────────────────────────
 
@@ -37,13 +36,18 @@ function isInsideRoot(root: string, target: string): boolean {
   return targetPath === rootPath || targetPath.startsWith(`${rootPath}/`);
 }
 
-export function safeVaultPath(id: string, _access: FileAccess[] = ['metadata']): string | null {
-  if (!id || id.includes('\u0000')) return null;
-  // Normalise slashes and strip leading/trailing separators
+function normalizeVaultId(id: string, options: { allowEmpty?: boolean } = {}): string | null {
+  if (id.includes('\u0000')) return null;
   const clean = id.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').trim();
-  if (!clean) return null;
+  if (!clean) return options.allowEmpty ? '' : null;
   const segments = clean.split('/');
   if (segments.some((s) => s === '.' || s === '..')) return null;
+  return clean;
+}
+
+export function safeVaultPath(id: string, _access: FileAccess[] = ['metadata']): string | null {
+  const clean = normalizeVaultId(id);
+  if (clean === null) return null;
   const root = getRoot();
   const target = resolve(root, clean);
   return isInsideRoot(root, target) ? target : null;
@@ -139,58 +143,33 @@ interface VaultEntry {
   updatedAt: string;
 }
 
-export function vaultEntryFromStat(root: string, abs: string, stats: Stats): VaultEntry {
-  const rel = relative(root, abs).replace(/\\/g, '/');
-  const kind: VaultEntry['kind'] = stats.isDirectory() ? 'folder' : 'file';
+async function vaultEntryFromScopedPath(vault: ScopedFileSystem, id: string): Promise<VaultEntry> {
+  const stat = await vault.stat(id);
+  const kind: VaultEntry['kind'] = stat.type === 'directory' ? 'folder' : 'file';
+  const clean = id.replace(/\/+$/, '');
   return {
-    id: kind === 'folder' ? `${rel}/` : rel,
+    id: kind === 'folder' ? `${clean}/` : clean,
     kind,
-    name: basename(abs),
-    path: abs,
-    sizeBytes: kind === 'file' ? stats.size : 0,
-    updatedAt: new Date(stats.mtimeMs).toISOString(),
+    name: basename(clean),
+    path: clean,
+    sizeBytes: kind === 'file' ? (stat.size ?? 0) : 0,
+    updatedAt: stat.modifiedAt ?? new Date().toISOString(),
   };
 }
 
-export function deleteVaultPath(abs: string): void {
-  rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
-
-  // macOS can occasionally leave an empty directory behind after recursive
-  // contents are removed. Retry before reporting success so the UI does not
-  // require a second delete on the now-empty folder.
-  if (existsSync(abs)) {
-    rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
-
-  if (existsSync(abs)) {
-    throw new Error('Failed to delete vault path');
-  }
-}
-
-export function readVaultDirEntries(root: string, abs: string): VaultEntry[] {
-  let dirents: Dirent[];
-  try {
-    dirents = readdirSync(abs, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  return dirents
-    .filter((d) => !d.isSymbolicLink())
-    .filter((d) => !(d.isDirectory() && SKIPPED_DIRS.has(d.name)))
-    .filter((d) => !d.name.startsWith('.') || d.isDirectory())
-    .flatMap((d) => {
-      const childAbs = join(abs, d.name);
-      let stats: Stats;
-      try {
-        stats = statSync(childAbs);
-      } catch {
-        return [];
-      }
-      if (!stats.isFile() && !stats.isDirectory()) return [];
-      return [vaultEntryFromStat(root, childAbs, stats)];
-    })
+async function readVaultDirEntriesScoped(vault: ScopedFileSystem, id = ''): Promise<VaultEntry[]> {
+  const entries = await vault.list(id, { depth: 0, excludeNames: [...SKIPPED_DIRS] });
+  return entries
+    .filter((entry) => (entry.type === 'file' || entry.type === 'directory') && (!entry.name.startsWith('.') || entry.type === 'directory'))
+    .map((entry) => ({
+      id: entry.type === 'directory' ? `${entry.path}/` : entry.path,
+      kind: entry.type === 'directory' ? 'folder' : 'file',
+      name: entry.name,
+      path: entry.path,
+      sizeBytes: entry.type === 'file' ? (entry.size ?? 0) : 0,
+      updatedAt: entry.modifiedAt ?? new Date().toISOString(),
+    }))
     .sort((a, b) => {
-      // folders first, then alpha
       if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
@@ -212,30 +191,6 @@ interface VaultNoteSearchResult {
   title: string;
   excerpt: string;
   score: number;
-}
-
-function collectAllMarkdownFiles(root: string): string[] {
-  const results: string[] = [];
-  const stack = [root];
-  while (stack.length) {
-    const dir = stack.pop() as string;
-    let entries: Dirent[];
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (entry.isSymbolicLink()) continue;
-      const abs = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIPPED_DIRS.has(entry.name)) stack.push(abs);
-      } else if (entry.isFile() && extname(entry.name) === '.md') {
-        results.push(abs);
-      }
-    }
-  }
-  return results;
 }
 
 function buildSearchExcerpt(content: string, index: number, matchLength: number): string {
@@ -260,17 +215,26 @@ export function parseVaultSearchLimit(value: unknown): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(50, parsed) : 20;
 }
 
-export function searchVaultNotes(root: string, query: string, limit: number): Array<Omit<VaultNoteSearchResult, 'score'>> {
+async function collectMarkdownEntries(vault: ScopedFileSystem) {
+  const entries = await vault.list('', { depth: 100, excludeNames: [...SKIPPED_DIRS] });
+  return entries.filter((entry) => entry.type === 'file' && extname(entry.name).toLowerCase() === '.md');
+}
+
+export async function searchVaultNotes(
+  vault: ScopedFileSystem,
+  query: string,
+  limit: number,
+): Promise<Array<Omit<VaultNoteSearchResult, 'score'>>> {
   const normalized = query.trim().toLowerCase();
   const results: VaultNoteSearchResult[] = [];
 
-  for (const filePath of collectAllMarkdownFiles(root)) {
-    const id = relative(root, filePath).replace(/\\/g, '/');
-    const name = basename(filePath);
+  for (const entry of await collectMarkdownEntries(vault)) {
+    const id = entry.path;
+    const name = entry.name;
     const title = name.replace(/\.md$/i, '');
     let content = '';
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = await vault.readText(id);
     } catch {
       continue;
     }
@@ -305,28 +269,24 @@ export function searchVaultNotes(root: string, query: string, limit: number): Ar
     .map(({ score: _score, ...result }) => result);
 }
 
-export function findVaultBacklinks(targetId: string, root: string): BacklinkResult[] {
-  // targetId may be "notes/foo.md" — derive the note name without extension
+export async function findVaultBacklinks(targetId: string, vault: ScopedFileSystem): Promise<BacklinkResult[]> {
   const targetName = basename(targetId).replace(/\.md$/i, '');
   const escapedName = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`\\[\\[${escapedName}(?:\\|[^\\]]*)?\\]\\]`, 'gi');
 
   const results: BacklinkResult[] = [];
-  const files = collectAllMarkdownFiles(root);
-
-  for (const filePath of files) {
-    const fileId = relative(root, filePath).replace(/\\/g, '/');
-    if (fileId === targetId) continue; // skip the file itself
+  for (const entry of await collectMarkdownEntries(vault)) {
+    const fileId = entry.path;
+    if (fileId === targetId) continue;
     let content: string;
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = await vault.readText(fileId);
     } catch {
       continue;
     }
     if (!pattern.test(content)) continue;
     pattern.lastIndex = 0;
 
-    // Build a short excerpt around the first match
     const matchIndex = content.search(pattern);
     pattern.lastIndex = 0;
     const start = Math.max(0, matchIndex - 60);
@@ -335,7 +295,7 @@ export function findVaultBacklinks(targetId: string, root: string): BacklinkResu
     if (start > 0) excerpt = `…${excerpt}`;
     if (end < content.length) excerpt = `${excerpt}…`;
 
-    results.push({ id: fileId, name: basename(filePath), excerpt });
+    results.push({ id: fileId, name: entry.name, excerpt });
   }
 
   return results;
@@ -346,26 +306,21 @@ export function findVaultBacklinks(targetId: string, root: string): BacklinkResu
 export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 'post' | 'delete'>): void {
   // GET /api/vault/tree?dir=<rel-id>  — list a directory (shallow)
   // dir defaults to root when omitted / empty
-  router.get('/api/vault/tree', (req, res) => {
+  router.get('/api/vault/tree', async (req, res) => {
     try {
       const root = getRoot();
       const dirParam = typeof req.query.dir === 'string' ? req.query.dir.trim() : '';
-      let abs: string;
-      if (!dirParam) {
-        abs = root;
-      } else {
-        const resolved = safeVaultPath(dirParam, ['list', 'metadata']);
-        if (!resolved) {
-          res.status(400).json({ error: 'Invalid path' });
-          return;
-        }
-        abs = resolved;
+      const id = normalizeVaultId(dirParam, { allowEmpty: true });
+      if (id === null) {
+        res.status(400).json({ error: 'Invalid path' });
+        return;
       }
-      if (!existsSync(abs) || !statSync(abs).isDirectory()) {
+      const vault = await vaultAuthority(['list', 'metadata']);
+      if (id && (!(await vault.exists(id)) || (await vault.stat(id)).type !== 'directory')) {
         res.status(404).json({ error: 'Directory not found' });
         return;
       }
-      res.json({ root, entries: readVaultDirEntries(root, abs) });
+      res.json({ root, entries: await readVaultDirEntriesScoped(vault, id) });
     } catch (err) {
       logError('vault/tree error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -373,21 +328,20 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // GET /api/vault/file?id=<rel-id>  — read file content
-  router.get('/api/vault/file', (req, res) => {
+  router.get('/api/vault/file', async (req, res) => {
     try {
-      const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safeVaultPath(id, ['read', 'metadata']) : null;
-      if (!abs) {
+      const id = normalizeVaultId(typeof req.query.id === 'string' ? req.query.id.trim() : '');
+      if (!id) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      if (!existsSync(abs) || !statSync(abs).isFile()) {
+      const vault = await vaultAuthority(['read', 'metadata']);
+      if (!(await vault.exists(id)) || (await vault.stat(id)).type !== 'file') {
         res.status(404).json({ error: 'File not found' });
         return;
       }
-      const content = readFileSync(abs, 'utf-8');
-      const stats = statSync(abs);
-      res.json({ id, content, updatedAt: new Date(stats.mtimeMs).toISOString() });
+      const stats = await vault.stat(id);
+      res.json({ id, content: await vault.readText(id), updatedAt: stats.modifiedAt ?? new Date().toISOString() });
     } catch (err) {
       logError('vault/file GET error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -407,16 +361,14 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'content must be a string' });
         return;
       }
-      const abs = safeVaultPath(id.trim(), ['write', 'metadata']);
-      if (!abs) {
+      const clean = normalizeVaultId(id);
+      if (!clean) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
       const vault = await vaultAuthority(['write', 'metadata']);
-      await vault.writeText(id.trim(), content);
-      const stats = statSync(abs);
-      const root = getRoot();
-      res.json(vaultEntryFromStat(root, abs, stats));
+      await vault.writeText(clean, content);
+      res.json(await vaultEntryFromScopedPath(vault, clean));
     } catch (err) {
       logError('vault/file PUT error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -424,19 +376,19 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // DELETE /api/vault/file?id=<rel-id>  — delete file or folder (recursive)
-  router.delete('/api/vault/file', (req, res) => {
+  router.delete('/api/vault/file', async (req, res) => {
     try {
-      const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safeVaultPath(id, ['read', 'metadata']) : null;
-      if (!abs) {
+      const id = normalizeVaultId(typeof req.query.id === 'string' ? req.query.id.trim() : '');
+      if (!id) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      if (!existsSync(abs)) {
+      const vault = await vaultAuthority(['delete', 'metadata']);
+      if (!(await vault.exists(id))) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      deleteVaultPath(abs);
+      await vault.remove(id, { recursive: true, force: true });
       res.json({ ok: true });
     } catch (err) {
       logError('vault/file DELETE error', { message: String(err) });
@@ -457,45 +409,40 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'newName must be a plain file/folder name' });
         return;
       }
-      const abs = safeVaultPath(id.trim(), ['move', 'metadata']);
-      if (!abs) {
+      const sourceId = normalizeVaultId(id);
+      if (!sourceId) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      if (!existsSync(abs)) {
+      const vault = await vaultAuthority(['move', 'metadata']);
+      if (!(await vault.exists(sourceId))) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      const root = getRoot();
-      const parentAbs =
+      const parent =
         parentId === null
-          ? root
+          ? ''
           : typeof parentId === 'string'
-            ? parentId.trim()
-              ? safeVaultPath(parentId.trim().replace(/^\/+|\/+$/g, ''))
-              : root
-            : dirname(abs);
-      if (!parentAbs || !existsSync(parentAbs) || !statSync(parentAbs).isDirectory()) {
+            ? normalizeVaultId(parentId, { allowEmpty: true })
+            : dirname(sourceId).replace(/\\/g, '/');
+      if (parent === null || (parent && (!(await vault.exists(parent)) || (await vault.stat(parent)).type !== 'directory'))) {
         res.status(400).json({ error: 'Target folder does not exist' });
         return;
       }
-      const newAbs = join(parentAbs, newName.trim());
-      if (!isInsideRoot(root, newAbs)) {
-        res.status(400).json({ error: 'Target path is outside vault' });
-        return;
-      }
-      if (statSync(abs).isDirectory() && (newAbs === abs || newAbs.startsWith(`${abs}/`))) {
+      const targetId = join(parent, newName.trim()).replace(/\\/g, '/');
+      if (
+        (await vault.stat(sourceId)).type === 'directory' &&
+        (targetId === sourceId || targetId.startsWith(`${sourceId.replace(/\/+$/, '')}/`))
+      ) {
         res.status(400).json({ error: 'Cannot move a folder into itself' });
         return;
       }
-      if (existsSync(newAbs)) {
+      if (await vault.exists(targetId)) {
         res.status(409).json({ error: 'A file or folder with that name already exists' });
         return;
       }
-      const vault = await vaultAuthority(['move', 'metadata']);
-      await vault.move(relative(root, abs).replace(/\\/g, '/'), relative(root, newAbs).replace(/\\/g, '/'));
-      const stats = statSync(newAbs);
-      res.json(vaultEntryFromStat(root, newAbs, stats));
+      await vault.move(sourceId, targetId);
+      res.json(await vaultEntryFromScopedPath(vault, targetId));
     } catch (err) {
       logError('vault/rename error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -511,16 +458,14 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'id is required' });
         return;
       }
-      const abs = safeVaultPath(id.trim(), ['write', 'metadata']);
-      if (!abs) {
+      const clean = normalizeVaultId(id);
+      if (!clean) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
       const vault = await vaultAuthority(['write', 'metadata']);
-      await vault.createDirectory(id.trim());
-      const stats = statSync(abs);
-      const root = getRoot();
-      res.json(vaultEntryFromStat(root, abs, stats));
+      await vault.createDirectory(clean);
+      res.json(await vaultEntryFromScopedPath(vault, clean));
     } catch (err) {
       logError('vault/folder error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -528,16 +473,16 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // GET /api/vault/backlinks?id=<rel-id>  — find files that [[wikilink]] to this file
-  router.get('/api/vault/backlinks', (req, res) => {
+  router.get('/api/vault/backlinks', async (req, res) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
       if (!id) {
         res.status(400).json({ error: 'id is required' });
         return;
       }
-      const root = getRoot();
+      const vault = await vaultAuthority(['read', 'list', 'metadata']);
       const targetName = basename(id).replace(/\.md$/i, '');
-      res.json({ id, targetName, backlinks: findVaultBacklinks(id, root) });
+      res.json({ id, targetName, backlinks: await findVaultBacklinks(id, vault) });
     } catch (err) {
       logError('vault/backlinks', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -545,12 +490,12 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // GET /api/vault/note-search?q=...&limit=... — note title/path search for mobile linking
-  router.get('/api/vault/note-search', (req, res) => {
+  router.get('/api/vault/note-search', async (req, res) => {
     try {
       const q = typeof req.query.q === 'string' ? req.query.q : '';
       const limit = parseVaultSearchLimit(req.query.limit);
-      const root = getRoot();
-      res.json({ results: searchVaultNotes(root, q, limit) });
+      const vault = await vaultAuthority(['read', 'list', 'metadata']);
+      res.json({ results: await searchVaultNotes(vault, q, limit) });
     } catch (err) {
       logError('vault/note-search', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -558,7 +503,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // GET /api/vault/search?q=...&limit=... — full-text search across all .md files
-  router.get('/api/vault/search', (req, res) => {
+  router.get('/api/vault/search', async (req, res) => {
     try {
       const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
       if (!q) {
@@ -566,34 +511,30 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         return;
       }
       const limit = parseVaultSearchLimit(req.query.limit);
-      const root = getRoot();
-      const files = collectAllMarkdownFiles(root);
+      const vault = await vaultAuthority(['read', 'list', 'metadata']);
       const lower = q.toLowerCase();
       const results: Array<{ id: string; name: string; excerpt: string; matchCount: number }> = [];
 
-      for (const filePath of files) {
-        const id = relative(root, filePath).replace(/\\/g, '/');
-        const name = basename(filePath);
+      for (const entry of await collectMarkdownEntries(vault)) {
+        const id = entry.path;
+        const name = entry.name;
         let content: string;
         try {
-          content = readFileSync(filePath, 'utf-8');
+          content = await vault.readText(id);
         } catch {
           continue;
         }
         const contentLower = content.toLowerCase();
         const nameLower = name.toLowerCase();
-        // Name match scores higher
         const nameMatch = nameLower.includes(lower);
         const contentMatch = contentLower.includes(lower);
         if (!nameMatch && !contentMatch) continue;
-        // Count occurrences
         let count = 0;
         let pos = 0;
         while ((pos = contentLower.indexOf(lower, pos)) !== -1) {
           count++;
           pos += lower.length;
         }
-        // Build excerpt around first content match
         const firstIdx = contentLower.indexOf(lower);
         const start = Math.max(0, firstIdx - 60);
         const end = Math.min(content.length, firstIdx + lower.length + 80);
@@ -601,7 +542,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         if (start > 0) excerpt = `…${excerpt}`;
         if (end < content.length) excerpt = `${excerpt}…`;
         results.push({ id, name, excerpt, matchCount: count + (nameMatch ? 100 : 0) });
-        if (results.length >= limit * 3) break; // collect extras, then sort
+        if (results.length >= limit * 3) break;
       }
 
       results.sort((a, b) => b.matchCount - a.matchCount);
@@ -625,37 +566,32 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'targetDir must be a string' });
         return;
       }
-      const root = getRoot();
-      const srcAbs = safeVaultPath(id.trim(), ['move', 'metadata']);
-      if (!srcAbs) {
+      const sourceId = normalizeVaultId(id);
+      if (!sourceId) {
         res.status(400).json({ error: 'Invalid source id' });
         return;
       }
-      if (!existsSync(srcAbs)) {
-        res.status(404).json({ error: 'Source not found' });
-        return;
-      }
-      const destDir = targetDir.trim() ? safeVaultPath(targetDir.trim().replace(/\/+$/, '')) : root;
-      if (!destDir) {
+      const targetDirId = normalizeVaultId(targetDir, { allowEmpty: true });
+      if (targetDirId === null) {
         res.status(400).json({ error: 'Invalid target directory' });
         return;
       }
-      if (!existsSync(destDir) || !statSync(destDir).isDirectory()) {
+      const vault = await vaultAuthority(['move', 'metadata']);
+      if (!(await vault.exists(sourceId))) {
+        res.status(404).json({ error: 'Source not found' });
+        return;
+      }
+      if (targetDirId && (!(await vault.exists(targetDirId)) || (await vault.stat(targetDirId)).type !== 'directory')) {
         res.status(400).json({ error: 'Target directory does not exist' });
         return;
       }
-      const destAbs = join(destDir, basename(srcAbs));
-      if (!isInsideRoot(root, destAbs)) {
-        res.status(400).json({ error: 'Target is outside vault' });
-        return;
-      }
-      if (existsSync(destAbs)) {
+      const destId = join(targetDirId, basename(sourceId)).replace(/\\/g, '/');
+      if (await vault.exists(destId)) {
         res.status(409).json({ error: 'A file with that name already exists there' });
         return;
       }
-      const vault = await vaultAuthority(['move', 'metadata']);
-      await vault.move(relative(root, srcAbs).replace(/\\/g, '/'), relative(root, destAbs).replace(/\\/g, '/'));
-      res.json(vaultEntryFromStat(root, destAbs, statSync(destAbs)));
+      await vault.move(sourceId, destId);
+      res.json(await vaultEntryFromScopedPath(vault, destId));
     } catch (err) {
       logError('vault/move', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -683,18 +619,21 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         return;
       }
 
-      const root = getRoot();
-      const directoryId = typeof payload.directoryId === 'string' ? payload.directoryId.trim().replace(/^\/+|\/+$/g, '') : '';
-      const targetDirAbs = directoryId ? safeVaultPath(directoryId, ['write', 'metadata']) : root;
-      if (!targetDirAbs) {
+      const directoryId = normalizeVaultId(typeof payload.directoryId === 'string' ? payload.directoryId : '', { allowEmpty: true });
+      if (directoryId === null) {
+        res.status(400).json({ error: 'Invalid target directory' });
+        return;
+      }
+      const vault = await vaultAuthority(['read', 'write', 'metadata']);
+      if (directoryId && (!(await vault.exists(directoryId)) || (await vault.stat(directoryId)).type !== 'directory')) {
         res.status(400).json({ error: 'Invalid target directory' });
         return;
       }
 
-      const imported = await importVaultSharedItem({
+      const imported = await importVaultSharedItemToFilesystem({
         kind,
-        root,
-        targetDirAbs,
+        filesystem: vault,
+        targetDirId: directoryId,
         ...(typeof payload.title === 'string' ? { title: payload.title } : {}),
         ...(typeof payload.text === 'string' ? { text: payload.text } : {}),
         ...(typeof payload.url === 'string' ? { url: payload.url } : {}),
@@ -705,9 +644,8 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         ...(typeof payload.createdAt === 'string' ? { createdAt: payload.createdAt } : {}),
       });
 
-      const noteStats = statSync(imported.notePath);
       res.status(201).json({
-        note: vaultEntryFromStat(root, imported.notePath, noteStats),
+        note: await vaultEntryFromScopedPath(vault, imported.noteId),
         sourceKind: imported.sourceKind,
         title: imported.title,
         ...(imported.asset ? { asset: imported.asset } : {}),
@@ -752,22 +690,22 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // GET /api/vault/asset?id=...  — serve a binary vault file (images, etc.)
-  router.get('/api/vault/asset', (req, res: Response) => {
+  router.get('/api/vault/asset', async (req, res: Response) => {
     try {
-      const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safeVaultPath(id, ['read', 'metadata']) : null;
-      if (!abs) {
+      const id = normalizeVaultId(typeof req.query.id === 'string' ? req.query.id.trim() : '');
+      if (!id) {
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      if (!existsSync(abs) || !statSync(abs).isFile()) {
+      const vault = await vaultAuthority(['read', 'metadata']);
+      if (!(await vault.exists(id)) || (await vault.stat(id)).type !== 'file') {
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      const mime = mimeLookup(abs) || 'application/octet-stream';
+      const mime = mimeLookup(id) || 'application/octet-stream';
       res.setHeader('Content-Type', mime);
       res.setHeader('Cache-Control', 'public, max-age=3600');
-      res.send(readFileSync(abs));
+      res.send(Buffer.from(await vault.readBytes(id)));
     } catch (err) {
       logError('vault/asset', { message: String(err) });
       res.status(500).end();

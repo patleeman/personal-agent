@@ -1,5 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, dirname, extname, join, relative } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 
 import { defaultFileSystemAuthority, type FileAccess, type ScopedFileSystem } from '../../filesystem/filesystemAuthority.js';
 import { callServerModuleExport } from './serverModuleResolver.js';
@@ -68,55 +67,24 @@ async function vaultEntryFromScopedStat(root: ScopedFileSystem, id: string): Pro
   };
 }
 
-function vaultEntryFromStat(root: string, abs: string): VaultEntry {
-  const stats = statSync(abs);
-  const rel = relative(root, abs).replace(/\\/g, '/');
-  const kind = stats.isDirectory() ? 'folder' : 'file';
-  return {
-    id: kind === 'folder' ? `${rel}/` : rel,
-    kind,
-    name: basename(abs),
-    path: abs,
-    sizeBytes: kind === 'file' ? stats.size : 0,
-    updatedAt: new Date(stats.mtimeMs).toISOString(),
-  };
+async function readVaultDirEntries(root: ScopedFileSystem, id = ''): Promise<VaultEntry[]> {
+  const entries = await root.list(id, { depth: 0, excludeNames: [...SKIPPED_DIRS] });
+  return entries
+    .filter((entry) => (entry.type === 'file' || entry.type === 'directory') && (!entry.name.startsWith('.') || entry.type === 'directory'))
+    .map((entry) => ({
+      id: entry.type === 'directory' ? `${entry.path}/` : entry.path,
+      kind: entry.type === 'directory' ? 'folder' : 'file',
+      name: entry.name,
+      path: entry.path,
+      sizeBytes: entry.type === 'file' ? (entry.size ?? 0) : 0,
+      updatedAt: entry.modifiedAt ?? new Date().toISOString(),
+    }))
+    .sort((left, right) => (left.kind !== right.kind ? (left.kind === 'folder' ? -1 : 1) : left.name.localeCompare(right.name)));
 }
 
-function readVaultDirEntries(root: string, abs: string): VaultEntry[] {
-  try {
-    return readdirSync(abs, { withFileTypes: true })
-      .filter((entry) => !entry.isSymbolicLink())
-      .filter((entry) => !(entry.isDirectory() && SKIPPED_DIRS.has(entry.name)))
-      .filter((entry) => !entry.name.startsWith('.') || entry.isDirectory())
-      .flatMap((entry) => {
-        const childAbs = join(abs, entry.name);
-        try {
-          const stats = statSync(childAbs);
-          if (!stats.isFile() && !stats.isDirectory()) return [];
-          return [vaultEntryFromStat(root, childAbs)];
-        } catch {
-          return [];
-        }
-      })
-      .sort((left, right) => (left.kind !== right.kind ? (left.kind === 'folder' ? -1 : 1) : left.name.localeCompare(right.name)));
-  } catch {
-    return [];
-  }
-}
-
-function collectMarkdownFiles(root: string, dir = root): string[] {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  return entries.flatMap((entry) => {
-    if (entry.isSymbolicLink()) return [];
-    const abs = join(dir, entry.name);
-    if (entry.isDirectory()) return SKIPPED_DIRS.has(entry.name) ? [] : collectMarkdownFiles(root, abs);
-    return entry.isFile() && entry.name.toLowerCase().endsWith('.md') ? [abs] : [];
-  });
+async function collectMarkdownEntries(root: ScopedFileSystem) {
+  const entries = await root.list('', { depth: 100, excludeNames: [...SKIPPED_DIRS] });
+  return entries.filter((entry) => entry.type === 'file' && entry.name.toLowerCase().endsWith('.md'));
 }
 
 function parseVaultSearchLimit(value: unknown): number {
@@ -128,16 +96,16 @@ function parseVaultSearchLimit(value: unknown): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(50, parsed) : 20;
 }
 
-function searchVaultNotes(root: string, query: string, limit: number) {
+async function searchVaultNotes(root: ScopedFileSystem, query: string, limit: number) {
   const normalized = query.trim().toLowerCase();
   const results: Array<{ id: string; name: string; title: string; excerpt: string; score: number }> = [];
-  for (const filePath of collectMarkdownFiles(root)) {
-    const id = relative(root, filePath).replace(/\\/g, '/');
-    const name = basename(filePath);
+  for (const entry of await collectMarkdownEntries(root)) {
+    const id = entry.path;
+    const name = entry.name;
     const title = name.replace(/\.md$/i, '');
     let content = '';
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = await root.readText(id);
     } catch {
       continue;
     }
@@ -172,27 +140,29 @@ function searchVaultNotes(root: string, query: string, limit: number) {
     .map(({ score: _score, ...result }) => result);
 }
 
-function findVaultBacklinks(targetId: string, root: string) {
+async function findVaultBacklinks(targetId: string, root: ScopedFileSystem) {
   const targetName = basename(targetId).replace(/\.md$/i, '');
   const escapedName = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`\\[\\[${escapedName}(?:\\|[^\\]]*)?\\]\\]`, 'gi');
-  return collectMarkdownFiles(root).flatMap((filePath) => {
-    const fileId = relative(root, filePath).replace(/\\/g, '/');
-    if (fileId === targetId) return [];
+  const results = [];
+  for (const entry of await collectMarkdownEntries(root)) {
+    const fileId = entry.path;
+    if (fileId === targetId) continue;
     let content = '';
     try {
-      content = readFileSync(filePath, 'utf-8');
+      content = await root.readText(fileId);
     } catch {
-      return [];
+      continue;
     }
     const matchIndex = content.search(pattern);
-    if (matchIndex < 0) return [];
+    if (matchIndex < 0) continue;
     const excerpt = content
       .slice(Math.max(0, matchIndex - 60), Math.min(content.length, matchIndex + 80))
       .replace(/\s+/g, ' ')
       .trim();
-    return [{ id: fileId, title: basename(fileId).replace(/\.md$/i, ''), excerpt }];
-  });
+    results.push({ id: fileId, title: basename(fileId).replace(/\.md$/i, ''), excerpt });
+  }
+  return results;
 }
 
 function decodeVaultImageDataUrl(dataUrl: string): Buffer {
@@ -233,24 +203,9 @@ export const knowledgeVault: Record<string, unknown> = {
     return { root: vaultRoot, files };
   },
   async tree(input: { dir?: string } = {}) {
-    if (!input.dir) {
-      const vaultRootPath = await getVaultRoot();
-      return { entries: readVaultDirEntries(vaultRootPath, vaultRootPath) };
-    }
-    const { root, id } = await requireVaultPath(input.dir, ['list', 'metadata']);
-    const entries = await root.list(id, { depth: 0, excludeNames: [...SKIPPED_DIRS] });
-    return {
-      entries: entries
-        .filter((entry) => entry.type === 'file' || entry.type === 'directory')
-        .map((entry) => ({
-          id: entry.type === 'directory' ? `${entry.path}/` : entry.path,
-          kind: entry.type === 'directory' ? 'folder' : 'file',
-          name: entry.name,
-          path: entry.path,
-          sizeBytes: entry.type === 'file' ? (entry.size ?? 0) : 0,
-          updatedAt: entry.modifiedAt ?? new Date().toISOString(),
-        })),
-    };
+    const root = await vaultRoot(['list', 'metadata'], 'knowledge vault tree');
+    const id = input.dir ? normalizeVaultId(input.dir) : '';
+    return { entries: await readVaultDirEntries(root, id) };
   },
   async readFile(input: { id: string }) {
     const { root, id } = await requireVaultPath(input.id, ['read', 'metadata']);
@@ -291,10 +246,16 @@ export const knowledgeVault: Record<string, unknown> = {
     return vaultEntryFromScopedStat(source.root, targetId);
   },
   async backlinks(input: { id: string }) {
-    return { backlinks: findVaultBacklinks(input.id, await getVaultRoot()) };
+    return { backlinks: await findVaultBacklinks(input.id, await vaultRoot(['read', 'list', 'metadata'], 'knowledge vault backlinks')) };
   },
   async search(input: { q: string; limit?: number }) {
-    return { results: searchVaultNotes(await getVaultRoot(), input.q, parseVaultSearchLimit(input.limit ?? 20)) };
+    return {
+      results: await searchVaultNotes(
+        await vaultRoot(['read', 'list', 'metadata'], 'knowledge vault search'),
+        input.q,
+        parseVaultSearchLimit(input.limit ?? 20),
+      ),
+    };
   },
   async uploadImage(input: { filename: string; dataUrl: string }) {
     const fileName = buildVaultImageUploadFileName(input.filename, input.dataUrl);

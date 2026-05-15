@@ -7,6 +7,8 @@ import { extension as mimeExtension } from 'mime-types';
 import TurndownService from 'turndown';
 import { stringify as stringifyYaml } from 'yaml';
 
+import type { ScopedFileSystem } from '../filesystem/filesystemAuthority.js';
+
 export interface VaultKnowledgeShareImportInput {
   kind: 'text' | 'url' | 'image';
   root: string;
@@ -29,6 +31,11 @@ export interface VaultKnowledgeShareImportResult {
     id: string;
     url: string;
   };
+}
+
+export interface VaultKnowledgeShareImportFilesystemInput extends Omit<VaultKnowledgeShareImportInput, 'root' | 'targetDirAbs'> {
+  filesystem: ScopedFileSystem;
+  targetDirId: string;
 }
 
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -87,6 +94,21 @@ function uniqueNameInDirectory(absDir: string, baseName: string, extension: stri
   let attempt = `${baseName}${extension}`;
   let index = 2;
   while (existsSync(join(absDir, attempt))) {
+    attempt = `${baseName}-${String(index)}${extension}`;
+    index += 1;
+  }
+  return attempt;
+}
+
+async function uniqueNameInScopedDirectory(
+  filesystem: ScopedFileSystem,
+  dirId: string,
+  baseName: string,
+  extension: string,
+): Promise<string> {
+  let attempt = `${baseName}${extension}`;
+  let index = 2;
+  while (await filesystem.exists(join(dirId, attempt).replace(/\\/g, '/'))) {
     attempt = `${baseName}-${String(index)}${extension}`;
     index += 1;
   }
@@ -330,6 +352,74 @@ function buildSharedImageNote(input: {
   };
 }
 
+async function buildSharedImageNoteForFilesystem(input: {
+  filesystem: ScopedFileSystem;
+  title?: string;
+  mimeType?: string;
+  fileName?: string;
+  dataBase64: string;
+  sourceApp?: string;
+  createdAt: string;
+}): Promise<{ title: string; content: string; assetId: string }> {
+  const decodedImage = decodeSharedBase64Payload(input.dataBase64);
+  const imageBuffer = decodedImage.buffer;
+  const normalizedMimeType = decodedImage.mimeType ?? input.mimeType?.trim().toLowerCase();
+  if (normalizedMimeType && !normalizedMimeType.startsWith('image/')) {
+    throw new Error('mimeType must be an image type for image imports.');
+  }
+  const baseTitle =
+    input.title?.trim() || normalizeShareString(input.fileName)?.replace(/\.[^.]+$/, '') || `Shared image ${input.createdAt.slice(0, 10)}`;
+  const assetExt = resolveSharedImageAssetExtension({ fileName: input.fileName, mimeType: normalizedMimeType });
+  const assetBase = `${Date.now()}-${slugifyShareValue(baseTitle, 'shared-image')}`;
+  const assetFileName = await uniqueNameInScopedDirectory(input.filesystem, '_attachments', assetBase, `.${assetExt}`);
+  const assetId = `_attachments/${assetFileName}`;
+  await input.filesystem.writeBytes(assetId, imageBuffer);
+  const assetUrl = `/api/vault/asset?id=${encodeURIComponent(assetId)}`;
+  const frontmatter: Record<string, unknown> = {
+    title: baseTitle,
+    source_type: 'shared-image',
+    captured_at: input.createdAt,
+    asset_path: assetId,
+    mime_type: normalizedMimeType ?? `image/${assetExt}`,
+    tags: ['share', 'image'],
+  };
+  if (input.sourceApp) {
+    frontmatter.source_app = input.sourceApp;
+  }
+  const body = [`![${baseTitle}](${assetUrl})`, `Saved asset path: \`${assetId}\``].join('\n\n');
+  return {
+    title: baseTitle,
+    content: markdownWithFrontmatter(frontmatter, body),
+    assetId,
+  };
+}
+
+async function buildSharedImportContent(
+  input: Omit<VaultKnowledgeShareImportInput, 'root' | 'targetDirAbs'>,
+  createdAt: string,
+): Promise<{ title: string; content: string; asset?: VaultKnowledgeShareImportResult['asset'] }> {
+  if (input.kind === 'text') {
+    const text = normalizeShareString(input.text) ?? '';
+    return buildSharedTextNote({
+      title: input.title,
+      text,
+      sourceApp: normalizeShareString(input.sourceApp),
+      createdAt,
+    });
+  }
+  if (input.kind === 'url') {
+    const url = normalizeShareString(input.url);
+    if (!url) throw new Error('url is required for URL imports.');
+    return buildSharedUrlNote({
+      url,
+      title: input.title,
+      sourceApp: normalizeShareString(input.sourceApp),
+      createdAt,
+    });
+  }
+  throw new Error('image imports require filesystem-specific handling');
+}
+
 export async function importVaultSharedItem(input: VaultKnowledgeShareImportInput): Promise<VaultKnowledgeShareImportResult> {
   const createdAt = normalizeShareTimestamp(input.createdAt);
   mkdirSync(input.targetDirAbs, { recursive: true });
@@ -392,6 +482,52 @@ export async function importVaultSharedItem(input: VaultKnowledgeShareImportInpu
     sourceKind: input.kind,
     title,
     notePath,
+    ...(asset ? { asset } : {}),
+  };
+}
+
+export async function importVaultSharedItemToFilesystem(
+  input: VaultKnowledgeShareImportFilesystemInput,
+): Promise<VaultKnowledgeShareImportResult & { noteId: string }> {
+  const createdAt = normalizeShareTimestamp(input.createdAt);
+  const targetDirId = input.targetDirId.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (targetDirId) await input.filesystem.createDirectory(targetDirId);
+
+  let title: string;
+  let content: string;
+  let asset: VaultKnowledgeShareImportResult['asset'];
+
+  if (input.kind === 'image') {
+    const dataBase64 = normalizeShareString(input.dataBase64);
+    if (!dataBase64) throw new Error('dataBase64 is required for image imports.');
+    const built = await buildSharedImageNoteForFilesystem({
+      filesystem: input.filesystem,
+      title: input.title,
+      mimeType: normalizeShareString(input.mimeType),
+      fileName: normalizeShareString(input.fileName),
+      dataBase64,
+      sourceApp: normalizeShareString(input.sourceApp),
+      createdAt,
+    });
+    title = built.title;
+    content = built.content;
+    asset = { id: built.assetId, url: `/api/vault/asset?id=${encodeURIComponent(built.assetId)}` };
+  } else {
+    const built = await buildSharedImportContent(input, createdAt);
+    title = built.title;
+    content = built.content;
+  }
+
+  const noteBase = slugifyShareValue(title, 'shared-note');
+  const noteFileName = await uniqueNameInScopedDirectory(input.filesystem, targetDirId, noteBase, '.md');
+  const noteId = join(targetDirId, noteFileName).replace(/\\/g, '/');
+  await input.filesystem.writeText(noteId, content);
+
+  return {
+    sourceKind: input.kind,
+    title,
+    notePath: noteId,
+    noteId,
     ...(asset ? { asset } : {}),
   };
 }
