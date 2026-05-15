@@ -3711,7 +3711,7 @@ export function Sidebar() {
               <ActivityTreeView
                 items={activityTreeItems}
                 activeItemId={activeActivityTreeItemId}
-                className="h-[calc(100vh-9rem)] min-h-[12rem]"
+                className="min-h-0"
                 canDragItem={canDragActivityTreeItem}
                 canDropItem={canDropActivityTreeItem}
                 collapsedGroupItemIds={collapsedActivityTreeGroupItemIds}
