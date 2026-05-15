@@ -128,4 +128,21 @@ describe('resolveServerModuleSpecifierFrom', () => {
 
     expect(resolved).toBe(pathToFileURL(appAsarPath).href);
   });
+
+  it('resolves packaged automation modules from bundled server output', () => {
+    const resourcesRoot = makeTempRoot();
+    const cwdRoot = makeTempRoot();
+    const appAsarPath = join(resourcesRoot, 'app.asar/server/dist/automation/deferredResumes.js');
+    touch(appAsarPath);
+    delete process.env.PERSONAL_AGENT_REPO_ROOT;
+    process.chdir(cwdRoot);
+
+    const resolved = resolveServerModuleSpecifierFrom({
+      importMetaUrl: pathToFileURL(join(resourcesRoot, 'extensions/system-automations/dist/backend.mjs')).href,
+      relativeSpecifier: '../../automation/deferredResumes.js',
+      resourcesPath: resourcesRoot,
+    });
+
+    expect(resolved).toBe(pathToFileURL(appAsarPath).href);
+  });
 });
