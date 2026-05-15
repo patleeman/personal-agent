@@ -62,7 +62,6 @@ type RequestShape = {
 };
 
 const ENABLED = process.env.PI_OPENAI_NATIVE_COMPACTION !== '0';
-const NOTIFY = process.env.PI_OPENAI_NATIVE_COMPACTION_NOTIFY === '1';
 const requestShapeBySession = new Map<string, RequestShape>();
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -79,7 +78,7 @@ function notify(
   message: string,
   level: 'info' | 'warning' | 'error' = 'info',
 ): void {
-  if (NOTIFY && ctx.hasUI) ctx.ui.notify(message, level);
+  if (ctx.hasUI) ctx.ui.notify(message, level);
 }
 
 function getSessionId(ctx: { sessionManager: { getSessionId(): string } }): string {

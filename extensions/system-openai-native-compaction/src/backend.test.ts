@@ -205,6 +205,62 @@ describe('openai native compaction extension', () => {
     ]);
   });
 
+  it('notifies by default when reusing native compacted history', () => {
+    const harness = createPiHarness();
+    openaiNativeCompactionExtension(harness.pi as never);
+
+    const beforeProviderRequest =
+      harness.getHandler<
+        (event: { payload: Record<string, unknown> }, ctx: Record<string, unknown>) => Record<string, unknown> | undefined
+      >('before_provider_request');
+    const notify = vi.fn();
+
+    const result = beforeProviderRequest(
+      {
+        payload: {
+          model: OPENAI_MODEL.id,
+          input: [
+            { role: 'system', content: 'system prompt' },
+            { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Current prompt' }] },
+          ],
+        },
+      },
+      {
+        model: OPENAI_MODEL,
+        hasUI: true,
+        ui: { notify },
+        sessionManager: {
+          getSessionId: () => 'session-native-notice',
+          getBranch: () => [
+            {
+              id: 'compaction-1',
+              type: 'compaction',
+              summary: 'Portable summary',
+              details: {
+                nativeCompaction: {
+                  version: 1,
+                  provider: 'openai-responses-compact',
+                  modelKey: modelKey(OPENAI_MODEL),
+                  replacementHistory: [
+                    {
+                      type: 'message',
+                      role: 'assistant',
+                      content: [{ type: 'output_text', text: 'Native compacted context' }],
+                    },
+                  ],
+                },
+              },
+            },
+            userMessageEntry('user-1', 'Current prompt'),
+          ],
+        },
+      },
+    );
+
+    expect(result).toBeDefined();
+    expect(notify).toHaveBeenCalledWith(`Using OpenAI compaction for ${OPENAI_MODEL.provider}/${OPENAI_MODEL.id}`, 'info');
+  });
+
   it('drops orphan tool outputs when reconstructing replay history across model changes', () => {
     const state = reconstructNativeState(
       [
