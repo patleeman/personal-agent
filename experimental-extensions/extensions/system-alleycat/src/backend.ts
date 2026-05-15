@@ -215,22 +215,45 @@ async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
     PA_ALLEYCAT_JSONL_PORT: String(codexServer.jsonlPort),
     RUST_LOG: process.env.RUST_LOG ?? 'info',
   };
-  const child = await ctx.shell.spawn({
-    command: binary,
-    env,
-    onStdout: (chunk) => appendSidecarOutput(Buffer.from(chunk)),
-    onStderr: (chunk) => appendSidecarOutput(Buffer.from(chunk)),
-    onExit: (event) => {
-      rememberLog(`Alleycat sidecar exited code=${event.code ?? 'null'} signal=${event.signal ?? 'null'}`);
-      if (sidecarProcess === child) {
-        sidecarProcess = null;
-        sidecarPid = null;
-      }
-    },
-  });
-  sidecarProcess = child;
-  sidecarPid = child.pid;
-  if (!sidecarPid) throw new Error('Failed to start Alleycat sidecar: missing child pid');
+  const spawnSidecar = (ctx.shell as unknown as { spawn?: ExtensionBackendContext['shell']['spawn'] }).spawn;
+  if (spawnSidecar) {
+    const child = await spawnSidecar({
+      command: binary,
+      env,
+      onStdout: (chunk) => appendSidecarOutput(Buffer.from(chunk)),
+      onStderr: (chunk) => appendSidecarOutput(Buffer.from(chunk)),
+      onExit: (event) => {
+        rememberLog(`Alleycat sidecar exited code=${event.code ?? 'null'} signal=${event.signal ?? 'null'}`);
+        if (sidecarProcess === child) {
+          sidecarProcess = null;
+          sidecarPid = null;
+        }
+      },
+    });
+    sidecarProcess = child;
+    sidecarPid = child.pid;
+    if (!sidecarPid) throw new Error('Failed to start Alleycat sidecar: missing child pid');
+  } else {
+    rememberLog('ctx.shell.spawn unavailable; falling back to legacy shell background sidecar launch');
+    const command = [
+      `PA_ALLEYCAT_TOKEN=${shellQuote(token)}`,
+      `PA_ALLEYCAT_SECRET_KEY=${shellQuote(secret)}`,
+      `PA_ALLEYCAT_JSONL_HOST=127.0.0.1`,
+      `PA_ALLEYCAT_JSONL_PORT=${codexServer.jsonlPort}`,
+      `RUST_LOG=${shellQuote(process.env.RUST_LOG ?? 'info')}`,
+      `${shellQuote(binary)} >> ${shellQuote(logPath)} 2>&1 & echo $!`,
+    ].join(' ');
+    const result = await ctx.shell.exec({ command: 'sh', args: ['-lc', command], timeoutMs: 10_000 });
+    sidecarPid = Number(result.stdout.trim());
+    sidecarProcess = sidecarPid
+      ? {
+          pid: sidecarPid,
+          kill: () => ctx?.shell.exec({ command: 'sh', args: ['-lc', `kill ${sidecarPid} >/dev/null 2>&1 || true`], timeoutMs: 5_000 }),
+        }
+      : null;
+    if (!Number.isFinite(sidecarPid) || sidecarPid <= 0)
+      throw new Error(`Failed to start Alleycat sidecar: ${result.stderr || result.stdout}`);
+  }
 
   const deadline = Date.now() + SIDECAR_READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
