@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +16,7 @@ let sidecarLogs: string[] = [];
 
 const DEFAULT_COMPAT_PORT = 3850;
 const SECRET_KEY = 'alleycat-secret-key';
+const STABLE_IDENTITY_FILE = 'kitty-litter-alleycat/identity.json';
 const SIDECAR_READY_TIMEOUT_MS = 12_000;
 
 export interface AlleycatPairPayload {
@@ -111,10 +112,21 @@ function sidecarBinaryPath(): { binary: string | null; searched: string[] } {
 }
 
 async function ensureSecretKey(ctx: ExtensionBackendContext): Promise<string> {
-  const existing = await ctx.storage.get<string>(SECRET_KEY);
-  if (typeof existing === 'string' && existing.trim()) return existing;
-  const secret = randomBytes(32).toString('base64');
-  await ctx.storage.put(SECRET_KEY, secret);
+  const stablePath = join(ctx.runtimeDir, STABLE_IDENTITY_FILE);
+  try {
+    if (existsSync(stablePath)) {
+      const parsed = JSON.parse(readFileSync(stablePath, 'utf8')) as { secretKey?: unknown };
+      if (typeof parsed.secretKey === 'string' && parsed.secretKey.trim()) return parsed.secretKey;
+    }
+  } catch {
+    // Regenerate below if the file is corrupt.
+  }
+
+  const existing = await ctx.storage.get<string>(SECRET_KEY).catch(() => null);
+  const secret = typeof existing === 'string' && existing.trim() ? existing : randomBytes(32).toString('base64');
+  mkdirSync(dirname(stablePath), { recursive: true });
+  writeFileSync(stablePath, `${JSON.stringify({ secretKey: secret }, null, 2)}\n`, { mode: 0o600 });
+  await ctx.storage.put(SECRET_KEY, secret).catch(() => ({ ok: true }));
   return secret;
 }
 

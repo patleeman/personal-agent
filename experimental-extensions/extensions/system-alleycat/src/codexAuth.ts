@@ -1,9 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
 
 const TOKEN_BYTES = 32;
 const SETTINGS_KEY = 'codex-token';
+const STABLE_AUTH_FILE = 'kitty-litter-alleycat/auth.json';
 
 export interface CodexAuth {
   /** Validate a bearer token. Returns true if valid. */
@@ -17,17 +20,39 @@ export interface CodexAuth {
 }
 
 export function createCodexAuth(ctx: ExtensionBackendContext): CodexAuth {
-  // In-memory token cache. Loaded from storage immediately.
+  // In-memory token cache. Loaded from stable profile storage immediately.
   let cachedToken: string | null = null;
   let loadPromise: Promise<void> | null = null;
+  const stableAuthPath = join(ctx.runtimeDir, STABLE_AUTH_FILE);
+
+  const readStableToken = (): string | null => {
+    try {
+      if (!existsSync(stableAuthPath)) return null;
+      const parsed = JSON.parse(readFileSync(stableAuthPath, 'utf8')) as { token?: unknown };
+      return typeof parsed.token === 'string' && parsed.token.trim() ? parsed.token : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeStableToken = (token: string): void => {
+    mkdirSync(dirname(stableAuthPath), { recursive: true });
+    writeFileSync(stableAuthPath, `${JSON.stringify({ token }, null, 2)}\n`, { mode: 0o600 });
+  };
 
   // Kick off loading immediately (don't wait — storage may be async).
   // Callers should await ensurePaired() to guarantee loading is complete.
   const ensureLoaded = (): Promise<void> => {
     if (loadPromise) return loadPromise;
-    loadPromise = ctx.storage.get<string>(SETTINGS_KEY).then((stored) => {
-      cachedToken = (stored as string | null) ?? null;
-    });
+    loadPromise = (async () => {
+      cachedToken = readStableToken();
+      if (cachedToken) return;
+
+      // One-time migration from extension-scoped storage. Dev imports can change
+      // that namespace, so stable profile storage is the source of truth now.
+      cachedToken = ((await ctx.storage.get<string>(SETTINGS_KEY).catch(() => null)) as string | null) ?? null;
+      if (cachedToken) writeStableToken(cachedToken);
+    })();
     return loadPromise;
   };
 
@@ -55,6 +80,7 @@ export function createCodexAuth(ctx: ExtensionBackendContext): CodexAuth {
     rotateToken(): string {
       const token = generateToken();
       cachedToken = token;
+      writeStableToken(token);
       void ctx.storage.put(SETTINGS_KEY, token);
       return token;
     },
@@ -65,6 +91,7 @@ export function createCodexAuth(ctx: ExtensionBackendContext): CodexAuth {
 
       const token = generateToken();
       cachedToken = token;
+      writeStableToken(token);
       await ctx.storage.put(SETTINGS_KEY, token);
       ctx.log.info(`codex protocol auth token generated: ${token.slice(0, 16)}...`);
       return token;
