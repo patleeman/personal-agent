@@ -46,7 +46,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Artifacts](../extensions/system-artifacts/README.md)
 - [Auto Mode](../extensions/system-auto-mode/README.md)
 - [Automations](../extensions/system-automations/README.md)
-- [Browser](../extensions/system-browser/README.md)
+- [Browser](../experimental-extensions/extensions/system-browser/README.md)
 - [ACP Protocol](../experimental-extensions/extensions/system-acp/README.md)
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)

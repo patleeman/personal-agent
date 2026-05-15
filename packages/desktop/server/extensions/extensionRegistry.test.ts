@@ -29,7 +29,7 @@ describe('extension registry', () => {
         expect.objectContaining({ id: 'system-diffs', packageType: 'system', name: 'Diffs' }),
         expect.objectContaining({ id: 'system-context-usage', packageType: 'system', name: 'Context Usage' }),
         expect.objectContaining({ id: 'system-git-status', packageType: 'system', name: 'Git Status' }),
-        expect.objectContaining({ id: 'system-runs', packageType: 'system', name: 'Runs' }),
+        expect.objectContaining({ id: 'system-runs', packageType: 'system', name: 'Background Work' }),
       ]),
     );
     expect(snapshot.routes).toContainEqual({
@@ -50,31 +50,30 @@ describe('extension registry', () => {
         expect.objectContaining({
           extensionId: 'system-files',
           location: 'rightRail',
-          component: 'WorkspaceFilesPanel',
+          component: { host: 'workbench.files.rail' },
           detailView: 'workspace-file-detail',
         }),
-        expect.objectContaining({ extensionId: 'system-files', location: 'workbench', component: 'WorkspaceFileDetailPanel' }),
+        expect.objectContaining({ extensionId: 'system-files', location: 'workbench', component: { host: 'workbench.files.detail' } }),
         expect.objectContaining({
           extensionId: 'system-diffs',
           location: 'rightRail',
-          component: 'ConversationDiffsPanel',
+          component: { host: 'workbench.diffs.rail' },
           detailView: 'conversation-diff-detail',
         }),
-        expect.objectContaining({ extensionId: 'system-diffs', location: 'workbench', component: 'ConversationDiffDetailPanel' }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'workbench', component: { host: 'workbench.diffs.detail' } }),
         expect.objectContaining({
           extensionId: 'system-runs',
           location: 'rightRail',
-          component: 'ConversationRunsPanel',
+          component: { host: 'workbench.runs.rail' },
           detailView: 'conversation-run-detail',
         }),
-        expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: 'ConversationRunDetailPanel' }),
+        expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: { host: 'workbench.runs.detail' } }),
       ]),
     );
     expect(listExtensionSkillRegistrations()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ extensionId: 'system-artifacts', id: 'artifacts' }),
         expect.objectContaining({ extensionId: 'system-automations', id: 'scheduled-tasks' }),
-        expect.objectContaining({ extensionId: 'system-browser', id: 'browser' }),
         expect.objectContaining({ extensionId: 'system-runs', id: 'runs' }),
       ]),
     );

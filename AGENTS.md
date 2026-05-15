@@ -34,4 +34,4 @@ personal-agent is Patrick's personal AI agent runtime. Keep core small and build
 - Development, validation, UI QA, gitleaks, and checkpoint details: `docs/development.md`.
 - Release process, current version, signed build flow, and release gotchas: `docs/release-cycle.md`.
 - Extension authoring/API rules: `docs/extensions.md` and `packages/extensions/README.md`.
-- Browser feature docs: `extensions/system-browser/README.md`; Workbench Browser skill handles built-in browser context.
+- Browser feature docs: `experimental-extensions/extensions/system-browser/README.md`; Workbench Browser skill handles built-in browser context.

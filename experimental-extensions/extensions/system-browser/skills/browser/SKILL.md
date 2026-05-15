@@ -218,7 +218,7 @@ Do not show raw script/debug panels in the user Browser tab. The transcript is w
 
 ## Relationship to `agent-browser`
 
-`agent-browser` is still useful as a CLI/dev validation tool. In this repo, use it through `npm run ab:run` as documented in [Agent Browser](../../../../docs/agent-browser.md).
+`agent-browser` is still useful as a CLI/dev validation tool. In this repo, use it through `npm run ab:run` as documented in [Agent Browser](../../../../../docs/agent-browser.md).
 
 Do not confuse that with the built-in Workbench Browser:
 

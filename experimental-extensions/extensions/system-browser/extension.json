@@ -3,6 +3,7 @@
   "id": "system-browser",
   "name": "Browser",
   "packageType": "system",
+  "defaultEnabled": false,
   "description": "Browse web pages beside the active conversation.",
   "version": "0.1.0",
   "frontend": {

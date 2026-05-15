@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { setWorkbenchBrowserToolHost } from '../../../packages/desktop/server/extensions/workbenchBrowserToolHost.js';
+import { setWorkbenchBrowserToolHost } from '../../../../packages/desktop/server/extensions/workbenchBrowserToolHost.js';
 import { createWorkbenchBrowserAgentExtension } from './backend.js';
 
 function collectExtension() {

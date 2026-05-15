@@ -1262,7 +1262,7 @@ State is SQLite-backed and survives app restarts.
 See the system extensions in `extensions/` for practical examples:
 
 - **`system-artifacts`** — Tools + views + transcript renderer + skills
-- **`system-browser`** — Browser automation tool + views
+- **`system-browser`** — Experimental browser automation tool + views (`experimental-extensions/extensions/system-browser`)
 - **`system-automations`** — Scheduled tasks, reminders, conversation queues, and the Automations page
 - **`system-images`** — Experimental image generation tool (`experimental-extensions/extensions/system-images`)
 - **`system-conversation-tools`** — Agent lifecycle hooks + contextMenus
