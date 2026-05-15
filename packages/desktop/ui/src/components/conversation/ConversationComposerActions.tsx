@@ -143,7 +143,17 @@ export function ConversationComposerActions({
             <button
               type="button"
               onClick={(event) => {
-                onSubmitComposerActionForModifiers(composerAltHeld || event.altKey, composerParallelHeld || event.ctrlKey || event.metaKey);
+                onSubmitComposerActionForModifiers(
+                  streamingSubmitLabel === 'Follow up' || composerAltHeld || event.altKey,
+                  streamingSubmitLabel === 'Parallel' || composerParallelHeld || event.ctrlKey || event.metaKey,
+                );
+              }}
+              onContextMenu={(event) => {
+                if (streamingSubmitLabel !== 'Parallel' || (!composerParallelHeld && !event.ctrlKey && !event.metaKey)) {
+                  return;
+                }
+                event.preventDefault();
+                onSubmitComposerActionForModifiers(false, true);
               }}
               disabled={composerDisabled}
               className={cx(
@@ -208,7 +218,17 @@ export function ConversationComposerActions({
         <button
           type="button"
           onClick={(event) => {
-            onSubmitComposerActionForModifiers(composerAltHeld || event.altKey, composerParallelHeld || event.ctrlKey || event.metaKey);
+            onSubmitComposerActionForModifiers(
+              composerSubmitLabel === 'Follow up' || composerAltHeld || event.altKey,
+              composerSubmitLabel === 'Parallel' || composerParallelHeld || event.ctrlKey || event.metaKey,
+            );
+          }}
+          onContextMenu={(event) => {
+            if (composerSubmitLabel !== 'Parallel' || (!composerParallelHeld && !event.ctrlKey && !event.metaKey)) {
+              return;
+            }
+            event.preventDefault();
+            onSubmitComposerActionForModifiers(false, true);
           }}
           disabled={composerDisabled}
           className={cx(
