@@ -55,11 +55,16 @@ export function evaluateCommandEnablement(expression: string | undefined, contex
   if (!trimmed) return true;
   const negated = trimmed.startsWith('!');
   const body = negated ? trimmed.slice(1).trim() : trimmed;
-  const equality = body.match(/^([A-Za-z0-9_.:-]+)\s*==\s*(.+)$/);
-  const result = equality
-    ? String(readContextValue(context, equality[1]) ?? '') === equality[2].replace(/^['"]|['"]$/g, '')
+  const comparison = body.match(/^([A-Za-z0-9_.:-]+)\s*([!=]=)\s*(.+)$/);
+  const result = comparison
+    ? compareContextValue(readContextValue(context, comparison[1]), comparison[2], comparison[3])
     : Boolean(readContextValue(context, body));
   return negated ? !result : result;
+}
+
+function compareContextValue(value: ExtensionCommandContextValue, operator: string, expected: string): boolean {
+  const matches = String(value ?? '') === expected.replace(/^[']|[']$/g, '');
+  return operator === '!=' ? !matches : matches;
 }
 
 export function listHostCommands(): Array<{ id: string; title: string; category?: string }> {
@@ -119,24 +124,27 @@ export function createHostCommands(options: ExtensionCommandExecutorOptions): Ho
   ];
 }
 
-function legacyCommandToInvocation(command: string): { id: string; args?: Record<string, unknown> } {
-  if (command.startsWith('navigate:')) return { id: 'app.navigate', args: { to: command.slice('navigate:'.length) } };
-  if (command.startsWith('commandPalette:')) return { id: 'palette.open', args: { scope: command.slice('commandPalette:'.length) } };
-  if (command.startsWith('rightRail:')) return { id: 'rail.open', args: { target: command.slice('rightRail:'.length) } };
-  if (command.startsWith('layout:')) return { id: 'layout.set', args: { mode: command.slice('layout:'.length) } };
-  return { id: command };
+export function normalizeLegacyCommand(command: string): { command: string; args?: Record<string, unknown> } {
+  if (command.startsWith('navigate:')) return { command: 'app.navigate', args: { to: command.slice('navigate:'.length) } };
+  if (command.startsWith('commandPalette:')) return { command: 'palette.open', args: { scope: command.slice('commandPalette:'.length) } };
+  if (command.startsWith('rightRail:')) {
+    const [extensionId, surfaceId] = command.slice('rightRail:'.length).split('/');
+    return { command: 'rail.open', args: { extensionId, surfaceId } };
+  }
+  if (command.startsWith('layout:')) return { command: 'layout.set', args: { mode: command.slice('layout:'.length) } };
+  return { command };
 }
 
 export async function executeExtensionCommand(command: string, args: unknown, options: ExtensionCommandExecutorOptions): Promise<boolean> {
-  const invocation = legacyCommandToInvocation(command);
+  const invocation = normalizeLegacyCommand(command);
   const commandArgs = (args ?? invocation.args) as ExtensionCommandArgs;
-  const hostCommand = createHostCommands(options).find((candidate) => candidate.id === invocation.id);
+  const hostCommand = createHostCommands(options).find((candidate) => candidate.id === invocation.command);
   if (hostCommand) {
     if (hostCommand.canExecute && !hostCommand.canExecute(commandArgs, options.context ?? {})) return false;
     return Boolean(await hostCommand.execute(commandArgs));
   }
   const extensionCommand = options.extensionCommands?.find(
-    (candidate) => candidate.surfaceId === invocation.id || `${candidate.extensionId}.${candidate.surfaceId}` === invocation.id,
+    (candidate) => candidate.surfaceId === invocation.command || `${candidate.extensionId}.${candidate.surfaceId}` === invocation.command,
   );
   if (!extensionCommand) return false;
   if (!evaluateCommandEnablement(extensionCommand.enablement, options.context)) return false;

@@ -344,16 +344,19 @@ export function createBackendContext(
     commands: {
       execute: async (commandId, args) => {
         const command = findExtensionCommandRegistration(commandId);
-        if (!command) return false;
-        const actionResult = await invokeExtensionAction(
-          command.extensionId,
-          command.action,
-          args ?? {},
-          serverContext,
-          toolContext,
-          agentToolContext,
-        );
-        if (!actionResult.ok) throw new Error(actionResult.error);
+        if (command) {
+          const actionResult = await invokeExtensionAction(
+            command.extensionId,
+            command.action,
+            args ?? {},
+            serverContext,
+            toolContext,
+            agentToolContext,
+          );
+          if (!actionResult.ok) throw new Error(actionResult.error);
+          return true;
+        }
+        publishAppEvent({ type: 'extension_command', command: commandId, args, sourceExtensionId: extensionId });
         return true;
       },
       list: async () => listExtensionCommandRegistrations(),

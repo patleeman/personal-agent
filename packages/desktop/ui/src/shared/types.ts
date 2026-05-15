@@ -739,6 +739,7 @@ export type DesktopAppEvent =
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'notification'; extensionId: string; message: string; severity?: string; details?: string }
+  | { type: 'extension_command'; command: string; args?: unknown; sourceExtensionId?: string }
   | { type: 'session_meta_changed'; sessionId: string; running?: boolean }
   | { type: 'session_file_changed'; sessionId: string }
   | { type: 'open_session'; sessionId: string }

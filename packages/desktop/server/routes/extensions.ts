@@ -40,6 +40,7 @@ import {
 import { createExtensionRunsCapability } from '../extensions/extensionRuns.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from '../extensions/extensionStorage.js';
 import { logError } from '../middleware/index.js';
+import { publishAppEvent } from '../shared/appEvents.js';
 import type { ServerRouteContext } from './context.js';
 
 async function readExtensionInstallSummariesWithRuntimeState() {
@@ -382,7 +383,8 @@ export function registerExtensionRoutes(
     try {
       const command = findExtensionCommandRegistration(req.params.commandId);
       if (!command) {
-        res.status(404).json({ ok: false, error: 'Command not found.' });
+        publishAppEvent({ type: 'extension_command', command: req.params.commandId, args: req.body ?? {} });
+        res.json({ ok: true, result: true });
         return;
       }
       const result = await invokeExtensionAction(command.extensionId, command.action, req.body ?? {}, context);

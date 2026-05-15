@@ -622,9 +622,9 @@ Built-in host commands include:
 
 Legacy string commands still work for compatibility: `navigate:/path`, `commandPalette:threads|files|commands|search`, `rightRail:{extensionId}/{surfaceId}`, and `layout:compact|workbench`.
 
-Frontend extensions can call `pa.commands.execute(id, args)`, `pa.commands.list()`, and `pa.commands.setContext(key, value)`. Backend actions can call `ctx.commands.execute(id, args)` for extension-contributed commands.
+Frontend extensions can call `pa.commands.execute(id, args)`, `pa.commands.list()`, and `pa.commands.setContext(key, value)`. Backend actions can call `ctx.commands.execute(id, args)` for extension-contributed commands and built-in host commands; host command execution is delivered to the renderer over the app event stream.
 
-Enablement is intentionally tiny: a command can set `enablement` to a context key (`speechmic.connected`), negated key (`!conversation.isStreaming`), or equality (`layout.mode == workbench`). Frontend `setContext` namespaces keys under the extension id.
+Enablement is intentionally tiny: a command can set `enablement` to a context key (`speechmic.connected`), negated key (`!conversation.isStreaming`), equality (`layout.mode == workbench`), or inequality (`layout.mode != compact`). Frontend `setContext` namespaces keys under the extension id.
 
 Do not install global `window` listeners for app-level shortcuts.
 

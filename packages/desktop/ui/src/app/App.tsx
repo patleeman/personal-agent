@@ -283,6 +283,13 @@ export function App() {
             }),
           );
           return;
+        case 'extension_command':
+          window.dispatchEvent(
+            new CustomEvent('pa-extension-command-execute', {
+              detail: { command: payload.command, args: payload.args, sourceExtensionId: payload.sourceExtensionId },
+            }),
+          );
+          return;
         case 'invalidate':
           if (payload.topics.includes('runs')) {
             void api
