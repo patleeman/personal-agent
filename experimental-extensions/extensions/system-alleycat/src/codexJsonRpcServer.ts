@@ -49,6 +49,17 @@ export interface ConnectionState {
 export type NotifyFn = (method: string, params: unknown) => void;
 
 export type MethodHandler = (params: unknown, ctx: ExtensionBackendContext, conn: ConnectionState, notify: NotifyFn) => Promise<unknown>;
+export type ProtocolLogFn = (line: string) => void;
+
+let protocolLogger: ProtocolLogFn | null = null;
+
+export function setCodexProtocolLogger(logger: ProtocolLogFn | null): void {
+  protocolLogger = logger;
+}
+
+function logProtocol(line: string): void {
+  protocolLogger?.(line);
+}
 
 // ── Thread event dispatch ────────────────────────────────────────────────────
 // Maps threadId → set of notification functions for subscribed connections.
@@ -230,6 +241,9 @@ async function handleJsonRpcMessage(input: {
   }
 
   const { method, id, params } = request;
+  if (method === 'initialize' || method.startsWith('thread/')) {
+    logProtocol(`rpc request ${method} ${params ? JSON.stringify(params).slice(0, 500) : '{}'}`);
+  }
 
   if (id === undefined || id === null) return;
 
@@ -255,6 +269,13 @@ async function handleJsonRpcMessage(input: {
     }
 
     const result = await handler(params, input.ctx, input.conn, input.notify);
+    if (method === 'thread/list') {
+      const count = Array.isArray((result as Record<string, unknown> | null)?.data) ? (result as { data: unknown[] }).data.length : null;
+      logProtocol(`rpc response ${method} count=${count ?? 'unknown'} ${JSON.stringify(result).slice(0, 800)}`);
+    } else if (method === 'thread/loaded/list') {
+      const count = Array.isArray((result as Record<string, unknown> | null)?.data) ? (result as { data: unknown[] }).data.length : null;
+      logProtocol(`rpc response ${method} count=${count ?? 'unknown'} ${JSON.stringify(result).slice(0, 500)}`);
+    }
     input.sendJson({ jsonrpc: '2.0', id, result } satisfies JsonRpcSuccess);
   } catch (error) {
     input.sendJson({

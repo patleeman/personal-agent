@@ -197,11 +197,12 @@ async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
 
 export async function start(_input: unknown, ctx: ExtensionBackendContext): Promise<AlleycatStatus> {
   if (!codexServer) {
-    const { createCodexServer } = await import('./codexJsonRpcServer.js');
+    const { createCodexServer, setCodexProtocolLogger } = await import('./codexJsonRpcServer.js');
     const auth = codexAuth ?? createCodexAuth(ctx);
     codexAuth = auth;
     await auth.ensurePairing();
     const port = Number(process.env.PERSONAL_AGENT_ALLEYCAT_COMPAT_PORT) || DEFAULT_COMPAT_PORT;
+    setCodexProtocolLogger(rememberLog);
     codexServer = await createCodexServer({ port, auth, ctx, bindAddress: '127.0.0.1', fallbackToEphemeralPortOnConflict: true });
     ctx.log.info('Personal Agent Alleycat compatibility server started', { port: codexServer.port, jsonlPort: codexServer.jsonlPort });
   }
