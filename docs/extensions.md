@@ -121,7 +121,6 @@ The manifest declares what your extension contributes:
 | `composerShelves`            | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                        |
 | `newConversationPanels`      | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)           |
 | `composerControls`           | Component controls in the composer bottom row               | [See below](#composer-controls-composercontrols)                      |
-| `composerSubmitActions`      | Submit-mode actions for the composer                        | [See below](#composer-submit-actions-composersubmitactions)           |
 | `composerButtons`            | Legacy composer controls                                    | [See below](#composer-buttons-composerbuttons)                        |
 | `composerInputTools`         | Component tools beside composer controls                    | [See below](#composer-input-tools-composerinputtools)                 |
 | `toolbarActions`             | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                          |
@@ -294,21 +293,6 @@ Add component-backed controls in the composer bottom row. Core owns the row layo
 ```
 
 Slots are `leading`, `preferences`, and `actions`. Controls sort by `priority` ascending, then extension id, then contribution id. The component receives `pa`, `controlContext`, and the legacy alias `buttonContext`. `controlContext.renderMode` is `inline` or `menu`; `insertText(text)` inserts at the current composer selection; `openFilePicker()` opens the core-owned attachment input; and model/goal fields expose the current composer preference state.
-
-### Composer Submit Actions (`composerSubmitActions`)
-
-Declare submit-mode actions for composer sends. This is the extension boundary for future send strategies such as parallel prompts or follow-ups; core still owns low-level conversation primitives and permission checks.
-
-```json
-{
-  "id": "parallel",
-  "label": "Parallel",
-  "handler": "startParallelPrompt",
-  "when": "conversationBusy && composerHasContent",
-  "shortcut": "Mod+Enter",
-  "priority": 30
-}
-```
 
 ### Composer Buttons (`composerButtons`)
 
@@ -692,7 +676,7 @@ If a page needs a style that fights these defaults, first ask whether it should 
 ## Backend (Server-side)
 
 The backend runs in the Node.js server process. It exposes actions
-that the frontend can call via `pa.extension.invoke()`. A backend can also declare namespaced routes under `backend.routes`, mounted at `/api/extensions/{extensionId}/routes/*`. A backend can also declare `onEnableAction` in `extension.json` to run an action immediately after the user enables the extension.
+that the frontend can call via `pa.extension.invoke()`. A backend can also declare `onEnableAction` in `extension.json` to run an action immediately after the user enables the extension.
 
 ```typescript
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
@@ -700,25 +684,6 @@ import type { ExtensionBackendContext } from '@personal-agent/extensions';
 export async function ping(_input: unknown, ctx: ExtensionBackendContext) {
   ctx.log.info('ping received');
   return { ok: true, at: new Date().toISOString() };
-}
-```
-
-Backend route handlers receive a safe request object and backend context. Routes are extension-namespaced; do not add global product routes for extension-owned features.
-
-```json
-{
-  "backend": {
-    "entry": "dist/backend.mjs",
-    "routes": [{ "method": "GET", "path": "/status", "handler": "status" }]
-  }
-}
-```
-
-```typescript
-import type { ExtensionBackendContext, ExtensionRouteRequest, ExtensionRouteResponse } from '@personal-agent/extensions';
-
-export async function status(req: ExtensionRouteRequest, ctx: ExtensionBackendContext): Promise<ExtensionRouteResponse> {
-  return { status: 200, body: { ok: true, extensionId: ctx.extensionId, query: req.query } };
 }
 ```
 
