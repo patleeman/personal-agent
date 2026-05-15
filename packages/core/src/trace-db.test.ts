@@ -41,7 +41,7 @@ import {
   writeTraceStats,
   writeTraceSuggestedContext,
   writeTraceToolCall,
-} from './trace-db.ts';
+} from './trace-db.js';
 import { resolveTraceTelemetryLogDir } from './trace-telemetry-log.js';
 
 describe('trace-db', () => {

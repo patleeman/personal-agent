@@ -604,6 +604,7 @@ export function writeTraceStats(params: {
       durationMs: row.durationMs,
     },
   });
+  return;
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
@@ -681,6 +682,7 @@ export function writeTraceToolCall(params: {
       conversationTitle: row.conversationTitle,
     },
   });
+  return;
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
@@ -749,6 +751,7 @@ export function writeTraceContext(params: {
     profile: row.profile,
     payload: { ...row, id: undefined, sessionId: undefined, profile: undefined, ts: undefined },
   });
+  return;
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
@@ -806,6 +809,7 @@ export function writeTraceCompaction(params: {
     profile: row.profile,
     payload: { reason: row.reason, tokensBefore: row.tokensBefore, tokensAfter: row.tokensAfter, tokensSaved: row.tokensSaved },
   });
+  return;
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
@@ -839,6 +843,7 @@ export function writeTraceAutoMode(params: { sessionId: string; enabled: boolean
     profile: row.profile,
     payload: { enabled: row.enabled, stopReason: row.stopReason },
   });
+  return;
   try {
     const db = getTraceDb();
     db.prepare(`INSERT INTO trace_auto_mode (id, session_id, profile, ts, enabled, stop_reason) VALUES (?, ?, ?, ?, ?, ?)`).run(
@@ -869,6 +874,7 @@ export function writeTraceSuggestedContext(params: { sessionId: string; pointerI
     profile: row.profile,
     payload: { pointerIds: row.pointerIds, pointerCount: row.pointerCount },
   });
+  return;
   try {
     const db = getTraceDb();
     db.prepare(
@@ -905,6 +911,7 @@ export function writeTraceContextPointerInspect(params: {
     profile: row.profile,
     payload: { inspectedConversationId: row.inspectedConversationId, wasSuggested: row.wasSuggested },
   });
+  return;
   try {
     const db = getTraceDb();
     db.prepare(
