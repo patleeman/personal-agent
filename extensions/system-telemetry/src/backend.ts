@@ -403,7 +403,15 @@ function queryToolFlowFromEvents(events: TraceTelemetryLogEvent[]) {
   const bySession = new Map<string, TraceTelemetryLogEvent[]>();
   for (const event of toolEvents(events)) bySession.set(event.sessionId, [...(bySession.get(event.sessionId) ?? []), event]);
   const transitions = new Map<string, { fromTool: string; toTool: string; count: number }>();
-  const failureTrajectories: Array<{ sessionId: string; failedTool: string; previousCalls: string[]; errorMessage: string | null }> = [];
+  const coOccurrences = new Map<string, { toolA: string; toolB: string; sessions: number }>();
+  const failureTrajectories: Array<{
+    sessionId: string;
+    ts: string;
+    toolName: string;
+    failedTool: string;
+    previousCalls: string[];
+    errorMessage: string | null;
+  }> = [];
   for (const [sessionId, rows] of bySession.entries()) {
     const sorted = rows.sort((a, b) => a.ts.localeCompare(b.ts));
     const labels = sorted.map((event) =>
@@ -417,17 +425,32 @@ function queryToolFlowFromEvents(events: TraceTelemetryLogEvent[]) {
       current.count += 1;
       transitions.set(key, current);
     }
+    const uniqueLabels = [...new Set(labels)].sort((left, right) => left.localeCompare(right));
+    for (let left = 0; left < uniqueLabels.length; left += 1) {
+      for (let right = left + 1; right < uniqueLabels.length; right += 1) {
+        const key = `${uniqueLabels[left]}+${uniqueLabels[right]}`;
+        const current = coOccurrences.get(key) ?? { toolA: uniqueLabels[left], toolB: uniqueLabels[right], sessions: 0 };
+        current.sessions += 1;
+        coOccurrences.set(key, current);
+      }
+    }
     sorted.forEach((event, index) => {
       if (event.payload.status !== 'error') return;
       failureTrajectories.push({
         sessionId,
+        ts: event.ts,
+        toolName: labels[index],
         failedTool: labels[index],
-        previousCalls: labels.slice(Math.max(0, index - 5), index),
+        previousCalls: labels.slice(Math.max(0, index - 3), index),
         errorMessage: stringValue(event.payload.errorMessage),
       });
     });
   }
-  return { transitions: [...transitions.values()], failureTrajectories };
+  return {
+    transitions: [...transitions.values()].sort((a, b) => b.count - a.count),
+    coOccurrences: [...coOccurrences.values()].sort((a, b) => b.sessions - a.sessions),
+    failureTrajectories: failureTrajectories.sort((a, b) => b.ts.localeCompare(a.ts)),
+  };
 }
 
 function ok(body: unknown): ExtensionRouteResponse {
@@ -515,25 +538,46 @@ export function cacheEfficiency(req: ExtensionRouteRequest): ExtensionRouteRespo
   return ok({
     series: [],
     aggregate: {
-      requestHitRate: summary.cacheHitRate,
-      cachedShare: summary.cacheHitRate,
-      cacheRead: summary.tokensCached,
-      cacheRequests: 0,
-      totalInput: summary.tokensInput + summary.tokensCached + summary.tokensCachedWrite,
+      requestCacheHitRate: Math.round(summary.cacheHitRate * 10) / 10,
+      overallHitRate: Math.round(summary.cacheHitRate * 10) / 10,
+      totalCached: summary.tokensCached,
+      cachedRequests: summary.tokensCached > 0 ? 1 : 0,
+      requests: summary.tokensInput + summary.tokensCached + summary.tokensCachedWrite > 0 ? 1 : 0,
+      byModel: [],
     },
   });
 }
 
 export function systemPrompt(): ExtensionRouteResponse {
-  return ok({ series: [], aggregate: { avgSize: 0, avgWindowPct: 0, maxSize: 0, sessions: 0 } });
+  return ok({
+    series: [],
+    aggregate: {
+      avgSystemPromptTokens: 0,
+      avgPctOfContextWindow: 0,
+      maxSystemPromptTokens: 0,
+      samples: 0,
+      byModel: [],
+    },
+  });
 }
 
 export function autoMode(req: ExtensionRouteRequest): ExtensionRouteResponse {
   const events = eventsSince(parseRangeParam(req.query.range)).filter((event) => event.type === 'auto_mode');
+  const recentEvents = events
+    .slice(-20)
+    .reverse()
+    .map((event) => ({
+      ts: event.ts,
+      sessionId: event.sessionId,
+      enabled: event.payload.enabled === 1 || event.payload.enabled === true,
+      stopReason: stringValue(event.payload.stopReason),
+    }));
   return ok({
-    toggles: events.length,
-    enabledSessions: events.filter((event) => event.payload.enabled === 1).length,
-    recent: events.slice(-20).reverse(),
+    currentActive: recentEvents.filter((event) => event.enabled).length,
+    enabledCount: recentEvents.filter((event) => event.enabled).length,
+    disabledCount: recentEvents.filter((event) => !event.enabled).length,
+    topStopReasons: [],
+    recentEvents,
   });
 }
 
@@ -541,11 +585,31 @@ export function contextPointers(req: ExtensionRouteRequest): ExtensionRouteRespo
   const events = eventsSince(parseRangeParam(req.query.range));
   const suggested = events.filter((event) => event.type === 'suggested_context');
   const inspected = events.filter((event) => event.type === 'context_pointer_inspect');
+  const totalSuggested = suggested.reduce((total, event) => total + numberValue(event.payload.pointerCount), 0);
+  const totalInspects = inspected.filter((event) => event.payload.wasSuggested === 1).length;
+  const daily = new Map<string, { date: string; suggested: number; inspected: number }>();
+  for (const event of suggested) {
+    const date = dayKey(event.ts);
+    const bucket = daily.get(date) ?? { date, suggested: 0, inspected: 0 };
+    bucket.suggested += numberValue(event.payload.pointerCount);
+    daily.set(date, bucket);
+  }
+  for (const event of inspected) {
+    const date = dayKey(event.ts);
+    const bucket = daily.get(date) ?? { date, suggested: 0, inspected: 0 };
+    bucket.inspected += event.payload.wasSuggested === 1 ? 1 : 0;
+    daily.set(date, bucket);
+  }
   return ok({
-    suggestedCount: suggested.reduce((total, event) => total + numberValue(event.payload.pointerCount), 0),
-    inspectedCount: inspected.length,
-    suggestedSessions: suggested.length,
-    inspectedSuggestedCount: inspected.filter((event) => event.payload.wasSuggested === 1).length,
+    summary: {
+      totalSuggested,
+      totalInspects,
+      totalAnyInspects: inspected.length,
+      usageRate: totalSuggested > 0 ? Math.round((totalInspects / totalSuggested) * 1000) / 10 : 0,
+      sessionsWithSuggested: new Set(suggested.map((event) => event.sessionId)).size,
+      avgPointersPerTurn: suggested.length > 0 ? Math.round((totalSuggested / suggested.length) * 10) / 10 : 0,
+    },
+    daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
   });
 }
 
