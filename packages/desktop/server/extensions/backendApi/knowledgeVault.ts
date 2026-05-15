@@ -266,11 +266,11 @@ export const knowledgeVault: Record<string, unknown> = {
     return { id, url: `/api/vault/asset?id=${encodeURIComponent(id)}` };
   },
   async importUrl(input: { url: string; title?: string; directoryId?: string; sourceApp?: string }) {
-    const vaultRoot = await getVaultRoot();
-    const result = await callServerModuleExport('../../routes/vaultShareImport.js', 'importVaultSharedItem', {
+    const filesystem = await vaultRoot(['read', 'write', 'metadata'], 'knowledge vault import url');
+    const result = await callServerModuleExport('../../routes/vaultShareImport.js', 'importVaultSharedItemToFilesystem', {
       kind: 'url',
-      root: vaultRoot,
-      targetDirAbs: vaultRoot,
+      filesystem,
+      targetDirId: input.directoryId ? normalizeVaultId(input.directoryId) : '',
       ...input,
     });
     await emitChanged();

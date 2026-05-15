@@ -1,6 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 
 import { type LocalCheckpointCommitFile, parseCheckpointDiffSections } from '../conversations/conversationCheckpointCommit.js';
@@ -107,7 +105,7 @@ function toWorkspaceRelative(root: string, absolutePath: string): string | null 
 }
 
 export function readWorkspaceRootSnapshot(cwd: string): WorkspaceRootSnapshot {
-  const absoluteCwd = realpathSync(resolve(cwd));
+  const absoluteCwd = execFileSync('pwd', ['-P'], { cwd: resolve(cwd), encoding: 'utf-8' }).trim();
   const repo = readGitRepoInfo(absoluteCwd);
   const root = repo?.root ?? absoluteCwd;
   const git = repo ? readGitStatusSummary(root) : null;
@@ -478,13 +476,16 @@ function buildUntrackedPatchFromContent(relativePath: string, content: string): 
 }
 
 async function buildUntrackedPatchAsync(root: string, relativePath: string): Promise<string> {
-  const absolutePath = resolve(root, relativePath);
   try {
-    const stats = await stat(absolutePath);
-    if (!stats.isFile() || stats.size > UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES) {
+    const workspaceRoot = await createCoreWorkspaceRoot(root, 'read untracked workspace diff', ['read', 'metadata']);
+    const stats = await workspaceRoot.stat(relativePath);
+    if (stats.type !== 'file' || (stats.size ?? 0) > UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES) {
       return buildEmptyUntrackedPatch(relativePath);
     }
-    return buildUntrackedPatchFromContent(relativePath, await readFile(absolutePath, 'utf-8'));
+    return buildUntrackedPatchFromContent(
+      relativePath,
+      await workspaceRoot.readText(relativePath, { maxBytes: UNCOMMITTED_DIFF_MAX_UNTRACKED_FILE_BYTES }),
+    );
   } catch {
     return buildEmptyUntrackedPatch(relativePath);
   }

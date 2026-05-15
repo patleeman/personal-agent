@@ -6,6 +6,7 @@ const scopedFiles = [
   'packages/desktop/server/extensions/extensionWorkspace.ts',
   'packages/desktop/server/extensions/backendApi/knowledgeVault.ts',
   'packages/desktop/server/routes/vaultEditor.ts',
+  'packages/desktop/server/routes/vaultShareImport.ts',
 ];
 
 const banned = [
@@ -15,6 +16,7 @@ const banned = [
   /\.resolvePath\s*\(/,
   /\.runSync\s*\(/,
   /requestRootSync\s*\(/,
+  /from\s+['"]node:fs(?:\/promises)?['"]/,
 ];
 
 let failed = false;

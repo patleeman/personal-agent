@@ -1,4 +1,3 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 
 import { Readability } from '@mozilla/readability';
@@ -11,8 +10,6 @@ import type { ScopedFileSystem } from '../filesystem/filesystemAuthority.js';
 
 export interface VaultKnowledgeShareImportInput {
   kind: 'text' | 'url' | 'image';
-  root: string;
-  targetDirAbs: string;
   title?: string;
   text?: string;
   url?: string;
@@ -33,7 +30,7 @@ export interface VaultKnowledgeShareImportResult {
   };
 }
 
-export interface VaultKnowledgeShareImportFilesystemInput extends Omit<VaultKnowledgeShareImportInput, 'root' | 'targetDirAbs'> {
+export interface VaultKnowledgeShareImportFilesystemInput extends VaultKnowledgeShareImportInput {
   filesystem: ScopedFileSystem;
   targetDirId: string;
 }
@@ -88,16 +85,6 @@ function slugifyShareValue(value: string, fallback = 'shared-note'): string {
       .replace(/^-+|-+$/g, '')
       .slice(0, 80) || fallback
   );
-}
-
-function uniqueNameInDirectory(absDir: string, baseName: string, extension: string): string {
-  let attempt = `${baseName}${extension}`;
-  let index = 2;
-  while (existsSync(join(absDir, attempt))) {
-    attempt = `${baseName}-${String(index)}${extension}`;
-    index += 1;
-  }
-  return attempt;
 }
 
 async function uniqueNameInScopedDirectory(
@@ -308,50 +295,6 @@ function resolveSharedImageAssetExtension(input: { fileName?: string; mimeType?:
   return IMAGE_FILE_EXTENSIONS.has(fileExt) ? fileExt : 'png';
 }
 
-function buildSharedImageNote(input: {
-  root: string;
-  title?: string;
-  mimeType?: string;
-  fileName?: string;
-  dataBase64: string;
-  sourceApp?: string;
-  createdAt: string;
-}): { title: string; content: string; assetId: string } {
-  const decodedImage = decodeSharedBase64Payload(input.dataBase64);
-  const imageBuffer = decodedImage.buffer;
-  const normalizedMimeType = decodedImage.mimeType ?? input.mimeType?.trim().toLowerCase();
-  if (normalizedMimeType && !normalizedMimeType.startsWith('image/')) {
-    throw new Error('mimeType must be an image type for image imports.');
-  }
-  const baseTitle =
-    input.title?.trim() || normalizeShareString(input.fileName)?.replace(/\.[^.]+$/, '') || `Shared image ${input.createdAt.slice(0, 10)}`;
-  const assetExt = resolveSharedImageAssetExtension({ fileName: input.fileName, mimeType: normalizedMimeType });
-  const assetDirAbs = join(input.root, '_attachments');
-  mkdirSync(assetDirAbs, { recursive: true });
-  const assetBase = `${Date.now()}-${slugifyShareValue(baseTitle, 'shared-image')}`;
-  const assetFileName = uniqueNameInDirectory(assetDirAbs, assetBase, `.${assetExt}`);
-  const assetId = `_attachments/${assetFileName}`;
-  writeFileSync(join(assetDirAbs, assetFileName), imageBuffer);
-  const assetUrl = `/api/vault/asset?id=${encodeURIComponent(assetId)}`;
-  const frontmatter: Record<string, unknown> = {
-    title: baseTitle,
-    source_type: 'shared-image',
-    captured_at: input.createdAt,
-    asset_path: assetId,
-    mime_type: normalizedMimeType ?? `image/${assetExt}`,
-    tags: ['share', 'image'],
-  };
-  if (input.sourceApp) {
-    frontmatter.source_app = input.sourceApp;
-  }
-  const body = [`![${baseTitle}](${assetUrl})`, `Saved asset path: \`${assetId}\``].join('\n\n');
-  return {
-    title: baseTitle,
-    content: markdownWithFrontmatter(frontmatter, body),
-    assetId,
-  };
-}
-
 async function buildSharedImageNoteForFilesystem(input: {
   filesystem: ScopedFileSystem;
   title?: string;
@@ -395,7 +338,7 @@ async function buildSharedImageNoteForFilesystem(input: {
 }
 
 async function buildSharedImportContent(
-  input: Omit<VaultKnowledgeShareImportInput, 'root' | 'targetDirAbs'>,
+  input: VaultKnowledgeShareImportInput,
   createdAt: string,
 ): Promise<{ title: string; content: string; asset?: VaultKnowledgeShareImportResult['asset'] }> {
   if (input.kind === 'text') {
@@ -418,72 +361,6 @@ async function buildSharedImportContent(
     });
   }
   throw new Error('image imports require filesystem-specific handling');
-}
-
-export async function importVaultSharedItem(input: VaultKnowledgeShareImportInput): Promise<VaultKnowledgeShareImportResult> {
-  const createdAt = normalizeShareTimestamp(input.createdAt);
-  mkdirSync(input.targetDirAbs, { recursive: true });
-
-  let title: string;
-  let content: string;
-  let asset: VaultKnowledgeShareImportResult['asset'];
-
-  if (input.kind === 'text') {
-    const text = normalizeShareString(input.text) ?? '';
-    const built = buildSharedTextNote({
-      title: input.title,
-      text,
-      sourceApp: normalizeShareString(input.sourceApp),
-      createdAt,
-    });
-    title = built.title;
-    content = built.content;
-  } else if (input.kind === 'url') {
-    const url = normalizeShareString(input.url);
-    if (!url) {
-      throw new Error('url is required for URL imports.');
-    }
-    const built = await buildSharedUrlNote({
-      url,
-      title: input.title,
-      sourceApp: normalizeShareString(input.sourceApp),
-      createdAt,
-    });
-    title = built.title;
-    content = built.content;
-  } else {
-    const dataBase64 = normalizeShareString(input.dataBase64);
-    if (!dataBase64) {
-      throw new Error('dataBase64 is required for image imports.');
-    }
-    const built = buildSharedImageNote({
-      root: input.root,
-      title: input.title,
-      mimeType: normalizeShareString(input.mimeType),
-      fileName: normalizeShareString(input.fileName),
-      dataBase64,
-      sourceApp: normalizeShareString(input.sourceApp),
-      createdAt,
-    });
-    title = built.title;
-    content = built.content;
-    asset = {
-      id: built.assetId,
-      url: `/api/vault/asset?id=${encodeURIComponent(built.assetId)}`,
-    };
-  }
-
-  const noteBase = slugifyShareValue(title, 'shared-note');
-  const noteFileName = uniqueNameInDirectory(input.targetDirAbs, noteBase, '.md');
-  const notePath = join(input.targetDirAbs, noteFileName);
-  writeFileSync(notePath, content, 'utf-8');
-
-  return {
-    sourceKind: input.kind,
-    title,
-    notePath,
-    ...(asset ? { asset } : {}),
-  };
 }
 
 export async function importVaultSharedItemToFilesystem(
