@@ -4,15 +4,17 @@ Desktop releases are built, signed, notarized, and published locally. Pushing a 
 
 ## Current release
 
-**v0.7.9-rc.10** — published 2026-05-12.
+**v0.8.0-rc.13** — published 2026-05-15.
 
-Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.7.9-rc.10
+Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.8.0-rc.13
 
 Highlights:
 
-- Fixed dev app startup: repo root resolution, missing preload/worker bundles, daemon inlining, and Codex port conflict.
-- `pnpm run dev` in `packages/desktop` works end-to-end: builds, launches the testing app bundle, and loads the UI with API endpoints responding.
-- The signed `.app` build through `desktop:dist` is blocked by pre-existing `packages/desktop/server` TypeScript errors. The esbuild-produced bundled output still works; use the direct build workaround below when needed.
+- Added extension-owned ACP protocol support plus smoke tooling and protocol visibility.
+- Fixed hung ACP prompts with timeout/error propagation.
+- Added the filesystem authority boundary and async backend-based filesystem authority.
+- Unified extension commands in the command palette with command acknowledgements and inspector support.
+- Hardened desktop release packaging for extension backends, runtime channels, background process aborts, and packaged app smoke tests.
 
 ## Release Commands
 
