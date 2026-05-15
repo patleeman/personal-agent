@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server as HttpServer, type Ser
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 
+import { resolvePersonalAgentRuntimeChannelConfig } from '@personal-agent/core';
 import { type WebSocket, WebSocketServer } from 'ws';
 
 import type { DaemonConfig } from '../../config.js';
@@ -263,7 +264,7 @@ function buildSetupState(
       ...config.companion,
       enabled: config.companion?.enabled ?? true,
       host: config.companion?.host ?? DEFAULT_COMPANION_HOST,
-      port: portOverride ?? config.companion?.port ?? 3843,
+      port: portOverride ?? config.companion?.port ?? resolvePersonalAgentRuntimeChannelConfig().companionPort,
     },
   };
   return buildCompanionSetupState({
@@ -439,7 +440,7 @@ export class DaemonCompanionServer {
     }
 
     const host = this.config.companion?.host ?? DEFAULT_COMPANION_HOST;
-    const preferredPort = this.config.companion?.port ?? 3843;
+    const preferredPort = this.config.companion?.port ?? resolvePersonalAgentRuntimeChannelConfig().companionPort;
 
     try {
       const attempt = await this.createListeningServerAttempt(host, preferredPort);

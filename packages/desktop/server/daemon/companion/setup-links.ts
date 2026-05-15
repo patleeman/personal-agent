@@ -1,5 +1,7 @@
 import { networkInterfaces } from 'node:os';
 
+import { resolvePersonalAgentRuntimeChannelConfig } from '@personal-agent/core';
+
 import type { DaemonConfig } from '../../config.js';
 import { resolveCompanionTailscaleUrl } from '../tailscale-serve.js';
 import { type CompanionPairingCode, type CompanionSetupLink, type CompanionSetupState, DEFAULT_COMPANION_HOST } from './types.js';
@@ -58,7 +60,7 @@ export function buildCompanionSetupState(input: {
   resolveTailnetUrl?: (port: number) => string | undefined;
 }): CompanionSetupState {
   const companionHost = input.config.companion?.host?.trim() || DEFAULT_COMPANION_HOST;
-  const companionPort = input.config.companion?.port ?? 3843;
+  const companionPort = input.config.companion?.port ?? resolvePersonalAgentRuntimeChannelConfig().companionPort;
   const warnings: string[] = [];
   const links: CompanionSetupLink[] = [];
   const seenBaseUrls = new Set<string>();

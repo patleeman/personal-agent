@@ -1,4 +1,5 @@
 import { hydrateProcessEnvFromShell, resolveChildProcessEnv } from '@personal-agent/core';
+import { resolvePersonalAgentRuntimeChannelConfig } from '@personal-agent/core';
 import { type ChildProcess } from 'child_process';
 import { closeSync, cpSync, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
@@ -402,7 +403,7 @@ export class PersonalAgentDaemon {
     const previous = {
       enabled: this.config.companion?.enabled !== false,
       host: this.config.companion?.host ?? DEFAULT_COMPANION_HOST,
-      port: this.config.companion?.port ?? 3843,
+      port: this.config.companion?.port ?? resolvePersonalAgentRuntimeChannelConfig().companionPort,
     };
     const next = {
       enabled: input.enabled ?? previous.enabled,

@@ -1,4 +1,10 @@
-import { getDurableTasksDir, getMachineConfigFilePath, readMachineConfigSection } from '@personal-agent/core';
+import {
+  getDurableTasksDir,
+  getMachineConfigFilePath,
+  readMachineConfigSection,
+  readPortOverride,
+  resolvePersonalAgentRuntimeChannelConfig,
+} from '@personal-agent/core';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 
@@ -123,6 +129,8 @@ export function getDaemonConfigFilePath(): string {
 }
 
 export function getDefaultDaemonConfig(): DaemonConfig {
+  const channelConfig = resolvePersonalAgentRuntimeChannelConfig();
+  const companionPort = readPortOverride(process.env.PERSONAL_AGENT_COMPANION_PORT) ?? channelConfig.companionPort;
   return {
     logLevel: 'info',
     queue: {
@@ -130,6 +138,9 @@ export function getDefaultDaemonConfig(): DaemonConfig {
     },
     ipc: {
       socketPath: process.env.PERSONAL_AGENT_DAEMON_SOCKET_PATH,
+    },
+    companion: {
+      port: companionPort,
     },
     modules: {
       maintenance: {

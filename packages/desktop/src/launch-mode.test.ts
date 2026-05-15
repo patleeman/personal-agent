@@ -34,6 +34,18 @@ describe('resolveDesktopLaunchPresentation', () => {
     });
   });
 
+  it('marks explicit dev launches clearly', () => {
+    expect(
+      resolveDesktopLaunchPresentation({
+        PERSONAL_AGENT_RUNTIME_CHANNEL: ' dev ',
+      }),
+    ).toEqual({
+      mode: 'dev',
+      appName: 'Personal Agent Dev',
+      launchLabel: 'Dev',
+    });
+  });
+
   it('marks explicit RC launches clearly', () => {
     expect(
       resolveDesktopLaunchPresentation({

@@ -27,11 +27,20 @@ pnpm run release:desktop:minor
 pnpm run release:desktop:major
 ```
 
-## RC App Identity
+## Runtime channels
 
-Versions with an `-rc` prerelease suffix are packaged as **Personal Agent RC** instead of **Personal Agent**. The RC app uses a separate macOS bundle identifier (`com.personal-agent.desktop.rc`), runtime state root (`personal-agent-rc`), Codex bridge port (`3847`), and artifact prefix (`Personal-Agent-RC-*`), so it can be installed next to the stable app without replacing it.
+Runtime identity is centralized as `stable`, `rc`, `dev`, or `test`. The channel owns app presentation, state-root suffixes, ports, and updater support.
 
-Stable versions keep the existing app name, bundle identifier, and `Personal-Agent-*` artifact names.
+| Channel  | App name               | State root suffix | Companion port |         Codex port | Updates  |
+| -------- | ---------------------- | ----------------- | -------------: | -----------------: | -------- |
+| `stable` | Personal Agent         | none              |           3842 |               3846 | enabled  |
+| `rc`     | Personal Agent RC      | `-rc`             |           3843 |               3847 | enabled  |
+| `dev`    | Personal Agent Dev     | `-dev`            |           3844 |               3848 | disabled |
+| `test`   | Personal Agent Testing | `-testing`        |   random (`0`) | random/unset (`0`) | disabled |
+
+Versions with an `-rc` prerelease suffix are packaged as **Personal Agent RC** instead of **Personal Agent**. The RC app uses a separate macOS bundle identifier (`com.personal-agent.desktop.rc`), runtime state root (`personal-agent-rc`), Codex bridge port (`3847`), companion port (`3843`), and artifact prefix (`Personal-Agent-RC-*`), so it can be installed next to the stable app without replacing it.
+
+Stable versions keep the existing app name, bundle identifier, and `Personal-Agent-*` artifact names. Dev/test launches disable update checks so local builds do not emit packaged updater metadata warnings.
 
 ## Release Flow
 

@@ -1,17 +1,21 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
-import { getDefaultStateRoot, getPiAgentRuntimeDir } from '@personal-agent/core';
-
-import { resolveDesktopLaunchPresentation } from './launch-mode.js';
+import {
+  getDefaultStateRoot,
+  getPiAgentRuntimeDir,
+  readPortOverride,
+  resolvePersonalAgentRuntimeChannel,
+  resolvePersonalAgentRuntimeChannelConfig,
+} from '@personal-agent/core';
 
 function resolveDefaultStateRootForEnv(env: NodeJS.ProcessEnv): string {
   const xdgStateHome = env.XDG_STATE_HOME?.trim();
   return xdgStateHome ? join(xdgStateHome, 'personal-agent') : getDefaultStateRoot();
 }
 
-function resolveVariantStateRoot(defaultStateRoot: string, variant: 'rc' | 'testing'): string {
-  return join(dirname(defaultStateRoot), `${basename(defaultStateRoot)}-${variant}`);
+function resolveVariantStateRoot(defaultStateRoot: string, suffix: string): string {
+  return suffix ? join(dirname(defaultStateRoot), `${basename(defaultStateRoot)}${suffix}`) : defaultStateRoot;
 }
 
 interface DesktopRuntimeEnvironmentOptions {
@@ -26,16 +30,18 @@ export function resolveDesktopRuntimeEnvironmentOverrides(
 ): {
   stateRoot?: string;
 } {
-  const launchPresentation = resolveDesktopLaunchPresentation(env, options);
+  const channelConfig = resolvePersonalAgentRuntimeChannelConfig(env, options);
 
-  if (launchPresentation.mode !== 'rc' && launchPresentation.mode !== 'testing') {
+  if (!channelConfig.stateRootSuffix) {
     return {};
   }
 
   return {
     ...(env.PERSONAL_AGENT_STATE_ROOT?.trim()
       ? {}
-      : { stateRoot: resolveVariantStateRoot(options.defaultStateRoot ?? resolveDefaultStateRootForEnv(env), launchPresentation.mode) }),
+      : {
+          stateRoot: resolveVariantStateRoot(options.defaultStateRoot ?? resolveDefaultStateRootForEnv(env), channelConfig.stateRootSuffix),
+        }),
   };
 }
 
@@ -91,8 +97,8 @@ function writeJsonRecord(filePath: string, record: Record<string, unknown>): voi
 }
 
 export function seedTestingRuntimeState(env: NodeJS.ProcessEnv = process.env, options: DesktopRuntimeEnvironmentOptions = {}): void {
-  const launchPresentation = resolveDesktopLaunchPresentation(env, options);
-  if (launchPresentation.mode !== 'rc' && launchPresentation.mode !== 'testing') {
+  const channel = resolvePersonalAgentRuntimeChannel(env, options);
+  if (channel !== 'rc' && channel !== 'dev' && channel !== 'test') {
     return;
   }
 
@@ -121,15 +127,16 @@ export function applyDesktopRuntimeEnvironmentOverrides(
     env.PERSONAL_AGENT_STATE_ROOT = overrides.stateRoot;
   }
 
-  // Use separate codex ports for packaged variants to avoid conflicts between
-  // stable, testing, and RC companion-protocol servers.
-  const launchMode = resolveDesktopLaunchPresentation(env, options).mode;
-  if (!env.CODEX_PORT && launchMode === 'testing') {
-    env.CODEX_PORT = '3846';
+  const channelConfig = resolvePersonalAgentRuntimeChannelConfig(env, options);
+  const codexPort = readPortOverride(env.PERSONAL_AGENT_CODEX_PORT) ?? channelConfig.codexPort;
+  const companionPort = readPortOverride(env.PERSONAL_AGENT_COMPANION_PORT) ?? channelConfig.companionPort;
+  if (!env.CODEX_PORT && codexPort > 0) {
+    env.CODEX_PORT = String(codexPort);
   }
-  if (!env.CODEX_PORT && launchMode === 'rc') {
-    env.CODEX_PORT = '3847';
+  if (!env.PERSONAL_AGENT_COMPANION_PORT && companionPort >= 0) {
+    env.PERSONAL_AGENT_COMPANION_PORT = String(companionPort);
   }
+  env.PERSONAL_AGENT_RUNTIME_CHANNEL = channelConfig.channel;
 
   seedTestingRuntimeState(env, options);
 }

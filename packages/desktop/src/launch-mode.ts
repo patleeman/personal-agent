@@ -1,4 +1,6 @@
-type DesktopLaunchMode = 'stable' | 'rc' | 'testing';
+import { resolvePersonalAgentRuntimeChannel } from '@personal-agent/core';
+
+type DesktopLaunchMode = 'stable' | 'rc' | 'dev' | 'testing';
 
 export interface DesktopLaunchPresentation {
   mode: DesktopLaunchMode;
@@ -8,19 +10,16 @@ export interface DesktopLaunchPresentation {
 
 const DEFAULT_APP_NAME = 'Personal Agent';
 const RC_APP_NAME = 'Personal Agent RC';
+const DEV_APP_NAME = 'Personal Agent Dev';
 const TESTING_APP_NAME = 'Personal Agent Testing';
-
-function isRcVersion(version?: string): boolean {
-  return typeof version === 'string' && /-rc(?:\.|$)/iu.test(version);
-}
 
 export function resolveDesktopLaunchPresentation(
   env: NodeJS.ProcessEnv = process.env,
   options: { version?: string; packaged?: boolean } = {},
 ): DesktopLaunchPresentation {
-  const rawVariant = env.PERSONAL_AGENT_DESKTOP_VARIANT?.trim().toLowerCase();
+  const channel = resolvePersonalAgentRuntimeChannel(env, options);
 
-  if (rawVariant === 'testing' || env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE === '1') {
+  if (channel === 'test') {
     return {
       mode: 'testing',
       appName: TESTING_APP_NAME,
@@ -28,7 +27,15 @@ export function resolveDesktopLaunchPresentation(
     };
   }
 
-  if (rawVariant === 'rc' || (options.packaged && isRcVersion(options.version))) {
+  if (channel === 'dev') {
+    return {
+      mode: 'dev',
+      appName: DEV_APP_NAME,
+      launchLabel: 'Dev',
+    };
+  }
+
+  if (channel === 'rc') {
     return {
       mode: 'rc',
       appName: RC_APP_NAME,

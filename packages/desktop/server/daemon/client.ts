@@ -1,3 +1,4 @@
+import { resolvePersonalAgentRuntimeChannelConfig } from '@personal-agent/core';
 import { randomUUID } from 'crypto';
 import { createConnection } from 'net';
 
@@ -181,7 +182,7 @@ export async function getCompanionUrl(config?: DaemonConfig): Promise<string | n
   }
 
   const host = resolvedConfig.companion?.host ?? DEFAULT_COMPANION_HOST;
-  const port = resolvedConfig.companion?.port ?? 3843;
+  const port = resolvedConfig.companion?.port ?? resolvePersonalAgentRuntimeChannelConfig().companionPort;
   const formattedHost = host.includes(':') ? `[${host}]` : host;
   return `http://${formattedHost}:${String(port)}`;
 }

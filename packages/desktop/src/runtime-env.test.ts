@@ -15,7 +15,7 @@ describe('desktop runtime environment overrides', () => {
     expect(resolveDesktopRuntimeEnvironmentOverrides({}, { defaultStateRoot: '/state/personal-agent' })).toEqual({});
   });
 
-  it('isolates testing launches onto a separate state root and companion port', () => {
+  it('isolates testing launches onto a separate state root', () => {
     expect(
       resolveDesktopRuntimeEnvironmentOverrides(
         {
@@ -57,7 +57,23 @@ describe('desktop runtime environment overrides', () => {
 
     expect(env.PERSONAL_AGENT_STATE_ROOT).toBeTruthy();
     expect(env.PERSONAL_AGENT_STATE_ROOT).toMatch(/personal-agent-testing$/);
-    expect(env.CODEX_PORT).toBe('3846');
+    expect(env.CODEX_PORT).toBeUndefined();
+    expect(env.PERSONAL_AGENT_COMPANION_PORT).toBe('0');
+    expect(env.PERSONAL_AGENT_RUNTIME_CHANNEL).toBe('test');
+  });
+
+  it('applies dev overrides directly onto the process environment', () => {
+    const env: NodeJS.ProcessEnv = {
+      PERSONAL_AGENT_RUNTIME_CHANNEL: 'dev',
+      XDG_STATE_HOME: '/state',
+    };
+
+    applyDesktopRuntimeEnvironmentOverrides(env);
+
+    expect(env.PERSONAL_AGENT_STATE_ROOT).toBe('/state/personal-agent-dev');
+    expect(env.CODEX_PORT).toBe('3848');
+    expect(env.PERSONAL_AGENT_COMPANION_PORT).toBe('3844');
+    expect(env.PERSONAL_AGENT_RUNTIME_CHANNEL).toBe('dev');
   });
 
   it('applies RC overrides directly onto the process environment', () => {
@@ -69,6 +85,8 @@ describe('desktop runtime environment overrides', () => {
 
     expect(env.PERSONAL_AGENT_STATE_ROOT).toBe('/state/personal-agent-rc');
     expect(env.CODEX_PORT).toBe('3847');
+    expect(env.PERSONAL_AGENT_COMPANION_PORT).toBe('3843');
+    expect(env.PERSONAL_AGENT_RUNTIME_CHANNEL).toBe('rc');
   });
 
   it('seeds testing auth from the stable runtime when the testing auth file is empty', () => {

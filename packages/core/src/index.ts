@@ -7,6 +7,7 @@
 
 // Runtime state exports
 export * from './runtime/index.js';
+export * from './runtime-channel.js';
 
 // SQLite helpers
 export * from './sqlite.js';

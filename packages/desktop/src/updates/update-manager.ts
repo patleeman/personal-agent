@@ -1,3 +1,4 @@
+import { resolvePersonalAgentRuntimeChannelConfig } from '@personal-agent/core';
 import { app, dialog } from 'electron';
 import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater';
 
@@ -38,9 +39,16 @@ function renderUpdateErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function areDesktopUpdatesSupported(): boolean {
+  return (
+    app.isPackaged &&
+    resolvePersonalAgentRuntimeChannelConfig(process.env, { version: app.getVersion(), packaged: app.isPackaged }).updatesEnabled
+  );
+}
+
 function createDefaultDesktopAppUpdateState(currentVersion: string): DesktopAppUpdateState {
   return {
-    supported: app.isPackaged,
+    supported: areDesktopUpdatesSupported(),
     currentVersion,
     status: 'idle',
   };
@@ -67,9 +75,9 @@ export class DesktopUpdateManager {
   ) {
     this.state = createDefaultDesktopAppUpdateState(this.currentVersion);
 
-    if (!app.isPackaged) {
+    if (!areDesktopUpdatesSupported()) {
       this.updater = null;
-      logUpdateMessage('update checks disabled for unpackaged desktop runs');
+      logUpdateMessage('update checks disabled for this desktop runtime channel');
       return;
     }
 
@@ -82,7 +90,7 @@ export class DesktopUpdateManager {
   }
 
   start(): void {
-    if (!app.isPackaged) {
+    if (!areDesktopUpdatesSupported()) {
       return;
     }
 
@@ -123,13 +131,13 @@ export class DesktopUpdateManager {
   }
 
   async checkForUpdates(options: { userInitiated?: boolean } = {}): Promise<void> {
-    if (!app.isPackaged || !this.updater) {
+    if (!areDesktopUpdatesSupported() || !this.updater) {
       if (options.userInitiated) {
         await dialog.showMessageBox({
           type: 'info',
           buttons: ['OK'],
-          message: 'Update checks are only available in packaged desktop builds',
-          detail: 'Build or install the signed desktop app to check for releases from the app menu.',
+          message: 'Update checks are not available in this desktop runtime channel',
+          detail: 'Use a signed stable or RC desktop app to check for releases from the app menu.',
         });
       }
       return;
