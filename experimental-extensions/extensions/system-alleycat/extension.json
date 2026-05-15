@@ -10,7 +10,7 @@
     "styles": []
   },
   "backend": {
-    "entry": "src/backend.ts",
+    "entry": "dist/backend.mjs",
     "services": [
       {
         "id": "host",
