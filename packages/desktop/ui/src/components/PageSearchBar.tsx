@@ -343,6 +343,7 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
   const [focusVersion, setFocusVersion] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const matchesCount = matches.length;
+  const pendingScrollToMatchRef = useRef(false);
   const nextMatchModifierLabel = useMemo(() => (isMacPlatform() ? '⌘' : 'Ctrl'), []);
   const statusLabel = useMemo(() => {
     if (query.trim().length === 0) {
@@ -366,6 +367,7 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
   const openSearch = useCallback(() => {
     const selectedText = readSelectedSearchText();
     setOpen(true);
+    pendingScrollToMatchRef.current = true;
     setQuery((current) => (current.trim().length > 0 || open ? current : selectedText));
     if (!open) {
       setActiveIndex(0);
@@ -386,6 +388,7 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
         return;
       }
 
+      pendingScrollToMatchRef.current = true;
       setActiveIndex((current) => {
         const nextIndex = (current + delta + matchesCount) % matchesCount;
         return nextIndex;
@@ -516,11 +519,19 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
     }
 
     applyHighlights(matches, activeIndex);
-    scrollRangeIntoView(matches[activeIndex]);
 
     return () => {
       clearHighlights();
     };
+  }, [activeIndex, matches, open]);
+
+  useEffect(() => {
+    if (!open || !pendingScrollToMatchRef.current || matches.length === 0) {
+      return;
+    }
+
+    pendingScrollToMatchRef.current = false;
+    scrollRangeIntoView(matches[activeIndex]);
   }, [activeIndex, matches, open]);
 
   if (!open) {
@@ -556,6 +567,7 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
             type="text"
             value={query}
             onChange={(event) => {
+              pendingScrollToMatchRef.current = true;
               setQuery(event.target.value);
               setActiveIndex(0);
             }}

@@ -128,4 +128,39 @@ describe('PageSearchBar', () => {
 
     expect(container.textContent).toContain('1/2');
   });
+
+  it('does not force-scroll the active match when content changes under an open search', async () => {
+    const scrollIntoView = HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    const { container } = renderHarness();
+
+    pressGlobalKey('f', { ctrlKey: true });
+    await flushAsyncWork();
+
+    const input = container.querySelector('input[aria-label="Find on page"]');
+    expect(input).toBeInstanceOf(HTMLInputElement);
+
+    const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    if (!valueSetter) {
+      throw new Error('HTMLInputElement value setter unavailable');
+    }
+
+    await act(async () => {
+      valueSetter.call(input, 'alpha beta');
+      input?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    const addButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Add match');
+    expect(addButton).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      (addButton as HTMLButtonElement).click();
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain('1/3');
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
 });
