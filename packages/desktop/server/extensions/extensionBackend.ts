@@ -165,6 +165,16 @@ export interface ExtensionBackendContext {
 
 type ExtensionBackendModule = Record<string, unknown>;
 
+export interface ExtensionProtocolContext extends ExtensionBackendContext {
+  protocolId: string;
+  stdio: {
+    stdin: NodeJS.ReadableStream;
+    stdout: NodeJS.WritableStream;
+    stderr: NodeJS.WritableStream;
+  };
+  signal: AbortSignal;
+}
+
 export interface ExtensionActionTelemetryEntry {
   extensionId: string;
   actionId: string;
@@ -401,6 +411,21 @@ export function createBackendContext(
       warn: (message, fields) => logWarn(`extension:${extensionId} ${message}`, fields),
       error: (message, fields) => logError(`extension:${extensionId} ${message}`, fields),
     },
+  };
+}
+
+export function createProtocolContext(
+  extensionId: string,
+  protocolId: string,
+  stdio: ExtensionProtocolContext['stdio'],
+  signal: AbortSignal,
+  serverContext?: ExtensionBackendServerContext,
+): ExtensionProtocolContext {
+  return {
+    ...createBackendContext(extensionId, serverContext),
+    protocolId,
+    stdio,
+    signal,
   };
 }
 
@@ -885,6 +910,46 @@ export async function invokeExtensionAction(
     });
     return { ok: false, error: message };
   }
+}
+
+export async function invokeExtensionProtocolEntrypoint(
+  protocolId: string,
+  input: unknown,
+  options: {
+    serverContext?: ExtensionBackendServerContext;
+    stdio: ExtensionProtocolContext['stdio'];
+    signal: AbortSignal;
+  },
+): Promise<void> {
+  const enabled = listExtensionInstallSummaries().filter((summary) => summary.status === 'enabled');
+  const matches = enabled.flatMap((summary) => {
+    const entry = findExtensionEntry(summary.id);
+    const manifestEntrypoints = entry?.manifest.backend?.protocolEntrypoints ?? [];
+    return manifestEntrypoints
+      .filter((entrypoint) => entrypoint.id === protocolId)
+      .map((entrypoint) => ({ extensionId: summary.id, entrypoint }));
+  });
+
+  if (matches.length === 0) {
+    throw new Error(`No enabled extension provides protocol entrypoint "${protocolId}".`);
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple enabled extensions provide protocol entrypoint "${protocolId}": ${matches.map((match) => match.extensionId).join(', ')}.`,
+    );
+  }
+
+  const [{ extensionId, entrypoint }] = matches;
+  const backend = await loadExtensionBackend(extensionId);
+  const handler = backend[entrypoint.handler];
+  if (typeof handler !== 'function') {
+    throw new Error(`Extension "${extensionId}" protocol handler not found: ${entrypoint.handler}`);
+  }
+
+  await (handler as (entryInput: unknown, ctx: ExtensionProtocolContext) => unknown | Promise<unknown>)(
+    input,
+    createProtocolContext(extensionId, protocolId, options.stdio, options.signal, options.serverContext),
+  );
 }
 
 const PRODUCT_CRITICAL_EXTENSION_SELF_TESTS: Record<string, Record<string, unknown>> = {

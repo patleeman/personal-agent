@@ -38,7 +38,7 @@ my-extension/
 ├── package.json        # Dependencies (optional)
 ├── src/
 │   ├── frontend.tsx    # UI components (optional)
-│   └── backend.ts      # Backend handlers (optional)
+│   └── backend.ts      # Backend handlers / protocol entrypoints (optional)
 └── dist/               # Built output
 ```
 
@@ -78,6 +78,13 @@ The manifest declares what your extension contributes:
         "handler": "ping",
         "title": "Ping"
       }
+    ],
+    "protocolEntrypoints": [
+      {
+        "id": "acp",
+        "handler": "runAcpProtocol",
+        "title": "Agent Client Protocol"
+      }
     ]
   },
   "contributes": {
@@ -99,35 +106,36 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                        | Purpose                                                     | Docs                                                                  |
-| ---------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
-| `views`                      | UI surfaces (pages, panels)                                 | See `docs/views.md`                                                   |
-| `nav`                        | Left sidebar navigation items                               |                                                                       |
-| `commands`                   | Extension actions invokable by command IDs                  |                                                                       |
-| `keybindings`                | Keyboard shortcuts                                          |                                                                       |
-| `slashCommands`              | `/command` in composer                                      |                                                                       |
-| `tools`                      | Agent-callable tools                                        |                                                                       |
-| `mentions`                   | @-mention providers                                         |                                                                       |
-| `skills`                     | Agent Skills (markdown)                                     |                                                                       |
-| `themes`                     | Color themes                                                |                                                                       |
-| `transcriptRenderers`        | Custom tool result rendering                                |                                                                       |
-| `promptReferences`           | @-mention resolvers                                         |                                                                       |
-| `quickOpen`                  | Command palette surfaces/tabs backed by extension providers | [See below](#quick-open-surfaces-quickopen)                           |
-| `settings`                   | Settings schema contributions                               | [See below](#settings)                                                |
-| `settingsComponent`          | Component panel in Settings                                 | [See below](#settings-component-settingscomponent)                    |
-| `topBarElements`             | Top bar indicator icons                                     | [See below](#top-bar-elements-topbarelements)                         |
-| `conversationHeaderElements` | Badges in conversation header                               | [See below](#conversation-header-elements-conversationheaderelements) |
-| `messageActions`             | Hover buttons on messages                                   | [See below](#message-actions-messageactions)                          |
-| `composerShelves`            | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                        |
-| `newConversationPanels`      | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)           |
-| `composerControls`           | Component controls in the composer bottom row               | [See below](#composer-controls-composercontrols)                      |
-| `composerButtons`            | Legacy composer controls                                    | [See below](#composer-buttons-composerbuttons)                        |
-| `composerInputTools`         | Component tools beside composer controls                    | [See below](#composer-input-tools-composerinputtools)                 |
-| `toolbarActions`             | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                          |
-| `conversationDecorators`     | Badges on conversation list items                           | [See below](#conversation-decorators-conversationdecorators)          |
-| `contextMenus`               | Right-click menu items                                      | [See below](#context-menus-contextmenus)                              |
-| `threadHeaderActions`        | Component buttons in the Threads header                     | [See below](#thread-header-actions-threadheaderactions)               |
-| `statusBarItems`             | Labels in the composer status bar                           | [See below](#status-bar-items-statusbaritems)                         |
+| Field                         | Purpose                                                     | Docs                                                                  |
+| ----------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| `views`                       | UI surfaces (pages, panels)                                 | See `docs/views.md`                                                   |
+| `nav`                         | Left sidebar navigation items                               |                                                                       |
+| `commands`                    | Extension actions invokable by command IDs                  |                                                                       |
+| `keybindings`                 | Keyboard shortcuts                                          |                                                                       |
+| `slashCommands`               | `/command` in composer                                      |                                                                       |
+| `tools`                       | Agent-callable tools                                        |                                                                       |
+| `mentions`                    | @-mention providers                                         |                                                                       |
+| `skills`                      | Agent Skills (markdown)                                     |                                                                       |
+| `themes`                      | Color themes                                                |                                                                       |
+| `backend.protocolEntrypoints` | Extension-owned stdio protocols launched by the host CLI    | [See below](#protocol-entrypoints-backendprotocolentrypoints)         |
+| `transcriptRenderers`         | Custom tool result rendering                                |                                                                       |
+| `promptReferences`            | @-mention resolvers                                         |                                                                       |
+| `quickOpen`                   | Command palette surfaces/tabs backed by extension providers | [See below](#quick-open-surfaces-quickopen)                           |
+| `settings`                    | Settings schema contributions                               | [See below](#settings)                                                |
+| `settingsComponent`           | Component panel in Settings                                 | [See below](#settings-component-settingscomponent)                    |
+| `topBarElements`              | Top bar indicator icons                                     | [See below](#top-bar-elements-topbarelements)                         |
+| `conversationHeaderElements`  | Badges in conversation header                               | [See below](#conversation-header-elements-conversationheaderelements) |
+| `messageActions`              | Hover buttons on messages                                   | [See below](#message-actions-messageactions)                          |
+| `composerShelves`             | Sections above the composer                                 | [See below](#composer-shelves-composershelves)                        |
+| `newConversationPanels`       | Panels on the new conversation page                         | [See below](#new-conversation-panels-newconversationpanels)           |
+| `composerControls`            | Component controls in the composer bottom row               | [See below](#composer-controls-composercontrols)                      |
+| `composerButtons`             | Legacy composer controls                                    | [See below](#composer-buttons-composerbuttons)                        |
+| `composerInputTools`          | Component tools beside composer controls                    | [See below](#composer-input-tools-composerinputtools)                 |
+| `toolbarActions`              | Icon buttons in composer toolbar                            | [See below](#toolbar-actions-toolbaractions)                          |
+| `conversationDecorators`      | Badges on conversation list items                           | [See below](#conversation-decorators-conversationdecorators)          |
+| `contextMenus`                | Right-click menu items                                      | [See below](#context-menus-contextmenus)                              |
+| `threadHeaderActions`         | Component buttons in the Threads header                     | [See below](#thread-header-actions-threadheaderactions)               |
+| `statusBarItems`              | Labels in the composer status bar                           | [See below](#status-bar-items-statusbaritems)                         |
 
 ### Views
 
@@ -499,6 +507,35 @@ Add labels in the status bar below the composer. Action-based — no frontend en
 
 **`alignment`**: `"left"` or `"right"`. **`priority`**: sort order (higher = closer to edge).
 Items without an `action` are static labels. Items with an `action` are clickable.
+
+### Protocol entrypoints (`backend.protocolEntrypoints`)
+
+Extensions can expose host-launched stdio protocols such as ACP. The host resolves these by protocol id and wires stdin/stdout/stderr into the backend handler.
+
+```json
+{
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "protocolEntrypoints": [
+      {
+        "id": "acp",
+        "handler": "runAcpProtocol",
+        "title": "Agent Client Protocol"
+      }
+    ]
+  }
+}
+```
+
+The handler receives `ExtensionProtocolContext`, which extends the normal backend context with:
+
+- `protocolId`
+- `stdio.stdin`
+- `stdio.stdout`
+- `stdio.stderr`
+- `signal`
+
+These entrypoints are intended for long-lived protocol sessions, not one-shot actions.
 
 ### Tools
 

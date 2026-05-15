@@ -169,6 +169,26 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
     },
 
     /**
+     * Ensure a persisted conversation is resumed into the live registry.
+     */
+    async ensureLive(conversationId: string, options?: { cwd?: string }): Promise<{ id: string; conversationId: string }> {
+      const existing = liveSessionRegistry.get(conversationId);
+      if (existing) {
+        return { id: conversationId, conversationId };
+      }
+
+      const { resolveConversationSessionFile } = await import('../conversations/conversationService.js');
+      const sessionFile = resolveConversationSessionFile(conversationId);
+      if (!sessionFile) {
+        throw new Error(`Conversation "${conversationId}" has no persisted session file.`);
+      }
+
+      const resumed = await resumeSession(sessionFile, options?.cwd ? { cwdOverride: options.cwd } : undefined);
+      invalidateAppTopics('sessions');
+      return { id: resumed.id, conversationId: resumed.id };
+    },
+
+    /**
      * Send a message into a live conversation.
      */
     async sendMessage(conversationId: string, text: string, options?: ExtensionConversationSendOptions): Promise<{ accepted: boolean }> {

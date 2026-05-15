@@ -491,6 +491,7 @@ export interface ExtensionBackend {
   actions?: ExtensionBackendAction[];
   routes?: ExtensionBackendRoute[];
   services?: ExtensionBackendService[];
+  protocolEntrypoints?: ExtensionBackendProtocolEntrypoint[];
   startupAction?: string;
   onEnableAction?: string;
   onDisableAction?: string;
@@ -508,6 +509,13 @@ export interface ExtensionBackendService {
 }
 
 export interface ExtensionBackendAction {
+  id: string;
+  handler: string;
+  title?: string;
+  description?: string;
+}
+
+export interface ExtensionBackendProtocolEntrypoint {
   id: string;
   handler: string;
   title?: string;
@@ -756,11 +764,13 @@ export interface ExtensionBackendContext {
     list(...args: never[]): Promise<unknown>;
     getMeta(conversationId: string): Promise<unknown>;
     get(conversationId: string, options?: { tailBlocks?: number }): Promise<unknown>;
+    getBlocks(conversationId: string, options?: { tailBlocks?: number }): Promise<unknown>;
     searchIndex(sessionIds: string[]): Promise<unknown>;
     sendMessage(conversationId: string, text: string, options?: { steer?: boolean }): Promise<unknown>;
     setTitle(conversationId: string, title: string): Promise<unknown>;
     compact(conversationId: string): Promise<unknown>;
     create(input?: ExtensionConversationCreateInput): Promise<ExtensionConversationResult>;
+    ensureLive(conversationId: string, options?: { cwd?: string }): Promise<ExtensionConversationResult>;
     fork(input: ExtensionConversationForkInput): Promise<ExtensionConversationResult>;
     appendTranscriptBlock(input: ExtensionTranscriptBlockWriteInput): Promise<{ blockId: string }>;
     updateTranscriptBlock(input: ExtensionTranscriptBlockWriteInput & { blockId: string }): Promise<{ blockId: string }>;
@@ -836,4 +846,14 @@ export interface ExtensionBackendContext {
     warn(message: string, fields?: Record<string, unknown>): void;
     error(message: string, fields?: Record<string, unknown>): void;
   };
+}
+
+export interface ExtensionProtocolContext extends ExtensionBackendContext {
+  protocolId: string;
+  stdio: {
+    stdin: NodeJS.ReadableStream;
+    stdout: NodeJS.WritableStream;
+    stderr: NodeJS.WritableStream;
+  };
+  signal: AbortSignal;
 }

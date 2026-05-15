@@ -185,6 +185,21 @@ function validateManifestReferences(packageRoot: string, manifest: ExtensionMani
     }
   }
 
+  for (const entrypoint of manifest.backend?.protocolEntrypoints ?? []) {
+    const handler = entrypoint.handler ?? entrypoint.id;
+    if (!handler?.trim())
+      add(findings, 'error', 'missing-protocol-handler', `Protocol entrypoint "${entrypoint.id}" is missing a handler.`);
+    else if (backendContent && !hasExport(backendContent, handler)) {
+      add(
+        findings,
+        'error',
+        'missing-backend-export',
+        `Protocol handler "${handler}" is referenced by the manifest but is not exported.`,
+        backendSource,
+      );
+    }
+  }
+
   for (const tool of manifest.contributes?.tools ?? []) {
     if (!tool.id?.trim()) add(findings, 'error', 'invalid-tool', 'Tool contribution is missing id.');
     if (!tool.description?.trim()) add(findings, 'error', 'invalid-tool', `Tool "${tool.id}" is missing description.`);

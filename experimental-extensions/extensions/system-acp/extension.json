@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "id": "system-acp",
+  "name": "ACP Protocol",
+  "packageType": "system",
+  "defaultEnabled": false,
+  "description": "Expose Personal Agent as an Agent Client Protocol server over stdio.",
+  "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "protocolEntrypoints": [
+      {
+        "id": "acp",
+        "handler": "runAcpProtocol",
+        "title": "Agent Client Protocol",
+        "description": "ACP agent over stdio for Alleycat, Litter, and other ACP clients."
+      }
+    ]
+  },
+  "permissions": ["conversations:readwrite", "storage:readwrite"]
+}

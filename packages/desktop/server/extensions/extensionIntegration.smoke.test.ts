@@ -220,6 +220,9 @@ describe('extension manifests - structural validation', () => {
       for (const service of manifest.backend?.services ?? []) {
         expect(service.handler, `${ext.id}: service "${service.id}" must declare a handler`).toBeTruthy();
       }
+      for (const entrypoint of manifest.backend?.protocolEntrypoints ?? []) {
+        expect(entrypoint.handler, `${ext.id}: protocol entrypoint "${entrypoint.id}" must declare a handler`).toBeTruthy();
+      }
 
       // Extensions without a backend entry must not declare lifecycle actions/services.
       if (!manifest.backend?.entry) {
@@ -227,6 +230,9 @@ describe('extension manifests - structural validation', () => {
         expect(!manifest.backend?.onEnableAction, `${ext.id}: declares onEnableAction but has no backend entry`).toBe(true);
         expect(!manifest.backend?.onDisableAction, `${ext.id}: declares onDisableAction but has no backend entry`).toBe(true);
         expect(!manifest.backend?.services?.length, `${ext.id}: declares services but has no backend entry`).toBe(true);
+        expect(!manifest.backend?.protocolEntrypoints?.length, `${ext.id}: declares protocolEntrypoints but has no backend entry`).toBe(
+          true,
+        );
       }
     }
   });
@@ -1012,11 +1018,12 @@ describe('extension backends - file existence and structural checks', () => {
     }
   });
 
-  it('backend action handler names exist as exports in the prebuilt bundle', () => {
+  it('backend action and protocol handler names exist as exports in the prebuilt bundle', () => {
     for (const s of summaries) {
       if (s.packageType !== 'system') continue;
       const actions = s.manifest.backend?.actions ?? [];
-      if (actions.length === 0) continue;
+      const protocolEntrypoints = s.manifest.backend?.protocolEntrypoints ?? [];
+      if (actions.length === 0 && protocolEntrypoints.length === 0) continue;
 
       const backendPath = resolve(s.packageRoot ?? '', 'dist', 'backend.mjs');
       if (!existsSync(backendPath)) continue;
@@ -1024,9 +1031,13 @@ describe('extension backends - file existence and structural checks', () => {
       const content = readFileSync(backendPath, 'utf-8');
       for (const action of actions) {
         const handlerName = action.handler ?? action.id;
-        // Check if the handler is exported (named export or function declaration)
         const exportPattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${handlerName}|export\\s*\\{[^}]*\\b${handlerName}\\b)`);
         expect(exportPattern.test(content), `${s.id}: backend action handler "${handlerName}" not found in dist/backend.mjs`).toBe(true);
+      }
+      for (const entrypoint of protocolEntrypoints) {
+        const handlerName = entrypoint.handler ?? entrypoint.id;
+        const exportPattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${handlerName}|export\\s*\\{[^}]*\\b${handlerName}\\b)`);
+        expect(exportPattern.test(content), `${s.id}: backend protocol handler "${handlerName}" not found in dist/backend.mjs`).toBe(true);
       }
     }
   });

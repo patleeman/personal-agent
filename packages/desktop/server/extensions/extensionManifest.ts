@@ -525,6 +525,8 @@ export interface ExtensionBackend {
   routes?: ExtensionBackendRoute[];
   /** Declarative long-lived extension services owned by the host lifecycle. */
   services?: ExtensionBackendService[];
+  /** Declarative stdio protocol entrypoints owned by the extension host. */
+  protocolEntrypoints?: ExtensionBackendProtocolEntrypoint[];
   /**
    * Action id to call when the extension is enabled and the server starts.
    * The handler receives `(input, ctx)` and can start long-lived services
@@ -552,6 +554,13 @@ export interface ExtensionBackendService {
 }
 
 export interface ExtensionBackendAction {
+  id: string;
+  handler: string;
+  title?: string;
+  description?: string;
+}
+
+export interface ExtensionBackendProtocolEntrypoint {
   id: string;
   handler: string;
   title?: string;

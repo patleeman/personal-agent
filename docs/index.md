@@ -47,6 +47,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [Automations](../extensions/system-automations/README.md)
 - [Browser](../extensions/system-browser/README.md)
 - [Codex Protocol for Companion App](../experimental-extensions/extensions/system-codex/README.md)
+- [ACP Protocol](../experimental-extensions/extensions/system-acp/README.md)
 - [Conversation Tools](../extensions/system-conversation-tools/README.md)
 - [Diffs](../extensions/system-diffs/README.md)
 - [Extension Manager](../extensions/system-extension-manager/README.md)

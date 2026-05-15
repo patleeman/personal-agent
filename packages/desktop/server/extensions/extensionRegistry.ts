@@ -1295,6 +1295,14 @@ function validateExtensionBackend(backend: Record<string, unknown>): void {
       validateOptionalString(action.description, `backend.actions[${index}].description`);
     }
   }
+  if (backend.protocolEntrypoints !== undefined) {
+    for (const [index, entrypoint] of assertRecordArray(backend.protocolEntrypoints, 'backend.protocolEntrypoints').entries()) {
+      requireString(entrypoint.id, `backend.protocolEntrypoints[${index}].id`);
+      requireString(entrypoint.handler, `backend.protocolEntrypoints[${index}].handler`);
+      validateOptionalString(entrypoint.title, `backend.protocolEntrypoints[${index}].title`);
+      validateOptionalString(entrypoint.description, `backend.protocolEntrypoints[${index}].description`);
+    }
+  }
   if (backend.routes !== undefined) {
     for (const [index, route] of assertRecordArray(backend.routes, 'backend.routes').entries()) {
       validateEnum(route.method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], `backend.routes[${index}].method`);
