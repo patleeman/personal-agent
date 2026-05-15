@@ -36,17 +36,6 @@ export interface ExtensionComposerControlRegistration {
 
 export type ExtensionComposerButtonRegistration = ExtensionComposerControlRegistration;
 
-export interface ExtensionComposerSubmitActionRegistration {
-  extensionId: string;
-  id: string;
-  label: string;
-  handler: string;
-  when?: string;
-  shortcut?: string;
-  default?: boolean;
-  priority?: number;
-}
-
 export interface ExtensionComposerInputToolRegistration {
   extensionId: string;
   id: string;
@@ -178,7 +167,6 @@ const EMPTY_EXTENSION_REGISTRY_STATE: ExtensionRegistryState = {
   settingsComponent: null,
   settingsComponents: [],
   composerControls: [],
-  composerSubmitActions: [],
   composerButtons: [],
   composerInputTools: [],
   toolbarActions: [],
@@ -211,7 +199,6 @@ export interface ExtensionRegistryState {
   settingsComponent: ExtensionSettingsComponentRegistration | null;
   settingsComponents: ExtensionSettingsComponentRegistration[];
   composerControls: ExtensionComposerControlRegistration[];
-  composerSubmitActions: ExtensionComposerSubmitActionRegistration[];
   composerButtons: ExtensionComposerButtonRegistration[];
   composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
@@ -357,26 +344,6 @@ function normalizeComposerControls(extensions: ExtensionManifest[]): ExtensionCo
     }
   }
   result.sort(compareComposerControls);
-  return result;
-}
-
-function normalizeComposerSubmitActions(extensions: ExtensionManifest[]): ExtensionComposerSubmitActionRegistration[] {
-  const result: ExtensionComposerSubmitActionRegistration[] = [];
-  for (const extension of extensions) {
-    for (const action of extension.contributes?.composerSubmitActions ?? []) {
-      result.push({
-        extensionId: extension.id,
-        id: action.id,
-        label: action.label,
-        handler: action.handler,
-        ...(action.when ? { when: action.when } : {}),
-        ...(action.shortcut ? { shortcut: action.shortcut } : {}),
-        ...(typeof action.default === 'boolean' ? { default: action.default } : {}),
-        ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
-      });
-    }
-  }
-  result.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.extensionId.localeCompare(b.extensionId) || a.id.localeCompare(b.id));
   return result;
 }
 
@@ -597,7 +564,6 @@ function useExtensionRegistryLoader(): ExtensionRegistryState {
             settingsComponents,
             settingsComponent: settingsComponents[0] ?? null,
             composerControls: normalizeComposerControls(enabledRegistryExtensions),
-            composerSubmitActions: normalizeComposerSubmitActions(enabledRegistryExtensions),
             composerButtons: normalizeComposerControls(enabledRegistryExtensions),
             composerInputTools: normalizeComposerInputTools(enabledRegistryExtensions),
             toolbarActions: normalizeToolbarActions(enabledRegistryExtensions),

@@ -1022,22 +1022,6 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
-  if (contributes.composerSubmitActions !== undefined) {
-    for (const [index, action] of assertRecordArray(contributes.composerSubmitActions, 'contributes.composerSubmitActions').entries()) {
-      requireString(action.id, `contributes.composerSubmitActions[${index}].id`);
-      requireString(action.label, `contributes.composerSubmitActions[${index}].label`);
-      requireString(action.handler, `contributes.composerSubmitActions[${index}].handler`);
-      validateOptionalString(action.when, `contributes.composerSubmitActions[${index}].when`);
-      validateOptionalString(action.shortcut, `contributes.composerSubmitActions[${index}].shortcut`);
-      if (action.default !== undefined && typeof action.default !== 'boolean') {
-        throw new Error(`Extension manifest contributes.composerSubmitActions[${index}].default must be a boolean.`);
-      }
-      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
-        throw new Error(`Extension manifest contributes.composerSubmitActions[${index}].priority must be an integer.`);
-      }
-    }
-  }
-
   if (contributes.composerButtons !== undefined) {
     for (const [index, button] of assertRecordArray(contributes.composerButtons, 'contributes.composerButtons').entries()) {
       requireString(button.id, `contributes.composerButtons[${index}].id`);
@@ -1562,7 +1546,6 @@ export function readExtensionSchema() {
       'composerShelves',
       'newConversationPanels',
       'composerControls',
-      'composerSubmitActions',
       'composerButtons',
       'composerInputTools',
       'toolbarActions',

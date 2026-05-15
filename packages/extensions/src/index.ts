@@ -244,17 +244,6 @@ export interface ExtensionComposerControlContribution {
   priority?: number;
 }
 
-export interface ExtensionComposerSubmitActionContribution {
-  id: string;
-  label: string;
-  handler: string;
-  when?: string;
-  shortcut?: string;
-  default?: boolean;
-  /** Sort priority. Lower wins. Default 0. */
-  priority?: number;
-}
-
 export interface ExtensionComposerButtonContribution {
   id: string;
   component: string;
@@ -458,7 +447,6 @@ export interface ExtensionContributions {
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
   composerControls?: ExtensionComposerControlContribution[];
-  composerSubmitActions?: ExtensionComposerSubmitActionContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];

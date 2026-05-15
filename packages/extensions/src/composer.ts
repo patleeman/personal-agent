@@ -31,18 +31,4 @@ export interface ComposerControlContext {
   toggleGoal: () => void;
 }
 
-export interface ComposerSubmitContext {
-  conversationId?: string;
-  text: string;
-  attachments: unknown[];
-  conversationBusy: boolean;
-  streamIsStreaming: boolean;
-  modifiers: {
-    altKey: boolean;
-    ctrlKey: boolean;
-    metaKey: boolean;
-    shiftKey: boolean;
-  };
-}
-
 export type ComposerButtonContext = ComposerControlContext;

@@ -83,7 +83,7 @@ Supported top-level fields:
 - `id`, `name`, `description`, `version`, `packageType`.
 - `frontend`: native React bundle entry and optional styles.
 - `backend`: backend module entry, backend actions, and optional agent lifecycle factory.
-- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, transcript blocks, selection actions, subscriptions, themes, topBarElements, messageActions, composerShelves, composerControls, composerSubmitActions, toolbarActions, conversationDecorators, contextMenus, statusBarItems, secrets, and settings metadata.
+- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, transcript blocks, selection actions, subscriptions, themes, topBarElements, messageActions, composerShelves, composerControls, toolbarActions, conversationDecorators, contextMenus, statusBarItems, secrets, and settings metadata.
 - `dependsOn`: required or optional extension dependencies surfaced by diagnostics and available for runtime discovery.
 - `permissions`: declared capability intent.
 

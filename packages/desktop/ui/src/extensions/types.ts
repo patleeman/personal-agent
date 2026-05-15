@@ -174,16 +174,6 @@ interface ExtensionComposerControlContribution {
   priority?: number;
 }
 
-interface ExtensionComposerSubmitActionContribution {
-  id: string;
-  label: string;
-  handler: string;
-  when?: string;
-  shortcut?: string;
-  default?: boolean;
-  priority?: number;
-}
-
 interface ExtensionComposerButtonContribution {
   id: string;
   component: string;
@@ -307,7 +297,6 @@ interface ExtensionContributions {
   composerShelves?: ExtensionComposerShelfContribution[];
   newConversationPanels?: ExtensionNewConversationPanelContribution[];
   composerControls?: ExtensionComposerControlContribution[];
-  composerSubmitActions?: ExtensionComposerSubmitActionContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];

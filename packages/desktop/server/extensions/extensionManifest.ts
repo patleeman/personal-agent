@@ -117,7 +117,6 @@ export interface ExtensionContributions {
   composerShelves?: ExtensionComposerShelfContribution[];
   newConversationPanels?: ExtensionNewConversationPanelContribution[];
   composerControls?: ExtensionComposerControlContribution[];
-  composerSubmitActions?: ExtensionComposerSubmitActionContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
@@ -180,16 +179,6 @@ export interface ExtensionComposerControlContribution {
   title?: string;
   slot?: 'leading' | 'preferences' | 'actions';
   when?: string;
-  priority?: number;
-}
-
-export interface ExtensionComposerSubmitActionContribution {
-  id: string;
-  label: string;
-  handler: string;
-  when?: string;
-  shortcut?: string;
-  default?: boolean;
   priority?: number;
 }
 
