@@ -61,9 +61,11 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
     if (!status?.pairPayload) return '';
     return JSON.stringify(status.pairPayload, null, 2);
   }, [status?.pairPayload]);
-  const qrCodeUrl = pairPayloadJson
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairPayloadJson)}`
-    : null;
+  const pairPayloadReady = Boolean(status?.pairPayload?.node_id && status.pairPayload.node_id !== 'sidecar-not-running');
+  const qrCodeUrl =
+    pairPayloadJson && pairPayloadReady
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairPayloadJson)}`
+      : null;
 
   async function invoke(action: 'rotateToken') {
     setBusy(true);
@@ -140,7 +142,7 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
         </div>
       </div>
 
-      {status?.pairPayload ? (
+      {status?.pairPayload && pairPayloadReady ? (
         <div className={SECTION}>
           <div className={LABEL}>Pair payload</div>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">

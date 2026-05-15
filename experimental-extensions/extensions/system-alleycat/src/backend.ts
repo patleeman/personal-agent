@@ -111,11 +111,11 @@ async function ensureSecretKey(ctx: ExtensionBackendContext): Promise<string> {
   return secret;
 }
 
-async function buildPairPayload(ctx: ExtensionBackendContext): Promise<AlleycatPairPayload> {
+async function buildPairPayload(ctx: ExtensionBackendContext): Promise<AlleycatPairPayload | null> {
   const auth = codexAuth ?? createCodexAuth(ctx);
-  const token = await auth.ensurePairing();
+  await auth.ensurePairing();
   codexAuth = auth;
-  return pairPayloadCache ?? { v: 1, node_id: 'sidecar-not-running', token, relay: null };
+  return pairPayloadCache;
 }
 
 async function refreshSidecarLogs(): Promise<void> {
@@ -224,6 +224,11 @@ export async function stop(_input?: unknown, ctx?: ExtensionBackendContext): Pro
 export async function status(_input?: unknown, ctx?: ExtensionBackendContext): Promise<AlleycatStatus> {
   if (ctx) await refreshSidecarLogs();
   if (ctx && sidecarPid && !(await isPidRunning(ctx, sidecarPid))) sidecarPid = null;
+  if (ctx && !sidecarPid) {
+    // Self-heal for dev reloads/imports where the manifest service registration
+    // changed after the extension was already enabled. Enabled == running.
+    await start(ctx).catch((error) => rememberLog(error instanceof Error ? error.message : String(error)));
+  }
   if (ctx && !pairPayloadCache) pairPayloadCache = await buildPairPayload(ctx);
   return {
     running: Boolean(codexServer && sidecarPid),
