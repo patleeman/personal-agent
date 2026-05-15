@@ -937,8 +937,8 @@ describe('extension registry - integration sanity', () => {
     expect(snapshot.routes.length).toBeGreaterThanOrEqual(7);
   });
 
-  it('has at least 20 views registered', () => {
-    expect(snapshot.views.length).toBeGreaterThanOrEqual(20);
+  it('has at least 19 views registered', () => {
+    expect(snapshot.views.length).toBeGreaterThanOrEqual(19);
   });
 
   it('all view ids are unique across extensions', () => {

@@ -29,26 +29,6 @@
     ]
   },
   "contributes": {
-    "views": [
-      {
-        "id": "page",
-        "title": "Kitty Litter",
-        "location": "main",
-        "route": "/alleycat",
-        "component": "AlleycatPage",
-        "placement": "primary",
-        "scope": "global",
-        "activation": "on-route"
-      }
-    ],
-    "nav": [
-      {
-        "id": "nav",
-        "label": "Kitty Litter",
-        "route": "/alleycat",
-        "icon": "terminal"
-      }
-    ],
     "settingsComponent": {
       "id": "alleycat",
       "component": "AlleycatSettingsPanel",

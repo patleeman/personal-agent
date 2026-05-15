@@ -1,5 +1,4 @@
-import type { ExtensionSurfaceProps, NativeExtensionClient } from '@personal-agent/extensions';
-import { AppPageIntro, AppPageLayout } from '@personal-agent/extensions/ui';
+import type { NativeExtensionClient } from '@personal-agent/extensions';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface AlleycatPairPayload {
@@ -33,18 +32,6 @@ const CALLOUT = 'rounded-lg bg-surface/60 px-3 py-2 text-[12px] leading-relaxed 
 
 function shortNodeId(nodeId: string): string {
   return nodeId.length <= 18 ? nodeId : `${nodeId.slice(0, 8)}…${nodeId.slice(-8)}`;
-}
-
-export function AlleycatPage({ pa }: ExtensionSurfaceProps) {
-  return (
-    <AppPageLayout title="Kitty Litter Mobile Pairing" summary="Pair the Kitty Litter mobile app directly with Personal Agent.">
-      <AppPageIntro
-        title="Personal Agent for Kitty Litter"
-        body="Manage the PA-owned Alleycat-compatible host. It advertises only Personal Agent and exposes conversations through the Codex-shaped API Kitty expects."
-      />
-      <AlleycatPanel pa={pa} />
-    </AppPageLayout>
-  );
 }
 
 export function AlleycatSettingsPanel({ pa }: AlleycatSettingsPanelProps) {
