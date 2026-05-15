@@ -1,4 +1,3 @@
-import { DEFAULT_COMPANION_HOST, updateCompanionConfig } from '@personal-agent/daemon';
 import { clipboard, ipcMain, shell, type WebContents } from 'electron';
 
 import type { HostManager } from './hosts/host-manager.js';
@@ -203,11 +202,6 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readDaemonState();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:ensure-companion-network-reachable`, async () => {
-    const result = await updateCompanionConfig({ enabled: true, host: DEFAULT_COMPANION_HOST });
-    return { changed: true, url: result.url };
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-sessions`, async (event) => {

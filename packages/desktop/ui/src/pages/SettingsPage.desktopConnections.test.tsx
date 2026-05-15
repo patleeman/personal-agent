@@ -110,7 +110,7 @@ describe('DesktopConnectionsSettingsPanel', () => {
     delete window.personalAgentDesktop;
   });
 
-  it('renders app behavior settings and companion panel', async () => {
+  it('renders app behavior settings', async () => {
     const { container } = renderPanel();
     await flushAsyncWork();
 

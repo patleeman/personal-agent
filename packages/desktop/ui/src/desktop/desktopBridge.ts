@@ -116,7 +116,6 @@ export interface PersonalAgentDesktopBridge {
     startOnSystemStart?: boolean;
     keyboardShortcuts?: Record<string, string>;
   }): Promise<DesktopAppPreferencesState>;
-  ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readSessions(): Promise<SessionMeta[]>;
