@@ -2904,20 +2904,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const insertTextIntoComposer = useCallback(
     (text: string) => {
+      const el = textareaRef.current;
+      const selection = el
+        ? {
+            start: el.selectionStart ?? composerSelectionRef.current.start,
+            end: el.selectionEnd ?? composerSelectionRef.current.end,
+          }
+        : composerSelectionRef.current;
       const insertion = insertTextAtComposerSelection({
-        currentInput: textareaRef.current?.value ?? input,
-        selection: composerSelectionRef.current,
+        currentInput: el?.value ?? input,
+        selection,
         text,
       });
       if (!insertion) {
         return;
       }
 
-      const el = textareaRef.current;
       if (el) {
         el.value = insertion.nextInput;
       }
       setInput(insertion.nextInput);
+      setSlashIdx(0);
+      setMentionIdx(0);
       window.requestAnimationFrame(() => {
         const el = textareaRef.current;
         if (!el) {
