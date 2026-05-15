@@ -15,6 +15,8 @@ interface AlleycatStatus {
   pairPayload: AlleycatPairPayload | null;
   agents: Array<{ name: string; display_name: string; wire: string; available: boolean }>;
   implementation: string;
+  sidecarRunning: boolean;
+  logs: string[];
   note: string;
 }
 
@@ -71,6 +73,9 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
     if (!status?.pairPayload) return '';
     return JSON.stringify(status.pairPayload, null, 2);
   }, [status?.pairPayload]);
+  const qrCodeUrl = pairPayloadJson
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairPayloadJson)}`
+    : null;
 
   async function invoke(action: 'start' | 'stop' | 'rotateToken') {
     setBusy(true);
@@ -107,6 +112,7 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
           <span className={`inline-block h-2 w-2 rounded-full ${status?.running ? 'bg-success' : 'bg-danger'}`} />
           <span>{status?.running ? 'Running' : 'Stopped'}</span>
           {status?.port ? <span className="text-tertiary">local compat port {status.port}</span> : null}
+          {status?.implementation ? <span className="text-tertiary">· {status.implementation}</span> : null}
         </div>
         <p className={NOTE}>{status?.note}</p>
       </div>
@@ -133,15 +139,29 @@ function AlleycatPanel({ pa }: AlleycatSettingsPanelProps) {
       {status?.pairPayload ? (
         <div className={SECTION}>
           <div className={LABEL}>Pair payload</div>
-          <textarea
-            readOnly
-            className={`${MONO} min-h-[9rem] resize-none`}
-            value={pairPayloadJson}
-            onClick={(event) => event.currentTarget.select()}
-          />
-          <p className={NOTE}>
-            Node {shortNodeId(status.pairPayload.node_id)} · relay {status.pairPayload.relay ?? 'default'}
-          </p>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <textarea
+                readOnly
+                className={`${MONO} min-h-[9rem] resize-none`}
+                value={pairPayloadJson}
+                onClick={(event) => event.currentTarget.select()}
+              />
+              <p className={NOTE}>
+                Node {shortNodeId(status.pairPayload.node_id)} · relay {status.pairPayload.relay ?? 'default'}
+              </p>
+            </div>
+            {qrCodeUrl ? (
+              <img src={qrCodeUrl} alt="Alleycat pairing QR code" className="h-[180px] w-[180px] rounded-lg border border-border-subtle" />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {status?.logs?.length ? (
+        <div className={SECTION}>
+          <div className={LABEL}>Host logs</div>
+          <pre className={`${MONO} max-h-40 overflow-auto whitespace-pre-wrap`}>{status.logs.slice(-12).join('\n')}</pre>
         </div>
       ) : null}
 

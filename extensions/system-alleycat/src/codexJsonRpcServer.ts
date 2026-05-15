@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage } from 'node:http';
-import { createServer as createNetServer } from 'node:net';
+import { createServer as createNetServer, type Socket } from 'node:net';
+import { createInterface } from 'node:readline';
 
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
 import { type WebSocket, WebSocketServer } from 'ws';
@@ -204,7 +205,67 @@ export interface CodexServerOptions {
 
 export interface CodexServerHandle {
   port: number;
+  jsonlPort: number;
   stop: () => void;
+}
+
+async function handleJsonRpcMessage(input: {
+  raw: string;
+  conn: ConnectionState;
+  ctx: ExtensionBackendContext;
+  notify: NotifyFn;
+  sendJson: (data: unknown) => void;
+  getHandlers: () => Promise<Record<string, MethodHandler>>;
+}): Promise<void> {
+  let request: JsonRpcRequest;
+  try {
+    request = JSON.parse(input.raw) as JsonRpcRequest;
+  } catch {
+    input.sendJson({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32700, message: 'Parse error' },
+    } satisfies JsonRpcError);
+    return;
+  }
+
+  const { method, id, params } = request;
+
+  if (id === undefined || id === null) return;
+
+  if (method !== 'initialize' && !input.conn.initialized) {
+    input.sendJson({
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32000, message: 'Not initialized' },
+    } satisfies JsonRpcError);
+    return;
+  }
+
+  try {
+    const allHandlers = await input.getHandlers();
+    const handler = allHandlers[method];
+    if (!handler) {
+      input.sendJson({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32601, message: `Method not found: ${method}` },
+      } satisfies JsonRpcError);
+      return;
+    }
+
+    const result = await handler(params, input.ctx, input.conn, input.notify);
+    input.sendJson({ jsonrpc: '2.0', id, result } satisfies JsonRpcSuccess);
+  } catch (error) {
+    input.sendJson({
+      jsonrpc: '2.0',
+      id,
+      error: {
+        code: -32603,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    } satisfies JsonRpcError);
+  }
 }
 
 async function canBindPort(port: number, bindAddress: string): Promise<boolean> {
@@ -243,6 +304,29 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
 
   const wss = new WebSocketServer({ server: httpServer });
 
+  const jsonlServer = createNetServer((socket: Socket) => {
+    socket.setEncoding('utf8');
+    const conn: ConnectionState = {
+      initialized: false,
+      subscribedThreads: new Set(),
+      activeTurnThreads: new Set(),
+    };
+    const sendJson = (data: unknown) => {
+      if (!socket.destroyed) socket.write(`${JSON.stringify(data)}\n`);
+    };
+    const notify: NotifyFn = (method: string, params: unknown) => {
+      sendJson({ jsonrpc: '2.0', method, params } satisfies JsonRpcNotification);
+    };
+    const lines = createInterface({ input: socket, crlfDelay: Infinity });
+    lines.on('line', (line) => {
+      if (!line.trim()) return;
+      void handleJsonRpcMessage({ raw: line, conn, ctx, notify, sendJson, getHandlers });
+    });
+    const cleanupConnection = () => unsubscribeConnectionFromAll(notify, conn);
+    socket.on('close', cleanupConnection);
+    socket.on('error', cleanupConnection);
+  });
+
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const heartbeat = setInterval(() => {
       if (ws.readyState === ws.OPEN) {
@@ -275,62 +359,8 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
       sendJson({ jsonrpc: '2.0', method, params } satisfies JsonRpcNotification);
     };
 
-    ws.on('message', async (raw) => {
-      let request: JsonRpcRequest;
-      try {
-        request = JSON.parse(raw.toString()) as JsonRpcRequest;
-      } catch {
-        sendJson({
-          jsonrpc: '2.0',
-          id: null,
-          error: { code: -32700, message: 'Parse error' },
-        } satisfies JsonRpcError);
-        return;
-      }
-
-      const { method, id, params } = request;
-
-      // Notifications (no id) — fire and forget
-      if (id === undefined || id === null) return;
-
-      // Only initialize is allowed before initialization
-      if (method !== 'initialize' && !conn.initialized) {
-        sendJson({
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32000, message: 'Not initialized' },
-        } satisfies JsonRpcError);
-        return;
-      }
-
-      try {
-        const allHandlers = await getHandlers();
-        const handler = allHandlers[method];
-        if (!handler) {
-          sendJson({
-            jsonrpc: '2.0',
-            id,
-            error: { code: -32601, message: `Method not found: ${method}` },
-          } satisfies JsonRpcError);
-          return;
-        }
-
-        const result = await handler(params, ctx, conn, notify);
-        sendJson({
-          jsonrpc: '2.0',
-          id,
-          result,
-        } satisfies JsonRpcSuccess);
-      } catch (error) {
-        sendJson({
-          jsonrpc: '2.0',
-          id,
-          error: {
-            code: -32603,
-            message: error instanceof Error ? error.message : String(error),
-          },
-        } satisfies JsonRpcError);
-      }
+    ws.on('message', (raw) => {
+      void handleJsonRpcMessage({ raw: raw.toString(), conn, ctx, notify, sendJson, getHandlers });
     });
 
     const cleanupConnection = () => {
@@ -350,19 +380,29 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
       httpServer.off('error', onError);
       const addr = httpServer.address();
       const actualPort = typeof addr === 'object' && addr ? addr.port : port;
-      resolve({
-        port: actualPort,
-        stop: () => {
-          for (const ws of wss.clients) ws.close(1001, 'Server shutting down');
-          wss.close();
-          httpServer.close();
-          // Clean up all thread subscriptions
-          for (const [, group] of threadSubscribers) {
-            group.unsubscribe?.();
-          }
-          threadSubscribers.clear();
-        },
-      });
+      const startJsonlServer = () => {
+        jsonlServer.listen(0, bindAddress, () => {
+          const jsonlAddr = jsonlServer.address();
+          const jsonlPort = typeof jsonlAddr === 'object' && jsonlAddr ? jsonlAddr.port : 0;
+          resolve({
+            port: actualPort,
+            jsonlPort,
+            stop: () => {
+              for (const ws of wss.clients) ws.close(1001, 'Server shutting down');
+              wss.close();
+              httpServer.close();
+              jsonlServer.close();
+              // Clean up all thread subscriptions
+              for (const [, group] of threadSubscribers) {
+                group.unsubscribe?.();
+              }
+              threadSubscribers.clear();
+            },
+          });
+        });
+      };
+      jsonlServer.once('error', (error) => reject(error));
+      startJsonlServer();
     };
 
     const onError = (error: NodeJS.ErrnoException) => {

@@ -13,7 +13,7 @@ This extension should replace external `kittylitter` process management for Pers
 
 ## Current implementation state
 
-The extension currently wires the full Personal Agent Codex-shaped JSON-RPC handler set behind a local compatibility listener. It reuses the protocol implementation from `system-codex`:
+The extension runs a PA-owned Rust iroh sidecar and forwards `connect` streams to a local JSONL Personal Agent bridge. It reuses the protocol implementation from `system-codex`:
 
 - `initialize`
 - `thread/list`
@@ -40,13 +40,14 @@ The extension currently wires the full Personal Agent Codex-shaped JSON-RPC hand
 - `skills/list`
 - filesystem / command / process compatibility handlers and stubs used by Codex clients
 
-## Remaining work
+## Transport
 
-The local compatibility listener is not the final phone-pairing transport. The remaining bridge layer is a bundled Rust sidecar or native host component that owns:
+`sidecar/` contains the Rust host process. The backend launches the packaged `bin/pa-alleycat-host-<platform>-<arch>` through `ctx.shell`, passes it the PA token/secret and local JSONL port, then reads the sidecar ready event for the real iroh pair payload.
 
-- iroh endpoint
-- Alleycat pair payload with real iroh node id
-- `list_agents` returning only `personal-agent`
-- `connect` stream handoff to the Codex-shaped JSON-RPC handler
+The sidecar implements Alleycat host ops:
+
+- `list_agents` returns only `personal-agent`
+- `restart_agent` is accepted only for `personal-agent`
+- `connect` returns a session ack, then byte-proxies the iroh stream to the local PA JSONL bridge
 
 Do not reintroduce ACP or hijack a named external agent slot such as Devin.
