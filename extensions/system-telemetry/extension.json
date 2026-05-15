@@ -9,6 +9,24 @@
     "entry": "dist/frontend.js",
     "styles": []
   },
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "routes": [
+      { "method": "GET", "path": "/traces/summary", "handler": "summary" },
+      { "method": "GET", "path": "/traces/model-usage", "handler": "modelUsage" },
+      { "method": "GET", "path": "/traces/cost-by-conversation", "handler": "costByConversation" },
+      { "method": "GET", "path": "/traces/tool-health", "handler": "toolHealth" },
+      { "method": "GET", "path": "/traces/context", "handler": "context" },
+      { "method": "GET", "path": "/traces/agent-loop", "handler": "agentLoop" },
+      { "method": "GET", "path": "/traces/tokens-daily", "handler": "tokensDaily" },
+      { "method": "GET", "path": "/traces/tool-flow", "handler": "toolFlow" },
+      { "method": "GET", "path": "/traces/cache-efficiency", "handler": "cacheEfficiency" },
+      { "method": "GET", "path": "/traces/system-prompt", "handler": "systemPrompt" },
+      { "method": "GET", "path": "/traces/auto-mode", "handler": "autoMode" },
+      { "method": "GET", "path": "/traces/context-pointers", "handler": "contextPointers" },
+      { "method": "GET", "path": "/traces/session-integrity", "handler": "sessionIntegrity" }
+    ]
+  },
   "contributes": {
     "views": [
       {

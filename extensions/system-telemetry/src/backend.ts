@@ -6,9 +6,14 @@
  */
 
 import { queryAppTelemetryEvents, readTraceTelemetryLogEvents, type TraceTelemetryLogEvent } from '@personal-agent/core';
-import type { Express } from 'express';
 
-import { logError } from '../middleware/index.js';
+interface ExtensionRouteRequest {
+  query: Record<string, string | string[]>;
+}
+interface ExtensionRouteResponse {
+  status?: number;
+  body?: unknown;
+}
 
 function parseRangeParam(range: unknown): string {
   const valid = ['1h', '6h', '24h', '7d', '30d'];
@@ -294,158 +299,126 @@ function queryToolFlowFromEvents(events: TraceTelemetryLogEvent[]) {
   return { transitions: [...transitions.values()], failureTrajectories };
 }
 
-export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
-  router.get('/api/traces/summary', (req, res) => {
-    try {
-      res.json(querySummaryFromEvents(eventsSince(parseRangeParam(req.query.range))));
-    } catch (err) {
-      logError('traces summary error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+function ok(body: unknown): ExtensionRouteResponse {
+  return { status: 200, body };
+}
 
-  router.get('/api/traces/model-usage', (req, res) => {
-    try {
-      res.json(queryModelUsageFromEvents(eventsSince(parseRangeParam(req.query.range))));
-    } catch (err) {
-      logError('traces model-usage error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+export function summary(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  return ok(querySummaryFromEvents(eventsSince(parseRangeParam(req.query.range))));
+}
 
-  router.get('/api/traces/cost-by-conversation', (_req, res) => {
-    try {
-      res.json([]);
-    } catch (err) {
-      logError('traces cost-by-conversation error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+export function modelUsage(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  return ok(queryModelUsageFromEvents(eventsSince(parseRangeParam(req.query.range))));
+}
 
-  router.get('/api/traces/tool-health', (req, res) => {
-    try {
-      res.json(queryToolHealthFromEvents(eventsSince(parseRangeParam(req.query.range))));
-    } catch (err) {
-      logError('traces tool-health error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+export function costByConversation(): ExtensionRouteResponse {
+  return ok([]);
+}
 
-  router.get('/api/traces/context', (req, res) => {
-    try {
-      const events = eventsSince(parseRangeParam(req.query.range));
-      const sessions = contextEvents(events)
-        .map((event) => ({
-          sessionId: event.sessionId,
-          ts: event.ts,
-          modelId: stringValue(event.payload.modelId),
-          totalTokens: numberValue(event.payload.totalTokens),
-          contextWindow: numberValue(event.payload.contextWindow),
-          pct: numberValue(event.payload.pct),
-          segSystem: numberValue(event.payload.segSystem),
-          segUser: numberValue(event.payload.segUser),
-          segAssistant: numberValue(event.payload.segAssistant),
-          segTool: numberValue(event.payload.segTool),
-          segSummary: numberValue(event.payload.segSummary),
-          systemPromptTokens: numberValue(event.payload.systemPromptTokens),
-        }))
-        .sort((a, b) => b.ts.localeCompare(a.ts));
-      const compactions = events
-        .filter((event) => event.type === 'compaction')
-        .map((event) => ({
-          sessionId: event.sessionId,
-          ts: event.ts,
-          reason: stringValue(event.payload.reason) ?? 'manual',
-          tokensBefore: numberValue(event.payload.tokensBefore),
-          tokensAfter: numberValue(event.payload.tokensAfter),
-          tokensSaved: numberValue(event.payload.tokensSaved),
-        }));
-      res.json({
-        sessions,
-        compactions,
-        compactionAggs: { count: compactions.length, tokensSaved: compactions.reduce((total, row) => total + row.tokensSaved, 0) },
-      });
-    } catch (err) {
-      logError('traces context error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+export function toolHealth(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  return ok(queryToolHealthFromEvents(eventsSince(parseRangeParam(req.query.range))));
+}
 
-  router.get('/api/traces/agent-loop', (req, res) => {
-    try {
-      res.json(queryAgentLoopFromEvents(eventsSince(parseRangeParam(req.query.range))));
-    } catch (err) {
-      logError('traces agent-loop error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
+export function context(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const events = eventsSince(parseRangeParam(req.query.range));
+  const sessions = contextEvents(events)
+    .map((event) => ({
+      sessionId: event.sessionId,
+      ts: event.ts,
+      modelId: stringValue(event.payload.modelId),
+      totalTokens: numberValue(event.payload.totalTokens),
+      contextWindow: numberValue(event.payload.contextWindow),
+      pct: numberValue(event.payload.pct),
+      segSystem: numberValue(event.payload.segSystem),
+      segUser: numberValue(event.payload.segUser),
+      segAssistant: numberValue(event.payload.segAssistant),
+      segTool: numberValue(event.payload.segTool),
+      segSummary: numberValue(event.payload.segSummary),
+      systemPromptTokens: numberValue(event.payload.systemPromptTokens),
+    }))
+    .sort((a, b) => b.ts.localeCompare(a.ts));
+  const compactions = events
+    .filter((event) => event.type === 'compaction')
+    .map((event) => ({
+      sessionId: event.sessionId,
+      ts: event.ts,
+      reason: stringValue(event.payload.reason) ?? 'manual',
+      tokensBefore: numberValue(event.payload.tokensBefore),
+      tokensAfter: numberValue(event.payload.tokensAfter),
+      tokensSaved: numberValue(event.payload.tokensSaved),
+    }));
+  return ok({
+    sessions,
+    compactions,
+    compactionAggs: { count: compactions.length, tokensSaved: compactions.reduce((total, row) => total + row.tokensSaved, 0) },
   });
+}
 
-  router.get('/api/traces/tokens-daily', (req, res) => {
-    try {
-      const buckets = new Map<string, { date: string; tokens: number; cost: number; calls: number }>();
-      for (const event of statsEvents(eventsSince(parseRangeParam(req.query.range)))) {
-        const date = dayKey(event.ts);
-        const bucket = buckets.get(date) ?? { date, tokens: 0, cost: 0, calls: 0 };
-        bucket.tokens +=
-          numberValue(event.payload.tokensInput) +
-          numberValue(event.payload.tokensOutput) +
-          numberValue(event.payload.tokensCachedInput) +
-          numberValue(event.payload.tokensCachedWrite);
-        bucket.cost += numberValue(event.payload.cost);
-        bucket.calls += 1;
-        buckets.set(date, bucket);
-      }
-      res.json([...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)));
-    } catch (err) {
-      logError('traces tokens-daily error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+export function agentLoop(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  return ok(queryAgentLoopFromEvents(eventsSince(parseRangeParam(req.query.range))));
+}
 
-  router.get('/api/traces/tool-flow', (req, res) => res.json(queryToolFlowFromEvents(eventsSince(parseRangeParam(req.query.range)))));
-  router.get('/api/traces/cache-efficiency', (req, res) => {
-    const summary = querySummaryFromEvents(eventsSince(parseRangeParam(req.query.range)));
-    res.json({
-      series: [],
-      aggregate: {
-        requestHitRate: summary.cacheHitRate,
-        cachedShare: summary.cacheHitRate,
-        cacheRead: summary.tokensCached,
-        cacheRequests: 0,
-        totalInput: summary.tokensInput + summary.tokensCached + summary.tokensCachedWrite,
-      },
-    });
+export function tokensDaily(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const buckets = new Map<string, { date: string; tokens: number; cost: number; calls: number }>();
+  for (const event of statsEvents(eventsSince(parseRangeParam(req.query.range)))) {
+    const date = dayKey(event.ts);
+    const bucket = buckets.get(date) ?? { date, tokens: 0, cost: 0, calls: 0 };
+    bucket.tokens +=
+      numberValue(event.payload.tokensInput) +
+      numberValue(event.payload.tokensOutput) +
+      numberValue(event.payload.tokensCachedInput) +
+      numberValue(event.payload.tokensCachedWrite);
+    bucket.cost += numberValue(event.payload.cost);
+    bucket.calls += 1;
+    buckets.set(date, bucket);
+  }
+  return ok([...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)));
+}
+
+export function toolFlow(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  return ok(queryToolFlowFromEvents(eventsSince(parseRangeParam(req.query.range))));
+}
+
+export function cacheEfficiency(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const summary = querySummaryFromEvents(eventsSince(parseRangeParam(req.query.range)));
+  return ok({
+    series: [],
+    aggregate: {
+      requestHitRate: summary.cacheHitRate,
+      cachedShare: summary.cacheHitRate,
+      cacheRead: summary.tokensCached,
+      cacheRequests: 0,
+      totalInput: summary.tokensInput + summary.tokensCached + summary.tokensCachedWrite,
+    },
   });
-  router.get('/api/traces/system-prompt', (_req, res) =>
-    res.json({ series: [], aggregate: { avgSize: 0, avgWindowPct: 0, maxSize: 0, sessions: 0 } }),
-  );
-  router.get('/api/traces/auto-mode', (req, res) => {
-    const events = eventsSince(parseRangeParam(req.query.range)).filter((event) => event.type === 'auto_mode');
-    res.json({
-      toggles: events.length,
-      enabledSessions: events.filter((event) => event.payload.enabled === 1).length,
-      recent: events.slice(-20).reverse(),
-    });
+}
+
+export function systemPrompt(): ExtensionRouteResponse {
+  return ok({ series: [], aggregate: { avgSize: 0, avgWindowPct: 0, maxSize: 0, sessions: 0 } });
+}
+
+export function autoMode(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const events = eventsSince(parseRangeParam(req.query.range)).filter((event) => event.type === 'auto_mode');
+  return ok({
+    toggles: events.length,
+    enabledSessions: events.filter((event) => event.payload.enabled === 1).length,
+    recent: events.slice(-20).reverse(),
   });
-  router.get('/api/traces/context-pointers', (req, res) => {
-    const events = eventsSince(parseRangeParam(req.query.range));
-    const suggested = events.filter((event) => event.type === 'suggested_context');
-    const inspected = events.filter((event) => event.type === 'context_pointer_inspect');
-    res.json({
-      suggestedCount: suggested.reduce((total, event) => total + numberValue(event.payload.pointerCount), 0),
-      inspectedCount: inspected.length,
-      suggestedSessions: suggested.length,
-      inspectedSuggestedCount: inspected.filter((event) => event.payload.wasSuggested === 1).length,
-    });
+}
+
+export function contextPointers(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const events = eventsSince(parseRangeParam(req.query.range));
+  const suggested = events.filter((event) => event.type === 'suggested_context');
+  const inspected = events.filter((event) => event.type === 'context_pointer_inspect');
+  return ok({
+    suggestedCount: suggested.reduce((total, event) => total + numberValue(event.payload.pointerCount), 0),
+    inspectedCount: inspected.length,
+    suggestedSessions: suggested.length,
+    inspectedSuggestedCount: inspected.filter((event) => event.payload.wasSuggested === 1).length,
   });
-  router.get('/api/traces/session-integrity', (req, res) => {
-    try {
-      const since = parseRangeParam(req.query.range);
-      const events = queryAppTelemetryEvents({ since, limit: 200 }).filter((event) => event.category === 'session_integrity');
-      res.json(events);
-    } catch (err) {
-      logError('traces session-integrity error', { message: err instanceof Error ? err.message : String(err) });
-      res.status(500).json({ error: String(err) });
-    }
-  });
+}
+
+export function sessionIntegrity(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const since = parseRangeParam(req.query.range);
+  return ok(queryAppTelemetryEvents({ since, limit: 200 }).filter((event) => event.category === 'session_integrity'));
 }

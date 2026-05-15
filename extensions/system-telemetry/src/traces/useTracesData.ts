@@ -21,8 +21,14 @@ import type {
   TraceTokenDaily,
   TraceToolHealth,
 } from '@personal-agent/extensions/data';
-import { api } from '@personal-agent/extensions/data';
 import { useCallback, useEffect, useState } from 'react';
+
+async function telemetryGet<T>(path: string, range: TraceRange): Promise<T> {
+  const params = new URLSearchParams({ range });
+  const response = await fetch(`/api/extensions/system-telemetry/routes${path}?${params.toString()}`);
+  if (!response.ok) throw new Error(`Telemetry request failed: ${response.status}`);
+  return (await response.json()) as T;
+}
 
 function notifyError(message: string) {
   window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message, source: 'system-telemetry' } }));
@@ -93,19 +99,22 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         contextPointers,
         sessionIntegrity,
       ] = await Promise.all([
-        api.tracesSummary(range),
-        api.tracesModelUsage(range),
-        api.tracesCostByConversation(range),
-        api.tracesToolHealth(range),
-        api.tracesContext(range),
-        api.tracesAgentLoop(range),
-        api.tracesTokensDaily(range),
-        api.tracesToolFlow(range),
-        api.tracesAutoMode(range),
-        api.tracesCacheEfficiency(range),
-        api.tracesSystemPrompt(range),
-        api.tracesContextPointers(range),
-        typeof api.tracesSessionIntegrity === 'function' ? api.tracesSessionIntegrity(range) : Promise.resolve([]),
+        telemetryGet<TraceSummary>('/traces/summary', range),
+        telemetryGet<{ models: TraceModelUsage[]; throughput: TraceThroughput[] }>('/traces/model-usage', range),
+        telemetryGet<TraceCostRow[]>('/traces/cost-by-conversation', range),
+        telemetryGet<TraceToolHealth[]>('/traces/tool-health', range),
+        telemetryGet<{ sessions: TraceContextSession[]; compactions: TraceCompactionEvent[]; compactionAggs: TraceCompactionAggs }>(
+          '/traces/context',
+          range,
+        ),
+        telemetryGet<TraceAgentLoop>('/traces/agent-loop', range),
+        telemetryGet<TraceTokenDaily[]>('/traces/tokens-daily', range),
+        telemetryGet<ToolFlowResult>('/traces/tool-flow', range),
+        telemetryGet<AutoModeSummary>('/traces/auto-mode', range),
+        telemetryGet<{ series: unknown[]; aggregate: CacheEfficiencyAggregate }>('/traces/cache-efficiency', range),
+        telemetryGet<{ series: unknown[]; aggregate: SystemPromptAggregate }>('/traces/system-prompt', range),
+        telemetryGet<ContextPointerUsageResult>('/traces/context-pointers', range),
+        telemetryGet<AppTelemetryEventRow[]>('/traces/session-integrity', range),
       ]);
 
       setData({

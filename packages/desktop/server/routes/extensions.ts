@@ -6,6 +6,7 @@ import type { Express, Request, Response } from 'express';
 import { pingDaemon, startBackgroundRun } from '../daemon/index.js';
 import {
   invokeExtensionAction,
+  invokeExtensionRoute,
   listExtensionActionTelemetry,
   reloadExtensionBackend,
   runExtensionSelfTest,
@@ -62,6 +63,43 @@ function normalizeDependencyId(dependency: string | { id: string; optional?: boo
   return typeof dependency === 'string'
     ? { id: dependency, optional: false }
     : { id: dependency.id, optional: Boolean(dependency.optional) };
+}
+
+function normalizeRouteQuery(query: Request['query']): Record<string, string | string[]> {
+  const normalized: Record<string, string | string[]> = {};
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === 'string') normalized[key] = value;
+    else if (Array.isArray(value)) normalized[key] = value.filter((item): item is string => typeof item === 'string');
+  }
+  return normalized;
+}
+
+async function dispatchExtensionBackendRoute(
+  req: Request,
+  res: Response,
+  context?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): Promise<void> {
+  try {
+    const extensionId = req.params.id;
+    const routePath = `/${req.params[0] ?? ''}`;
+    const result = await invokeExtensionRoute(
+      extensionId,
+      req.method,
+      routePath,
+      {
+        method: req.method,
+        path: routePath,
+        query: normalizeRouteQuery(req.query),
+        params: {},
+        body: req.body,
+      },
+      context,
+    );
+    for (const [key, value] of Object.entries(result.headers ?? {})) res.setHeader(key, value);
+    res.status(result.status ?? 200).json(result.body ?? null);
+  } catch (err) {
+    sendRouteError(res, 'extension backend route error', err);
+  }
 }
 
 function findMissingRequiredDependencies(extensionId: string): string[] {
@@ -131,6 +169,12 @@ export function registerExtensionRoutes(
   router: Pick<Express, 'delete' | 'get' | 'patch' | 'post' | 'put'>,
   context?: Pick<ServerRouteContext, 'getCurrentProfile'>,
 ): void {
+  router.get('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
+  router.post('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
+  router.put('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
+  router.patch('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
+  router.delete('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
+
   router.get('/api/extensions/schema', (_req, res) => {
     try {
       res.json(readExtensionSchema());
