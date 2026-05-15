@@ -207,7 +207,8 @@ function frontendEntryPath(extensionDir, manifest) {
 }
 
 function sourceEntryPath(extensionDir, relativePath) {
-  return relativePath ? join(extensionDir, relativePath) : undefined;
+  if (!relativePath || !relativePath.startsWith('src/')) return undefined;
+  return join(extensionDir, relativePath);
 }
 
 function isBuildManifestStale(buildManifestPath, sourcePaths) {
