@@ -56,6 +56,22 @@ async function readExtensionInstallSummariesWithRuntimeState() {
   }));
 }
 
+function isHostCommandAction(action: string): boolean {
+  return (
+    action === 'app.navigate' ||
+    action === 'palette.open' ||
+    action === 'rail.open' ||
+    action === 'layout.set' ||
+    action === 'conversation.new' ||
+    action === 'conversation.open' ||
+    action === 'composer.focus' ||
+    action.startsWith('navigate:') ||
+    action.startsWith('commandPalette:') ||
+    action.startsWith('rightRail:') ||
+    action.startsWith('layout:')
+  );
+}
+
 function sendRouteError(res: Response, label: string, err: unknown): void {
   logError(label, { message: err instanceof Error ? err.message : String(err) });
   res.status(500).json({ error: String(err) });
@@ -171,11 +187,11 @@ export function registerExtensionRoutes(
   router: Pick<Express, 'delete' | 'get' | 'patch' | 'post' | 'put'>,
   context?: Pick<ServerRouteContext, 'getCurrentProfile'>,
 ): void {
-  router.get('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
-  router.post('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
-  router.put('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
-  router.patch('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
-  router.delete('/api/extensions/:id/routes/*', (req, res) => void dispatchExtensionBackendRoute(req, res, context));
+  router.get('/api/extensions/:id/routes/*', (req, res) => dispatchExtensionBackendRoute(req, res, context));
+  router.post('/api/extensions/:id/routes/*', (req, res) => dispatchExtensionBackendRoute(req, res, context));
+  router.put('/api/extensions/:id/routes/*', (req, res) => dispatchExtensionBackendRoute(req, res, context));
+  router.patch('/api/extensions/:id/routes/*', (req, res) => dispatchExtensionBackendRoute(req, res, context));
+  router.delete('/api/extensions/:id/routes/*', (req, res) => dispatchExtensionBackendRoute(req, res, context));
 
   router.get('/api/extensions/schema', (_req, res) => {
     try {
@@ -387,7 +403,12 @@ export function registerExtensionRoutes(
         res.json({ ok: true, result: true });
         return;
       }
-      const result = await invokeExtensionAction(command.extensionId, command.action, req.body ?? {}, context);
+      if (isHostCommandAction(command.action)) {
+        publishAppEvent({ type: 'extension_command', command: command.action, args: req.body ?? command.args ?? {} });
+        res.json({ ok: true, result: true });
+        return;
+      }
+      const result = await invokeExtensionAction(command.extensionId, command.action, req.body ?? command.args ?? {}, context);
       res.json({ ok: true, result });
     } catch (err) {
       sendRouteError(res, 'extension command execute error', err);

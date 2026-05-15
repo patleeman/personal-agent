@@ -146,11 +146,11 @@ describe('registerExtensionRoutes', () => {
     const harness = createHarness();
 
     const res = createResponse();
-    harness.getHandler('/api/extensions/:id/routes/*')(
+    await harness.getHandler('/api/extensions/:id/routes/*')(
       { method: 'GET', params: { id: 'agent-board', 0: 'status' }, query: { q: 'hello' } },
       res,
     );
-    await vi.waitFor(() => expect(res.status).toHaveBeenCalledWith(201));
+    expect(res.status).toHaveBeenCalledWith(201);
 
     expect(res.json).toHaveBeenCalledWith({ ok: true, q: 'hello' });
   });
