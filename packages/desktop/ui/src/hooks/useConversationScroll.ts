@@ -70,6 +70,7 @@ export function useConversationScroll({
   const isTransientSettleRef = useRef(false);
   const isStreamingRef = useRef(isStreaming);
   const lastAutoScrollTimeRef = useRef(0);
+  const streamingPinnedScrollHeightRef = useRef(0);
   const hasMessages = (messages?.length ?? 0) > 0;
 
   const clearSmoothBottomScrollSettle = useCallback(() => {
@@ -242,6 +243,7 @@ export function useConversationScroll({
     pendingPrependRestoreRef.current = null;
     completedInitialScrollKeyRef.current = null;
     streamingTailAutoScrollKeyRef.current = null;
+    streamingPinnedScrollHeightRef.current = 0;
     scrollPinnedToBottomRef.current = true;
     isTransientSettleRef.current = false;
 
@@ -528,6 +530,7 @@ export function useConversationScroll({
 
     if (!isStreaming) {
       streamingTailAutoScrollKeyRef.current = tailKey;
+      streamingPinnedScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0;
       // When streaming just ended, the last block's content finalizes and
       // the streaming-status indicator is removed — both change the scroll
       // container's layout. Do a final settle to re-anchor the viewport to
@@ -538,17 +541,34 @@ export function useConversationScroll({
       return;
     }
 
-    if (!scrollRef.current) {
+    const el = scrollRef.current;
+    if (!el) {
       streamingTailAutoScrollKeyRef.current = tailKey;
+      streamingPinnedScrollHeightRef.current = 0;
       return;
     }
 
     if (!scrollPinnedToBottomRef.current) {
       streamingTailAutoScrollKeyRef.current = tailKey;
+      streamingPinnedScrollHeightRef.current = el.scrollHeight;
       return;
     }
 
-    if (!shouldAutoScrollToStreamingTail(streamingTailAutoScrollKeyRef.current, tailBlock)) {
+    const previousTailKey = streamingTailAutoScrollKeyRef.current;
+    const shouldScrollToNewTail = shouldAutoScrollToStreamingTail(previousTailKey, tailBlock);
+    if (!shouldScrollToNewTail) {
+      // If the user is pinned to bottom and the active streaming block grows,
+      // preserve their bottom-relative position by the height delta. This keeps
+      // the live tail visible without restarting the heavy settle loop for every
+      // token, and wheel/pointer detach still wins immediately.
+      const previousScrollHeight = streamingPinnedScrollHeightRef.current || el.scrollHeight;
+      const nextScrollHeight = el.scrollHeight;
+      const heightDelta = nextScrollHeight - previousScrollHeight;
+      if (heightDelta > 0) {
+        el.scrollTop += heightDelta;
+        setAtBottom(true);
+      }
+      streamingPinnedScrollHeightRef.current = nextScrollHeight;
       return;
     }
 
@@ -565,6 +585,7 @@ export function useConversationScroll({
     lastAutoScrollTimeRef.current = now;
 
     streamingTailAutoScrollKeyRef.current = tailKey;
+    streamingPinnedScrollHeightRef.current = el.scrollHeight;
     scrollToBottom();
   }, [isStreaming, messages, scrollRef, scrollToBottom]);
 

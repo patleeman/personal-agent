@@ -107,6 +107,74 @@ describe('useConversationScroll', () => {
     expect(result.current.atBottom).toBe(true);
   });
 
+  it('preserves the bottom-relative position when the pinned streaming tail grows', () => {
+    const scrollEl = document.createElement('div');
+    setScrollMetrics(scrollEl, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });
+    scrollEl.querySelector = vi.fn().mockReturnValue(null);
+    const scrollRef = { current: scrollEl };
+
+    const { result, rerender } = renderHook(
+      ({ messages, isStreaming }) =>
+        useConversationScroll({
+          conversationId: 'conversation-1',
+          messages,
+          scrollRef,
+          sessionLoading: false,
+          isStreaming,
+          initialScrollKey: null,
+        }),
+      {
+        initialProps: {
+          isStreaming: false,
+          messages: [{ type: 'text' as const, ts: '1', text: 'hello' }],
+        },
+      },
+    );
+
+    rerender({ isStreaming: true, messages: [{ type: 'text' as const, ts: '1', text: 'hello' }] });
+    setScrollMetrics(scrollEl, { scrollHeight: 1120, clientHeight: 400, scrollTop: 600 });
+    rerender({ isStreaming: true, messages: [{ type: 'text' as const, ts: '1', text: 'hello streamed text' }] });
+
+    expect(scrollEl.scrollTop).toBe(720);
+    expect(result.current.atBottom).toBe(true);
+  });
+
+  it('does not preserve streaming tail growth after the user detaches', () => {
+    const scrollEl = document.createElement('div');
+    setScrollMetrics(scrollEl, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });
+    scrollEl.querySelector = vi.fn().mockReturnValue(null);
+    const scrollRef = { current: scrollEl };
+
+    const { result, rerender } = renderHook(
+      ({ messages, isStreaming }) =>
+        useConversationScroll({
+          conversationId: 'conversation-1',
+          messages,
+          scrollRef,
+          sessionLoading: false,
+          isStreaming,
+          initialScrollKey: null,
+        }),
+      {
+        initialProps: {
+          isStreaming: true,
+          messages: [{ type: 'text' as const, ts: '1', text: 'hello' }],
+        },
+      },
+    );
+
+    act(() => {
+      scrollEl.dispatchEvent(new WheelEvent('wheel', { deltaY: -80 }));
+    });
+    expect(result.current.atBottom).toBe(false);
+
+    setScrollMetrics(scrollEl, { scrollHeight: 1120, clientHeight: 400, scrollTop: 560 });
+    rerender({ isStreaming: true, messages: [{ type: 'text' as const, ts: '1', text: 'hello streamed text' }] });
+
+    expect(scrollEl.scrollTop).toBe(560);
+    expect(result.current.atBottom).toBe(false);
+  });
+
   it('allows explicit scroll-to-bottom actions to re-pin during streaming', () => {
     const scrollEl = document.createElement('div');
     setScrollMetrics(scrollEl, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });
