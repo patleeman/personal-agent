@@ -87,7 +87,11 @@ describe('buildActivityTreeItems', () => {
     });
 
     expect(items).toEqual([
-      expect.objectContaining({ id: buildConversationActivityId('conv-1'), kind: 'conversation' }),
+      expect.objectContaining({
+        id: buildConversationActivityId('conv-1'),
+        kind: 'conversation',
+        metadata: expect.objectContaining({ hasPendingRuns: true }),
+      }),
       expect.objectContaining({
         id: buildExecutionActivityId('run-1'),
         kind: 'execution',
@@ -98,6 +102,17 @@ describe('buildActivityTreeItems', () => {
       }),
     ]);
     expect(buildRunActivityId('run-1')).toBe(buildExecutionActivityId('run-1'));
+  });
+
+  it('does not mark running conversations as idle pending', () => {
+    const items = buildActivityTreeItems({
+      conversations: [session({ id: 'conv-1', title: 'Build the thing', isRunning: true })],
+      executions: [execution({ id: 'run-1', conversationId: 'conv-1', status: 'running' })],
+    });
+
+    expect(items.find((item) => item.id === buildConversationActivityId('conv-1'))).toEqual(
+      expect.objectContaining({ metadata: expect.objectContaining({ hasPendingRuns: false }) }),
+    );
   });
 
   it('opens subagent executions at their captured conversation when available', () => {

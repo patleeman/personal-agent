@@ -1300,6 +1300,7 @@ function OpenConversationRow({
   gatewayProviders = [],
   isAutomation = false,
   automationTitle,
+  hasPendingRuns = false,
   onDragStart,
   onDragOver,
   onDrop,
@@ -1324,6 +1325,7 @@ function OpenConversationRow({
   gatewayProviders?: Array<'telegram' | 'slack_mcp'>;
   isAutomation?: boolean;
   automationTitle?: string;
+  hasPendingRuns?: boolean;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
@@ -1651,8 +1653,13 @@ function OpenConversationRow({
         title={rowTitle}
       >
         <div className="flex w-3 shrink-0 items-center justify-center self-stretch">
-          {session.isRunning || needsAttention ? (
-            <ConversationStatusText isRunning={session.isRunning} needsAttention={needsAttention} className="shrink-0" />
+          {session.isRunning || hasPendingRuns || needsAttention ? (
+            <ConversationStatusText
+              isRunning={session.isRunning}
+              hasPendingRuns={hasPendingRuns}
+              needsAttention={needsAttention}
+              className="shrink-0"
+            />
           ) : null}
         </div>
         <div className="min-w-0 flex-1 pr-[4.5rem]">
@@ -2101,6 +2108,19 @@ export function Sidebar() {
     () => new Set((tasks ?? []).flatMap((task) => (task.running && task.threadConversationId ? [task.threadConversationId] : []))),
     [tasks],
   );
+  const pendingExecutionConversationIdSet = useMemo(
+    () =>
+      new Set(
+        (executions?.executions ?? []).flatMap((execution) =>
+          execution.conversationId &&
+          execution.visibility !== 'hidden' &&
+          ['queued', 'waiting', 'running', 'recovering'].includes(execution.status)
+            ? [execution.conversationId]
+            : [],
+        ),
+      ),
+    [executions],
+  );
   const filteredConversationItems = useMemo(
     () =>
       orderedConversationItems.filter((item) => {
@@ -2271,7 +2291,17 @@ export function Sidebar() {
       executions: executions?.executions ?? [],
     }).map((item) => {
       const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
-      return conversationId && pinnedIdSet.has(conversationId) ? { ...item, metadata: { ...item.metadata, isPinned: true } } : item;
+      if (!conversationId) return item;
+
+      const metadata = {
+        ...item.metadata,
+        ...(pinnedIdSet.has(conversationId) ? { isPinned: true } : {}),
+        ...(runningAutomationConversationIdSet.has(conversationId) ? { isRunning: true, hasPendingRuns: false } : {}),
+        ...(pendingExecutionConversationIdSet.has(conversationId) && !runningAutomationConversationIdSet.has(conversationId)
+          ? { hasPendingRuns: true }
+          : {}),
+      };
+      return { ...item, status: metadata.isRunning ? 'running' : item.status, metadata };
     });
 
     if (threadsOrganizeMode !== 'project' || groupedConversationRows.length === 0) {
@@ -2311,7 +2341,16 @@ export function Sidebar() {
       );
 
     return [...groupItems, ...groupedItems];
-  }, [activityTreeSessions, executions, groupedConversationRows, pinnedIds, threadsFilterMode, threadsOrganizeMode]);
+  }, [
+    activityTreeSessions,
+    executions,
+    groupedConversationRows,
+    pendingExecutionConversationIdSet,
+    pinnedIds,
+    runningAutomationConversationIdSet,
+    threadsFilterMode,
+    threadsOrganizeMode,
+  ]);
   const [activityTreeItems, setActivityTreeItems] = useState<ActivityTreeItem[]>(() => baseActivityTreeItems);
   const activeActivityTreeItemId = activeConversationId ? buildConversationActivityId(activeConversationId) : null;
   const collapsedActivityTreeGroupItemIds = useMemo(
@@ -3564,6 +3603,7 @@ export function Sidebar() {
         : null;
 
     const isAutomationRunning = runningAutomationConversationIdSet.has(session.id);
+    const hasPendingExecutions = pendingExecutionConversationIdSet.has(session.id);
     const gatewayProviders =
       gatewayState?.bindings
         .filter((binding) => binding.conversationId === session.id)
@@ -3579,6 +3619,7 @@ export function Sidebar() {
         canDrag={canDrag}
         isAutomation={isAutomationRunning}
         automationTitle={automationThreadTitleByConversationId.get(session.id)}
+        hasPendingRuns={hasPendingExecutions && !session.isRunning && !isAutomationRunning}
         isDragging={canDrag && draggingSessionId === session.id}
         dropPosition={dropPosition}
         onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}

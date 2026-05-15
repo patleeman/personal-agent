@@ -173,8 +173,9 @@ export function ActivityTreeView({
           const canCreateChild = item.kind === 'group' && onCreateChildItem;
           const conversationIsRunning = item.kind === 'conversation' && item.metadata?.isRunning === true;
           const conversationNeedsAttention = item.kind === 'conversation' && item.metadata?.needsAttention === true;
+          const conversationHasPendingRuns = item.kind === 'conversation' && item.metadata?.hasPendingRuns === true;
           const conversationIsPinned = item.kind === 'conversation' && item.metadata?.isPinned === true;
-          const showConversationStatus = conversationIsRunning || conversationNeedsAttention;
+          const showConversationStatus = conversationIsRunning || conversationHasPendingRuns || conversationNeedsAttention;
           const rowPaddingLeft = item.kind === 'group' ? 0.5 : 0.5 + depth * 0.5;
           return (
             <button
@@ -279,7 +280,11 @@ export function ActivityTreeView({
               ) : null}
               {showConversationStatus ? (
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
-                  <ConversationStatusText isRunning={conversationIsRunning} needsAttention={conversationNeedsAttention} />
+                  <ConversationStatusText
+                    isRunning={conversationIsRunning}
+                    hasPendingRuns={conversationHasPendingRuns}
+                    needsAttention={conversationNeedsAttention}
+                  />
                 </span>
               ) : item.kind === 'group' ? (
                 <span

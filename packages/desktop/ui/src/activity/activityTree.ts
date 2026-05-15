@@ -3,6 +3,10 @@ import type { ExecutionRecord, SessionMeta } from '../shared/types';
 export type ActivityTreeItemKind = 'conversation' | 'execution' | 'run' | 'terminal' | 'artifact' | 'checkpoint' | 'group';
 export type ActivityTreeItemStatus = 'idle' | 'running' | 'queued' | 'failed' | 'done';
 
+function executionIsActive(status: string | undefined): boolean {
+  return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
+}
+
 export interface ActivityTreeItem {
   id: string;
   kind: ActivityTreeItemKind;
@@ -36,6 +40,13 @@ export function buildExecutionActivityId(executionId: string): string {
 
 export function buildActivityTreeItems({ conversations, executions = [] }: BuildActivityTreeInput): ActivityTreeItem[] {
   const conversationIds = new Set(conversations.map((session) => session.id));
+  const activeExecutionConversationIds = new Set(
+    executions.flatMap((execution) =>
+      execution.conversationId && executionIsActive(execution.status) && execution.visibility !== 'hidden'
+        ? [execution.conversationId]
+        : [],
+    ),
+  );
   const conversationIdBySourceRunId = new Map(
     conversations.flatMap((session) => (session.sourceRunId ? [[session.sourceRunId, session.id] as const] : [])),
   );
@@ -56,6 +67,7 @@ export function buildActivityTreeItems({ conversations, executions = [] }: Build
       cwd: session.cwd,
       isRunning: Boolean(session.isRunning),
       needsAttention: Boolean(session.needsAttention),
+      hasPendingRuns: !session.isRunning && activeExecutionConversationIds.has(session.id),
     },
   }));
 
