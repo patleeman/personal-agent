@@ -326,6 +326,7 @@ async function main() {
     env: {
       ...process.env,
       PERSONAL_AGENT_STATE_ROOT: stateRoot,
+      PERSONAL_AGENT_DESKTOP_USER_DATA_DIR: join(tempRoot, 'user-data'),
       PERSONAL_AGENT_DAEMON_SOCKET_PATH: daemonSocketPath,
       PERSONAL_AGENT_COMPANION_PORT: String(companionPort),
       PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1',
