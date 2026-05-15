@@ -268,7 +268,7 @@ function createProtocolHarness() {
 }
 
 afterEach(() => {
-  // no-op; each test owns its own abort controller
+  delete process.env.PERSONAL_AGENT_ACP_PROMPT_TIMEOUT_MS;
 });
 
 describe('system-acp protocol', () => {
@@ -343,6 +343,24 @@ describe('system-acp protocol', () => {
     await harness.clientConnection.cancel({ sessionId: created.sessionId });
     const result = await pendingPrompt;
     expect(result.stopReason).toBe('cancelled');
+
+    harness.abortController.abort();
+    await harness.runPromise;
+  });
+
+  it('fails a hung prompt instead of waiting forever', async () => {
+    process.env.PERSONAL_AGENT_ACP_PROMPT_TIMEOUT_MS = '25';
+
+    const harness = createProtocolHarness();
+    await harness.clientConnection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
+    const created = await harness.clientConnection.newSession({ cwd: '/repo', mcpServers: [] });
+
+    await expect(
+      harness.clientConnection.prompt({
+        sessionId: created.sessionId,
+        prompt: [{ type: 'text', text: 'hang forever' }],
+      }),
+    ).rejects.toThrow('Internal error');
 
     harness.abortController.abort();
     await harness.runPromise;

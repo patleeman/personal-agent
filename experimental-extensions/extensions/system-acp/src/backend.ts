@@ -10,6 +10,7 @@ const MODES: acp.SessionMode[] = [
   { id: 'ask', name: 'Ask', description: 'Discussion-oriented mode for lighter guidance.' },
 ];
 const ACP_SMOKE_TEST_MODE = process.env.PERSONAL_AGENT_ACP_SMOKE_TEST === '1';
+const DEFAULT_ACP_PROMPT_TIMEOUT_MS = 120_000;
 
 type StoredSessionRecord = {
   sessionId: string;
@@ -46,6 +47,17 @@ function toToolKind(toolName: string | undefined): acp.ToolKind {
   if (name.includes('web')) return 'fetch';
   if (name.includes('think')) return 'think';
   return 'other';
+}
+
+function readPromptTimeoutMs(): number {
+  const raw = process.env.PERSONAL_AGENT_ACP_PROMPT_TIMEOUT_MS?.trim();
+  if (!raw) return DEFAULT_ACP_PROMPT_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ACP_PROMPT_TIMEOUT_MS;
+}
+
+function renderErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function contentBlockToText(block: acp.ContentBlock): string {
@@ -264,6 +276,16 @@ class PersonalAgentAcpAgent implements acp.Agent {
     this.activePrompts.get(params.sessionId)?.abortController.abort();
     this.activePrompts.set(params.sessionId, active);
 
+    this.ctx.log.info('ACP prompt started', {
+      sessionId: params.sessionId,
+      conversationId: record.conversationId,
+      cwd: record.cwd,
+      modeId: record.currentModeId,
+      promptLength: text.length,
+      smoke: ACP_SMOKE_TEST_MODE,
+      timeoutMs: readPromptTimeoutMs(),
+    });
+
     if (ACP_SMOKE_TEST_MODE) {
       await this.connection.sessionUpdate({
         sessionId: record.sessionId,
@@ -312,10 +334,26 @@ class PersonalAgentAcpAgent implements acp.Agent {
       void this.forwardEvent(record.sessionId, event, active);
     });
 
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    const timeoutMs = readPromptTimeoutMs();
+
     try {
-      await this.ctx.conversations.sendMessage(record.conversationId, text, { steer: false });
+      await Promise.race([
+        this.ctx.conversations.sendMessage(record.conversationId, text, { steer: false }),
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            active.abortController.abort();
+            void this.ctx.conversations.abort(record.conversationId).catch(() => undefined);
+            reject(new Error(`ACP prompt timed out after ${timeoutMs}ms.`));
+          }, timeoutMs);
+        }),
+      ]);
       const updated = await refreshSessionRecord(this.ctx, params.sessionId);
-      this.activePrompts.delete(params.sessionId);
+      this.ctx.log.info('ACP prompt completed', {
+        sessionId: params.sessionId,
+        conversationId: record.conversationId,
+        stopReason: active.abortController.signal.aborted ? 'cancelled' : 'end_turn',
+      });
       await this.connection.sessionUpdate({
         sessionId: record.sessionId,
         update: {
@@ -328,7 +366,15 @@ class PersonalAgentAcpAgent implements acp.Agent {
         stopReason: active.abortController.signal.aborted ? 'cancelled' : 'end_turn',
         ...(params.messageId ? { userMessageId: params.messageId } : {}),
       };
+    } catch (error) {
+      this.ctx.log.error('ACP prompt failed', {
+        sessionId: params.sessionId,
+        conversationId: record.conversationId,
+        message: renderErrorMessage(error),
+      });
+      throw error;
     } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       unsubscribe?.();
       this.activePrompts.delete(params.sessionId);
     }
