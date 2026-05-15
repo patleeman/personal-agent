@@ -25,17 +25,20 @@ export const initialize: { handler: MethodHandler } = {
     const platformFamily = process.platform === 'win32' ? 'windows' : 'unix';
     const version = '0.125.0';
 
-    queueMicrotask(() => {
+    setTimeout(() => {
       void (async () => {
         const sessions = await ctx.conversations.list().catch(() => []);
         if (!Array.isArray(sessions)) return;
+        let count = 0;
         for (const raw of sessions) {
           const session = raw as Record<string, unknown>;
           if (!isLiveOrRunning(session) || typeof session.id !== 'string' || !session.id) continue;
           notify('thread/started', { thread: toThreadResponse(session.id, session, [], ctx) });
+          count += 1;
         }
+        ctx.log.info(`alleycat announced ${count} live PA thread(s) after initialize`);
       })();
-    });
+    }, 0);
 
     return {
       userAgent: `codex_cli_rs/${version} (${type()} ${release()}; ${machine()}) personal-agent`,
