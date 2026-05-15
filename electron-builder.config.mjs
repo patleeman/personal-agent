@@ -23,6 +23,18 @@ function optionalExtraResource(resource) {
   return existsSync(resource.from) ? [resource] : [];
 }
 
+const packagedExtensionFilter = [
+  '*/extension.json',
+  '*/README.md',
+  '*/package.json',
+  '*/dist/**/*',
+  '*/skills/**/*',
+  '*/docs/**/*',
+  '*/assets/**/*',
+  '!**/*.map',
+  '!**/src/**/*.test.*',
+];
+
 function readDesktopPackageVersion() {
   const packageJson = JSON.parse(readFileSync(resolve('packages/desktop/package.json'), 'utf8'));
   return typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
@@ -111,12 +123,12 @@ const electronBuilderConfig = {
     {
       from: 'extensions',
       to: 'extensions',
-      filter: ['**/*', '!**/*.map', '!**/src/**/*.test.*'],
+      filter: packagedExtensionFilter,
     },
     {
       from: 'experimental-extensions/extensions',
       to: 'experimental-extensions/extensions',
-      filter: ['**/*', '!**/*.map', '!**/src/**/*.test.*'],
+      filter: packagedExtensionFilter,
     },
     {
       from: 'docs',
