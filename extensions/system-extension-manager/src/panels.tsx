@@ -398,6 +398,13 @@ function formatServiceSummary(extension: ExtensionInstallSummary): string {
     : 'None';
 }
 
+function formatProtocolSummary(extension: ExtensionInstallSummary): string {
+  const protocolEntrypoints = extension.manifest?.backend?.protocolEntrypoints ?? [];
+  return protocolEntrypoints.length
+    ? protocolEntrypoints.map((entrypoint) => `${entrypoint.id} → ${entrypoint.handler}`).join(', ')
+    : 'None';
+}
+
 function formatSubscriptionSummary(extension: ExtensionInstallSummary): string {
   return extension.subscriptions?.length
     ? extension.subscriptions
@@ -1358,7 +1365,7 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
                   <DetailRow label="Shortcuts" value={formatKeybindingSummary(extension)} />
                   <DetailRow
                     label="Backend"
-                    value={`Actions: ${formatBackendActionSummary(extension)} · Services: ${formatServiceSummary(extension)}`}
+                    value={`Actions: ${formatBackendActionSummary(extension)} · Services: ${formatServiceSummary(extension)} · Protocols: ${formatProtocolSummary(extension)}`}
                   />
                   <DetailRow label="Subscriptions" value={formatSubscriptionSummary(extension)} />
                   <DetailRow label="Dependencies" value={formatDependencySummary(extension)} />

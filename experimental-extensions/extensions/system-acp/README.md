@@ -17,6 +17,12 @@ ACP_BRIDGE_AGENT_BIN=personal-agent
 ACP_BRIDGE_AGENT_ARGS="protocol acp"
 ```
 
+Quick smoke test:
+
+```bash
+npm run acp:smoke
+```
+
 ## Supported ACP surface
 
 - `initialize`

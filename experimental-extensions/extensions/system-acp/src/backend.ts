@@ -9,6 +9,7 @@ const MODES: acp.SessionMode[] = [
   { id: 'code', name: 'Code', description: 'Normal coding-agent mode for Personal Agent.' },
   { id: 'ask', name: 'Ask', description: 'Discussion-oriented mode for lighter guidance.' },
 ];
+const ACP_SMOKE_TEST_MODE = process.env.PERSONAL_AGENT_ACP_SMOKE_TEST === '1';
 
 type StoredSessionRecord = {
   sessionId: string;
@@ -262,6 +263,50 @@ class PersonalAgentAcpAgent implements acp.Agent {
     };
     this.activePrompts.get(params.sessionId)?.abortController.abort();
     this.activePrompts.set(params.sessionId, active);
+
+    if (ACP_SMOKE_TEST_MODE) {
+      await this.connection.sessionUpdate({
+        sessionId: record.sessionId,
+        update: {
+          sessionUpdate: 'agent_thought_chunk',
+          messageId: active.currentThinkingMessageId,
+          content: { type: 'text', text: 'thinking…' },
+        },
+      });
+      await this.connection.sessionUpdate({
+        sessionId: record.sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: active.currentAgentMessageId,
+          content: { type: 'text', text: `hello from ACP smoke: ${text}` },
+        },
+      });
+      await this.connection.sessionUpdate({
+        sessionId: record.sessionId,
+        update: {
+          sessionUpdate: 'tool_call',
+          toolCallId: 'smoke-tool-1',
+          title: 'Smoke read',
+          kind: 'read',
+          status: 'completed',
+          rawInput: { path: 'README.md' },
+          rawOutput: { content: 'smoke ok' },
+        },
+      });
+      await this.connection.sessionUpdate({
+        sessionId: record.sessionId,
+        update: {
+          sessionUpdate: 'usage_update',
+          used: 3,
+          size: 3,
+        },
+      });
+      await refreshSessionRecord(this.ctx, params.sessionId);
+      return {
+        stopReason: 'end_turn',
+        ...(params.messageId ? { userMessageId: params.messageId } : {}),
+      };
+    }
 
     const unsubscribe = this.ctx.conversations.subscribe(record.conversationId, (event) => {
       void this.forwardEvent(record.sessionId, event, active);

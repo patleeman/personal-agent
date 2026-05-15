@@ -14,7 +14,7 @@ The Extension Manager should make that loop boring:
 
 - create a starter native extension package
 - list installed system and user extensions
-- show manifest, surfaces, commands, routes, build status, and permissions
+- show manifest, surfaces, commands, routes, protocol entrypoints, build status, and permissions
 - build/rebuild an extension
 - reload extension registry/runtime
 - keep per-extension actions visibly acknowledged with inline progress and result notices even when the list is scrolled
