@@ -2,7 +2,7 @@ import { PassThrough, Readable, Writable } from 'node:stream';
 
 import * as acp from '@agentclientprotocol/sdk';
 import type { ExtensionProtocolContext } from '@personal-agent/extensions';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { runAcpProtocol } from '../backend.js';
 
@@ -36,7 +36,7 @@ class TestClient {
   }
 }
 
-function createProtocolHarness() {
+function createProtocolHarness(input: Record<string, unknown> = {}) {
   const abortController = new AbortController();
   const storage = new Map<string, unknown>();
   const conversations = new Map<string, ConversationRecord>();
@@ -256,7 +256,7 @@ function createProtocolHarness() {
     acp.ndJsonStream(Writable.toWeb(clientToAgent), Readable.toWeb(agentToClient)),
   );
 
-  const runPromise = runAcpProtocol({}, ctx);
+  const runPromise = runAcpProtocol(input, ctx);
 
   return {
     abortController,
@@ -266,10 +266,6 @@ function createProtocolHarness() {
     runPromise,
   };
 }
-
-afterEach(() => {
-  delete process.env.PERSONAL_AGENT_ACP_PROMPT_TIMEOUT_MS;
-});
 
 describe('system-acp protocol', () => {
   it('supports the exposed ACP session lifecycle and prompt streaming with the official client SDK', async () => {
@@ -349,9 +345,7 @@ describe('system-acp protocol', () => {
   });
 
   it('fails a hung prompt instead of waiting forever', async () => {
-    process.env.PERSONAL_AGENT_ACP_PROMPT_TIMEOUT_MS = '25';
-
-    const harness = createProtocolHarness();
+    const harness = createProtocolHarness({ timeoutMs: 25 });
     await harness.clientConnection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
     const created = await harness.clientConnection.newSession({ cwd: '/repo', mcpServers: [] });
 

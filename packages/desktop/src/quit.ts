@@ -12,9 +12,8 @@ export function hasDesktopQuitConfirmationBypassArg(argv: string[] = process.arg
   return argv.includes('--no-quit-confirmation') || argv.includes('--skip-quit-confirmation');
 }
 
-export function shouldSkipDesktopQuitConfirmation(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv): boolean {
-  const raw = env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes' || hasDesktopQuitConfirmationBypassArg(argv);
+export function shouldSkipDesktopQuitConfirmation(argv: string[] = process.argv): boolean {
+  return hasDesktopQuitConfirmationBypassArg(argv);
 }
 
 function buildDesktopQuitDetail(behavior: DesktopQuitConfirmationBehavior): string {

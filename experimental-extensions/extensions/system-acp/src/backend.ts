@@ -9,7 +9,6 @@ const MODES: acp.SessionMode[] = [
   { id: 'code', name: 'Code', description: 'Normal coding-agent mode for Personal Agent.' },
   { id: 'ask', name: 'Ask', description: 'Discussion-oriented mode for lighter guidance.' },
 ];
-const ACP_SMOKE_TEST_MODE = process.env.PERSONAL_AGENT_ACP_SMOKE_TEST === '1';
 const DEFAULT_ACP_PROMPT_TIMEOUT_MS = 120_000;
 
 type StoredSessionRecord = {
@@ -26,6 +25,11 @@ type ActivePrompt = {
   abortController: AbortController;
   currentAgentMessageId: string;
   currentThinkingMessageId: string;
+};
+
+type AcpProtocolInput = {
+  smoke?: boolean;
+  timeoutMs?: number;
 };
 
 function sessionKey(sessionId: string): string {
@@ -49,11 +53,8 @@ function toToolKind(toolName: string | undefined): acp.ToolKind {
   return 'other';
 }
 
-function readPromptTimeoutMs(): number {
-  const raw = process.env.PERSONAL_AGENT_ACP_PROMPT_TIMEOUT_MS?.trim();
-  if (!raw) return DEFAULT_ACP_PROMPT_TIMEOUT_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ACP_PROMPT_TIMEOUT_MS;
+function readPromptTimeoutMs(input: AcpProtocolInput): number {
+  return input.timeoutMs ?? DEFAULT_ACP_PROMPT_TIMEOUT_MS;
 }
 
 function renderErrorMessage(error: unknown): string {
@@ -145,6 +146,7 @@ class PersonalAgentAcpAgent implements acp.Agent {
   constructor(
     private readonly connection: acp.AgentSideConnection,
     private readonly ctx: ExtensionProtocolContext,
+    private readonly input: AcpProtocolInput,
   ) {}
 
   async initialize(_params: acp.InitializeRequest): Promise<acp.InitializeResponse> {
@@ -282,11 +284,11 @@ class PersonalAgentAcpAgent implements acp.Agent {
       cwd: record.cwd,
       modeId: record.currentModeId,
       promptLength: text.length,
-      smoke: ACP_SMOKE_TEST_MODE,
-      timeoutMs: readPromptTimeoutMs(),
+      smoke: this.input.smoke === true,
+      timeoutMs: readPromptTimeoutMs(this.input),
     });
 
-    if (ACP_SMOKE_TEST_MODE) {
+    if (this.input.smoke === true) {
       await this.connection.sessionUpdate({
         sessionId: record.sessionId,
         update: {
@@ -335,7 +337,7 @@ class PersonalAgentAcpAgent implements acp.Agent {
     });
 
     let timeoutHandle: NodeJS.Timeout | null = null;
-    const timeoutMs = readPromptTimeoutMs();
+    const timeoutMs = readPromptTimeoutMs(this.input);
 
     try {
       await Promise.race([
@@ -581,9 +583,28 @@ class PersonalAgentAcpAgent implements acp.Agent {
   }
 }
 
-export async function runAcpProtocol(_input: unknown, ctx: ExtensionProtocolContext): Promise<void> {
+function parseProtocolInput(input: unknown): AcpProtocolInput {
+  const record = input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
+  const args = Array.isArray(record.args) ? record.args.filter((arg): arg is string => typeof arg === 'string') : [];
+  const timeoutArg = args.find((arg) => arg.startsWith('--prompt-timeout-ms='));
+  const timeoutMs = timeoutArg ? Number(timeoutArg.slice('--prompt-timeout-ms='.length)) : undefined;
+  return {
+    smoke: args.includes('--smoke-test') || record.smoke === true,
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? { timeoutMs }
+      : typeof record.timeoutMs === 'number' && record.timeoutMs > 0
+        ? { timeoutMs: record.timeoutMs }
+        : {}),
+  };
+}
+
+export async function runAcpProtocol(input: unknown, ctx: ExtensionProtocolContext): Promise<void> {
+  const protocolInput = parseProtocolInput(input);
   const stream = acp.ndJsonStream(Writable.toWeb(ctx.stdio.stdout), Readable.toWeb(ctx.stdio.stdin));
-  const connection = new acp.AgentSideConnection((agentConnection) => new PersonalAgentAcpAgent(agentConnection, ctx), stream);
+  const connection = new acp.AgentSideConnection(
+    (agentConnection) => new PersonalAgentAcpAgent(agentConnection, ctx, protocolInput),
+    stream,
+  );
   await Promise.race([
     connection.closed,
     new Promise<void>((resolve) => ctx.signal.addEventListener('abort', () => resolve(), { once: true })),

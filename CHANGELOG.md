@@ -501,12 +501,11 @@
 - fix: route desktop companion calls through api proxy
 - fix: cap telemetry and ignore broken pipe logging
 - Wire extension quick check into npm run check pipeline, update AGENTS.md
-- Add visible skip message when QUICK_EXTENSION_CHECK is set
 - fix: proxy companion API from built desktop app
 - Add extension validation commands to README.md dev section
 - Add check:extensions to AGENTS.md npm scripts documentation
 - fix: ignore idle web live runs during recovery
-- Add npm run check:extensions and check:extensions:quick scripts, env-var-based quick-skip for slow test, update docs
+- Add npm run check:extensions and check:extensions:quick scripts, update docs
 - Add dynamic import test for backend modules to catch module-scope runtime errors (+1 test, 79 total, 93 combined)
 - fix: import native context menu guard in sidebar
 - Add stale build detection test (checks dist files are newer than source), update docs (+1 test, 78 total, 92 combined)

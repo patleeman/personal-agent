@@ -11,7 +11,10 @@ import { basename, join, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const WebSocket = require('ws');
 
-const appPath = process.argv[2] ? resolve(process.argv[2]) : '';
+const args = process.argv.slice(2);
+const preserveSmokeState = args.includes('--preserve-state');
+const appArg = args.find((arg) => arg !== '--preserve-state');
+const appPath = appArg ? resolve(appArg) : '';
 
 function fail(message) {
   console.error(message);
@@ -329,7 +332,6 @@ async function main() {
       PERSONAL_AGENT_DESKTOP_USER_DATA_DIR: join(tempRoot, 'user-data'),
       PERSONAL_AGENT_DAEMON_SOCKET_PATH: daemonSocketPath,
       PERSONAL_AGENT_COMPANION_PORT: String(companionPort),
-      PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -363,12 +365,7 @@ async function main() {
       }
     }
 
-    const preserve = ['1', 'true', 'yes'].includes(
-      String(process.env.PERSONAL_AGENT_RELEASE_PRESERVE_SMOKE_STATE ?? '')
-        .trim()
-        .toLowerCase(),
-    );
-    if (!preserve) {
+    if (!preserveSmokeState) {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   }

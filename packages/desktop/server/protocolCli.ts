@@ -48,7 +48,7 @@ function classifyError(error: unknown): number {
 }
 
 export async function runProtocolCli(argv: string[], options?: { signal?: AbortSignal }): Promise<number> {
-  const [command, protocolId] = argv;
+  const [command, protocolId, ...protocolArgs] = argv;
   if (command !== 'protocol' || !protocolId) {
     process.stderr.write(`${usage()}\n`);
     return PROTOCOL_CLI_EXIT_CODES.usage;
@@ -59,7 +59,7 @@ export async function runProtocolCli(argv: string[], options?: { signal?: AbortS
   try {
     await invokeExtensionProtocolEntrypoint(
       protocolId,
-      {},
+      { args: protocolArgs },
       {
         serverContext: buildServerContext(),
         stdio: {

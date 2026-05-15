@@ -60,16 +60,10 @@ describe('hasDesktopQuitConfirmationBypassArg', () => {
 });
 
 describe('shouldSkipDesktopQuitConfirmation', () => {
-  it('recognizes explicit opt-out environment flags', () => {
-    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' })).toBe(true);
-    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: ' true ' })).toBe(true);
-    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: 'yes' })).toBe(true);
-    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '0' })).toBe(false);
-  });
-
-  it('recognizes launch arguments too', () => {
-    expect(shouldSkipDesktopQuitConfirmation({}, ['node', 'main.js', '--no-quit-confirmation'])).toBe(true);
-    expect(shouldSkipDesktopQuitConfirmation({}, ['node', 'main.js', '--skip-quit-confirmation'])).toBe(true);
+  it('recognizes explicit launch arguments', () => {
+    expect(shouldSkipDesktopQuitConfirmation(['node', 'main.js', '--no-quit-confirmation'])).toBe(true);
+    expect(shouldSkipDesktopQuitConfirmation(['node', 'main.js', '--skip-quit-confirmation'])).toBe(true);
+    expect(shouldSkipDesktopQuitConfirmation(['node', 'main.js'])).toBe(false);
   });
 });
 
@@ -111,8 +105,8 @@ describe('confirmDesktopQuit', () => {
   });
 
   it('skips the dialog entirely when the launch disables quit confirmation', async () => {
-    const previous = process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION;
-    process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION = '1';
+    const originalArgv = process.argv;
+    process.argv = ['node', 'main.js', '--no-quit-confirmation'];
 
     try {
       const dialogLike = {
@@ -122,11 +116,7 @@ describe('confirmDesktopQuit', () => {
       await expect(confirmDesktopQuit(dialogLike, 'Personal Agent')).resolves.toBe(true);
       expect(dialogLike.showMessageBox).not.toHaveBeenCalled();
     } finally {
-      if (previous === undefined) {
-        delete process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION;
-      } else {
-        process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION = previous;
-      }
+      process.argv = originalArgv;
     }
   });
 });

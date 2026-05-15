@@ -415,10 +415,6 @@ function formatDaemonUnavailableWarning(error: unknown, config?: DaemonConfig): 
 }
 
 export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: DaemonConfig): Promise<void> {
-  if (process.env.PERSONAL_AGENT_DISABLE_DAEMON_EVENTS === '1') {
-    return;
-  }
-
   try {
     const accepted = await emitDaemonEvent(input, config);
     if (!accepted) {

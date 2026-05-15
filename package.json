@@ -40,7 +40,7 @@
     "check:coverage": "vitest run --coverage --reporter=verbose || echo '⚠ Coverage check complete — review numbers above'",
     "check": "pnpm run check:types && pnpm run lint && pnpm run fmt && pnpm run check:extensions:quick; knip --no-config-hints || true",
     "check:extensions": "node scripts/check-extension-backend-api.mjs && vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/extensions/systemExtensionBackendRuntime.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts && node scripts/check-packaged-extensions.mjs",
-    "check:extensions:quick": "node scripts/check-extension-backend-api.mjs && node scripts/check-filesystem-authority.mjs && QUICK_EXTENSION_CHECK=1 vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/extensions/systemExtensionBackendRuntime.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts && node scripts/check-packaged-extensions.mjs",
+    "check:extensions:quick": "node scripts/check-extension-backend-api.mjs && node scripts/check-filesystem-authority.mjs && vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts packages/desktop/server/extensions/systemExtensionBackendRuntime.smoke.test.ts packages/desktop/server/routes/registerAll.smoke.test.ts && node scripts/check-packaged-extensions.mjs",
     "extensions:bundle-report": "node scripts/report-extension-bundles.mjs",
     "fix": "pnpm run fmt:fix && pnpm run lint:fix",
     "test": "vitest run",

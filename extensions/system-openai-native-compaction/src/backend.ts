@@ -61,7 +61,6 @@ type RequestShape = {
   text?: Record<string, unknown>;
 };
 
-const ENABLED = process.env.PI_OPENAI_NATIVE_COMPACTION !== '0';
 const requestShapeBySession = new Map<string, RequestShape>();
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -554,8 +553,6 @@ function clearSessionState(sessionId: string | undefined): void {
 }
 
 export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void {
-  if (!ENABLED) return;
-
   pi.on('session_start', (_event, ctx) => {
     clearSessionState(getSessionId(ctx));
   });

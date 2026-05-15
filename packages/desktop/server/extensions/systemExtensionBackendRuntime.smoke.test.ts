@@ -35,7 +35,6 @@ process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
 process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 process.env.PERSONAL_AGENT_CONFIG_ROOT = configRoot;
 process.env.PERSONAL_AGENT_VAULT_ROOT = vaultRoot;
-process.env.PI_OPENAI_NATIVE_COMPACTION = '1';
 
 const module = await import(backendUrl);
 const storage = new Map();
@@ -301,11 +300,6 @@ describe('system extension backend runtime smoke tests', () => {
   });
 
   it('imports each prebuilt backend and exercises one safe runtime path', () => {
-    if (process.env.QUICK_EXTENSION_CHECK) {
-      console.log('  ↳ skipped (QUICK_EXTENSION_CHECK=1 — run without it for full runtime smoke)');
-      return;
-    }
-
     for (const backend of systemBackends) {
       expect(existsSync(backend.backendPath), `${backend.id}: missing dist/backend.mjs`).toBe(true);
       expect(() => runBackendRuntimeSmoke(backend.id, backend.backendPath), `${backend.id}: backend runtime smoke failed`).not.toThrow();

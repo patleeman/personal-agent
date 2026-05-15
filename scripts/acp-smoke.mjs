@@ -58,12 +58,11 @@ async function main() {
   const stateRoot = await makeStateRoot();
   const cliPath = path.resolve('scripts/personal-agent-cli.mjs');
 
-  const child = spawn('node', [cliPath, 'protocol', 'acp'], {
+  const child = spawn('node', [cliPath, 'protocol', 'acp', '--smoke-test'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
       PERSONAL_AGENT_STATE_ROOT: stateRoot,
-      PERSONAL_AGENT_ACP_SMOKE_TEST: '1',
     },
     stdio: ['pipe', 'pipe', 'inherit'],
   });

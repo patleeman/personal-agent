@@ -18,7 +18,10 @@ const FORBIDDEN_BACKEND_IMPORTS = new Set([
 ]);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const packageRoot = resolve(process.argv[2] || process.cwd());
+const args = process.argv.slice(2);
+const emitSourceMaps = args.includes('--sourcemap');
+const packageArg = args.find((arg) => arg !== '--sourcemap');
+const packageRoot = resolve(packageArg || process.cwd());
 const manifestPath = join(packageRoot, 'extension.json');
 if (!existsSync(manifestPath)) {
   console.error(`No extension.json found at ${manifestPath}`);
@@ -26,7 +29,6 @@ if (!existsSync(manifestPath)) {
 }
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-const emitSourceMaps = process.env.PA_EXTENSION_SOURCEMAP === '1' || process.env.PA_EXTENSION_SOURCEMAP === 'true';
 if (manifest.schemaVersion !== 2) {
   console.error('Only native extension manifest schemaVersion 2 is supported by this builder.');
   process.exit(1);
