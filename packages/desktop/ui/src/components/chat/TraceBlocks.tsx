@@ -1,12 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useAppData } from '../../app/contexts';
 import type { MessageBlock } from '../../shared/types';
 import { getStreamingThroughputLabel } from '../../transcript/streamingThroughput';
 import { cx, Pill, SurfacePanel } from '../ui';
-import { InlineTraceRunCard } from './InlineTraceRunCard.js';
-import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
-import { collectTraceClusterLinkedRuns } from './linkedRuns.js';
 import { buildReplySelectionScopeProps, type ReplySelectionGestureHandler } from './replySelection.js';
 import { buildSummaryPreview } from './summaryPreview.js';
 import { ToolBlock } from './ToolBlock.js';
@@ -19,8 +15,6 @@ import {
   toolMeta,
 } from './toolPresentation.js';
 import type { TraceClusterSummary, TraceClusterSummaryCategory, TraceConversationBlock } from './transcriptItems.js';
-
-const TRACE_LINKED_RUN_VISIBLE_LIMIT = 4;
 
 export const ThinkingBlock = memo(function ThinkingBlock({
   block,
@@ -152,7 +146,6 @@ function useGracefulTraceClusterActive(active: boolean): boolean {
 }
 
 export function TraceClusterBlock({
-  clusterStartIndex,
   blocks,
   summary,
   live,
@@ -166,10 +159,7 @@ export function TraceClusterBlock({
   resumeBusy,
   resumeTitle,
   resumeLabel,
-  isInlineRunExpanded,
-  onToggleInlineRun,
 }: {
-  clusterStartIndex: number;
   blocks: TraceConversationBlock[];
   summary: TraceClusterSummary;
   live: boolean;
@@ -183,18 +173,9 @@ export function TraceClusterBlock({
   resumeBusy?: boolean;
   resumeTitle?: string | null;
   resumeLabel?: string;
-  isInlineRunExpanded?: (inlineRunKey: string) => boolean;
-  onToggleInlineRun?: (inlineRunKey: string) => void;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const [showAllBlocks, setShowAllBlocks] = useState(false);
-  const [showAllLinkedRuns, setShowAllLinkedRuns] = useState(false);
-  const { runs } = useAppData();
-  const outputMentionRunIds = useMemo(() => new Set((runs?.runs ?? []).map((run) => run.runId)), [runs?.runs]);
-  const linkedRuns = useMemo(() => collectTraceClusterLinkedRuns(blocks, { outputMentionRunIds }), [blocks, outputMentionRunIds]);
-  const hiddenLinkedRunCount = Math.max(0, linkedRuns.length - TRACE_LINKED_RUN_VISIBLE_LIMIT);
-  const visibleLinkedRuns =
-    showAllLinkedRuns || hiddenLinkedRunCount === 0 ? linkedRuns : linkedRuns.slice(0, TRACE_LINKED_RUN_VISIBLE_LIMIT);
   const expandedCategories = summary.categories.slice(0, 3);
   const remainingCategoryCount = Math.max(0, summary.categories.length - expandedCategories.length);
   const durationLabel = summary.durationMs && summary.durationMs > 0 ? `${(summary.durationMs / 1000).toFixed(1)}s` : null;
@@ -274,39 +255,6 @@ export function TraceClusterBlock({
         </button>
         <ResumeConversationAction onResume={onResume} busy={resumeBusy} title={resumeTitle} label={resumeLabel} variant="inline" />
       </div>
-
-      {linkedRuns.length > 0 && (
-        <div className="ml-2.5 space-y-1.5 border-l border-border-subtle pl-2.5">
-          <div className="flex flex-wrap items-center gap-2 rounded-md bg-elevated/30 px-2.5 py-1.5 text-[11px] text-secondary">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-dim">related background work</span>
-            <span>
-              {linkedRuns.length} background task{linkedRuns.length === 1 ? '' : 's'} mentioned in this step
-            </span>
-            <span className="flex-1" />
-            {hiddenLinkedRunCount > 0 && (
-              <button type="button" onClick={() => setShowAllLinkedRuns((current) => !current)} className="ui-action-button text-[10px]">
-                {showAllLinkedRuns ? `Show first ${TRACE_LINKED_RUN_VISIBLE_LIMIT}` : `Show all ${linkedRuns.length} background tasks`}
-              </button>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            {visibleLinkedRuns.map((linkedRun) => {
-              const inlineRunKey = buildInlineRunExpansionKey(clusterStartIndex, linkedRun.runId);
-
-              return (
-                <InlineTraceRunCard
-                  key={linkedRun.runId}
-                  run={linkedRun}
-                  expanded={isInlineRunExpanded?.(inlineRunKey) ?? false}
-                  onToggle={() => {
-                    onToggleInlineRun?.(inlineRunKey);
-                  }}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {open && (
         <div className="ml-2.5 space-y-1.5 border-l border-border-subtle pl-2.5">

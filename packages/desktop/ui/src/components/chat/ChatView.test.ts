@@ -425,7 +425,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('cwd personal-agent');
   });
 
-  it('surfaces linked run cards even when an internal-work cluster is collapsed', () => {
+  it('does not surface linked run cards as separate internal-work cluster shelf content', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -452,9 +452,9 @@ describe('chat view streaming disclosure', () => {
     );
 
     expect(html).toContain('Internal work');
-    expect(html).toContain('related background work');
-    expect(html).toContain('Inspect git diff');
-    expect(html).toContain('show details');
+    expect(html).not.toContain('related background work');
+    expect(html).not.toContain('background task mentioned in this step');
+    expect(html).not.toContain('show details');
   });
 
   it('resolves legacy linked run ids to current durable run records using task slug', () => {

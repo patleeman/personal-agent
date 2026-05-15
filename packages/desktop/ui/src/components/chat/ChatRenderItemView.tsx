@@ -88,7 +88,6 @@ export function ChatRenderItemView({
           return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
         })}
         <TraceClusterBlock
-          clusterStartIndex={item.startIndex}
           blocks={item.blocks}
           summary={item.summary}
           live={live}
@@ -102,8 +101,6 @@ export function ChatRenderItemView({
           resumeBusy={resumeConversationBusy}
           resumeTitle={resumeConversationTitle}
           resumeLabel={resumeConversationLabel}
-          isInlineRunExpanded={isInlineRunExpanded}
-          onToggleInlineRun={onToggleInlineRun}
         />
       </div>
     );
