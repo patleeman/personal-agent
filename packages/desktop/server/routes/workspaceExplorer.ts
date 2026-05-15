@@ -48,17 +48,17 @@ export function registerWorkspaceExplorerRoutes(
   router: Pick<Express, 'delete' | 'get' | 'post' | 'put'>,
   context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
 ): void {
-  router.get('/api/workspace/tree', (req, res) => {
+  router.get('/api/workspace/tree', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.query.cwd);
-      res.json(listWorkspaceDirectory(cwd, readQueryString(req.query.path)));
+      res.json(await listWorkspaceDirectory(cwd, readQueryString(req.query.path)));
     } catch (error) {
       logError('workspace tree request failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
     }
   });
 
-  router.get('/api/workspace/file', (req, res) => {
+  router.get('/api/workspace/file', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.query.cwd);
       const path = readQueryString(req.query.path);
@@ -66,14 +66,14 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      res.json(readWorkspaceFile(cwd, path, req.query.force === '1'));
+      res.json(await readWorkspaceFile(cwd, path, req.query.force === '1'));
     } catch (error) {
       logError('workspace file request failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
     }
   });
 
-  router.put('/api/workspace/file', (req, res) => {
+  router.put('/api/workspace/file', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.body?.cwd);
       const path = readQueryString(req.body?.path);
@@ -82,7 +82,7 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'cwd, path, and content required' });
         return;
       }
-      const result = writeWorkspaceFile(cwd, path, content);
+      const result = await writeWorkspaceFile(cwd, path, content);
       publishHostEvent('workspaceFiles', { action: 'write', cwd, path });
       res.json(result);
     } catch (error) {
@@ -91,7 +91,7 @@ export function registerWorkspaceExplorerRoutes(
     }
   });
 
-  router.delete('/api/workspace/path', (req, res) => {
+  router.delete('/api/workspace/path', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.query.cwd);
       const path = readQueryString(req.query.path);
@@ -99,7 +99,7 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      const result = deleteWorkspacePath(cwd, path);
+      const result = await deleteWorkspacePath(cwd, path);
       publishHostEvent('workspaceFiles', { action: 'delete', cwd, path });
       res.json(result);
     } catch (error) {
@@ -108,7 +108,7 @@ export function registerWorkspaceExplorerRoutes(
     }
   });
 
-  router.post('/api/workspace/folder', (req, res) => {
+  router.post('/api/workspace/folder', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.body?.cwd);
       const path = readQueryString(req.body?.path);
@@ -116,7 +116,7 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      const result = createWorkspaceFolder(cwd, path);
+      const result = await createWorkspaceFolder(cwd, path);
       publishHostEvent('workspaceFiles', { action: 'createFolder', cwd, path });
       res.json(result);
     } catch (error) {
@@ -125,7 +125,7 @@ export function registerWorkspaceExplorerRoutes(
     }
   });
 
-  router.post('/api/workspace/rename', (req, res) => {
+  router.post('/api/workspace/rename', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.body?.cwd);
       const path = readQueryString(req.body?.path);
@@ -134,7 +134,7 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path and newName required' });
         return;
       }
-      const result = renameWorkspacePath(cwd, path, newName);
+      const result = await renameWorkspacePath(cwd, path, newName);
       publishHostEvent('workspaceFiles', { action: 'rename', cwd, path, newName });
       res.json(result);
     } catch (error) {
@@ -143,7 +143,7 @@ export function registerWorkspaceExplorerRoutes(
     }
   });
 
-  router.post('/api/workspace/move', (req, res) => {
+  router.post('/api/workspace/move', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.body?.cwd);
       const path = readQueryString(req.body?.path);
@@ -152,7 +152,7 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      const result = moveWorkspacePath(cwd, path, targetDir);
+      const result = await moveWorkspacePath(cwd, path, targetDir);
       publishHostEvent('workspaceFiles', { action: 'move', cwd, path, targetDir });
       res.json(result);
     } catch (error) {
@@ -161,7 +161,7 @@ export function registerWorkspaceExplorerRoutes(
     }
   });
 
-  router.get('/api/workspace/diff', (req, res) => {
+  router.get('/api/workspace/diff', async (req, res) => {
     try {
       const cwd = resolveRequestCwd(context, req.query.cwd);
       const path = readQueryString(req.query.path);
@@ -169,7 +169,7 @@ export function registerWorkspaceExplorerRoutes(
         res.status(400).json({ error: 'path required' });
         return;
       }
-      res.json(readWorkspaceDiffOverlay(cwd, path));
+      res.json(await readWorkspaceDiffOverlay(cwd, path));
     } catch (error) {
       logError('workspace diff request failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);

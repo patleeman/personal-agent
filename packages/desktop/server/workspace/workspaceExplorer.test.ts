@@ -37,13 +37,13 @@ function createRepo(): string {
 }
 
 describe('workspace explorer', () => {
-  it('lists from the git root and annotates git status badges', () => {
+  it('lists from the git root and annotates git status badges', async () => {
     const repo = createRepo();
     const nested = join(repo, 'src');
     writeFileSync(join(repo, 'tracked.txt'), 'one\nTWO\nthree\n');
     writeFileSync(join(repo, 'src', 'new.ts'), 'export const fresh = true;\n');
 
-    const listing = listWorkspaceDirectory(nested, '');
+    const listing = await listWorkspaceDirectory(nested, '');
 
     expect(listing.root).toBe(realpathSync(repo));
     expect(listing.rootKind).toBe('git');
@@ -52,13 +52,13 @@ describe('workspace explorer', () => {
     expect(listing.entries.find((entry) => entry.path === 'src')?.descendantGitStatusCount).toBe(1);
   });
 
-  it('reads small text files and reports large files as metadata until forced', () => {
+  it('reads small text files and reports large files as metadata until forced', async () => {
     const repo = createRepo();
     writeFileSync(join(repo, 'big.txt'), 'x'.repeat(600 * 1024));
 
-    const normal = readWorkspaceFile(repo, 'tracked.txt');
-    const big = readWorkspaceFile(repo, 'big.txt');
-    const forced = readWorkspaceFile(repo, 'big.txt', true);
+    const normal = await readWorkspaceFile(repo, 'tracked.txt');
+    const big = await readWorkspaceFile(repo, 'big.txt');
+    const forced = await readWorkspaceFile(repo, 'big.txt', true);
 
     expect(normal.content).toContain('one');
     expect(big.tooLarge).toBe(true);
@@ -81,11 +81,11 @@ describe('workspace explorer', () => {
     expect(parsed.addedLines).toEqual([2]);
   });
 
-  it('treats untracked files as entirely added', () => {
+  it('treats untracked files as entirely added', async () => {
     const repo = createRepo();
     writeFileSync(join(repo, 'new.txt'), 'a\nb\n');
 
-    const overlay = readWorkspaceDiffOverlay(repo, 'new.txt');
+    const overlay = await readWorkspaceDiffOverlay(repo, 'new.txt');
 
     expect(overlay.gitStatus).toBe('untracked');
     expect(overlay.addedLines).toEqual([1, 2, 3]);
@@ -116,24 +116,24 @@ describe('workspace explorer', () => {
     expect(result?.files.map((file) => file.path).sort()).toEqual(['src/app.ts', 'tracked.txt']);
   });
 
-  it('writes, creates, renames, moves, and deletes workspace paths safely', () => {
+  it('writes, creates, renames, moves, and deletes workspace paths safely', async () => {
     const repo = createRepo();
 
-    const written = writeWorkspaceFile(repo, 'notes/todo.txt', 'ship it\r\n');
+    const written = await writeWorkspaceFile(repo, 'notes/todo.txt', 'ship it\r\n');
     expect(written.path).toBe('notes/todo.txt');
     expect(readFileSync(join(repo, 'notes', 'todo.txt'), 'utf-8')).toBe('ship it\n');
 
-    const folder = createWorkspaceFolder(repo, 'docs');
+    const folder = await createWorkspaceFolder(repo, 'docs');
     expect(folder.kind).toBe('directory');
 
-    const renamed = renameWorkspacePath(repo, 'notes/todo.txt', 'done.txt');
+    const renamed = await renameWorkspacePath(repo, 'notes/todo.txt', 'done.txt');
     expect(renamed.path).toBe('notes/done.txt');
 
-    const moved = moveWorkspacePath(repo, 'notes/done.txt', 'docs');
+    const moved = await moveWorkspacePath(repo, 'notes/done.txt', 'docs');
     expect(moved.path).toBe('docs/done.txt');
 
-    deleteWorkspacePath(repo, 'docs/done.txt');
+    await deleteWorkspacePath(repo, 'docs/done.txt');
     expect(existsSync(join(repo, 'docs', 'done.txt'))).toBe(false);
-    expect(() => writeWorkspaceFile(repo, '../escape.txt', 'nope')).toThrow(/escapes workspace root/i);
+    await expect(writeWorkspaceFile(repo, '../escape.txt', 'nope')).rejects.toThrow(/escapes filesystem root/i);
   });
 });

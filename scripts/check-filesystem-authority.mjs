@@ -12,6 +12,9 @@ const banned = [
   /function\s+assertSafeWorkspacePath\b/,
   /function\s+assertInside\b/,
   /function\s+isInsideRoot\([^)]*target[^)]*\)\s*{\s*const\s+rel\s*=\s*relative\(/s,
+  /\.resolvePath\s*\(/,
+  /\.runSync\s*\(/,
+  /requestRootSync\s*\(/,
 ];
 
 let failed = false;

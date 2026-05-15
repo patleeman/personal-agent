@@ -1,19 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  readSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  type Stats,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 
@@ -136,13 +122,6 @@ export function readWorkspaceRootSnapshot(cwd: string): WorkspaceRootSnapshot {
   };
 }
 
-function statKind(stats: Stats): WorkspaceEntryKind {
-  if (stats.isDirectory()) return 'directory';
-  if (stats.isFile()) return 'file';
-  if (stats.isSymbolicLink()) return 'symlink';
-  return 'other';
-}
-
 function statusForPath(snapshot: WorkspaceRootSnapshot, relativePath: string): GitStatusChangeKind | null {
   return snapshot.changes.find((change) => change.relativePath === relativePath)?.change ?? null;
 }
@@ -153,52 +132,29 @@ function descendantStatusCount(snapshot: WorkspaceRootSnapshot, relativePath: st
   return snapshot.changes.filter((change) => change.relativePath.startsWith(prefix)).length;
 }
 
-export function listWorkspaceDirectory(cwd: string, relativePath?: string | null): WorkspaceDirectoryListing {
+export async function listWorkspaceDirectory(cwd: string, relativePath?: string | null): Promise<WorkspaceDirectoryListing> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'list workspace directory', ['list', 'metadata']);
-  const absolutePath = workspaceRoot.resolvePath(path);
-  const entries = workspaceRoot.runSync('list', { relativePath: path }, () => {
-    const stats = statSync(absolutePath);
-    if (!stats.isDirectory()) {
-      throw new Error('Path is not a directory');
-    }
-
-    return readdirSync(absolutePath, { withFileTypes: true })
-      .map((entry): WorkspaceEntry | null => {
-        const entryRelativePath = [path, entry.name].filter(Boolean).join('/');
-        const entryAbsolutePath = resolve(absolutePath, entry.name);
-        let entryStats: ReturnType<typeof statSync>;
-        try {
-          entryStats = statSync(entryAbsolutePath);
-        } catch {
-          return null;
-        }
-        const kind = entry.isDirectory()
-          ? 'directory'
-          : entry.isFile()
-            ? 'file'
-            : entry.isSymbolicLink()
-              ? 'symlink'
-              : statKind(entryStats);
-        return {
-          name: entry.name,
-          path: entryRelativePath,
-          kind,
-          size: entryStats.isFile() ? entryStats.size : null,
-          modifiedAt: entryStats.mtime.toISOString(),
-          gitStatus: statusForPath(snapshot, entryRelativePath),
-          descendantGitStatusCount: kind === 'directory' ? descendantStatusCount(snapshot, entryRelativePath) : 0,
-        };
-      })
-      .filter((entry): entry is WorkspaceEntry => Boolean(entry))
-      .sort((left, right) => {
-        if (left.kind === 'directory' && right.kind !== 'directory') return -1;
-        if (left.kind !== 'directory' && right.kind === 'directory') return 1;
-        return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-      });
-  });
-
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'list workspace directory', ['list', 'metadata']);
+  const stats = await workspaceRoot.stat(path);
+  if (stats.type !== 'directory') throw new Error('Path is not a directory');
+  const entries = (await workspaceRoot.list(path, { depth: 0 }))
+    .map(
+      (entry): WorkspaceEntry => ({
+        name: entry.name,
+        path: entry.path,
+        kind: entry.type === 'directory' || entry.type === 'file' || entry.type === 'symlink' ? entry.type : 'other',
+        size: entry.size ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
+        gitStatus: statusForPath(snapshot, entry.path),
+        descendantGitStatusCount: entry.type === 'directory' ? descendantStatusCount(snapshot, entry.path) : 0,
+      }),
+    )
+    .sort((left, right) => {
+      if (left.kind === 'directory' && right.kind !== 'directory') return -1;
+      if (left.kind !== 'directory' && right.kind === 'directory') return 1;
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    });
   return { ...snapshot, path, entries };
 }
 
@@ -212,171 +168,124 @@ function looksBinary(buffer: Buffer): boolean {
   return sample.length > 0 && suspicious / sample.length > 0.08;
 }
 
-function readFileSample(path: string, size: number): Buffer {
-  const length = Math.min(size, 8192);
-  if (length <= 0) return Buffer.alloc(0);
-  const buffer = Buffer.alloc(length);
-  const fd = openSync(path, 'r');
-  try {
-    const bytesRead = readSync(fd, buffer, 0, length, 0);
-    return buffer.subarray(0, bytesRead);
-  } finally {
-    closeSync(fd);
-  }
-}
-
-export function readWorkspaceFile(cwd: string, relativePath: string, force = false): WorkspaceFileContent {
+export async function readWorkspaceFile(cwd: string, relativePath: string, force = false): Promise<WorkspaceFileContent> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'read workspace file', ['read', 'metadata']);
-  const absolutePath = workspaceRoot.resolvePath(path);
-  return workspaceRoot.runSync('read', { relativePath: path }, () => {
-    const exists = existsSync(absolutePath);
-    if (!exists) {
-      return {
-        ...snapshot,
-        path,
-        name: basename(path),
-        exists: false,
-        kind: 'file',
-        size: null,
-        modifiedAt: null,
-        binary: false,
-        tooLarge: false,
-        truncated: false,
-        content: null,
-        gitStatus: statusForPath(snapshot, path),
-      };
-    }
-
-    const { stats, kind } = workspaceRoot.runSync('metadata', { relativePath: path }, () => {
-      const stats = statSync(absolutePath);
-      return { stats, kind: statKind(stats) };
-    });
-    const size = stats.isFile() ? stats.size : null;
-    const sample = stats.isFile() ? readFileSample(absolutePath, stats.size) : Buffer.alloc(0);
-    const binary = stats.isFile() ? looksBinary(sample) : false;
-    const tooLarge = stats.isFile() && stats.size > MAX_FILE_BYTES;
-    let content: string | null = null;
-    let truncated = false;
-
-    if (stats.isFile() && !binary && (!tooLarge || force)) {
-      const buffer = readFileSync(absolutePath);
-      truncated = !force && buffer.length > MAX_FILE_BYTES;
-      content = buffer
-        .subarray(0, force ? buffer.length : MAX_FILE_BYTES)
-        .toString('utf-8')
-        .replace(/\r\n?/g, '\n');
-    }
-
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'read workspace file', ['read', 'metadata']);
+  const exists = await workspaceRoot.exists(path);
+  if (!exists) {
     return {
       ...snapshot,
       path,
       name: basename(path),
-      exists: true,
-      kind,
-      size,
-      modifiedAt: stats.mtime.toISOString(),
-      binary,
-      tooLarge,
-      truncated,
-      content,
+      exists: false,
+      kind: 'file',
+      size: null,
+      modifiedAt: null,
+      binary: false,
+      tooLarge: false,
+      truncated: false,
+      content: null,
       gitStatus: statusForPath(snapshot, path),
     };
-  });
+  }
+  const stats = await workspaceRoot.stat(path);
+  const kind = stats.type === 'directory' || stats.type === 'file' || stats.type === 'symlink' ? stats.type : 'other';
+  const size = stats.type === 'file' ? stats.size : null;
+  const sample =
+    stats.type === 'file' && size !== null
+      ? Buffer.from(await workspaceRoot.readBytes(path, { maxBytes: Math.min(size, 8192) }).catch(async () => Buffer.alloc(0)))
+      : Buffer.alloc(0);
+  const binary = stats.type === 'file' ? looksBinary(sample) : false;
+  const tooLarge = stats.type === 'file' && size !== null && size > MAX_FILE_BYTES;
+  let content: string | null = null;
+  let truncated = false;
+  if (stats.type === 'file' && !binary && (!tooLarge || force)) {
+    const buffer = Buffer.from(await workspaceRoot.readBytes(path));
+    truncated = !force && buffer.length > MAX_FILE_BYTES;
+    content = buffer
+      .subarray(0, force ? buffer.length : MAX_FILE_BYTES)
+      .toString('utf-8')
+      .replace(/\r\n?/g, '\n');
+  }
+  return {
+    ...snapshot,
+    path,
+    name: basename(path),
+    exists: true,
+    kind,
+    size,
+    modifiedAt: stats.modifiedAt,
+    binary,
+    tooLarge,
+    truncated,
+    content,
+    gitStatus: statusForPath(snapshot, path),
+  };
 }
 
-export function writeWorkspaceFile(cwd: string, relativePath: string, content: string): WorkspaceFileContent {
+export async function writeWorkspaceFile(cwd: string, relativePath: string, content: string): Promise<WorkspaceFileContent> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
-  if (!path) {
-    throw new Error('path required');
-  }
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'write workspace file', ['read', 'write', 'metadata']);
-  const absolutePath = workspaceRoot.resolvePath(path);
-  workspaceRoot.runSync('write', { relativePath: path }, () => {
-    mkdirSync(dirname(absolutePath), { recursive: true });
-    writeFileSync(absolutePath, content.replace(/\r\n?/g, '\n'), 'utf-8');
-  });
+  if (!path) throw new Error('path required');
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'write workspace file', ['read', 'write', 'metadata']);
+  await workspaceRoot.writeText(path, content.replace(/\r\n?/g, '\n'));
   return readWorkspaceFile(cwd, path, true);
 }
 
-export function createWorkspaceFolder(cwd: string, relativePath: string): WorkspaceEntry {
+export async function createWorkspaceFolder(cwd: string, relativePath: string): Promise<WorkspaceEntry> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
-  if (!path) {
-    throw new Error('path required');
-  }
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'create workspace folder', ['write', 'metadata']);
-  const absolutePath = workspaceRoot.resolvePath(path);
-  workspaceRoot.runSync('write', { relativePath: path }, () => mkdirSync(absolutePath, { recursive: true }));
+  if (!path) throw new Error('path required');
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'create workspace folder', ['write', 'metadata']);
+  await workspaceRoot.createDirectory(path);
   return workspaceEntryForPath(snapshot, path);
 }
 
-export function deleteWorkspacePath(cwd: string, relativePath: string): { ok: true } {
+export async function deleteWorkspacePath(cwd: string, relativePath: string): Promise<{ ok: true }> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
-  if (!path) {
-    throw new Error('Refusing to delete workspace root');
-  }
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'delete workspace path', ['delete']);
-  workspaceRoot.runSync('delete', { relativePath: path }, () => rmSync(workspaceRoot.resolvePath(path), { recursive: true, force: true }));
+  if (!path) throw new Error('Refusing to delete workspace root');
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'delete workspace path', ['delete']);
+  await workspaceRoot.remove(path, { recursive: true, force: true });
   return { ok: true };
 }
 
-export function renameWorkspacePath(cwd: string, relativePath: string, newName: string): WorkspaceEntry {
+export async function renameWorkspacePath(cwd: string, relativePath: string, newName: string): Promise<WorkspaceEntry> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
   const normalizedName = normalizeRelativePath(newName);
-  if (!path || !normalizedName || normalizedName.includes('/')) {
-    throw new Error('Invalid rename target');
-  }
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'rename workspace path', ['move', 'metadata']);
-  const source = workspaceRoot.resolvePath(path);
+  if (!path || !normalizedName || normalizedName.includes('/')) throw new Error('Invalid rename target');
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'rename workspace path', ['move', 'metadata']);
   const targetPath = normalizeRelativePath(join(dirname(path), normalizedName));
-  const target = workspaceRoot.resolvePath(targetPath);
-  workspaceRoot.runSync('move', { relativePath: path, destinationPath: targetPath }, () => renameSync(source, target));
+  await workspaceRoot.move(path, targetPath);
   return workspaceEntryForPath(snapshot, targetPath);
 }
 
-export function moveWorkspacePath(cwd: string, relativePath: string, targetDir: string): WorkspaceEntry {
+export async function moveWorkspacePath(cwd: string, relativePath: string, targetDir: string): Promise<WorkspaceEntry> {
   const snapshot = readWorkspaceRootSnapshot(cwd);
   const path = normalizeRelativePath(relativePath);
   const destinationDir = normalizeRelativePath(targetDir);
-  if (!path) {
-    throw new Error('Refusing to move workspace root');
-  }
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'move workspace path', ['move', 'metadata']);
-  const source = workspaceRoot.resolvePath(path);
+  if (!path) throw new Error('Refusing to move workspace root');
   const targetPath = normalizeRelativePath(join(destinationDir, basename(path)));
-  if (path === targetPath) {
-    return workspaceEntryForPath(snapshot, path);
-  }
-  if (targetPath.startsWith(`${path}/`)) {
-    throw new Error('Cannot move a folder into itself');
-  }
-  const target = workspaceRoot.resolvePath(targetPath);
-  workspaceRoot.runSync('move', { relativePath: path, destinationPath: targetPath }, () => {
-    mkdirSync(dirname(target), { recursive: true });
-    renameSync(source, target);
-  });
+  if (path === targetPath) return workspaceEntryForPath(snapshot, path);
+  if (targetPath.startsWith(`${path}/`)) throw new Error('Cannot move a folder into itself');
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'move workspace path', ['move', 'metadata']);
+  await workspaceRoot.move(path, targetPath);
   return workspaceEntryForPath(snapshot, targetPath);
 }
 
-function workspaceEntryForPath(snapshot: WorkspaceRootSnapshot, relativePath: string): WorkspaceEntry {
+async function workspaceEntryForPath(snapshot: WorkspaceRootSnapshot, relativePath: string): Promise<WorkspaceEntry> {
   const path = normalizeRelativePath(relativePath);
-  const workspaceRoot = createCoreWorkspaceRoot(snapshot.root, 'workspace entry metadata', ['metadata']);
-  const absolutePath = workspaceRoot.resolvePath(path);
-  const { stats, kind } = workspaceRoot.runSync('metadata', { relativePath: path }, () => {
-    const stats = statSync(absolutePath);
-    return { stats, kind: statKind(stats) };
-  });
+  const workspaceRoot = await createCoreWorkspaceRoot(snapshot.root, 'workspace entry metadata', ['metadata']);
+  const stats = await workspaceRoot.stat(path);
+  const kind = stats.type === 'directory' || stats.type === 'file' || stats.type === 'symlink' ? stats.type : 'other';
   return {
     name: basename(path),
     path,
     kind,
-    size: stats.isFile() ? stats.size : null,
-    modifiedAt: stats.mtime.toISOString(),
+    size: stats.type === 'file' ? stats.size : null,
+    modifiedAt: stats.modifiedAt,
     gitStatus: statusForPath(snapshot, path),
     descendantGitStatusCount: kind === 'directory' ? descendantStatusCount(snapshot, path) : 0,
   };
@@ -445,8 +354,8 @@ function parseDiffOverlay(diff: string): { addedLines: number[]; deletedBlocks: 
   return { addedLines, deletedBlocks };
 }
 
-export function readWorkspaceDiffOverlay(cwd: string, relativePath: string): WorkspaceDiffOverlay {
-  const file = readWorkspaceFile(cwd, relativePath, false);
+export async function readWorkspaceDiffOverlay(cwd: string, relativePath: string): Promise<WorkspaceDiffOverlay> {
+  const file = await readWorkspaceFile(cwd, relativePath, false);
   const path = file.path;
   const status = file.gitStatus;
   if (!status || file.binary || (file.size !== null && file.size > MAX_DIFF_FILE_BYTES)) {

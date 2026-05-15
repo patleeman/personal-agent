@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import type { FileAccess } from '../filesystem/filesystemAuthority.js';
 import { createExtensionFilesystemCapability } from './extensionFilesystem.js';
 
+function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').trim();
+}
+
 export function createExtensionWorkspaceCapability(extensionId = 'unknown-extension', toolContext?: { cwd?: string }) {
   const filesystem = createExtensionFilesystemCapability(extensionId, toolContext);
 
@@ -14,9 +18,8 @@ export function createExtensionWorkspaceCapability(extensionId = 'unknown-extens
     async readText(input: { cwd: string; path: string; maxBytes?: number }): Promise<{ path: string; content: string; sha256: string }> {
       const root = await workspace(input.cwd, ['read'], 'extension workspace readText');
       const buffer = Buffer.from(await root.readBytes(input.path, { maxBytes: input.maxBytes ?? 1024 * 1024 }));
-      const normalizedPath = root.relativePath(root.resolvePath(input.path)) ?? input.path;
       return {
-        path: normalizedPath,
+        path: normalizeWorkspacePath(input.path),
         content: buffer.toString('utf-8'),
         sha256: createHash('sha256').update(buffer).digest('hex'),
       };
@@ -25,7 +28,7 @@ export function createExtensionWorkspaceCapability(extensionId = 'unknown-extens
     async writeText(input: { cwd: string; path: string; content: string }): Promise<{ path: string; bytes: number }> {
       const root = await workspace(input.cwd, ['write'], 'extension workspace writeText');
       await root.writeText(input.path, input.content);
-      return { path: root.relativePath(root.resolvePath(input.path)) ?? input.path, bytes: Buffer.byteLength(input.content) };
+      return { path: normalizeWorkspacePath(input.path), bytes: Buffer.byteLength(input.content) };
     },
 
     async list(input: {

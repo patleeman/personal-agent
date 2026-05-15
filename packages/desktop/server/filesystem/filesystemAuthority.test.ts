@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -75,10 +75,10 @@ describe('FileSystemAuthority', () => {
 
   it('creates private temp roots', async () => {
     const authority = new FileSystemAuthority();
-    const root = await authority.createTempRoot({ subject: { type: 'core', id: 'test' }, access: ['write'], reason: 'test' });
+    const root = await authority.createTempRoot({ subject: { type: 'core', id: 'test' }, access: ['write', 'metadata'], reason: 'test' });
 
     await root.writeText('out.txt', 'ok');
 
-    expect(existsSync(root.resolvePath('out.txt'))).toBe(true);
+    await expect(root.exists('out.txt')).resolves.toBe(true);
   });
 });

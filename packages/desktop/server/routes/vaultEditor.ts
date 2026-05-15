@@ -2,18 +2,7 @@
  * Vault editor routes — file CRUD for the knowledge base UI.
  */
 
-import {
-  type Dirent,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  type Stats,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { type Dirent, existsSync, readdirSync, readFileSync, rmSync, type Stats, statSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 
 import { getVaultRoot } from '@personal-agent/core';
@@ -32,9 +21,9 @@ function getRoot(): string {
   return resolve(getVaultRoot());
 }
 
-function vaultAuthority(access: FileAccess[] = ['metadata']): ScopedFileSystem {
+async function vaultAuthority(access: FileAccess[] = ['metadata']): Promise<ScopedFileSystem> {
   const root = getRoot();
-  return defaultFileSystemAuthority.requestRootSync({
+  return defaultFileSystemAuthority.requestRoot({
     subject: { type: 'core', id: 'vault-editor' },
     root: { kind: 'vault', id: root, path: root, displayName: 'Knowledge vault' },
     access,
@@ -43,21 +32,21 @@ function vaultAuthority(access: FileAccess[] = ['metadata']): ScopedFileSystem {
 }
 
 function isInsideRoot(root: string, target: string): boolean {
-  return vaultAuthority(['metadata']).relativePath(target) !== null;
+  const rootPath = resolve(root);
+  const targetPath = resolve(target);
+  return targetPath === rootPath || targetPath.startsWith(`${rootPath}/`);
 }
 
-export function safeVaultPath(id: string, access: FileAccess[] = ['metadata']): string | null {
+export function safeVaultPath(id: string, _access: FileAccess[] = ['metadata']): string | null {
   if (!id || id.includes('\u0000')) return null;
   // Normalise slashes and strip leading/trailing separators
   const clean = id.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').trim();
   if (!clean) return null;
   const segments = clean.split('/');
   if (segments.some((s) => s === '.' || s === '..')) return null;
-  try {
-    return vaultAuthority(access).resolvePath(clean);
-  } catch {
-    return null;
-  }
+  const root = getRoot();
+  const target = resolve(root, clean);
+  return isInsideRoot(root, target) ? target : null;
 }
 
 export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
@@ -407,7 +396,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
   // PUT /api/vault/file  — create or overwrite a file
   // body: { id: string, content: string }
-  router.put('/api/vault/file', (req, res) => {
+  router.put('/api/vault/file', async (req, res) => {
     try {
       const { id, content } = req.body as { id?: unknown; content?: unknown };
       if (typeof id !== 'string' || !id.trim()) {
@@ -423,12 +412,8 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      const vault = vaultAuthority(['write', 'metadata']);
-      const rel = vault.relativePath(abs) ?? id.trim();
-      vault.runSync('write', { relativePath: rel }, () => {
-        mkdirSync(dirname(abs), { recursive: true });
-        writeFileSync(abs, content, 'utf-8');
-      });
+      const vault = await vaultAuthority(['write', 'metadata']);
+      await vault.writeText(id.trim(), content);
       const stats = statSync(abs);
       const root = getRoot();
       res.json(vaultEntryFromStat(root, abs, stats));
@@ -461,7 +446,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
   // POST /api/vault/rename  — rename / move within the vault
   // body: { id: string, newName: string, parentId?: string }  (newName is just the basename)
-  router.post('/api/vault/rename', (req, res) => {
+  router.post('/api/vault/rename', async (req, res) => {
     try {
       const { id, newName, parentId } = req.body as { id?: unknown; newName?: unknown; parentId?: unknown };
       if (typeof id !== 'string' || !id.trim()) {
@@ -507,11 +492,8 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(409).json({ error: 'A file or folder with that name already exists' });
         return;
       }
-      vaultAuthority(['move', 'metadata']).runSync(
-        'move',
-        { relativePath: relative(root, abs), destinationPath: relative(root, newAbs) },
-        () => renameSync(abs, newAbs),
-      );
+      const vault = await vaultAuthority(['move', 'metadata']);
+      await vault.move(relative(root, abs).replace(/\\/g, '/'), relative(root, newAbs).replace(/\\/g, '/'));
       const stats = statSync(newAbs);
       res.json(vaultEntryFromStat(root, newAbs, stats));
     } catch (err) {
@@ -522,7 +504,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
   // POST /api/vault/folder  — create a directory
   // body: { id: string }
-  router.post('/api/vault/folder', (req, res) => {
+  router.post('/api/vault/folder', async (req, res) => {
     try {
       const { id } = req.body as { id?: unknown };
       if (typeof id !== 'string' || !id.trim()) {
@@ -534,9 +516,8 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'Invalid id' });
         return;
       }
-      const vault = vaultAuthority(['write', 'metadata']);
-      const rel = vault.relativePath(abs) ?? id.trim();
-      vault.runSync('write', { relativePath: rel }, () => mkdirSync(abs, { recursive: true }));
+      const vault = await vaultAuthority(['write', 'metadata']);
+      await vault.createDirectory(id.trim());
       const stats = statSync(abs);
       const root = getRoot();
       res.json(vaultEntryFromStat(root, abs, stats));
@@ -633,7 +614,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
   // POST /api/vault/move  — move file or folder to a new parent directory
   // body: { id: string, targetDir: string }  targetDir = '' means vault root
-  router.post('/api/vault/move', (req, res) => {
+  router.post('/api/vault/move', async (req, res) => {
     try {
       const { id, targetDir } = req.body as { id?: unknown; targetDir?: unknown };
       if (typeof id !== 'string' || !id.trim()) {
@@ -672,11 +653,8 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(409).json({ error: 'A file with that name already exists there' });
         return;
       }
-      vaultAuthority(['move', 'metadata']).runSync(
-        'move',
-        { relativePath: relative(root, srcAbs), destinationPath: relative(root, destAbs) },
-        () => renameSync(srcAbs, destAbs),
-      );
+      const vault = await vaultAuthority(['move', 'metadata']);
+      await vault.move(relative(root, srcAbs).replace(/\\/g, '/'), relative(root, destAbs).replace(/\\/g, '/'));
       res.json(vaultEntryFromStat(root, destAbs, statSync(destAbs)));
     } catch (err) {
       logError('vault/move', { message: String(err) });
@@ -746,7 +724,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
   // POST /api/vault/image  — save a base64-encoded image to _attachments/
   // body: { filename: string, dataUrl: string }
-  router.post('/api/vault/image', (req, res) => {
+  router.post('/api/vault/image', async (req, res) => {
     try {
       const { filename, dataUrl } = req.body as { filename?: unknown; dataUrl?: unknown };
       if (typeof filename !== 'string' || !filename.trim()) {
@@ -757,16 +735,11 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'dataUrl must be a data: URL' });
         return;
       }
-      const root = getRoot();
-      const attachDir = join(root, '_attachments');
       const buf = decodeVaultImageDataUrl(dataUrl);
       const outName = buildVaultImageUploadFileName(filename, dataUrl);
-      const outPath = join(attachDir, outName);
-      vaultAuthority(['write']).runSync('write', { relativePath: `_attachments/${outName}` }, () => {
-        mkdirSync(attachDir, { recursive: true });
-        writeFileSync(outPath, buf);
-      });
       const id = `_attachments/${outName}`;
+      const vault = await vaultAuthority(['write']);
+      await vault.writeBytes(id, buf);
       res.json({ id, url: `/api/vault/asset?id=${encodeURIComponent(id)}` });
     } catch (err) {
       if (isVaultImageUploadClientError(err)) {
