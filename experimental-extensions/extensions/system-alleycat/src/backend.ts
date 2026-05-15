@@ -10,6 +10,7 @@ import { createCodexAuth } from './codexAuth.js';
 let codexServer: Awaited<ReturnType<typeof import('./codexJsonRpcServer.js').createCodexServer>> | null = null;
 let codexAuth: ReturnType<typeof createCodexAuth> | null = null;
 let pairPayloadCache: AlleycatPairPayload | null = null;
+let sidecarProcess: { pid: number | null; kill: () => Promise<void> | void } | null = null;
 let sidecarPid: number | null = null;
 let sidecarLogPath: string | null = null;
 let sidecarLogs: string[] = [];
@@ -81,6 +82,10 @@ function personalAgentInfo(available: boolean): AlleycatAgentInfo {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function appendSidecarOutput(chunk: Buffer): void {
+  for (const line of chunk.toString('utf8').split('\n')) rememberLog(line);
 }
 
 function rememberLog(line: string): void {
@@ -202,18 +207,30 @@ async function startSidecar(ctx: ExtensionBackendContext): Promise<void> {
   sidecarLogPath = logPath;
   sidecarLogs = [];
 
-  const command = [
-    `PA_ALLEYCAT_TOKEN=${shellQuote(token)}`,
-    `PA_ALLEYCAT_SECRET_KEY=${shellQuote(secret)}`,
-    `PA_ALLEYCAT_JSONL_HOST=127.0.0.1`,
-    `PA_ALLEYCAT_JSONL_PORT=${codexServer.jsonlPort}`,
-    `RUST_LOG=${shellQuote(process.env.RUST_LOG ?? 'info')}`,
-    `${shellQuote(binary)} >> ${shellQuote(logPath)} 2>&1 & echo $!`,
-  ].join(' ');
-  const result = await ctx.shell.exec({ command: 'sh', args: ['-lc', command], timeoutMs: 10_000 });
-  sidecarPid = Number(result.stdout.trim());
-  if (!Number.isFinite(sidecarPid) || sidecarPid <= 0)
-    throw new Error(`Failed to start Alleycat sidecar: ${result.stderr || result.stdout}`);
+  const env = {
+    ...process.env,
+    PA_ALLEYCAT_TOKEN: token,
+    PA_ALLEYCAT_SECRET_KEY: secret,
+    PA_ALLEYCAT_JSONL_HOST: '127.0.0.1',
+    PA_ALLEYCAT_JSONL_PORT: String(codexServer.jsonlPort),
+    RUST_LOG: process.env.RUST_LOG ?? 'info',
+  };
+  const child = await ctx.shell.spawn({
+    command: binary,
+    env,
+    onStdout: (chunk) => appendSidecarOutput(Buffer.from(chunk)),
+    onStderr: (chunk) => appendSidecarOutput(Buffer.from(chunk)),
+    onExit: (event) => {
+      rememberLog(`Alleycat sidecar exited code=${event.code ?? 'null'} signal=${event.signal ?? 'null'}`);
+      if (sidecarProcess === child) {
+        sidecarProcess = null;
+        sidecarPid = null;
+      }
+    },
+  });
+  sidecarProcess = child;
+  sidecarPid = child.pid;
+  if (!sidecarPid) throw new Error('Failed to start Alleycat sidecar: missing child pid');
 
   const deadline = Date.now() + SIDECAR_READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -250,6 +267,10 @@ export async function startService(input: unknown, ctx: ExtensionBackendContext)
 }
 
 export async function stop(_input?: unknown, ctx?: ExtensionBackendContext): Promise<{ ok: true }> {
+  if (sidecarProcess) {
+    sidecarProcess.kill();
+    sidecarProcess = null;
+  }
   if (sidecarPid) {
     if (ctx) await ctx.shell.exec({ command: 'sh', args: ['-lc', `kill ${sidecarPid} >/dev/null 2>&1 || true`], timeoutMs: 5_000 });
     sidecarPid = null;

@@ -78,6 +78,9 @@ const ctx = {
       }
       return { stdout: 'ok\n', stderr: '', executionWrappers: [] };
     },
+    async spawn() {
+      return { pid: 12345, executionWrappers: [], kill() {} };
+    },
   },
   secrets: {
     get() {

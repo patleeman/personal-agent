@@ -1,4 +1,4 @@
-import { execFileProcess } from '../shared/processLauncher.js';
+import { execFileProcess, spawnProcess, terminateProcessGroup } from '../shared/processLauncher.js';
 
 export function createExtensionShellCapability() {
   return {
@@ -36,6 +36,28 @@ export function createExtensionShellCapability() {
         stderr: result.stderr,
         executionWrappers: result.launch.wrappers,
       };
+    },
+
+    async spawn(input: {
+      command: string;
+      args?: string[];
+      cwd?: string;
+      env?: Record<string, string>;
+      onStdout?: (chunk: string) => void;
+      onStderr?: (chunk: string) => void;
+      onExit?: (event: { code: number | null; signal: NodeJS.Signals | null }) => void;
+    }): Promise<{ pid: number | null; executionWrappers: Array<{ id: string; label?: string }>; kill: () => void }> {
+      const { child, launch } = spawnProcess({
+        command: input.command,
+        args: input.args ?? [],
+        cwd: input.cwd,
+        env: input.env ? { ...process.env, ...input.env } : process.env,
+        options: { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      });
+      child.stdout?.on('data', (chunk: Buffer) => input.onStdout?.(chunk.toString('utf8')));
+      child.stderr?.on('data', (chunk: Buffer) => input.onStderr?.(chunk.toString('utf8')));
+      child.on('exit', (code, signal) => input.onExit?.({ code, signal }));
+      return { pid: child.pid ?? null, executionWrappers: launch.wrappers, kill: () => terminateProcessGroup(child) };
     },
   };
 }

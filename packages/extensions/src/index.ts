@@ -830,6 +830,15 @@ export interface ExtensionBackendContext {
       stderr: string;
       executionWrappers: Array<{ id: string; label?: string }>;
     }>;
+    spawn(input: {
+      command: string;
+      args?: string[];
+      cwd?: string;
+      env?: Record<string, string>;
+      onStdout?: (chunk: string) => void;
+      onStderr?: (chunk: string) => void;
+      onExit?: (event: { code: number | null; signal: NodeJS.Signals | null }) => void;
+    }): Promise<{ pid: number | null; executionWrappers: Array<{ id: string; label?: string }>; kill: () => void }>;
   };
   commands: {
     execute(command: string, args?: unknown): Promise<boolean>;
