@@ -16,10 +16,18 @@ function defaultCwd(ctx?: { runtime?: { getRepoRoot?: () => string } }): string 
 
 function absoluteCwd(value: unknown, ctx?: { runtime?: { getRepoRoot?: () => string } }): string {
   const raw = typeof value === 'string' && value.trim() ? value.trim() : defaultCwd(ctx);
-  // Kitty's local iSH default is /root. Treat it as \"use the paired desktop's default cwd\"
+  // Kitty's local iSH default is /root. Treat it as "use the paired desktop's default cwd"
   // so a missing mobile cwd selection doesn't create useless /root PA threads.
   if (raw === '/root' || raw === '~' || raw === '~/') return resolve(defaultCwd(ctx));
   return resolve(raw);
+}
+
+function isMobileDefaultCwd(value: unknown): boolean {
+  return value === '/root' || value === '~' || value === '~/';
+}
+
+function isLiveOrRunning(session: Record<string, unknown>): boolean {
+  return session.running === true || session.isRunning === true || session.isLive === true;
 }
 
 function threadStatus(detail?: Record<string, unknown>) {
@@ -285,9 +293,11 @@ export const thread = {
     const searchTerm = typeof p?.searchTerm === 'string' ? p.searchTerm.trim().toLowerCase() : '';
     const requestedCwds = (() => {
       const cwd = p?.cwd;
-      if (typeof cwd === 'string' && cwd.trim()) return new Set([absoluteCwd(cwd, ctx)]);
-      if (Array.isArray(cwd))
-        return new Set(cwd.filter((item): item is string => typeof item === 'string').map((item) => absoluteCwd(item, ctx)));
+      if (typeof cwd === 'string' && cwd.trim()) return isMobileDefaultCwd(cwd) ? null : new Set([absoluteCwd(cwd, ctx)]);
+      if (Array.isArray(cwd)) {
+        const cwdValues = cwd.filter((item): item is string => typeof item === 'string' && !isMobileDefaultCwd(item));
+        return cwdValues.length > 0 ? new Set(cwdValues.map((item) => absoluteCwd(item, ctx))) : null;
+      }
       return null;
     })();
 
@@ -303,7 +313,7 @@ export const thread = {
               {
                 ...session,
                 title: (session.title as string) ?? '',
-                status: session.running === true ? { type: 'active', activeFlags: [] } : { type: 'notLoaded' },
+                status: isLiveOrRunning(session) ? { type: 'idle' } : { type: 'notLoaded' },
               },
               [],
               ctx,
@@ -331,7 +341,7 @@ export const thread = {
       ? sessions
           .filter((s: unknown) => {
             const session = s as Record<string, unknown>;
-            return session.running === true;
+            return isLiveOrRunning(session);
           })
           .map((s: unknown) => (s as Record<string, unknown>).id as string)
           .filter(Boolean)

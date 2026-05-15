@@ -67,7 +67,7 @@ describe('system-alleycat thread protocol', () => {
     const ctx = makeContext({
       list: vi.fn().mockResolvedValue([
         { id: 'a', title: 'Alpha', cwd: '/repo/a', updatedAt: 10 },
-        { id: 'b', title: 'Beta needle', cwd: '/repo/b', updatedAt: 30, running: true },
+        { id: 'b', title: 'Beta needle', cwd: '/repo/b', updatedAt: 30, isLive: true },
         { id: 'c', title: 'Gamma needle', cwd: '/repo/b', updatedAt: 20 },
       ]),
     });
@@ -80,7 +80,23 @@ describe('system-alleycat thread protocol', () => {
     )) as { data: Array<{ id: string; status: { type: string } }> };
 
     expect(result.data.map((item) => item.id)).toEqual(['b', 'c']);
-    expect(result.data[0].status.type).toBe('active');
+    expect(result.data[0].status.type).toBe('idle');
     expect(result.data[1].status.type).toBe('notLoaded');
+  });
+
+  it('treats Kitty mobile /root cwd as global and reports live loaded threads', async () => {
+    const ctx = makeContext({
+      list: vi.fn().mockResolvedValue([
+        { id: 'a', title: 'Alpha', cwd: '/repo/a', updatedAt: 10, isLive: true },
+        { id: 'b', title: 'Beta', cwd: '/repo/b', updatedAt: 30 },
+      ]),
+    });
+    const conn = { initialized: true, subscribedThreads: new Set<string>(), activeTurnThreads: new Set<string>() };
+
+    const listed = (await thread.list({ cwd: '/root', limit: 10 }, ctx as never, conn, vi.fn())) as { data: Array<{ id: string }> };
+    expect(listed.data.map((item) => item.id)).toEqual(['b', 'a']);
+
+    const loaded = (await thread.loadedList({}, ctx as never, conn, vi.fn())) as { data: string[] };
+    expect(loaded.data).toEqual(['a']);
   });
 });
