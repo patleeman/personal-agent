@@ -28,6 +28,7 @@ const packagedExtensionFilter = [
   '*/README.md',
   '*/package.json',
   '*/dist/**/*',
+  '*/src/**/*',
   '*/skills/**/*',
   '*/docs/**/*',
   '*/assets/**/*',

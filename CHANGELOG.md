@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0-rc.15 — 2026-05-15
+
+- fix: run packaged background agents reliably
+- fix: package only built extension artifacts
+- fix: package extension manager server helpers
+- fix: load prebuilt alleycat backend
+- docs: update current RC release
+
 ## 0.8.0-rc.14 — 2026-05-15
 
 - fix: stabilize release validation
