@@ -448,7 +448,7 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-center gap-1 px-2 py-0.5 rounded-md text-secondary transition-colors hover:bg-steel/5 hover:text-primary;
+    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1 rounded-md text-secondary transition-colors hover:bg-steel/5 hover:text-primary;
   }
 
   .ui-sidebar-pinned-icon {

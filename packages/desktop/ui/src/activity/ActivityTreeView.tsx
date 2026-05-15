@@ -295,7 +295,7 @@ export function ActivityTreeView({
                 >
                   {expanded ? '▾' : '▸'}
                 </span>
-              ) : childCount > 0 ? (
+              ) : childCount > 0 && item.kind !== 'conversation' ? (
                 <span
                   role="button"
                   tabIndex={-1}
