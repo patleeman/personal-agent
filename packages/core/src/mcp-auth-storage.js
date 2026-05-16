@@ -35,11 +35,21 @@ function getLegacyConfigDirs() {
 async function ensureConfigDir() {
   await fs.mkdir(getMcpAuthConfigDir(), { recursive: true });
 }
+function assertSafeFileSegment(value) {
+  if (!value || value.includes('/') || value.includes('\\') || value === '.' || value === '..') {
+    throw new Error(`Invalid MCP auth file segment: ${value}`);
+  }
+  return value;
+}
 function getMcpAuthFilePath(serverUrlHash, filename) {
-  return join(getMcpAuthConfigDir(), `${serverUrlHash}_${filename}`);
+  const safeHash = assertSafeFileSegment(serverUrlHash);
+  const safeFilename = assertSafeFileSegment(filename);
+  return join(getMcpAuthConfigDir(), `${safeHash}_${safeFilename}`);
 }
 function getLegacyMcpAuthFilePaths(serverUrlHash, filename) {
-  return getLegacyConfigDirs().map((dir) => join(dir, `${serverUrlHash}_${filename}`));
+  const safeHash = assertSafeFileSegment(serverUrlHash);
+  const safeFilename = assertSafeFileSegment(filename);
+  return getLegacyConfigDirs().map((dir) => join(dir, `${safeHash}_${safeFilename}`));
 }
 async function readExistingFile(filePaths) {
   for (const filePath of filePaths) {

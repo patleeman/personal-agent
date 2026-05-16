@@ -74,6 +74,13 @@ describe('mcp-auth-storage', () => {
     });
   });
 
+  describe('path validation', () => {
+    it('rejects unsafe hash and filename values', async () => {
+      await expect(writeTextFile('../outside', 'note.txt', 'hello')).rejects.toThrow('Invalid MCP auth file segment');
+      await expect(writeTextFile('hash', '../outside.txt', 'hello')).rejects.toThrow('Invalid MCP auth file segment');
+    });
+  });
+
   describe('delete', () => {
     it('deletes an existing file', async () => {
       await writeTextFile('hash4', 'temp.txt', 'delete me');
