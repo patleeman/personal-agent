@@ -63,6 +63,32 @@ describe('system-alleycat thread protocol', () => {
     ]);
   });
 
+  it('hydrates thread/read turns by default for Kitty clients', async () => {
+    const ctx = makeContext();
+    const result = (await thread.read(
+      { threadId: 'thread-1' },
+      ctx as never,
+      { initialized: true, subscribedThreads: new Set(), activeTurnThreads: new Set() },
+      vi.fn(),
+    )) as { thread: { turns: Array<{ items: Array<Record<string, unknown>> }> } };
+
+    expect(result.thread.turns).toHaveLength(2);
+    expect(ctx.conversations.getBlocks).toHaveBeenCalledWith('thread-1');
+  });
+
+  it('can skip thread/read turns when requested', async () => {
+    const ctx = makeContext();
+    const result = (await thread.read(
+      { threadId: 'thread-1', includeTurns: false },
+      ctx as never,
+      { initialized: true, subscribedThreads: new Set(), activeTurnThreads: new Set() },
+      vi.fn(),
+    )) as { thread: { turns: unknown[] } };
+
+    expect(result.thread.turns).toEqual([]);
+    expect(ctx.conversations.getBlocks).not.toHaveBeenCalled();
+  });
+
   it('filters and sorts thread/list by cwd, search term, and updated time', async () => {
     const ctx = makeContext({
       list: vi.fn().mockResolvedValue([

@@ -363,7 +363,7 @@ export const thread = {
     const threadId = p?.threadId as string | undefined;
     if (!threadId) throw new Error('threadId is required');
 
-    const includeTurns = p?.includeTurns === true;
+    const includeTurns = p?.includeTurns !== false;
     const meta = await ctx.conversations.getMeta(threadId).catch(() => null);
     const detail = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : {};
 
