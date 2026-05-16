@@ -80,7 +80,7 @@ describe('AutomationsPage', () => {
     expect(container.textContent).toContain('Automations');
     expect(container.innerHTML).toContain('aria-label="Scheduler healthy.');
     expect(container.textContent).toContain('Daily check');
-    expect(container.textContent).toContain('Cron 0 9 * * 1-5');
+    expect(container.textContent).toContain('Workday start');
   });
 
   it('starts an automation run from the row action', async () => {

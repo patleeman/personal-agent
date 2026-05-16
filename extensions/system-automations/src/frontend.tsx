@@ -228,11 +228,13 @@ function taskScopeText(task: ScheduledTaskSummary) {
 }
 
 function taskScheduleSummary(task: ScheduledTaskSummary) {
+  const preset = CRON_PRESETS.find((candidate) => candidate.cron === task.cron);
+  if (preset) return preset.label;
   if (task.cron === '0 2 * * *') return 'Daily at 02:00';
-  if (task.cron === '0 * * * *') return 'Every hour';
+  if (task.cron === '0 * * * *') return 'Hourly';
   if (task.cron?.startsWith('0 */')) {
     const hours = task.cron.match(/^0 \*\/(\d+) \* \* \*$/)?.[1];
-    if (hours) return `Every ${hours}h on the hour`;
+    if (hours) return `Every ${hours} hours`;
   }
   return scheduleText(task);
 }
@@ -884,7 +886,12 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
           <>
             <AppPageIntro
               title="Automations"
-              summary="Scheduled prompts and background jobs that run without babysitting."
+              summary={
+                <>
+                  Scheduled prompts and background jobs that run without babysitting. {enabledLabel} · {countLabel}
+                  {allPastDueTasks.length > 0 ? ` · ${pastDueLabel}` : ''}
+                </>
+              }
               actions={
                 <div className="flex flex-wrap items-center gap-2">
                   <ToolbarButton onClick={() => openEditor()}>New automation</ToolbarButton>
@@ -896,11 +903,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
               }
             />
 
-            {notice ? (
-              <div className="sticky top-0 z-20 border-b border-border-subtle/60 bg-base/95 py-2 text-[13px] text-secondary backdrop-blur">
-                {notice}
-              </div>
-            ) : null}
+            {notice ? <div className="rounded-lg bg-surface/35 px-3 py-2 text-[13px] text-secondary">{notice}</div> : null}
           </>
         )}
 
@@ -1238,16 +1241,6 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
 
         {!editorOpen && (
           <div className="space-y-4">
-            <div className="flex items-baseline justify-between gap-4">
-              <div>
-                <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current health</h2>
-                <p className="mt-1 text-[12px] text-secondary">
-                  {enabledLabel} · {countLabel}
-                  {allPastDueTasks.length > 0 ? ` · ${pastDueLabel}` : ''}
-                </p>
-              </div>
-            </div>
-
             {tasks.length === 0 ? (
               <EmptyState
                 title="No automations yet"
@@ -1284,23 +1277,20 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                   <EmptyState title="No matching automations" body="Adjust the filter or search query." />
                 ) : shouldSplitSections ? (
                   <div className="space-y-6">
-                    <section className="space-y-3">
-                      <SectionHeader title="Current" count={`${visibleCurrentTasks.length} shown`} />
-                      {visibleCurrentTasks.length > 0 ? (
-                        <AutomationTable
-                          tasks={visibleCurrentTasks}
-                          logById={logById}
-                          busy={busy}
-                          nowMs={nowMs}
-                          onRunTask={(taskId) => void runTask(taskId)}
-                          onOpenEditor={openEditor}
-                          onToggleLog={(taskId) => void toggleLog(taskId)}
-                          onDeleteTask={(task) => void deleteTask(task)}
-                        />
-                      ) : (
-                        <div className="py-2 text-[13px] text-secondary">No current automations.</div>
-                      )}
-                    </section>
+                    {visibleCurrentTasks.length > 0 ? (
+                      <AutomationTable
+                        tasks={visibleCurrentTasks}
+                        logById={logById}
+                        busy={busy}
+                        nowMs={nowMs}
+                        onRunTask={(taskId) => void runTask(taskId)}
+                        onOpenEditor={openEditor}
+                        onToggleLog={(taskId) => void toggleLog(taskId)}
+                        onDeleteTask={(task) => void deleteTask(task)}
+                      />
+                    ) : (
+                      <div className="py-2 text-[13px] text-secondary">No current automations.</div>
+                    )}
 
                     {visiblePastDueTasks.length > 0 ? (
                       <section className="space-y-3 border-t border-border-subtle/70 pt-4">
