@@ -203,7 +203,18 @@ export const ChatView = memo(function ChatView({
   }, [shouldUseContentVisibility]);
 
   const contentVisibilityStyle = useMemo<React.CSSProperties | undefined>(
-    () => (shouldUseContentVisibility && contentVisibilityReady ? { contentVisibility: 'auto' } : undefined),
+    () =>
+      shouldUseContentVisibility && contentVisibilityReady
+        ? {
+            contentVisibility: 'auto',
+            // Without an intrinsic-size fallback, Chromium treats skipped
+            // offscreen transcript blocks as effectively zero-height until they
+            // scroll into view. That makes the scrollbar jump exactly when
+            // lazy content hydrates or images finish loading. `auto` lets the
+            // browser remember measured sizes, with a sane first-pass fallback.
+            containIntrinsicSize: 'auto 96px',
+          }
+        : undefined,
     [contentVisibilityReady, shouldUseContentVisibility],
   );
 

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ChatRenderChunk } from './chatWindowing.js';
-import { buildChatRenderChunkLayouts, calculateAverageSpanHeight, resolveVisibleChunkRange } from './useChatWindowing.js';
+import {
+  buildChatRenderChunkLayouts,
+  calculateAverageSpanHeight,
+  mergeChunkHeightMeasurements,
+  resolveVisibleChunkRange,
+} from './useChatWindowing.js';
 
 const chunks: ChatRenderChunk[] = [
   {
@@ -34,6 +39,16 @@ const chunks: ChatRenderChunk[] = [
 ];
 
 describe('useChatWindowing helpers', () => {
+  it('merges chunk height measurements without churn from duplicate or invalid values', () => {
+    const current = { 'chunk-0': 200 };
+
+    expect(mergeChunkHeightMeasurements(current, { 'chunk-0': 200, 'chunk-2': 0 })).toBe(current);
+    expect(mergeChunkHeightMeasurements(current, { 'chunk-0': 200.2, 'chunk-2': 180 })).toEqual({
+      'chunk-0': 201,
+      'chunk-2': 180,
+    });
+  });
+
   it('calculates average span height from measured chunks', () => {
     expect(calculateAverageSpanHeight(chunks, {})).toBe(96);
     expect(calculateAverageSpanHeight(chunks, { 'chunk-0': 200, 'chunk-2': 300 })).toBe(100);

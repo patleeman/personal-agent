@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   buildChatRenderChunks,
@@ -12,6 +12,34 @@ import {
 import type { ChatRenderItem } from './transcriptItems.js';
 
 const MAX_OVERSCAN_CHUNKS = 10;
+
+function normalizeChunkHeight(height: number): number | null {
+  if (!Number.isFinite(height) || height <= 0) {
+    return null;
+  }
+
+  return Math.ceil(height);
+}
+
+export function mergeChunkHeightMeasurements(
+  current: Record<string, number>,
+  measurements: Record<string, number>,
+): Record<string, number> {
+  let changed = false;
+  const next = { ...current };
+
+  for (const [chunkKey, measuredHeight] of Object.entries(measurements)) {
+    const height = normalizeChunkHeight(measuredHeight);
+    if (height === null || current[chunkKey] === height) {
+      continue;
+    }
+
+    next[chunkKey] = height;
+    changed = true;
+  }
+
+  return changed ? next : current;
+}
 
 export function calculateAverageSpanHeight(renderChunks: ChatRenderChunk[], chunkHeights: Record<string, number>): number {
   const measurements = renderChunks
@@ -135,6 +163,8 @@ export function useChatWindowing({
   );
   const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
   const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
+  const pendingChunkHeightsRef = useRef<Record<string, number>>({});
+  const chunkHeightFrameRef = useRef(0);
 
   useEffect(() => {
     if (!shouldWindowTranscript) {
@@ -186,9 +216,41 @@ export function useChatWindowing({
     [averageSpanHeight, chunkHeights, renderChunks],
   );
 
-  const updateChunkHeight = useCallback((chunkKey: string, height: number) => {
-    setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
+  const flushChunkHeightMeasurements = useCallback(() => {
+    chunkHeightFrameRef.current = 0;
+    const measurements = pendingChunkHeightsRef.current;
+    pendingChunkHeightsRef.current = {};
+
+    if (Object.keys(measurements).length === 0) {
+      return;
+    }
+
+    setChunkHeights((current) => mergeChunkHeightMeasurements(current, measurements));
   }, []);
+
+  const updateChunkHeight = useCallback(
+    (chunkKey: string, height: number) => {
+      pendingChunkHeightsRef.current[chunkKey] = height;
+
+      if (chunkHeightFrameRef.current !== 0) {
+        return;
+      }
+
+      chunkHeightFrameRef.current = window.requestAnimationFrame(flushChunkHeightMeasurements);
+    },
+    [flushChunkHeightMeasurements],
+  );
+
+  useEffect(
+    () => () => {
+      if (chunkHeightFrameRef.current !== 0) {
+        window.cancelAnimationFrame(chunkHeightFrameRef.current);
+        chunkHeightFrameRef.current = 0;
+      }
+      pendingChunkHeightsRef.current = {};
+    },
+    [],
+  );
 
   const visibleChunkRange = useMemo(
     () =>
