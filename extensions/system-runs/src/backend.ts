@@ -16,7 +16,7 @@ type RunAgentExtensionFactory = (api: RegisterToolApi) => void;
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
   agentToolContext?: { signal?: AbortSignal };
-  ui: { invalidate(topics: string | string[]): void };
+  ui?: { invalidate?(topics: string | string[]): void };
   shell: {
     exec(input: { command: string; args?: string[]; cwd?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<{
       stdout?: string;
@@ -124,7 +124,7 @@ async function executeRegisteredTool(factory: RunAgentExtensionFactory, input: u
 
 async function executeRunInput(input: unknown, ctx: NativeBackendContext, toolName: string) {
   const result = (await executeRegisteredTool(await loadRunAgentExtensionFactory(), input, ctx, toolName)) as ToolExecutionResult;
-  ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+  ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
   const text = Array.isArray(result?.content)
     ? result.content.map((item) => (item.type === 'text' ? (item.text ?? '') : JSON.stringify(item))).join('\n')
     : JSON.stringify(result, null, 2);
@@ -264,7 +264,7 @@ async function startBackgroundCommand(input: unknown, ctx: NativeBackendContext)
     throw new Error(result.reason ?? `Could not start durable run for ${taskSlug}.`);
   }
 
-  ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+  ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
   return {
     text: `Started background command ${result.runId} for ${taskSlug}.`,
     details: {
@@ -356,14 +356,14 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
 
   if (action === 'cancel') {
     const result = await cancelDurableRun(runId);
-    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
     if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel background command ${runId}.`);
     return { text: `Cancelled background command ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
   }
 
   if (action === 'rerun') {
     const result = await rerunDurableRun(runId);
-    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
     if (!result.accepted) throw new Error(result.reason ?? `Could not rerun background command ${runId}.`);
     return { text: `Rerun started ${result.runId} from ${runId}.`, details: { action: 'rerun', runId: result.runId, sourceRunId: runId } };
   }
@@ -413,14 +413,14 @@ export async function subagent(input: unknown, ctx: NativeBackendContext) {
 
   if (action === 'cancel') {
     const result = await cancelDurableRun(runId);
-    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
     if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel subagent ${runId}.`);
     return { text: `Cancelled subagent ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
   }
 
   if (action === 'rerun') {
     const result = await rerunDurableRun(runId);
-    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
     if (!result.accepted) throw new Error(result.reason ?? `Could not rerun subagent ${runId}.`);
     return {
       text: `Subagent rerun started ${result.runId} from ${runId}.`,
@@ -431,7 +431,7 @@ export async function subagent(input: unknown, ctx: NativeBackendContext) {
   if (action === 'follow_up') {
     const prompt = readString(params.prompt) ?? 'Continue from where you left off.';
     const result = await followUpDurableRun(runId, prompt);
-    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    ctx.ui?.invalidate?.(['executions', 'runs', 'tasks']);
     if (!result.accepted) throw new Error(result.reason ?? `Could not continue subagent ${runId}.`);
     return {
       text: `Subagent follow-up started ${result.runId} from ${runId}.`,

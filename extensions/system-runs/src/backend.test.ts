@@ -94,6 +94,15 @@ describe('system-runs backend', () => {
       expect(result.details).toEqual({ runId: 'abc1234', status: 'running' });
     });
 
+    it('does not fail when UI invalidation is unavailable', async () => {
+      mocks.runExecute.mockResolvedValue({
+        content: [{ type: 'text', text: 'Running...' }],
+      });
+
+      const result = await run({ action: 'start', taskSlug: 'test' }, createCtx({ ui: undefined }));
+      expect(result.text).toBe('Running...');
+    });
+
     it('handles multiple content blocks', async () => {
       mocks.runExecute.mockResolvedValue({
         content: [
