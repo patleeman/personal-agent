@@ -154,7 +154,8 @@ describe('system-web-tools backend', () => {
 
       const result = await duckDuckGoSearch({ query: 'test' });
       expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-      expect(String(vi.mocked(globalThis.fetch).mock.calls[1]?.[0])).toContain('lite.duckduckgo.com/lite');
+      expect(String(vi.mocked(globalThis.fetch).mock.calls[0]?.[0])).toBe('https://html.duckduckgo.com/html/');
+      expect(String(vi.mocked(globalThis.fetch).mock.calls[1]?.[0])).toBe('https://lite.duckduckgo.com/lite/');
       expect(parseDuckDuckGoHtml).toHaveBeenCalledTimes(2);
       expect(result.count).toBe(1);
     });

@@ -149,8 +149,10 @@ export async function duckDuckGoSearch(input: { query: string; count?: number; p
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     Accept: 'text/html,application/xhtml+xml',
   };
-  const response = await fetch(`https://html.duckduckgo.com/html/?${searchParams.toString()}`, {
-    headers,
+  const response = await fetch('https://html.duckduckgo.com/html/', {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: searchParams,
     signal: createRequestSignal(10000),
   });
   if (!response.ok) throw new Error(`DuckDuckGo search failed: HTTP ${response.status}`);
@@ -159,8 +161,10 @@ export async function duckDuckGoSearch(input: { query: string; count?: number; p
   let results = await parseDuckDuckGoHtml({ html, maxResults }, ctx);
 
   if (results.length === 0) {
-    const liteResponse = await fetch(`https://lite.duckduckgo.com/lite/?${searchParams.toString()}`, {
-      headers,
+    const liteResponse = await fetch('https://lite.duckduckgo.com/lite/', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: searchParams,
       signal: createRequestSignal(10000),
     });
     if (!liteResponse.ok) throw new Error(`DuckDuckGo search failed: HTTP ${liteResponse.status}`);

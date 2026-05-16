@@ -1,3 +1,7 @@
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+
 export interface ReadableHtmlResult {
   markdown: string;
   title?: string;
@@ -9,13 +13,11 @@ export interface SearchHtmlResult {
   snippet: string;
 }
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
-
 export async function extractReadableHtml(input: { html: string; url: string }): Promise<ReadableHtmlResult> {
-  const { JSDOM } = await dynamicImport<typeof import('jsdom')>('jsdom');
-  const { Readability } = await dynamicImport<typeof import('@mozilla/readability')>('@mozilla/readability');
-  const TurndownModule = await dynamicImport<typeof import('turndown')>('turndown');
-  const Turndown = (TurndownModule as unknown as { default?: typeof TurndownModule }).default || TurndownModule;
+  const { JSDOM } = require('jsdom') as typeof import('jsdom');
+  const { Readability } = require('@mozilla/readability') as typeof import('@mozilla/readability');
+  const TurndownModule = require('turndown') as typeof import('turndown') | { default: typeof import('turndown') };
+  const Turndown = 'default' in TurndownModule ? TurndownModule.default : TurndownModule;
 
   const dom = new JSDOM(input.html, { url: input.url });
   const article = new Readability(dom.window.document).parse();
@@ -42,7 +44,7 @@ export async function extractReadableHtml(input: { html: string; url: string }):
 }
 
 export async function parseDuckDuckGoHtml(input: { html: string; maxResults: number }): Promise<SearchHtmlResult[]> {
-  const { JSDOM } = await dynamicImport<typeof import('jsdom')>('jsdom');
+  const { JSDOM } = require('jsdom') as typeof import('jsdom');
   const document = new JSDOM(input.html).window.document;
   const results: SearchHtmlResult[] = [];
 

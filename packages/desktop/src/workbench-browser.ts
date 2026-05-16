@@ -488,18 +488,9 @@ export class WorkbenchBrowserViewController {
 
   async screenshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserScreenshot> {
     const view = this.requireView(owner, sessionKey);
-    let capture: { data?: string };
-    try {
-      capture = (await withCdp(view.webContents, async (send) => send('Page.captureScreenshot', { format: 'png', fromSurface: true }))) as {
-        data?: string;
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/target closed|target.*crashed|session closed|not attached/i.test(message)) throw error;
-      assertBrowserCommandTargetReady(view.webContents);
-      const image = await withTimeout('Electron capturePage', view.webContents.capturePage());
-      capture = { data: image.toPNG().toString('base64') };
-    }
+    assertBrowserCommandTargetReady(view.webContents);
+    const image = await withTimeout('Electron capturePage', view.webContents.capturePage(), 8000);
+    const capture = { data: image.toPNG().toString('base64') };
     const bounds = view.getBounds();
     return {
       ...getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey))),
