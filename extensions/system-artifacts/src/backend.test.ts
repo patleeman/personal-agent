@@ -111,6 +111,24 @@ describe('system-artifacts backend', () => {
       expect(mockSave).toHaveBeenCalledWith(expect.objectContaining({ artifactId: 'a1', title: 'Diagram v2', kind: 'mermaid' }));
     });
 
+    it('does not fail saving when UI invalidation is unavailable', async () => {
+      mockSave.mockReturnValue({
+        id: 'a1',
+        kind: 'html',
+        title: 'Report',
+        revision: 1,
+        updatedAt: '2025-01-01T00:00:00Z',
+        content: '<p>hello</p>',
+      });
+
+      const result = await artifact(
+        { action: 'save', title: 'Report', kind: 'html', content: '<p>hello</p>' },
+        createCtx({ ui: undefined }),
+      );
+
+      expect(result.artifactId).toBe('a1');
+    });
+
     it('throws when title is missing', async () => {
       await expect(artifact({ action: 'save', kind: 'html' }, createCtx())).rejects.toThrow('title is required');
     });

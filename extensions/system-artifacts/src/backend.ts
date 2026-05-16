@@ -77,7 +77,7 @@ export async function artifact(input: ArtifactInput, ctx: ArtifactBackendContext
         content: input.content ?? '',
       });
       const openRequested = input.open ?? true;
-      ctx.ui.invalidate('artifacts');
+      ctx.ui?.invalidate('artifacts');
       return {
         text: `${record.revision === 1 ? 'Saved' : 'Updated'} artifact ${record.id} [${record.kind}] "${record.title}".`,
         action: 'save',
@@ -121,7 +121,7 @@ export async function artifact(input: ArtifactInput, ctx: ArtifactBackendContext
     case 'delete': {
       const artifactId = readRequiredString(input.artifactId, 'artifactId');
       const deleted = deleteConversationArtifact({ profile, conversationId, artifactId });
-      ctx.ui.invalidate('artifacts');
+      ctx.ui?.invalidate('artifacts');
       return {
         text: deleted ? `Deleted artifact ${artifactId}.` : `Artifact ${artifactId} did not exist.`,
         action: 'delete',
