@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { recordTelemetryEvent } from '@personal-agent/extensions/backend';
 import {
   applyScheduledTaskThreadBinding,
   buildScheduledTaskThreadDetail,
@@ -22,7 +23,6 @@ import {
   type TaskRuntimeEntry,
   updateStoredAutomation,
 } from '@personal-agent/extensions/backend/automations';
-import { recordTelemetryEvent } from '@personal-agent/extensions/backend/telemetry';
 import { Type } from '@sinclair/typebox';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
@@ -538,7 +538,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
 
             case 'run': {
               const taskId = readRequiredString(params.taskId, 'taskId');
-              const { task } = resolveScheduledTaskForProfile(profile, taskId);
+              const { task } = await resolveScheduledTaskForProfile(profile, taskId);
               if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await startScheduledTaskRun(task.id);
               recordTelemetryEvent({

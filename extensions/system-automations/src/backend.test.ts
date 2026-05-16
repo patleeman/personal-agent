@@ -36,13 +36,14 @@ const backendAutomationMock = vi.hoisted(() => ({
   startScheduledTaskRun: vi.fn(),
   updateStoredAutomation: vi.fn(),
   clearTaskCallbackBinding: vi.fn(),
+  recordTelemetryEvent: vi.fn(),
 }));
 
 vi.mock('@personal-agent/extensions/backend', () => backendAutomationMock);
 vi.mock('@personal-agent/extensions/backend/automations', () => backendAutomationMock);
-vi.mock('@personal-agent/extensions/backend/telemetry', () => ({ recordTelemetryEvent: vi.fn() }), { virtual: true });
 
 import { queueFollowup } from './conversationQueueBackend.js';
+import { scheduledTask } from './scheduledTaskBackend.js';
 
 function createCtx(overrides?: Record<string, unknown>) {
   return {
@@ -56,6 +57,24 @@ function createCtx(overrides?: Record<string, unknown>) {
 describe('system-automations backend', () => {
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('scheduledTask handler', () => {
+    it('awaits task resolution before starting an immediate run', async () => {
+      const invalidate = vi.fn();
+      backendAutomationMock.resolveScheduledTaskForProfile.mockResolvedValue({
+        task: { id: 'daily-check', title: 'Daily Check' },
+      });
+      backendAutomationMock.startScheduledTaskRun.mockResolvedValue({ accepted: true, runId: 'run-1' });
+
+      const result = await scheduledTask({ action: 'run', taskId: 'daily-check' }, createCtx({ ui: { invalidate } }));
+
+      expect(result.text).toContain('Started scheduled task @daily-check as run run-1');
+      expect(backendAutomationMock.resolveScheduledTaskForProfile).toHaveBeenCalledWith('shared', 'daily-check');
+      expect(backendAutomationMock.startScheduledTaskRun).toHaveBeenCalledWith('daily-check');
+      expect(mocks.invalidateTopics).toHaveBeenCalledWith(['tasks', 'runs']);
+      expect(invalidate).toHaveBeenCalledWith(['tasks', 'runs', 'sessions']);
+    });
   });
 
   describe('queueFollowup handler', () => {
