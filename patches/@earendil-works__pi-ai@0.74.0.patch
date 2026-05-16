@@ -1,0 +1,95 @@
+diff --git a/dist/providers/openai-responses-shared.js b/dist/providers/openai-responses-shared.js
+index bce312532e6f69ee2bdef2ad7db14cbcb8c0d3b5..0fa08cf8ae9d8887f8a1e49eec45d8c20073a4a3 100644
+--- a/dist/providers/openai-responses-shared.js
++++ b/dist/providers/openai-responses-shared.js
+@@ -31,6 +31,14 @@ function parseTextSignature(signature) {
+     }
+     return { id: signature };
+ }
++function isValidImageContent(block) {
++    const mimeType = typeof block.mimeType === "string" ? block.mimeType.trim() : "";
++    const data = typeof block.data === "string" ? block.data.trim() : "";
++    return (mimeType.toLowerCase().startsWith("image/") &&
++        data.length > 0 &&
++        data.length % 4 !== 1 &&
++        /^[A-Za-z0-9+/]+={0,2}$/.test(data));
++}
+ // =============================================================================
+ // Message conversion
+ // =============================================================================
+@@ -79,19 +87,22 @@ export function convertResponsesMessages(model, context, allowedToolCallProvider
+                 });
+             }
+             else {
+-                const content = msg.content.map((item) => {
++                const content = [];
++                for (const item of msg.content) {
+                     if (item.type === "text") {
+-                        return {
++                        content.push({
+                             type: "input_text",
+                             text: sanitizeSurrogates(item.text),
+-                        };
++                        });
+                     }
+-                    return {
+-                        type: "input_image",
+-                        detail: "auto",
+-                        image_url: `data:${item.mimeType};base64,${item.data}`,
+-                    };
+-                });
++                    else if (isValidImageContent(item)) {
++                        content.push({
++                            type: "input_image",
++                            detail: "auto",
++                            image_url: `data:${item.mimeType.trim()};base64,${item.data.trim()}`,
++                        });
++                    }
++                }
+                 if (content.length === 0)
+                     continue;
+                 messages.push({
+@@ -161,11 +172,13 @@ export function convertResponsesMessages(model, context, allowedToolCallProvider
+                 .filter((c) => c.type === "text")
+                 .map((c) => c.text)
+                 .join("\n");
+-            const hasImages = msg.content.some((c) => c.type === "image");
++            const imageBlocks = msg.content.filter((c) => c.type === "image");
++            const validImageBlocks = imageBlocks.filter(isValidImageContent);
++            const hasImages = imageBlocks.length > 0;
+             const hasText = textResult.length > 0;
+             const [callId] = msg.toolCallId.split("|");
+             let output;
+-            if (hasImages && model.input.includes("image")) {
++            if (validImageBlocks.length > 0 && model.input.includes("image")) {
+                 const contentParts = [];
+                 if (hasText) {
+                     contentParts.push({
+@@ -173,19 +186,18 @@ export function convertResponsesMessages(model, context, allowedToolCallProvider
+                         text: sanitizeSurrogates(textResult),
+                     });
+                 }
+-                for (const block of msg.content) {
+-                    if (block.type === "image") {
+-                        contentParts.push({
+-                            type: "input_image",
+-                            detail: "auto",
+-                            image_url: `data:${block.mimeType};base64,${block.data}`,
+-                        });
+-                    }
++                for (const block of validImageBlocks) {
++                    contentParts.push({
++                        type: "input_image",
++                        detail: "auto",
++                        image_url: `data:${block.mimeType.trim()};base64,${block.data.trim()}`,
++                    });
+                 }
+                 output = contentParts;
+             }
+             else {
+-                output = sanitizeSurrogates(hasText ? textResult : "(see attached image)");
++                const imagePlaceholder = hasImages && validImageBlocks.length === 0 ? "(image omitted: invalid image data)" : "(see attached image)";
++                output = sanitizeSurrogates(hasText ? textResult : imagePlaceholder);
+             }
+             messages.push({
+                 type: "function_call_output",

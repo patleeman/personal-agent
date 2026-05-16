@@ -84,6 +84,50 @@ describe('workbench browser agent extension', () => {
     setWorkbenchBrowserToolHost(null);
   });
 
+  it('returns a tool error instead of an empty screenshot image attachment', async () => {
+    setWorkbenchBrowserToolHost({
+      isActive: async () => true,
+      listTabs: async () => [],
+      snapshot: async () => ({}),
+      cdp: async () => ({}),
+      screenshot: async () => ({ mimeType: 'image/png', dataBase64: '' }),
+    });
+
+    const tools = collectTools();
+    const screenshot = (await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never)) as {
+      isError?: boolean;
+      content: Array<{ type: string; data?: string; text?: string }>;
+    };
+
+    expect(screenshot.isError).toBe(true);
+    expect(screenshot.content).toHaveLength(1);
+    expect(screenshot.content[0]?.text).toContain('captured image data was empty');
+    expect(screenshot.content.some((part) => part.type === 'image')).toBe(false);
+
+    setWorkbenchBrowserToolHost(null);
+  });
+
+  it('returns a tool error instead of a non-image screenshot attachment', async () => {
+    setWorkbenchBrowserToolHost({
+      isActive: async () => true,
+      listTabs: async () => [],
+      snapshot: async () => ({}),
+      cdp: async () => ({}),
+      screenshot: async () => ({ mimeType: 'text/plain', dataBase64: 'aW1n' }),
+    });
+
+    const tools = collectTools();
+    const screenshot = (await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never)) as {
+      isError?: boolean;
+      content: Array<{ type: string; data?: string; text?: string }>;
+    };
+
+    expect(screenshot.isError).toBe(true);
+    expect(screenshot.content.some((part) => part.type === 'image')).toBe(false);
+
+    setWorkbenchBrowserToolHost(null);
+  });
+
   it('cancels browser tool calls when the tool abort signal fires', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => true,

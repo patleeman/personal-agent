@@ -24,6 +24,13 @@ function tabIdFromSessionKey(sessionKey: string): string {
   return sessionKey.startsWith(prefix) ? sessionKey.slice(prefix.length) : sessionKey;
 }
 
+function normalizeScreenshotImage(screenshot: { dataBase64?: string; mimeType?: string }): { data: string; mimeType: string } | undefined {
+  const data = typeof screenshot.dataBase64 === 'string' ? screenshot.dataBase64.trim() : '';
+  const mimeType = typeof screenshot.mimeType === 'string' ? screenshot.mimeType.trim() : 'image/png';
+  if (!data || !mimeType.toLowerCase().startsWith('image/')) return undefined;
+  return { data, mimeType };
+}
+
 async function withBrowserToolDeadline<T>(label: string, signal: AbortSignal | undefined, operation: Promise<T>): Promise<T> {
   if (signal?.aborted) {
     throw new BrowserToolAbortError(`${label} cancelled.`);
@@ -259,10 +266,24 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
             viewport?: unknown;
             capturedAt?: string;
           };
+          const image = normalizeScreenshotImage(screenshot);
+          if (!image) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'Browser screenshot failed: captured image data was empty or invalid. Try browser_snapshot first to check the browser state.',
+                },
+              ],
+              isError: true,
+              details: { action: 'screenshot', error: 'empty_image_data' },
+            };
+          }
+
           return {
             content: [
               { type: 'text' as const, text: 'Captured Workbench Browser screenshot.' },
-              { type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' },
+              { type: 'image' as const, data: image.data, mimeType: image.mimeType },
             ],
             details: {
               url: screenshot.url,
