@@ -33,9 +33,16 @@ export function findSelectionReplyScopeElements(
   };
 }
 
-function getRangeDocument(range: Range): Document | null {
-  const container = range.commonAncestorContainer;
-  return container.nodeType === Node.DOCUMENT_NODE ? (container as Document) : container.ownerDocument;
+function getRangeBoundaryDocument(node: Node): Document | null {
+  return node.nodeType === Node.DOCUMENT_NODE ? (node as Document) : node.ownerDocument;
+}
+
+function isRangeInDocument(range: Range, ownerDocument: Document): boolean {
+  return (
+    getRangeBoundaryDocument(range.commonAncestorContainer) === ownerDocument &&
+    getRangeBoundaryDocument(range.startContainer) === ownerDocument &&
+    getRangeBoundaryDocument(range.endContainer) === ownerDocument
+  );
 }
 
 export function readSelectedTextWithinElement(element: HTMLElement | null, selectionRange?: Range | null): string {
@@ -55,35 +62,42 @@ export function readSelectedTextWithinElement(element: HTMLElement | null, selec
       return selection.getRangeAt(0);
     })();
 
-  if (!range || getRangeDocument(range) !== ownerDocument) {
+  if (!range || !isRangeInDocument(range, ownerDocument)) {
     return '';
   }
 
   const scopeRange = ownerDocument.createRange();
   scopeRange.selectNodeContents(element);
 
-  if (
-    range.compareBoundaryPoints(Range.START_TO_END, scopeRange) <= 0 ||
-    range.compareBoundaryPoints(Range.END_TO_START, scopeRange) >= 0
-  ) {
-    return '';
+  try {
+    if (
+      range.compareBoundaryPoints(Range.START_TO_END, scopeRange) <= 0 ||
+      range.compareBoundaryPoints(Range.END_TO_START, scopeRange) >= 0
+    ) {
+      return '';
+    }
+
+    const intersection = ownerDocument.createRange();
+
+    if (range.compareBoundaryPoints(Range.START_TO_START, scopeRange) <= 0) {
+      intersection.setStart(scopeRange.startContainer, scopeRange.startOffset);
+    } else {
+      intersection.setStart(range.startContainer, range.startOffset);
+    }
+
+    if (range.compareBoundaryPoints(Range.END_TO_END, scopeRange) >= 0) {
+      intersection.setEnd(scopeRange.endContainer, scopeRange.endOffset);
+    } else {
+      intersection.setEnd(range.endContainer, range.endOffset);
+    }
+
+    return normalizeReplyQuoteSelection(intersection.toString());
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'WrongDocumentError') {
+      return '';
+    }
+    throw error;
   }
-
-  const intersection = document.createRange();
-
-  if (range.compareBoundaryPoints(Range.START_TO_START, scopeRange) <= 0) {
-    intersection.setStart(scopeRange.startContainer, scopeRange.startOffset);
-  } else {
-    intersection.setStart(range.startContainer, range.startOffset);
-  }
-
-  if (range.compareBoundaryPoints(Range.END_TO_END, scopeRange) >= 0) {
-    intersection.setEnd(scopeRange.endContainer, scopeRange.endOffset);
-  } else {
-    intersection.setEnd(range.endContainer, range.endOffset);
-  }
-
-  return normalizeReplyQuoteSelection(intersection.toString());
 }
 
 export function buildReplySelectionScopeProps(messageIndex?: number, blockId?: string, onSelectionGesture?: ReplySelectionGestureHandler) {
