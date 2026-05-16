@@ -204,7 +204,7 @@ function isParallelSideEffectBlock(block: Extract<DisplayBlock, { type: 'tool_us
     return action === 'save';
   }
 
-  if (block.tool === 'queue_followup') {
+  if (block.tool === 'deferred_resume') {
     return action === 'add' || action === 'cancel';
   }
 

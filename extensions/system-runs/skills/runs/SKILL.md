@@ -11,7 +11,6 @@ tools:
   - background_command
   - subagent
   - deferred_resume
-  - queue_followup
   - run
 ---
 
@@ -27,8 +26,7 @@ Use intent-shaped tools first. The old generic `run` tool is compatibility plumb
 | `background_command` | Compatibility lifecycle tool for background command records.             |
 | `subagent`           | A delegated agent task that should run durably outside the current turn. |
 | `scheduled_task`     | A persistent automation with a cron/time trigger and delivery policy.    |
-| `deferred_resume`    | Continue this same conversation later; preferred for wait/resume.        |
-| `queue_followup`     | Compatibility alias for deferred/follow-up queue behavior.               |
+| `deferred_resume`    | Continue this same conversation later.                                   |
 
 ## Background commands
 

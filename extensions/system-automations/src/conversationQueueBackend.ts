@@ -200,7 +200,7 @@ async function findConversationAutomation(id: string, sessionFile: string) {
   );
 }
 
-export async function queueFollowup(input: QueueFollowupInput, ctx: QueueFollowupContext) {
+export async function deferredResume(input: QueueFollowupInput, ctx: QueueFollowupContext) {
   const sessionId = readOptionalString(ctx.toolContext?.sessionId);
   const sessionFile = readOptionalString(ctx.toolContext?.sessionFile);
 

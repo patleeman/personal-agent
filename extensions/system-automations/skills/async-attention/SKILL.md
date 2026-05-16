@@ -8,14 +8,13 @@ metadata:
   status: active
 tools:
   - deferred_resume
-  - queue_followup
   - activity
   - scheduled_task
 ---
 
 # Async Attention and Wakeups
 
-Use the smallest scheduling surface that matches the owner of the work. For wait-then-continue requests, use `deferred_resume`/`queue_followup`; do not run `sleep` in bash.
+Use the smallest scheduling surface that matches the owner of the work. For wait-then-continue requests, use `deferred_resume`; do not run `sleep` in bash.
 
 ## Choose the right surface
 
@@ -28,9 +27,9 @@ Use the smallest scheduling surface that matches the owner of the work. For wait
 
 There is no standalone tell-me-later tool. Human “tell me later” requests are same-thread follow-ups unless they need a true app-wide automation.
 
-## `deferred_resume` / `queue_followup`
+## `deferred_resume`
 
-Use `deferred_resume` when this same conversation should continue later. `queue_followup` is the compatibility alias.
+Use `deferred_resume` when this same conversation should continue later.
 
 Actions:
 

@@ -28,7 +28,7 @@ Created -> Queued -> Running -> Completed
 - `subagent.allowedTools` accepts agent tool names, not shell commands. Use names like `bash`, `read`, `edit`, `web_fetch`, `conversation_inspect`, or `checkpoint`; for `rg`, `grep`, `find`, or `ls`, allow `bash` and run the command inside bash.
 - Keep `scheduled_task` separate for persistent automations.
 - `background_command` is shell-only; it lists/inspects background commands and rejects subagent IDs with a hint to use `subagent`.
-- Use `deferred_resume`/`queue_followup` for “wait, then continue this conversation” requests. Do not use foreground `bash` with `sleep` as a timer.
+- Use `deferred_resume` for “wait, then continue this conversation” requests. Do not use foreground `bash` with `sleep` as a timer.
 - Use this extension's legacy `run` tool only for compatibility and low-level inspection (`list`, `get`, `logs`, `rerun`, `follow_up`, `cancel`).
 
 ## UI

@@ -42,7 +42,7 @@ const backendAutomationMock = vi.hoisted(() => ({
 vi.mock('@personal-agent/extensions/backend', () => backendAutomationMock);
 vi.mock('@personal-agent/extensions/backend/automations', () => backendAutomationMock);
 
-import { queueFollowup } from './conversationQueueBackend.js';
+import { deferredResume } from './conversationQueueBackend.js';
 import { scheduledTask } from './scheduledTaskBackend.js';
 
 function createCtx(overrides?: Record<string, unknown>) {
@@ -109,13 +109,13 @@ describe('system-automations backend', () => {
     });
   });
 
-  describe('queueFollowup handler', () => {
+  describe('deferredResume handler', () => {
     it('requires trigger for add action', async () => {
-      await expect(queueFollowup({ action: 'add' } as never, createCtx())).rejects.toThrow('trigger is required');
+      await expect(deferredResume({ action: 'add' } as never, createCtx())).rejects.toThrow('trigger is required');
     });
 
     it('throws for cancel action without id', async () => {
-      await expect(queueFollowup({ action: 'cancel' } as never, createCtx())).rejects.toThrow('id is required');
+      await expect(deferredResume({ action: 'cancel' } as never, createCtx())).rejects.toThrow('id is required');
     });
 
     it('schedules time-based queue entries as visible deferred resumes', async () => {
@@ -123,7 +123,7 @@ describe('system-automations backend', () => {
       mocks.parseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
       mocks.scheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
 
-      const result = await queueFollowup(
+      const result = await deferredResume(
         { action: 'add', trigger: 'delay', delay: '4h', prompt: 'Keep going', deliverAs: 'followUp', title: 'Resume later' },
         createCtx({ ui: { invalidate } }),
       );
@@ -152,7 +152,7 @@ describe('system-automations backend', () => {
       mocks.parseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
       mocks.scheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
 
-      const result = await queueFollowup(
+      const result = await deferredResume(
         { action: 'add', trigger: 'delay', delay: '4h', prompt: 'Keep going' },
         createCtx({ ui: undefined }),
       );
@@ -161,11 +161,11 @@ describe('system-automations backend', () => {
     });
 
     it('throws for unsupported action', async () => {
-      await expect(queueFollowup({ action: 'unknown' } as never, createCtx())).rejects.toThrow('Unsupported queue follow-up action');
+      await expect(deferredResume({ action: 'unknown' } as never, createCtx())).rejects.toThrow('Unsupported queue follow-up action');
     });
 
     it('throws for invalid trigger value', async () => {
-      await expect(queueFollowup({ action: 'add', prompt: 'Do thing', trigger: 'invalid' } as never, createCtx())).rejects.toThrow(
+      await expect(deferredResume({ action: 'add', prompt: 'Do thing', trigger: 'invalid' } as never, createCtx())).rejects.toThrow(
         'trigger',
       );
     });

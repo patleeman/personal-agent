@@ -63,7 +63,7 @@ From the list view, click "New Automation". The editor uses the Settings page la
 - **General** — automation name, recurring instruction, and enabled state
 - **Schedule** — recurring vs one-time scheduling, human-readable schedule presets, and a preview
 - **Delivery** — background/conversation target plus thread binding; existing threads are selected from a dropdown
-- **Runtime** — optional working directory, model, timeout, and catch-up window
+- **Runtime** — optional working directory with folder picker, model dropdown, thinking level, timeout, and catch-up window
 
 The UI avoids raw cron entry for common creation/editing paths; selected presets are translated to scheduler syntax internally.
 
@@ -191,7 +191,7 @@ Tasks are managed through the `scheduled_task` agent tool or the Automations UI.
 
 Follow-up queue entries resume the current conversation later. They are conversation-bound and are the only user-facing tool for same-thread delayed continuation.
 
-Use the `deferred_resume` tool from within a conversation for explicit wait/resume requests. `queue_followup` is retained as the compatibility alias. Do not use `bash` + `sleep` as a timer.
+Use the `deferred_resume` tool from within a conversation for explicit wait/resume requests. Do not use `bash` + `sleep` as a timer.
 
 ## Actions
 
@@ -246,4 +246,4 @@ Supported time formats match scheduled tasks: ISO timestamps, natural language, 
 | Target      | Always this conversation | Background agent or conversation |
 | Persistence | Deferred resume state    | Automation store                 |
 
-Use `queue_followup` when this conversation should continue later. Use `scheduled_task` when unattended work should run on a schedule.
+Use `deferred_resume` when this conversation should continue later. Use `scheduled_task` when unattended work should run on a schedule.
