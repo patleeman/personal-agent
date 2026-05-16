@@ -14,7 +14,7 @@
         "kinds": ["text", "transcriptRange"],
         "icon": "👍",
         "priority": 100,
-        "args": { "draftText": "👍", "interpretation": "Agree / proceed" }
+        "args": { "draftText": "👍 Agree" }
       },
       {
         "id": "reply-disagree",
@@ -23,7 +23,7 @@
         "kinds": ["text", "transcriptRange"],
         "icon": "👎",
         "priority": 90,
-        "args": { "draftText": "👎", "interpretation": "Disagree / stop" }
+        "args": { "draftText": "👎 Disagree" }
       },
       {
         "id": "reply-question",
@@ -32,7 +32,7 @@
         "kinds": ["text", "transcriptRange"],
         "icon": "❓",
         "priority": 80,
-        "args": { "draftText": "❓", "interpretation": "Ask / clarify" }
+        "args": { "draftText": "❓ Clarify" }
       },
       {
         "id": "reply-think-harder",
@@ -41,7 +41,7 @@
         "kinds": ["text", "transcriptRange"],
         "icon": "🤔",
         "priority": 70,
-        "args": { "draftText": "🤔", "interpretation": "Think harder / reconsider" }
+        "args": { "draftText": "🤔 Think harder" }
       },
       {
         "id": "reply-try-again",
@@ -50,7 +50,7 @@
         "kinds": ["text", "transcriptRange"],
         "icon": "🔁",
         "priority": 60,
-        "args": { "draftText": "🔁", "interpretation": "Try again / another pass" }
+        "args": { "draftText": "🔁 Try again" }
       },
       {
         "id": "reply-revise",
@@ -59,7 +59,7 @@
         "kinds": ["text", "transcriptRange"],
         "icon": "✏️",
         "priority": 50,
-        "args": { "draftText": "✏️", "interpretation": "Revise this" }
+        "args": { "draftText": "✏️ Revise" }
       }
     ]
   }

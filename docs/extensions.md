@@ -873,7 +873,7 @@ Extensions can declare selection-aware actions for selected text, files, message
         "action": "composer.replyToSelection",
         "kinds": ["text", "transcriptRange"],
         "icon": "👍",
-        "args": { "draftText": "👍", "interpretation": "Agree / proceed" }
+        "args": { "draftText": "👍 Agree" }
       }
     ]
   }

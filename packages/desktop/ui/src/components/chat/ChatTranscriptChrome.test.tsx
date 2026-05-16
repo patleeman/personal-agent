@@ -40,7 +40,7 @@ describe('ChatTranscriptChrome', () => {
             action: 'composer.replyToSelection',
             kinds: ['text'],
             icon: '👍',
-            args: { draftText: '👍', interpretation: 'Agree / proceed' },
+            args: { draftText: '👍 Agree' },
           },
         ]}
         onAction={onAction}

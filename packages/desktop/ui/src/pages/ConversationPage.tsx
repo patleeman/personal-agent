@@ -4367,9 +4367,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const quoted = insertReplyQuoteIntoComposer(currentInput, selection.text);
       const args =
         selection.action?.args && typeof selection.action.args === 'object' ? (selection.action.args as Record<string, unknown>) : null;
-      const draftText = typeof args?.draftText === 'string' ? args.draftText : '';
-      const interpretation = typeof args?.interpretation === 'string' ? args.interpretation : '';
-      const starter = [draftText, interpretation ? `Interpretation: ${interpretation}` : ''].filter(Boolean).join('\n\n');
+      const starter = typeof args?.draftText === 'string' ? args.draftText.trim() : '';
       const nextText = starter
         ? `${quoted.text.slice(0, quoted.selectionStart)}${starter}${quoted.text.slice(quoted.selectionEnd)}`
         : quoted.text;
