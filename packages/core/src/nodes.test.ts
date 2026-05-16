@@ -17,6 +17,7 @@ import {
   matchesUnifiedNodeQuery,
   migrateLegacyNodes,
   tagUnifiedNode,
+  type UnifiedNodeRecord,
   updateUnifiedNode,
   validateUnifiedNodeId,
 } from './nodes.js';
@@ -31,6 +32,28 @@ function createTempStateRoot(): string {
   process.env.PERSONAL_AGENT_VAULT_ROOT = join(dir, 'sync');
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'config', 'profiles');
   return dir;
+}
+
+type UnifiedNodeTestInput = Partial<Omit<UnifiedNodeRecord, 'links'>> & { links?: Partial<UnifiedNodeRecord['links']> };
+
+function makeUnifiedNode(overrides: UnifiedNodeTestInput = {}): UnifiedNodeRecord {
+  const { links, ...rest } = overrides;
+  return {
+    id: 'test',
+    title: 'Test',
+    summary: '',
+    status: 'active',
+    type: 'note',
+    kinds: [],
+    tags: [],
+    profiles: [],
+    links: { related: [], conversations: [], relationships: [], ...links },
+    body: '',
+    filePath: '',
+    dirPath: '',
+    searchText: 'test search text for matching',
+    ...rest,
+  };
 }
 
 function writeFile(path: string, content: string): void {
@@ -345,101 +368,37 @@ Tracks graph relationships.
 });
 
 describe('matchesUnifiedNodeQuery', () => {
-  function makeNode(overrides: Record<string, unknown> = {}) {
-    return {
-      id: 'test',
-      title: 'Test',
-      summary: '',
-      status: 'active',
-      type: 'note',
-      kinds: [],
-      tags: [],
-      profiles: [],
-      links: { related: [], conversations: [], relationships: [] },
-      body: '',
-      filePath: '',
-      dirPath: '',
-      searchText: 'test search text for matching',
-      ...overrides,
-    } as unknown;
-  }
-
   it('matches by id field prefix', () => {
-    expect(matchesUnifiedNodeQuery(makeNode({ id: 'my-project' }), 'id:my-project')).toBe(true);
+    expect(matchesUnifiedNodeQuery(makeUnifiedNode({ id: 'my-project' }), 'id:my-project')).toBe(true);
   });
 
   it('returns true for undefined query', () => {
-    expect(matchesUnifiedNodeQuery(makeNode(), undefined)).toBe(true);
+    expect(matchesUnifiedNodeQuery(makeUnifiedNode(), undefined)).toBe(true);
   });
 
   it('returns true for empty query', () => {
-    expect(matchesUnifiedNodeQuery(makeNode(), '')).toBe(true);
+    expect(matchesUnifiedNodeQuery(makeUnifiedNode(), '')).toBe(true);
   });
 
   it('matches search text case-insensitively', () => {
-    const node = {
-      id: 'x',
-      title: 'x',
-      summary: '',
-      status: 'active',
-      type: 'note',
-      kinds: [],
-      tags: [],
-      profiles: [],
-      links: { related: [], conversations: [], relationships: [] },
-      body: '',
-      filePath: '',
-      dirPath: '',
-      searchText: 'hello world',
-    } as unknown;
+    const node = makeUnifiedNode({ id: 'x', title: 'x', searchText: 'hello world' });
     expect(matchesUnifiedNodeQuery(node, 'hello')).toBe(true);
   });
 
   it('matches id via field prefix', () => {
-    const node = {
-      id: 'my-project',
-      title: 'x',
-      summary: '',
-      status: 'active',
-      type: 'note',
-      kinds: [],
-      tags: [],
-      profiles: [],
-      links: { related: [], conversations: [], relationships: [] },
-      body: '',
-      filePath: '',
-      dirPath: '',
-      searchText: '',
-    } as unknown;
+    const node = makeUnifiedNode({ id: 'my-project', title: 'x', searchText: '' });
     expect(matchesUnifiedNodeQuery(node, 'id:my-project')).toBe(true);
   });
 
   it('does not match different id', () => {
-    const node = {
-      id: 'other',
-      title: 'x',
-      summary: '',
-      status: 'active',
-      type: 'note',
-      kinds: [],
-      tags: [],
-      profiles: [],
-      links: { related: [], conversations: [], relationships: [] },
-      body: '',
-      filePath: '',
-      dirPath: '',
-      searchText: '',
-    } as unknown;
+    const node = makeUnifiedNode({ id: 'other', title: 'x', searchText: '' });
     expect(matchesUnifiedNodeQuery(node, 'id:my-project')).toBe(false);
   });
 });
 
 describe('findUnifiedNodeById', () => {
   it('finds a node by id', () => {
-    const nodes = [
-      { id: 'a', title: 'A' },
-      { id: 'b', title: 'B' },
-    ] as unknown;
+    const nodes = [makeUnifiedNode({ id: 'a', title: 'A' }), makeUnifiedNode({ id: 'b', title: 'B' })];
     expect(findUnifiedNodeById(nodes, 'b').title).toBe('B');
   });
 
@@ -451,11 +410,11 @@ describe('findUnifiedNodeById', () => {
 describe('collectDuplicateUnifiedNodeIds', () => {
   it('finds duplicate ids', () => {
     const nodes = [
-      { id: 'dup', filePath: '/a' },
-      { id: 'unique', filePath: '/b' },
-      { id: 'dup', filePath: '/c' },
-      { id: 'dup', filePath: '/d' },
-    ] as unknown;
+      makeUnifiedNode({ id: 'dup', filePath: '/a' }),
+      makeUnifiedNode({ id: 'unique', filePath: '/b' }),
+      makeUnifiedNode({ id: 'dup', filePath: '/c' }),
+      makeUnifiedNode({ id: 'dup', filePath: '/d' }),
+    ];
     const dups = collectDuplicateUnifiedNodeIds(nodes);
     expect(dups).toHaveLength(1);
     expect(dups[0].id).toBe('dup');
@@ -463,13 +422,13 @@ describe('collectDuplicateUnifiedNodeIds', () => {
   });
 
   it('returns empty for unique nodes', () => {
-    expect(collectDuplicateUnifiedNodeIds([{ id: 'a' }, { id: 'b' }] as unknown)).toEqual([]);
+    expect(collectDuplicateUnifiedNodeIds([makeUnifiedNode({ id: 'a' }), makeUnifiedNode({ id: 'b' })])).toEqual([]);
   });
 });
 
 describe('collectUnifiedNodeReferenceErrors', () => {
   it('finds references to non-existent nodes', () => {
-    const nodes = [{ id: 'a', title: 'A', links: { related: ['b', 'c'] }, tags: [] }] as unknown;
+    const nodes = [makeUnifiedNode({ id: 'a', title: 'A', links: { related: ['b', 'c'] }, tags: [] })];
     const errors = collectUnifiedNodeReferenceErrors(nodes);
     expect(errors).toHaveLength(2);
     expect(errors[0].targetId).toBe('b');
@@ -478,9 +437,9 @@ describe('collectUnifiedNodeReferenceErrors', () => {
 
   it('returns empty when all references are valid', () => {
     const nodes = [
-      { id: 'a', title: 'A', links: { related: ['b'] }, tags: [] },
-      { id: 'b', title: 'B', links: { related: [] }, tags: [] },
-    ] as unknown;
+      makeUnifiedNode({ id: 'a', title: 'A', links: { related: ['b'] }, tags: [] }),
+      makeUnifiedNode({ id: 'b', title: 'B', links: { related: [] }, tags: [] }),
+    ];
     expect(collectUnifiedNodeReferenceErrors(nodes)).toEqual([]);
   });
 });
