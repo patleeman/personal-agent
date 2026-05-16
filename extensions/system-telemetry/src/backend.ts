@@ -186,10 +186,6 @@ function dayKey(ts: string): string {
   return ts.slice(0, 10);
 }
 
-function hourKey(ts: string): string {
-  return `${ts.slice(0, 13)}:00:00.000Z`;
-}
-
 function statsEvents(events: TraceTelemetryLogEvent[]) {
   return events.filter((event) => event.type === 'stats');
 }
@@ -275,7 +271,10 @@ function queryModelUsageFromEvents(events: TraceTelemetryLogEvent[]) {
       tokensCachedWrite: number;
     }
   >();
-  const throughput = new Map<string, { ts: string; tokens: number; cost: number; calls: number }>();
+  const throughput = new Map<
+    string,
+    { modelId: string; avgTokensPerSec: number; peakTokensPerSec: number; tokensOutput: number; durationMs: number; samples: number }
+  >();
   const stats = statsEvents(events);
   const sourceEvents = stats.length > 0 ? stats : latestContextBySession(events);
   for (const event of sourceEvents) {
@@ -304,16 +303,28 @@ function queryModelUsageFromEvents(events: TraceTelemetryLogEvent[]) {
     model.tokensCached += tokensCached;
     model.tokensCachedWrite += tokensCachedWrite;
     models.set(modelId, model);
-    const hour = hourKey(event.ts);
-    const bucket = throughput.get(hour) ?? { ts: hour, tokens: 0, cost: 0, calls: 0 };
-    bucket.tokens += tokens;
-    bucket.cost += cost;
-    bucket.calls += 1;
-    throughput.set(hour, bucket);
+    const durationMs = numberValue(event.payload.durationMs);
+    if (tokensOutput > 0 && durationMs > 0) {
+      const tokensPerSec = tokensOutput / (durationMs / 1000);
+      const bucket = throughput.get(modelId) ?? {
+        modelId,
+        avgTokensPerSec: 0,
+        peakTokensPerSec: 0,
+        tokensOutput: 0,
+        durationMs: 0,
+        samples: 0,
+      };
+      bucket.tokensOutput += tokensOutput;
+      bucket.durationMs += durationMs;
+      bucket.samples += 1;
+      bucket.avgTokensPerSec = bucket.durationMs > 0 ? Math.round(bucket.tokensOutput / (bucket.durationMs / 1000)) : 0;
+      bucket.peakTokensPerSec = Math.max(bucket.peakTokensPerSec, Math.round(tokensPerSec));
+      throughput.set(modelId, bucket);
+    }
   }
   return {
     models: [...models.values()].sort((a, b) => b.tokens - a.tokens),
-    throughput: [...throughput.values()].sort((a, b) => a.ts.localeCompare(b.ts)),
+    throughput: [...throughput.values()].map(({ samples: _samples, ...row }) => row).sort((a, b) => b.tokensOutput - a.tokensOutput),
   };
 }
 
