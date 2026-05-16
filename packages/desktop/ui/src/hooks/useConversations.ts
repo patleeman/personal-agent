@@ -26,7 +26,6 @@ import {
   pinConversationTab,
   readArchivedSessionIds,
   readConversationLayout,
-  readOpenSessionIds,
   readPinnedSessionIds,
   reopenMostRecentlyArchivedConversation,
   replaceConversationLayout,
@@ -68,9 +67,14 @@ function buildPlaceholderSessionMeta(id: string, title?: string): SessionMeta {
 }
 
 export function useConversations() {
-  const [openIds, setOpenIds] = useState(() => readOpenSessionIds());
-  const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
-  const [archivedConversationIds, setArchivedConversationIds] = useState(() => readArchivedSessionIds());
+  const initialLayout = useMemo(() => readConversationLayout(), []);
+  const [openIds, setOpenIds] = useState(() => initialLayout.sessionIds);
+  const [pinnedIds, setPinnedIds] = useState(() => initialLayout.pinnedSessionIds);
+  const [archivedConversationIds, setArchivedConversationIds] = useState(() => initialLayout.archivedSessionIds);
+  const [layoutHydrating, setLayoutHydrating] = useState(
+    () =>
+      initialLayout.sessionIds.length === 0 && initialLayout.pinnedSessionIds.length === 0 && initialLayout.archivedSessionIds.length === 0,
+  );
   const { titles: liveTitles } = useContext(LiveTitlesContext);
   const { sessions, tasks, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
@@ -91,13 +95,19 @@ export function useConversations() {
     const localLayout = readConversationLayout();
 
     if (localLayout.sessionIds.length > 0 || localLayout.pinnedSessionIds.length > 0 || localLayout.archivedSessionIds.length > 0) {
+      setLayoutHydrating(false);
       return;
     }
 
     void api
       .openConversationTabs()
       .then(({ sessionIds, pinnedSessionIds, archivedSessionIds }) => {
-        if (cancelled || (sessionIds.length === 0 && pinnedSessionIds.length === 0 && archivedSessionIds.length === 0)) {
+        if (cancelled) {
+          return;
+        }
+
+        if (sessionIds.length === 0 && pinnedSessionIds.length === 0 && archivedSessionIds.length === 0) {
+          setLayoutHydrating(false);
           return;
         }
 
@@ -107,13 +117,18 @@ export function useConversations() {
           currentLayout.pinnedSessionIds.length > 0 ||
           currentLayout.archivedSessionIds.length > 0
         ) {
+          setLayoutHydrating(false);
           return;
         }
 
         const nextLayout = replaceConversationLayout({ sessionIds, pinnedSessionIds, archivedSessionIds });
         applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+        setLayoutHydrating(false);
       })
       .catch(() => {
+        if (!cancelled) {
+          setLayoutHydrating(false);
+        }
         // Ignore bootstrap failures and keep the browser-local fallback.
       });
 
@@ -300,6 +315,7 @@ export function useConversations() {
     moveSession,
     shiftSession,
     loading,
+    layoutHydrating,
     refetch,
   };
 }
