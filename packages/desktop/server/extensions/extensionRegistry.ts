@@ -1643,6 +1643,30 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
       ...(command.description ? { description: command.description } : {}),
       ...(command.enablement ? { enablement: command.enablement } : {}),
     }));
+    const autoCommands = [
+      ...(extension.contributes?.nav ?? []).map((nav) => ({
+        extensionId: extension.id,
+        surfaceId: `open-${nav.id}`,
+        packageType: extension.packageType ?? 'user',
+        title: `Open ${nav.label}`,
+        action: 'app.navigate',
+        args: { to: nav.route },
+        ...(nav.icon ? { icon: nav.icon } : {}),
+        category: extension.name,
+      })),
+      ...(extension.contributes?.views ?? [])
+        .filter((view) => view.location === 'rightRail')
+        .map((view) => ({
+          extensionId: extension.id,
+          surfaceId: `open-${view.id}`,
+          packageType: extension.packageType ?? 'user',
+          title: `Open ${view.title}`,
+          action: 'rail.open',
+          args: { extensionId: extension.id, surfaceId: view.id },
+          ...(view.icon ? { icon: view.icon } : {}),
+          category: extension.name,
+        })),
+    ].filter((command) => !explicitCommandIds.has(command.surfaceId));
     const backendActions = (extension.backend?.actions ?? [])
       .filter((action) => !explicitCommandIds.has(action.id))
       .map((action) => ({
@@ -1654,7 +1678,7 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
         category: extension.name,
         ...(action.description ? { description: action.description } : {}),
       }));
-    return [...contributed, ...backendActions];
+    return [...contributed, ...autoCommands, ...backendActions];
   });
   return [...legacy, ...native];
 }
