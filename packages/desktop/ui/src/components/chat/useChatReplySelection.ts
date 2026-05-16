@@ -88,6 +88,7 @@ export function useChatReplySelection({
   const replySelectionSyncTimeoutRefs = useRef<number[]>([]);
   const replySelectionClearTimeoutRef = useRef<number | null>(null);
   const selectionContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const selectionContextMenuOpenedAtRef = useRef(0);
   const lastReplySelectionScopeRef = useRef<HTMLElement | null>(null);
 
   const clearScheduledReplySelectionSync = useCallback(() => {
@@ -364,7 +365,9 @@ export function useChatReplySelection({
     };
     const handleSelectionChange = () => {
       const selectionText = window.getSelection()?.toString().trim() ?? '';
-      if (!selectionText) {
+      const now = typeof performance === 'undefined' ? Date.now() : performance.now();
+      const menuJustOpened = now - selectionContextMenuOpenedAtRef.current < 350;
+      if (!selectionText && !menuJustOpened) {
         closeMenu();
       }
     };
@@ -438,6 +441,7 @@ export function useChatReplySelection({
   const openDomSelectionContextMenu = useCallback((menuState: ReplySelectionContextMenuState) => {
     const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
     const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
+    selectionContextMenuOpenedAtRef.current = typeof performance === 'undefined' ? Date.now() : performance.now();
     setSelectionContextMenu(constrainSelectionContextMenuPosition(menuState, { width: viewportWidth, height: viewportHeight }));
   }, []);
 
