@@ -56,7 +56,11 @@ export function getActivityConversationLink(options) {
   if (!existsSync(path)) {
     return null;
   }
-  return readActivityConversationLink(path);
+  try {
+    return readActivityConversationLink(path);
+  } catch {
+    return null;
+  }
 }
 export function writeActivityConversationLink(options) {
   validateProfileName(options.profile);

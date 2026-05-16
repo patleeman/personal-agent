@@ -86,7 +86,11 @@ export function getActivityConversationLink(options: ResolveActivityConversation
     return null;
   }
 
-  return readActivityConversationLink(path);
+  try {
+    return readActivityConversationLink(path);
+  } catch {
+    return null;
+  }
 }
 
 export function writeActivityConversationLink(options: {

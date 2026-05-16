@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -57,6 +57,15 @@ describe('activity conversation links', () => {
       updatedAt: '2026-03-12T11:00:00.000Z',
       relatedConversationIds: ['conv-123', 'conv-456'],
     });
+  });
+
+  it('returns null when the link file is corrupt', () => {
+    const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
+    const path = resolveActivityConversationLinkPath({ stateRoot, profile: 'assistant', activityId: 'daily-report' });
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, '{ nope');
+
+    expect(getActivityConversationLink({ stateRoot, profile: 'assistant', activityId: 'daily-report' })).toBeNull();
   });
 
   it('clears the durable link file when no conversation ids remain', () => {
