@@ -35,6 +35,11 @@ describe('local whisper provider', () => {
     );
   });
 
+  it('rejects local model names that escape the model cache directory', () => {
+    expect(() => testExports.resolveModelFileName('../secret')).toThrow('Invalid Whisper model name.');
+    expect(() => testExports.resolveModelFileName('nested/model')).toThrow('Invalid Whisper model name.');
+  });
+
   it('formats tuple segments returned by whisper-cpp-node', () => {
     expect(
       testExports.formatWhisperSegments([

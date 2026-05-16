@@ -82,7 +82,11 @@ function resolveModelFileName(model: string): string {
   if (/^https?:\/\//i.test(trimmed)) {
     throw new Error('Custom Whisper models must be direct Hugging Face /resolve/ URLs to .bin files.');
   }
-  return MODEL_FILE_NAMES[normalizeLocalWhisperModel(model)] ?? `ggml-${model}.bin`;
+  const normalizedModel = normalizeLocalWhisperModel(trimmed);
+  if (!/^[A-Za-z0-9._-]+$/.test(normalizedModel)) {
+    throw new Error('Invalid Whisper model name.');
+  }
+  return MODEL_FILE_NAMES[normalizedModel] ?? `ggml-${normalizedModel}.bin`;
 }
 
 function resolveModelFilePath(modelRootPath: string, model: string): string {
