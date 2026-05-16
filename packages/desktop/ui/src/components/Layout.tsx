@@ -29,7 +29,7 @@ import {
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { useConversations } from '../hooks/useConversations';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
-import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
+import { attemptLazyRouteRecovery, isRecoverableLazyRouteError, lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { routeIsKnowledge, routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { useRouteTelemetry } from '../telemetry/appTelemetry';
@@ -473,6 +473,10 @@ class RouteContentBoundary extends Component<
   }
 
   componentDidCatch(error: unknown, _errorInfo: { componentStack?: string }) {
+    if (isRecoverableLazyRouteError(error) && attemptLazyRouteRecovery(`route-boundary:${this.props.resetKey}`)) {
+      return;
+    }
+
     window.dispatchEvent(
       new CustomEvent('pa-notification', {
         detail: {

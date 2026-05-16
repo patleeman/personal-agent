@@ -1,6 +1,7 @@
 import { HOST_VIEW_COMPONENT_DEFINITIONS, type HostViewComponentDefinition } from '@personal-agent/extensions/host-view-components';
-import React, { lazy } from 'react';
+import React from 'react';
 
+import { lazyWithRecovery } from '../navigation/lazyRouteRecovery';
 import type { NativeExtensionClient } from './nativePaClient';
 import type { NativeExtensionViewSummary } from './types';
 
@@ -88,5 +89,5 @@ export function getHostViewComponentDefinition(
 export function lazyHostViewComponent(id: string) {
   const definition = getHostViewComponentDefinition(id);
   if (!definition?.load) throw new Error(`Unknown host view component: ${id}`);
-  return lazy(definition.load);
+  return lazyWithRecovery(`host-view:${id}`, definition.load);
 }

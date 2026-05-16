@@ -10,7 +10,7 @@ function getErrorMessage(error: unknown): string {
   return String(error ?? '');
 }
 
-function isRecoverableLazyRouteError(error: unknown): boolean {
+export function isRecoverableLazyRouteError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase();
   return (
     message.includes('failed to fetch dynamically imported module') ||
@@ -36,7 +36,7 @@ function clearLazyRouteRecovery(routeId: string): void {
   }
 }
 
-function attemptLazyRouteRecovery(routeId: string): boolean {
+export function attemptLazyRouteRecovery(routeId: string): boolean {
   if (typeof window === 'undefined') {
     return false;
   }
@@ -58,18 +58,22 @@ function attemptLazyRouteRecovery(routeId: string): boolean {
   return true;
 }
 
-export function lazyRouteWithRecovery<T extends ComponentType<unknown>>(routeId: string, loader: () => Promise<{ default: T }>) {
+export function lazyWithRecovery<T extends ComponentType<unknown>>(recoveryId: string, loader: () => Promise<{ default: T }>) {
   return lazy(async () => {
     try {
       const module = await loader();
-      clearLazyRouteRecovery(routeId);
+      clearLazyRouteRecovery(recoveryId);
       return module;
     } catch (error) {
-      if (isRecoverableLazyRouteError(error) && attemptLazyRouteRecovery(routeId)) {
+      if (isRecoverableLazyRouteError(error) && attemptLazyRouteRecovery(recoveryId)) {
         await new Promise<never>(() => {});
       }
 
       throw error;
     }
   });
+}
+
+export function lazyRouteWithRecovery<T extends ComponentType<unknown>>(routeId: string, loader: () => Promise<{ default: T }>) {
+  return lazyWithRecovery(routeId, loader);
 }
