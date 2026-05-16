@@ -2464,6 +2464,7 @@ export function Sidebar() {
     };
   }, [baseActivityTreeItems, extensionRegistry.activityTreeItemStyles]);
 
+  const activityTreeExtensionActions = extensionRegistry.activityTreeItemActions;
   const activityTreeExtensionContextMenus = useMemo(
     () =>
       extensionRegistry.contextMenus.filter(
@@ -2504,6 +2505,26 @@ export function Sidebar() {
       }
     },
     [getActivityTreePaClient, navigate, showSidebarNotice],
+  );
+  const handleActivityTreeExtensionAction = useCallback(
+    async (actionId: string, item: import('../activity/activityTree').ActivityTreeItem) => {
+      const action = activityTreeExtensionActions.find((candidate) => candidate.id === actionId);
+      if (!action) return;
+      const conversationId = typeof item.metadata?.conversationId === 'string' ? item.metadata.conversationId : null;
+      const input = {
+        itemId: item.id,
+        kind: item.kind,
+        title: item.title,
+        conversationId,
+        cwd: typeof item.metadata?.cwd === 'string' ? item.metadata.cwd : undefined,
+      };
+      try {
+        await getActivityTreePaClient(action.extensionId).extension.invoke(action.action, input);
+      } catch (error) {
+        showSidebarNotice('danger', `${action.title} failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+      }
+    },
+    [activityTreeExtensionActions, getActivityTreePaClient, showSidebarNotice],
   );
 
   function clearDragState() {
@@ -3756,6 +3777,10 @@ export function Sidebar() {
                 canDragItem={canDragActivityTreeItem}
                 canDropItem={canDropActivityTreeItem}
                 collapsedGroupItemIds={collapsedActivityTreeGroupItemIds}
+                inlineActions={activityTreeExtensionActions.map((action) => ({ id: action.id, title: action.title, icon: action.icon }))}
+                onInlineAction={(actionId, item) => {
+                  void handleActivityTreeExtensionAction(actionId, item);
+                }}
                 onToggleGroupItem={(item) => {
                   const groupKey = getActivityTreeGroupKey(item);
                   if (groupKey) {

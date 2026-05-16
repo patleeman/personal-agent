@@ -23,6 +23,8 @@ interface ActivityTreeViewProps {
   ) => boolean;
   collapsedGroupItemIds?: ReadonlySet<string>;
   onToggleGroupItem?: (item: ActivityTreeItem) => void;
+  inlineActions?: Array<{ id: string; title: string; icon?: string }>;
+  onInlineAction?: (actionId: string, item: ActivityTreeItem) => void;
   onArchiveItem?: (item: ActivityTreeItem) => void;
   onCreateChildItem?: (item: ActivityTreeItem) => void;
   onOpenItem?: (item: ActivityTreeItem) => void;
@@ -70,6 +72,8 @@ export function ActivityTreeView({
   canDropItem,
   collapsedGroupItemIds,
   onToggleGroupItem,
+  inlineActions = [],
+  onInlineAction,
   onArchiveItem,
   onCreateChildItem,
   onOpenItem,
@@ -393,6 +397,23 @@ export function ActivityTreeView({
                   {timeAgoCompact(item.updatedAt)}
                 </span>
               ) : null}
+              {inlineActions.map((action) => (
+                <span
+                  key={action.id}
+                  role="button"
+                  tabIndex={-1}
+                  className="shrink-0 rounded px-1 text-[12px] leading-none text-dim opacity-0 hover:bg-surface-hover hover:text-primary group-hover:opacity-100 group-focus-within:opacity-100"
+                  aria-label={action.title}
+                  title={action.title}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onInlineAction?.(action.id, item);
+                  }}
+                >
+                  {action.icon ?? '•'}
+                </span>
+              ))}
               {canArchive ? (
                 <span
                   role="button"

@@ -136,6 +136,11 @@ The manifest declares what your extension contributes:
 | `contextMenus`                | Right-click menu items                                      | [See below](#context-menus-contextmenus)                                                  |
 | `threadHeaderActions`         | Component buttons in the Threads header                     | [See below](#thread-header-actions-threadheaderactions)                                   |
 | `statusBarItems`              | Labels in the composer status bar                           | [See below](#status-bar-items-statusbaritems)                                             |
+| `conversationLifecycle`       | Conversation-state banners/inline UI                        | [See below](#conversation-lifecycle-conversationlifecycle)                                |
+| `composerAttachmentProviders` | Buttons that add/derive composer attachment context         | [See below](#composer-attachments)                                                        |
+| `composerAttachmentRenderers` | Renderers for extension-owned composer attachment chips     | [See below](#composer-attachments)                                                        |
+| `composerAttachmentResolvers` | Backend resolvers for extension-owned attachment refs       | [See below](#composer-attachments)                                                        |
+| `activityTreeItemActions`     | Inline action buttons on thread/activity tree rows          | [See below](#activity-tree-item-actions-activitytreeitemactions)                          |
 
 ### Views
 
@@ -199,6 +204,54 @@ Backend handler receives:
   messageRole: 'user' | 'assistant';
   blockId: string;
   conversationId: string;
+}
+```
+
+### Conversation Lifecycle (`conversationLifecycle`)
+
+Add React UI for conversation state transitions such as waiting for user input, blocked/takeover state, model or tool errors, active goal mode, compaction, or an active run.
+
+```json
+{
+  "contributes": {
+    "conversationLifecycle": [
+      {
+        "id": "approval-banner",
+        "component": "ApprovalBanner",
+        "events": ["waiting-for-user", "blocked"],
+        "slot": "banner",
+        "priority": 10
+      }
+    ]
+  }
+}
+```
+
+Components receive `{ pa, lifecycleContext }`, where `lifecycleContext` includes `conversationId`, `cwd`, `event`, `isStreaming`, `hasGoal`, `isCompacting`, and optional `error`.
+
+### Composer Attachments
+
+Use `composerAttachmentProviders` for buttons above the composer attachment shelf. The provider action receives `{ conversationId, cwd, composerText }`; returning a string or `{ "text": "..." }` appends text to the composer. `composerAttachmentRenderers` and `composerAttachmentResolvers` reserve the manifest/API seam for extension-owned attachment refs.
+
+```json
+{
+  "contributes": {
+    "composerAttachmentProviders": [{ "id": "attach-ticket", "title": "Attach Ticket", "action": "attachTicket", "icon": "🎫" }],
+    "composerAttachmentRenderers": [{ "id": "ticket-chip", "type": "jira-ticket", "component": "TicketAttachment" }],
+    "composerAttachmentResolvers": [{ "id": "ticket-resolver", "type": "jira-ticket", "action": "resolveTicket" }]
+  }
+}
+```
+
+### Activity Tree Item Actions (`activityTreeItemActions`)
+
+Add compact inline buttons to thread/activity tree rows. The action receives `{ itemId, kind, title, conversationId, cwd }`.
+
+```json
+{
+  "contributes": {
+    "activityTreeItemActions": [{ "id": "summarize-thread", "title": "Summarize", "action": "summarizeThread", "icon": "Σ" }]
+  }
 }
 ```
 

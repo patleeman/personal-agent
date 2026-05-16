@@ -1208,6 +1208,83 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.conversationLifecycle !== undefined) {
+    for (const [index, item] of assertRecordArray(contributes.conversationLifecycle, 'contributes.conversationLifecycle').entries()) {
+      requireString(item.id, `contributes.conversationLifecycle[${index}].id`);
+      requireString(item.component, `contributes.conversationLifecycle[${index}].component`);
+      requireStringArray(item.events, `contributes.conversationLifecycle[${index}].events`);
+      for (const [eventIndex, event] of (item.events as string[]).entries()) {
+        validateEnum(
+          event,
+          [
+            'before-run',
+            'after-run-start',
+            'blocked',
+            'waiting-for-user',
+            'model-error',
+            'tool-error',
+            'goal-active',
+            'compaction-available',
+          ],
+          `contributes.conversationLifecycle[${index}].events[${eventIndex}]`,
+        );
+      }
+      if (item.slot !== undefined) validateEnum(item.slot, ['banner', 'inline'], `contributes.conversationLifecycle[${index}].slot`);
+      if (item.priority !== undefined && (typeof item.priority !== 'number' || !Number.isInteger(item.priority)))
+        throw new Error(`Extension manifest contributes.conversationLifecycle[${index}].priority must be an integer.`);
+    }
+  }
+
+  if (contributes.composerAttachmentProviders !== undefined) {
+    for (const [index, provider] of assertRecordArray(
+      contributes.composerAttachmentProviders,
+      'contributes.composerAttachmentProviders',
+    ).entries()) {
+      requireString(provider.id, `contributes.composerAttachmentProviders[${index}].id`);
+      requireString(provider.title, `contributes.composerAttachmentProviders[${index}].title`);
+      requireString(provider.action, `contributes.composerAttachmentProviders[${index}].action`);
+      validateOptionalString(provider.icon, `contributes.composerAttachmentProviders[${index}].icon`);
+      if (provider.priority !== undefined && (typeof provider.priority !== 'number' || !Number.isInteger(provider.priority)))
+        throw new Error(`Extension manifest contributes.composerAttachmentProviders[${index}].priority must be an integer.`);
+    }
+  }
+
+  if (contributes.composerAttachmentRenderers !== undefined) {
+    for (const [index, renderer] of assertRecordArray(
+      contributes.composerAttachmentRenderers,
+      'contributes.composerAttachmentRenderers',
+    ).entries()) {
+      requireString(renderer.id, `contributes.composerAttachmentRenderers[${index}].id`);
+      requireString(renderer.type, `contributes.composerAttachmentRenderers[${index}].type`);
+      requireString(renderer.component, `contributes.composerAttachmentRenderers[${index}].component`);
+      if (renderer.priority !== undefined && (typeof renderer.priority !== 'number' || !Number.isInteger(renderer.priority)))
+        throw new Error(`Extension manifest contributes.composerAttachmentRenderers[${index}].priority must be an integer.`);
+    }
+  }
+
+  if (contributes.composerAttachmentResolvers !== undefined) {
+    for (const [index, resolver] of assertRecordArray(
+      contributes.composerAttachmentResolvers,
+      'contributes.composerAttachmentResolvers',
+    ).entries()) {
+      requireString(resolver.id, `contributes.composerAttachmentResolvers[${index}].id`);
+      requireString(resolver.type, `contributes.composerAttachmentResolvers[${index}].type`);
+      requireString(resolver.action, `contributes.composerAttachmentResolvers[${index}].action`);
+    }
+  }
+
+  if (contributes.activityTreeItemActions !== undefined) {
+    for (const [index, action] of assertRecordArray(contributes.activityTreeItemActions, 'contributes.activityTreeItemActions').entries()) {
+      requireString(action.id, `contributes.activityTreeItemActions[${index}].id`);
+      requireString(action.title, `contributes.activityTreeItemActions[${index}].title`);
+      requireString(action.action, `contributes.activityTreeItemActions[${index}].action`);
+      validateOptionalString(action.icon, `contributes.activityTreeItemActions[${index}].icon`);
+      validateOptionalString(action.when, `contributes.activityTreeItemActions[${index}].when`);
+      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority)))
+        throw new Error(`Extension manifest contributes.activityTreeItemActions[${index}].priority must be an integer.`);
+    }
+  }
+
   if (contributes.settingsComponent !== undefined) {
     if (!isRecord(contributes.settingsComponent)) {
       throw new Error('Extension manifest contributes.settingsComponent must be an object.');
@@ -1572,6 +1649,11 @@ export function readExtensionSchema() {
       'conversationDecorators',
       'activityTreeItemElements',
       'activityTreeItemStyles',
+      'conversationLifecycle',
+      'composerAttachmentProviders',
+      'composerAttachmentRenderers',
+      'composerAttachmentResolvers',
+      'activityTreeItemActions',
       'contextMenus',
       'threadHeaderActions',
       'statusBarItems',

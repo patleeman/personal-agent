@@ -121,6 +121,60 @@ export interface ExtensionActivityTreeItemStyleRegistration {
   priority?: number;
 }
 
+export interface ExtensionConversationLifecycleRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  events: Array<
+    | 'before-run'
+    | 'after-run-start'
+    | 'blocked'
+    | 'waiting-for-user'
+    | 'model-error'
+    | 'tool-error'
+    | 'goal-active'
+    | 'compaction-available'
+  >;
+  slot: 'banner' | 'inline';
+  priority?: number;
+  frontendEntry?: string;
+}
+
+export interface ExtensionComposerAttachmentProviderRegistration {
+  extensionId: string;
+  id: string;
+  title: string;
+  action: string;
+  icon?: string;
+  priority?: number;
+}
+
+export interface ExtensionComposerAttachmentRendererRegistration {
+  extensionId: string;
+  id: string;
+  type: string;
+  component: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
+export interface ExtensionComposerAttachmentResolverRegistration {
+  extensionId: string;
+  id: string;
+  type: string;
+  action: string;
+}
+
+export interface ExtensionActivityTreeItemActionRegistration {
+  extensionId: string;
+  id: string;
+  title: string;
+  action: string;
+  icon?: string;
+  when?: string;
+  priority?: number;
+}
+
 export interface ExtensionComposerShelfRegistration {
   extensionId: string;
   id: string;
@@ -190,6 +244,11 @@ const EMPTY_EXTENSION_REGISTRY_STATE: ExtensionRegistryState = {
   conversationDecorators: [],
   activityTreeItemElements: [],
   activityTreeItemStyles: [],
+  conversationLifecycle: [],
+  composerAttachmentProviders: [],
+  composerAttachmentRenderers: [],
+  composerAttachmentResolvers: [],
+  activityTreeItemActions: [],
   loading: false,
   error: null,
 };
@@ -223,6 +282,11 @@ export interface ExtensionRegistryState {
   conversationDecorators: ExtensionConversationDecoratorRegistration[];
   activityTreeItemElements: ExtensionActivityTreeItemElementRegistration[];
   activityTreeItemStyles: ExtensionActivityTreeItemStyleRegistration[];
+  conversationLifecycle: ExtensionConversationLifecycleRegistration[];
+  composerAttachmentProviders: ExtensionComposerAttachmentProviderRegistration[];
+  composerAttachmentRenderers: ExtensionComposerAttachmentRendererRegistration[];
+  composerAttachmentResolvers: ExtensionComposerAttachmentResolverRegistration[];
+  activityTreeItemActions: ExtensionActivityTreeItemActionRegistration[];
   loading: boolean;
   error: string | null;
 }
@@ -479,6 +543,84 @@ function normalizeActivityTreeItemStyles(extensions: ExtensionManifest[]): Exten
   return result;
 }
 
+function normalizeConversationLifecycle(extensions: ExtensionManifest[]): ExtensionConversationLifecycleRegistration[] {
+  const result: ExtensionConversationLifecycleRegistration[] = [];
+  for (const extension of extensions) {
+    const items = extension.contributes?.conversationLifecycle;
+    if (!items?.length) continue;
+    for (const item of items) {
+      result.push({
+        extensionId: extension.id,
+        id: item.id,
+        component: item.component,
+        events: item.events,
+        slot: item.slot ?? 'banner',
+        ...(typeof item.priority === 'number' ? { priority: item.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
+function normalizeComposerAttachmentProviders(extensions: ExtensionManifest[]): ExtensionComposerAttachmentProviderRegistration[] {
+  const result: ExtensionComposerAttachmentProviderRegistration[] = [];
+  for (const extension of extensions)
+    for (const provider of extension.contributes?.composerAttachmentProviders ?? [])
+      result.push({
+        extensionId: extension.id,
+        id: provider.id,
+        title: provider.title,
+        action: provider.action,
+        ...(provider.icon ? { icon: provider.icon } : {}),
+        ...(typeof provider.priority === 'number' ? { priority: provider.priority } : {}),
+      });
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
+function normalizeComposerAttachmentRenderers(extensions: ExtensionManifest[]): ExtensionComposerAttachmentRendererRegistration[] {
+  const result: ExtensionComposerAttachmentRendererRegistration[] = [];
+  for (const extension of extensions)
+    for (const renderer of extension.contributes?.composerAttachmentRenderers ?? [])
+      result.push({
+        extensionId: extension.id,
+        id: renderer.id,
+        type: renderer.type,
+        component: renderer.component,
+        ...(typeof renderer.priority === 'number' ? { priority: renderer.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
+function normalizeComposerAttachmentResolvers(extensions: ExtensionManifest[]): ExtensionComposerAttachmentResolverRegistration[] {
+  const result: ExtensionComposerAttachmentResolverRegistration[] = [];
+  for (const extension of extensions)
+    for (const resolver of extension.contributes?.composerAttachmentResolvers ?? [])
+      result.push({ extensionId: extension.id, id: resolver.id, type: resolver.type, action: resolver.action });
+  return result;
+}
+
+function normalizeActivityTreeItemActions(extensions: ExtensionManifest[]): ExtensionActivityTreeItemActionRegistration[] {
+  const result: ExtensionActivityTreeItemActionRegistration[] = [];
+  for (const extension of extensions)
+    for (const action of extension.contributes?.activityTreeItemActions ?? [])
+      result.push({
+        extensionId: extension.id,
+        id: action.id,
+        title: action.title,
+        action: action.action,
+        ...(action.icon ? { icon: action.icon } : {}),
+        ...(action.when ? { when: action.when } : {}),
+        ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+      });
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
 function normalizeContextMenus(extensions: ExtensionManifest[]): ExtensionContextMenuRegistration[] {
   const result: ExtensionContextMenuRegistration[] = [];
   for (const extension of extensions) {
@@ -612,6 +754,11 @@ function useExtensionRegistryLoader(): ExtensionRegistryState {
             conversationDecorators: normalizeConversationDecorators(enabledRegistryExtensions),
             activityTreeItemElements: normalizeActivityTreeItemElements(enabledRegistryExtensions),
             activityTreeItemStyles: normalizeActivityTreeItemStyles(enabledRegistryExtensions),
+            conversationLifecycle: normalizeConversationLifecycle(enabledRegistryExtensions),
+            composerAttachmentProviders: normalizeComposerAttachmentProviders(enabledRegistryExtensions),
+            composerAttachmentRenderers: normalizeComposerAttachmentRenderers(enabledRegistryExtensions),
+            composerAttachmentResolvers: normalizeComposerAttachmentResolvers(enabledRegistryExtensions),
+            activityTreeItemActions: normalizeActivityTreeItemActions(enabledRegistryExtensions),
             loading: false,
             error: null,
           });

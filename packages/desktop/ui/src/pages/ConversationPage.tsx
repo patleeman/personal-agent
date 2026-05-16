@@ -210,6 +210,7 @@ import {
 } from '../desktop/desktopBridge';
 import { ComposerShelfHost } from '../extensions/ComposerShelfHost';
 import { ConversationHeaderHost } from '../extensions/ConversationHeaderHost';
+import { ConversationLifecycleHost } from '../extensions/ConversationLifecycleHost';
 import { buildExtensionMentionItems } from '../extensions/extensionMentions';
 import { createNativeExtensionClient } from '../extensions/nativePaClient';
 import { NewConversationPanelHost } from '../extensions/NewConversationPanelHost';
@@ -5355,6 +5356,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const renameConversationDisabled = conversationNeedsTakeover || conversationCwdEditorOpen || conversationCwdBusy;
   const { composerShelves, conversationHeaderElements, newConversationPanels } = extensionRegistry;
+  const lifecycleEvent = sessionError
+    ? 'model-error'
+    : pendingAskUserQuestion
+      ? 'waiting-for-user'
+      : conversationNeedsTakeover
+        ? 'blocked'
+        : stream.goalState?.status === 'active' || composerGoalPending
+          ? 'goal-active'
+          : stream.isCompacting
+            ? 'compaction-available'
+            : conversationRunningForPage
+              ? 'after-run-start'
+              : null;
+  const conversationLifecycleElements = useMemo(
+    () => extensionRegistry.conversationLifecycle.filter((item) => lifecycleEvent && item.events.includes(lifecycleEvent)),
+    [extensionRegistry.conversationLifecycle, lifecycleEvent],
+  );
+  const conversationLifecycleContext = useMemo(
+    () =>
+      lifecycleEvent
+        ? {
+            conversationId: id ?? null,
+            cwd: currentCwd ?? null,
+            event: lifecycleEvent as NonNullable<typeof lifecycleEvent>,
+            isStreaming: conversationRunningForPage,
+            hasGoal: stream.goalState?.status === 'active' || composerGoalPending,
+            isCompacting: stream.isCompacting,
+            error: sessionError ?? null,
+          }
+        : null,
+    [
+      composerGoalPending,
+      conversationRunningForPage,
+      currentCwd,
+      id,
+      lifecycleEvent,
+      sessionError,
+      stream.goalState?.status,
+      stream.isCompacting,
+    ],
+  );
   const composerShelvesTop = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'top'), [composerShelves]);
   const composerShelvesBottom = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'bottom'), [composerShelves]);
   const suggestedContextShelfState = useMemo(
@@ -5407,8 +5449,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     (!draft && orderedDeferredResumes.length > 0) ||
     pendingBrowserComments.length > 0 ||
     Boolean(pendingAskUserQuestion && composerActiveQuestion);
+  const composerAttachmentProviders = extensionRegistry.composerAttachmentProviders;
+  const composerAttachmentProviderClientsRef = useRef<Map<string, ReturnType<typeof createNativeExtensionClient>>>(new Map());
+  const invokeComposerAttachmentProvider = useCallback(
+    async (provider: (typeof composerAttachmentProviders)[number]) => {
+      let client = composerAttachmentProviderClientsRef.current.get(provider.extensionId);
+      if (!client) {
+        client = createNativeExtensionClient(provider.extensionId);
+        composerAttachmentProviderClientsRef.current.set(provider.extensionId, client);
+      }
+      const result = await client.extension.invoke(provider.action, {
+        conversationId: id ?? null,
+        cwd: currentCwd ?? null,
+        composerText: input,
+      });
+      if (typeof result === 'string' && result.trim()) setInput(input ? `${input}\n${result}` : result);
+      if (result && typeof result === 'object' && 'text' in result && typeof result.text === 'string' && result.text.trim()) {
+        setInput(input ? `${input}\n${result.text}` : result.text);
+      }
+    },
+    [composerAttachmentProviders, currentCwd, id, input, setInput],
+  );
   const hasComposerAttachmentShelfContent =
-    attachments.length > 0 || drawingAttachments.length > 0 || drawingsBusy || Boolean(drawingsError);
+    attachments.length > 0 ||
+    drawingAttachments.length > 0 ||
+    drawingsBusy ||
+    Boolean(drawingsError) ||
+    composerAttachmentProviders.length > 0;
   const keyboardOpen = keyboardInset > 120;
   const conversationPerformanceMode = resolveConversationPerformanceMode({
     messageCount: realMessages?.length ?? 0,
@@ -5592,6 +5659,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   ))}
                 </div>
               )}
+              {conversationLifecycleContext && conversationLifecycleElements.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  {conversationLifecycleElements.map((element) => (
+                    <ConversationLifecycleHost
+                      key={`${element.extensionId}:${element.id}`}
+                      registration={element}
+                      lifecycleContext={conversationLifecycleContext}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {visibleConversationBootstrap?.integrityWarning && (
                 <div className="mt-1 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400">
                   <svg
@@ -5936,6 +6014,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             {hasComposerAttachmentShelfContent && (
               <div className="mb-2 max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+                {composerAttachmentProviders.length > 0 ? (
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {composerAttachmentProviders.map((provider) => (
+                      <button
+                        key={`${provider.extensionId}:${provider.id}`}
+                        type="button"
+                        className="ui-toolbar-button px-2 py-1 text-[11px]"
+                        onClick={() => {
+                          void invokeComposerAttachmentProvider(provider);
+                        }}
+                      >
+                        {provider.icon ? <span aria-hidden="true">{provider.icon}</span> : null}
+                        <span>{provider.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <ComposerAttachmentShelf
                   attachments={attachments}
                   drawingAttachments={drawingAttachments}

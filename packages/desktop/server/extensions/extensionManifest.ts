@@ -130,6 +130,11 @@ export interface ExtensionContributions {
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   activityTreeItemElements?: ExtensionActivityTreeItemElementContribution[];
   activityTreeItemStyles?: ExtensionActivityTreeItemStyleContribution[];
+  conversationLifecycle?: ExtensionConversationLifecycleContribution[];
+  composerAttachmentProviders?: ExtensionComposerAttachmentProviderContribution[];
+  composerAttachmentRenderers?: ExtensionComposerAttachmentRendererContribution[];
+  composerAttachmentResolvers?: ExtensionComposerAttachmentResolverContribution[];
+  activityTreeItemActions?: ExtensionActivityTreeItemActionContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
   secrets?: Record<string, ExtensionSecretContribution>;
   secretBackends?: ExtensionSecretBackendContribution[];
@@ -209,6 +214,55 @@ export interface ExtensionThreadHeaderActionContribution {
   id: string;
   component: string;
   title?: string;
+  priority?: number;
+}
+
+type ExtensionConversationLifecycleSlot = 'banner' | 'inline';
+type ExtensionConversationLifecycleEvent =
+  | 'before-run'
+  | 'after-run-start'
+  | 'blocked'
+  | 'waiting-for-user'
+  | 'model-error'
+  | 'tool-error'
+  | 'goal-active'
+  | 'compaction-available';
+
+interface ExtensionConversationLifecycleContribution {
+  id: string;
+  component: string;
+  events: ExtensionConversationLifecycleEvent[];
+  slot?: ExtensionConversationLifecycleSlot;
+  priority?: number;
+}
+
+interface ExtensionComposerAttachmentProviderContribution {
+  id: string;
+  title: string;
+  action: string;
+  icon?: string;
+  priority?: number;
+}
+
+interface ExtensionComposerAttachmentRendererContribution {
+  id: string;
+  type: string;
+  component: string;
+  priority?: number;
+}
+
+interface ExtensionComposerAttachmentResolverContribution {
+  id: string;
+  type: string;
+  action: string;
+}
+
+interface ExtensionActivityTreeItemActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  icon?: string;
+  when?: string;
   priority?: number;
 }
 

@@ -285,6 +285,55 @@ export interface ExtensionThreadHeaderActionContribution {
   priority?: number;
 }
 
+export type ExtensionConversationLifecycleSlot = 'banner' | 'inline';
+export type ExtensionConversationLifecycleEvent =
+  | 'before-run'
+  | 'after-run-start'
+  | 'blocked'
+  | 'waiting-for-user'
+  | 'model-error'
+  | 'tool-error'
+  | 'goal-active'
+  | 'compaction-available';
+
+export interface ExtensionConversationLifecycleContribution {
+  id: string;
+  component: string;
+  events: ExtensionConversationLifecycleEvent[];
+  slot?: ExtensionConversationLifecycleSlot;
+  priority?: number;
+}
+
+export interface ExtensionComposerAttachmentProviderContribution {
+  id: string;
+  title: string;
+  action: string;
+  icon?: string;
+  priority?: number;
+}
+
+export interface ExtensionComposerAttachmentRendererContribution {
+  id: string;
+  type: string;
+  component: string;
+  priority?: number;
+}
+
+export interface ExtensionComposerAttachmentResolverContribution {
+  id: string;
+  type: string;
+  action: string;
+}
+
+export interface ExtensionActivityTreeItemActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  icon?: string;
+  when?: string;
+  priority?: number;
+}
+
 export interface ThreadHeaderActionContext {
   activeConversationId?: string | null;
   cwd?: string | null;
@@ -470,6 +519,11 @@ export interface ExtensionContributions {
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   activityTreeItemElements?: ExtensionActivityTreeItemElementContribution[];
   activityTreeItemStyles?: ExtensionActivityTreeItemStyleContribution[];
+  conversationLifecycle?: ExtensionConversationLifecycleContribution[];
+  composerAttachmentProviders?: ExtensionComposerAttachmentProviderContribution[];
+  composerAttachmentRenderers?: ExtensionComposerAttachmentRendererContribution[];
+  composerAttachmentResolvers?: ExtensionComposerAttachmentResolverContribution[];
+  activityTreeItemActions?: ExtensionActivityTreeItemActionContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
   secrets?: Record<string, ExtensionSecretContribution>;
   secretBackends?: ExtensionSecretBackendContribution[];
