@@ -14,7 +14,8 @@ function getComposerPreferenceInlineLimit(composerShellWidth: number | null): nu
   if (width >= 760) return 4;
   if (width >= 660) return 3;
   if (width >= 560) return 2;
-  return 1;
+  if (width >= 460) return 1;
+  return 0;
 }
 
 export function ConversationComposerInputControls({

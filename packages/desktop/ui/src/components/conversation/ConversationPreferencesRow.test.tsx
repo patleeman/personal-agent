@@ -107,4 +107,21 @@ describe('ConversationPreferencesRow', () => {
       unmount();
     }
   });
+
+  it('moves every preference control into the settings menu when no inline controls fit', () => {
+    const { container, unmount } = renderInteractive({ inlineLimit: 0 });
+
+    try {
+      expect(container.textContent).not.toContain('model-preferences:inline');
+      expect(container.textContent).not.toContain('goal-mode:inline');
+
+      const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
+      expect(moreButton).not.toBeNull();
+      act(() => moreButton?.click());
+      expect(container.textContent).toContain('model-preferences:menu');
+      expect(container.textContent).toContain('goal-mode:menu');
+    } finally {
+      unmount();
+    }
+  });
 });

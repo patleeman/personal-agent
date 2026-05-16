@@ -25,7 +25,7 @@ export function ConversationPreferencesRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const inlineCount = Math.max(1, inlineLimit);
+  const inlineCount = Math.max(0, inlineLimit);
   const inlineControls = composerButtons.slice(0, inlineCount);
   const menuControls = composerButtons.slice(inlineCount);
   const hasMenuItems = menuControls.length > 0;
