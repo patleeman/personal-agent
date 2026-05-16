@@ -1093,6 +1093,7 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       for (const [kindIndex, kind] of kinds.entries()) {
         validateEnum(kind, ['text', 'messages', 'files', 'transcriptRange'], `contributes.selectionActions[${index}].kinds[${kindIndex}]`);
       }
+      validateOptionalString(action.icon, `contributes.selectionActions[${index}].icon`);
       validateOptionalString(action.when, `contributes.selectionActions[${index}].when`);
       if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
         throw new Error(`Extension manifest contributes.selectionActions[${index}].priority must be an integer.`);

@@ -468,7 +468,7 @@ The handler receives `{ text, mentionIds }` and returns `{ contextBlocks, refere
 
 ## Selection, transcript blocks, services, subscriptions, and dependencies
 
-Use `contributes.selectionActions` for actions on selected text, messages, files, or transcript ranges. Frontend surfaces can read and publish shared selection with `pa.selection.get()`, `pa.selection.set(...)`, and `pa.selection.subscribe(...)`; the host also emits `host:selection` events for subscription consumers.
+Use `contributes.selectionActions` for actions on selected text, messages, files, or transcript ranges. Selection actions support compact `icon` labels and static `args`; transcript selection menus merge those args with the active selection when invoking host composer actions like `composer.replyToSelection`. Frontend surfaces can read and publish shared selection with `pa.selection.get()`, `pa.selection.set(...)`, and `pa.selection.subscribe(...)`; the host also emits `host:selection` events for subscription consumers.
 
 Use `contributes.transcriptBlocks` plus `ctx.conversations.appendTranscriptBlock(...)` / `ctx.conversations.updateTranscriptBlock(...)` for extension-owned durable visible transcript blocks. This is the preferred seam for product-specific interactive blocks instead of baking new block types into core.
 

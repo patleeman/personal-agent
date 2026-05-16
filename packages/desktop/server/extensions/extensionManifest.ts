@@ -237,6 +237,8 @@ export interface ExtensionSelectionActionContribution {
   title: string;
   action: string;
   kinds: ExtensionSelectionKind[];
+  icon?: string;
+  args?: unknown;
   when?: string;
   priority?: number;
 }

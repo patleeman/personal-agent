@@ -347,6 +347,10 @@ export interface ExtensionSelectionActionContribution {
   title: string;
   action: string;
   kinds: ExtensionSelectionKind[];
+  /** Compact visual marker for selection action rows, for example an emoji. */
+  icon?: string;
+  /** Static action arguments merged with the active selection at execution time. */
+  args?: unknown;
   when?: string;
   priority?: number;
 }

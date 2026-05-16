@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "id": "system-reply-actions",
+  "name": "Reply Actions",
+  "description": "Transcript selection reply actions and emoji draft starters.",
+  "version": "0.1.0",
+  "packageType": "system",
+  "contributes": {
+    "selectionActions": [
+      {
+        "id": "reply-agree",
+        "title": "Agree / proceed",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "👍",
+        "priority": 100,
+        "args": { "draftText": "👍", "interpretation": "Agree / proceed" }
+      },
+      {
+        "id": "reply-disagree",
+        "title": "Disagree / stop",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "👎",
+        "priority": 90,
+        "args": { "draftText": "👎", "interpretation": "Disagree / stop" }
+      },
+      {
+        "id": "reply-question",
+        "title": "Ask / clarify",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "❓",
+        "priority": 80,
+        "args": { "draftText": "❓", "interpretation": "Ask / clarify" }
+      },
+      {
+        "id": "reply-think-harder",
+        "title": "Think harder",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "🤔",
+        "priority": 70,
+        "args": { "draftText": "🤔", "interpretation": "Think harder / reconsider" }
+      },
+      {
+        "id": "reply-try-again",
+        "title": "Try again",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "🔁",
+        "priority": 60,
+        "args": { "draftText": "🔁", "interpretation": "Try again / another pass" }
+      },
+      {
+        "id": "reply-revise",
+        "title": "Revise this",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "✏️",
+        "priority": 50,
+        "args": { "draftText": "✏️", "interpretation": "Revise this" }
+      }
+    ]
+  }
+}

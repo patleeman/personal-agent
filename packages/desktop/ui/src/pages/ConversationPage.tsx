@@ -4358,20 +4358,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   const handleReplyToSelection = useCallback(
-    (selection: { text: string }) => {
+    (selection: { text: string; action?: { args?: unknown } }) => {
       if (!selection.text) {
         return;
       }
 
       const currentInput = textareaRef.current?.value ?? input;
-      const next = insertReplyQuoteIntoComposer(currentInput, selection.text);
+      const quoted = insertReplyQuoteIntoComposer(currentInput, selection.text);
+      const args =
+        selection.action?.args && typeof selection.action.args === 'object' ? (selection.action.args as Record<string, unknown>) : null;
+      const draftText = typeof args?.draftText === 'string' ? args.draftText : '';
+      const interpretation = typeof args?.interpretation === 'string' ? args.interpretation : '';
+      const starter = [draftText, interpretation ? `Interpretation: ${interpretation}` : ''].filter(Boolean).join('\n\n');
+      const nextText = starter
+        ? `${quoted.text.slice(0, quoted.selectionStart)}${starter}${quoted.text.slice(quoted.selectionEnd)}`
+        : quoted.text;
+      const nextSelectionStart = starter ? quoted.selectionStart + starter.length : quoted.selectionStart;
+      const nextSelectionEnd = starter ? nextSelectionStart : quoted.selectionEnd;
 
-      setInput(next.text);
+      setInput(nextText);
       setSlashIdx(0);
       setMentionIdx(0);
       composerSelectionRef.current = {
-        start: next.selectionStart,
-        end: next.selectionEnd,
+        start: nextSelectionStart,
+        end: nextSelectionEnd,
       };
 
       window.requestAnimationFrame(() => {
@@ -4381,7 +4391,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
 
         el.focus();
-        el.setSelectionRange(next.selectionStart, next.selectionEnd);
+        el.setSelectionRange(nextSelectionStart, nextSelectionEnd);
       });
     },
     [input, setInput],
@@ -5630,6 +5640,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 }
                 onRewindMessage={!renderingStaleTranscript && id && !conversationRunningForPage ? rewindConversationFromMessage : undefined}
                 onReplyToSelection={renderingStaleTranscript ? undefined : handleReplyToSelection}
+                selectionActions={renderingStaleTranscript ? undefined : extensionRegistry.selectionActions}
                 onHydrateMessage={renderingStaleTranscript ? undefined : hydrateHistoricalBlock}
                 hydratingMessageBlockIds={renderingStaleTranscript ? undefined : hydratingHistoricalBlockIdSet}
                 onOpenArtifact={renderingStaleTranscript ? undefined : openArtifact}

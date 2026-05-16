@@ -861,12 +861,21 @@ const forked = await ctx.conversations.fork({ conversationId, title: 'Bug bash b
 
 ## Selection actions, transcript blocks, services, and subscriptions
 
-Extensions can declare selection-aware actions for selected text, files, messages, or transcript ranges. The frontend SDK exposes `pa.selection.get()`, `pa.selection.set(...)`, and `pa.selection.subscribe(...)`; hosts and extensions publish the current selection through the same shared model.
+Extensions can declare selection-aware actions for selected text, files, messages, or transcript ranges. Selection actions can include compact `icon` labels and static `args`; transcript selection menus merge those args with the active selection for composer actions such as `composer.replyToSelection`. The frontend SDK exposes `pa.selection.get()`, `pa.selection.set(...)`, and `pa.selection.subscribe(...)`; hosts and extensions publish the current selection through the same shared model.
 
 ```json
 {
   "contributes": {
-    "selectionActions": [{ "id": "send-selection", "title": "Send to Board", "action": "sendSelection", "kinds": ["text", "messages"] }]
+    "selectionActions": [
+      {
+        "id": "reply-agree",
+        "title": "Agree / proceed",
+        "action": "composer.replyToSelection",
+        "kinds": ["text", "transcriptRange"],
+        "icon": "👍",
+        "args": { "draftText": "👍", "interpretation": "Agree / proceed" }
+      }
+    ]
   }
 }
 ```

@@ -1,7 +1,7 @@
 import React, { memo, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import { recordChatRenderTiming } from '../../client/perfDiagnostics';
-import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
+import { type ExtensionSelectionActionRegistration, useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import { ChatRenderItemView } from './ChatRenderItemView.js';
@@ -12,7 +12,7 @@ import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.j
 import { SystemPromptMessage } from './MessageBlocks.js';
 import { getStreamingStatusLabel } from './toolPresentation.js';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
-import { useChatReplySelection } from './useChatReplySelection.js';
+import { type TranscriptSelectionAction, useChatReplySelection } from './useChatReplySelection.js';
 import { useChatWindowing } from './useChatWindowing.js';
 import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
 
@@ -33,7 +33,13 @@ interface ChatViewProps {
   layout?: ChatViewLayout;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onRewindMessage?: (messageIndex: number) => Promise<void> | void;
-  onReplyToSelection?: (selection: { text: string; messageIndex: number; blockId?: string }) => Promise<void> | void;
+  onReplyToSelection?: (selection: {
+    text: string;
+    messageIndex: number;
+    blockId?: string;
+    action?: TranscriptSelectionAction;
+  }) => Promise<void> | void;
+  selectionActions?: ExtensionSelectionActionRegistration[];
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenArtifact?: (artifactId: string) => void;
@@ -103,6 +109,7 @@ export const ChatView = memo(function ChatView({
   onForkMessage,
   onRewindMessage,
   onReplyToSelection,
+  selectionActions,
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenArtifact,
@@ -209,6 +216,9 @@ export const ChatView = memo(function ChatView({
     anchorToTail: anchorWindowingToTail,
   });
   const [selectedImage, setSelectedImage] = useState<InspectableImage | null>(null);
+  const transcriptSelectionActions = (selectionActions ?? []).filter(
+    (action) => action.kinds.includes('text') || action.kinds.includes('transcriptRange'),
+  );
   const {
     selectionContextMenu,
     selectionContextMenuRef,
@@ -396,7 +406,12 @@ export const ChatView = memo(function ChatView({
         )}
       </div>
       {selectionContextMenu ? (
-        <SelectionContextMenu menuState={selectionContextMenu} menuRef={selectionContextMenuRef} onAction={runSelectionContextMenuAction} />
+        <SelectionContextMenu
+          menuState={selectionContextMenu}
+          menuRef={selectionContextMenuRef}
+          selectionActions={transcriptSelectionActions}
+          onAction={runSelectionContextMenuAction}
+        />
       ) : null}
       {selectedImage && <ImageInspectModal image={selectedImage} onClose={() => setSelectedImage(null)} />}
     </>

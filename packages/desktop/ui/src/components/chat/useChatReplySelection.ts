@@ -9,6 +9,18 @@ interface ReplySelectionState {
   blockId?: string;
 }
 
+export interface TranscriptSelectionAction {
+  extensionId: string;
+  id: string;
+  title: string;
+  action: string;
+  kinds: string[];
+  icon?: string;
+  args?: unknown;
+  when?: string;
+  priority?: number;
+}
+
 export interface ReplySelectionContextMenuState {
   x: number;
   y: number;
@@ -62,7 +74,12 @@ export function useChatReplySelection({
   onReplyToSelection,
   scrollContainerRef,
 }: {
-  onReplyToSelection?: (selection: { text: string; messageIndex: number; blockId?: string }) => Promise<void> | void;
+  onReplyToSelection?: (selection: {
+    text: string;
+    messageIndex: number;
+    blockId?: string;
+    action?: TranscriptSelectionAction;
+  }) => Promise<void> | void;
   scrollContainerRef?: RefObject<HTMLDivElement>;
 }) {
   const [replySelection, setReplySelection] = useState<ReplySelectionState | null>(null);
@@ -376,7 +393,7 @@ export function useChatReplySelection({
   }, [closeSelectionContextMenu, scrollContainerRef, selectionContextMenu]);
 
   const handleReplySelection = useCallback(
-    async (selectionOverride?: ReplySelectionState | null) => {
+    async (selectionOverride?: ReplySelectionState | null, action?: TranscriptSelectionAction) => {
       const activeSelection = selectionOverride ?? replySelection;
       if (!activeSelection || !onReplyToSelection) {
         return;
@@ -389,6 +406,7 @@ export function useChatReplySelection({
         text: activeSelection.text,
         messageIndex: activeSelection.messageIndex,
         blockId: activeSelection.blockId,
+        ...(action ? { action } : {}),
       });
     },
     [clearReplySelection, closeSelectionContextMenu, onReplyToSelection, replySelection],
@@ -424,10 +442,15 @@ export function useChatReplySelection({
   }, []);
 
   const runSelectionContextMenuAction = useCallback(
-    async (action: 'reply' | 'copy' | null, menuState?: ReplySelectionContextMenuState | null) => {
+    async (action: 'reply' | 'copy' | TranscriptSelectionAction | null, menuState?: ReplySelectionContextMenuState | null) => {
       const activeMenuState = menuState ?? selectionContextMenu;
       if (!action || !activeMenuState) {
         closeSelectionContextMenu();
+        return;
+      }
+
+      if (typeof action === 'object') {
+        await handleReplySelection(activeMenuState.replySelection, action);
         return;
       }
 

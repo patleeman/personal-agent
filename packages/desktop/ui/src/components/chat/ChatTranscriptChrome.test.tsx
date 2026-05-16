@@ -25,4 +25,30 @@ describe('ChatTranscriptChrome', () => {
     expect(html).toContain('Reply with Selection');
     expect(html).toContain('Copy');
   });
+
+  it('renders extension selection action emoji buttons with labels', () => {
+    const onAction = vi.fn();
+    const html = renderToStaticMarkup(
+      <SelectionContextMenu
+        menuState={{ x: 10, y: 20, text: 'selected', replySelection: { text: 'selected', messageIndex: 1 } }}
+        menuRef={{ current: null }}
+        selectionActions={[
+          {
+            extensionId: 'system-reply-actions',
+            id: 'reply-agree',
+            title: 'Agree / proceed',
+            action: 'composer.replyToSelection',
+            kinds: ['text'],
+            icon: '👍',
+            args: { draftText: '👍', interpretation: 'Agree / proceed' },
+          },
+        ]}
+        onAction={onAction}
+      />,
+    );
+
+    expect(html).toContain('Selection reply starters');
+    expect(html).toContain('aria-label="Agree / proceed"');
+    expect(html).toContain('👍');
+  });
 });

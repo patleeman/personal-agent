@@ -70,9 +70,21 @@ interface ExtensionContextMenuRegistration {
   id: string;
   title: string;
   action: string;
-  surface: 'message' | 'conversationList';
+  surface: 'message' | 'conversationList' | 'selection' | 'fileSelection' | 'transcriptSelection';
   separator?: boolean;
   when?: string;
+}
+
+export interface ExtensionSelectionActionRegistration {
+  extensionId: string;
+  id: string;
+  title: string;
+  action: string;
+  kinds: Array<'text' | 'messages' | 'files' | 'transcriptRange'>;
+  icon?: string;
+  args?: unknown;
+  when?: string;
+  priority?: number;
 }
 
 export interface ExtensionThreadHeaderActionRegistration {
@@ -171,6 +183,7 @@ const EMPTY_EXTENSION_REGISTRY_STATE: ExtensionRegistryState = {
   composerInputTools: [],
   toolbarActions: [],
   contextMenus: [],
+  selectionActions: [],
   threadHeaderActions: [],
   statusBarItems: [],
   conversationHeaderElements: [],
@@ -203,6 +216,7 @@ export interface ExtensionRegistryState {
   composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
   contextMenus: ExtensionContextMenuRegistration[];
+  selectionActions: ExtensionSelectionActionRegistration[];
   threadHeaderActions: ExtensionThreadHeaderActionRegistration[];
   statusBarItems: ExtensionStatusBarItemRegistration[];
   conversationHeaderElements: ExtensionConversationHeaderElementRegistration[];
@@ -485,6 +499,29 @@ function normalizeContextMenus(extensions: ExtensionManifest[]): ExtensionContex
   return result;
 }
 
+function normalizeSelectionActions(extensions: ExtensionManifest[]): ExtensionSelectionActionRegistration[] {
+  const result: ExtensionSelectionActionRegistration[] = [];
+  for (const extension of extensions) {
+    const actions = extension.contributes?.selectionActions;
+    if (!actions?.length) continue;
+    for (const action of actions) {
+      result.push({
+        extensionId: extension.id,
+        id: action.id,
+        title: action.title,
+        action: action.action,
+        kinds: action.kinds,
+        ...(action.icon ? { icon: action.icon } : {}),
+        ...(action.args !== undefined ? { args: action.args } : {}),
+        ...(action.when ? { when: action.when } : {}),
+        ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
 function normalizeThreadHeaderActions(extensions: ExtensionManifest[]): ExtensionThreadHeaderActionRegistration[] {
   const result: ExtensionThreadHeaderActionRegistration[] = [];
   for (const extension of extensions) {
@@ -568,6 +605,7 @@ function useExtensionRegistryLoader(): ExtensionRegistryState {
             composerInputTools: normalizeComposerInputTools(enabledRegistryExtensions),
             toolbarActions: normalizeToolbarActions(enabledRegistryExtensions),
             contextMenus: normalizeContextMenus(enabledRegistryExtensions),
+            selectionActions: normalizeSelectionActions(enabledRegistryExtensions),
             threadHeaderActions: normalizeThreadHeaderActions(enabledRegistryExtensions),
             statusBarItems: normalizeStatusBarItems(enabledRegistryExtensions),
             conversationHeaderElements: normalizeConversationHeaderElements(enabledRegistryExtensions),
