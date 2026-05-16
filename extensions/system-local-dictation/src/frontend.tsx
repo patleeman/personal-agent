@@ -319,7 +319,7 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
 
   return (
     <div className="space-y-0">
-      <section className="scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <section className="scroll-mt-24 grid gap-5 py-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
         <div className="min-w-0 space-y-2">
           <div className="space-y-1.5">
             <h3 className="text-[15px] font-medium tracking-tight text-primary">Local Dictation</h3>
