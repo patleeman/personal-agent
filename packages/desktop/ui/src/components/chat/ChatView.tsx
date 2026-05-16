@@ -2,7 +2,7 @@ import React, { memo, type RefObject, useEffect, useMemo, useRef, useState } fro
 
 import { recordChatRenderTiming } from '../../client/perfDiagnostics';
 import { type ExtensionSelectionActionRegistration, useExtensionRegistry } from '../../extensions/useExtensionRegistry';
-import type { MessageBlock } from '../../shared/types';
+import type { LiveSessionToolDefinition, MessageBlock } from '../../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import { ChatRenderItemView } from './ChatRenderItemView.js';
 import { SelectionContextMenu, StreamingIndicator } from './ChatTranscriptChrome.js';
@@ -58,6 +58,7 @@ interface ChatViewProps {
   windowingHeaderContent?: React.ReactNode;
   anchorWindowingToTail?: boolean;
   systemPrompt?: string | null;
+  toolDefinitions?: LiveSessionToolDefinition[];
 }
 
 function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<HTMLDivElement>): boolean {
@@ -128,6 +129,7 @@ export const ChatView = memo(function ChatView({
   windowingHeaderContent,
   anchorWindowingToTail = false,
   systemPrompt = null,
+  toolDefinitions = [],
 }: ChatViewProps) {
   const renderStartedAtRef = useRef(performance.now());
   renderStartedAtRef.current = performance.now();
@@ -312,7 +314,8 @@ export const ChatView = memo(function ChatView({
     }
     return count;
   })();
-  const shouldGroupIntroContext = !shouldWindowTranscript && (Boolean(systemPrompt?.trim()) || leadingContextItemCount > 0);
+  const hasSystemPromptContext = Boolean(systemPrompt?.trim()) || toolDefinitions.length > 0;
+  const shouldGroupIntroContext = !shouldWindowTranscript && (hasSystemPromptContext || leadingContextItemCount > 0);
   const introContextItems = shouldGroupIntroContext ? renderItems.slice(0, leadingContextItemCount) : [];
   const transcriptItems = shouldGroupIntroContext ? renderItems.slice(leadingContextItemCount) : renderItems;
 
@@ -400,12 +403,12 @@ export const ChatView = memo(function ChatView({
             while typing (e.g. multi-line input). */}
         {shouldGroupIntroContext ? (
           <div className={transcriptItems.length > 0 || transcriptBoundary ? 'mb-7 space-y-1.5' : 'space-y-1.5'}>
-            {systemPrompt?.trim() ? <SystemPromptMessage text={systemPrompt} /> : null}
+            {hasSystemPromptContext ? <SystemPromptMessage text={systemPrompt ?? ''} toolDefinitions={toolDefinitions} /> : null}
             {introContextItems.map((item, itemIndex) => renderChatItem(item, itemIndex))}
           </div>
-        ) : systemPrompt?.trim() ? (
+        ) : hasSystemPromptContext ? (
           <div className="mb-1.5">
-            <SystemPromptMessage text={systemPrompt} />
+            <SystemPromptMessage text={systemPrompt ?? ''} toolDefinitions={toolDefinitions} />
           </div>
         ) : null}
         {transcriptBoundary}

@@ -75,10 +75,16 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   ensureStaleTurnState(entry);
   const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
   const systemPrompt = entry.session.systemPrompt?.trim() || null;
+  const toolDefinitions = entry.session.state.tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters as Record<string, unknown>,
+  }));
   subscription.send({
     type: 'snapshot',
     goalState,
     ...(systemPrompt ? { systemPrompt } : {}),
+    ...(toolDefinitions.length > 0 ? { toolDefinitions } : {}),
     ...buildLiveSessionSnapshot(entry, options?.tailBlocks),
   });
   const title = resolveTitle(entry);

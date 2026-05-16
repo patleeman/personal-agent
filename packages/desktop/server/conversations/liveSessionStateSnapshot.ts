@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
-import type { LiveContextUsage } from './liveSessionEvents.js';
+import type { LiveContextUsage, LiveSessionToolDefinition } from './liveSessionEvents.js';
 import { type ParallelPromptJob, type ParallelPromptPreview, readParallelState } from './liveSessionParallelJobs.js';
 import { buildLiveSessionPresenceState, type LiveSessionPresenceHost, type LiveSessionPresenceState } from './liveSessionPresence.js';
 import { type QueuedPromptPreview, readQueueState } from './liveSessionQueue.js';
@@ -45,6 +45,7 @@ export interface LiveSessionStateSnapshot {
   parallelJobs: ParallelPromptPreview[];
   goalState: ThreadGoal | null;
   systemPrompt: string | null;
+  toolDefinitions: LiveSessionToolDefinition[];
   presence: LiveSessionPresenceState;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
@@ -131,6 +132,11 @@ export function readLiveSessionStateSnapshotFromEntry(
     hasStaleTurnState: hasQueuedOrActiveStaleTurn(entry),
     goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
     systemPrompt: entry.session.systemPrompt?.trim() || null,
+    toolDefinitions: entry.session.state.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters as Record<string, unknown>,
+    })),
     error: entry.currentTurnError ?? null,
     title,
     tokens,

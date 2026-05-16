@@ -20,6 +20,12 @@ export interface LiveContextUsage {
   segments?: LiveContextUsageSegment[];
 }
 
+export interface LiveSessionToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
 export type SseEvent =
   | {
       type: 'snapshot';
@@ -29,6 +35,7 @@ export type SseEvent =
       isStreaming: boolean;
       goalState?: ThreadGoal | null;
       systemPrompt?: string | null;
+      toolDefinitions?: LiveSessionToolDefinition[];
     }
   | { type: 'agent_start' }
   | { type: 'agent_end' }

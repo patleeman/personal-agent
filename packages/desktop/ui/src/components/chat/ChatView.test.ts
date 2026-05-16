@@ -1012,6 +1012,28 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('renders tool definitions inside the system prompt disclosure', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        systemPrompt: 'Runtime instructions.',
+        toolDefinitions: [
+          {
+            name: 'bash',
+            description: 'Execute a bash command.',
+            parameters: { type: 'object', properties: { command: { type: 'string' } } },
+          },
+        ],
+        messages: [{ type: 'user', ts: '2026-03-11T18:00:00.000Z', text: 'Start' }],
+      }),
+    );
+
+    expect(html).toContain('Runtime instructions and 1 tool definitions available for inspection.');
+    expect(html).toContain('Available tool definitions');
+    expect(html).toContain('bash');
+    expect(html).toContain('Execute a bash command.');
+    expect(html).toContain('&quot;command&quot;');
+  });
+
   it('groups startup context disclosures tightly before the first user message', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {

@@ -1,7 +1,7 @@
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 
 import { parseSkillBlock } from '../../markdown/markdownExtensions';
-import type { MessageBlock } from '../../shared/types';
+import type { LiveSessionToolDefinition, MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
 import { cx } from '../ui';
 import type { ChatViewLayout } from './chatViewTypes.js';
@@ -364,20 +364,53 @@ function SystemEventFrame({
   );
 }
 
-export const SystemPromptMessage = memo(function SystemPromptMessage({ text }: { text: string }) {
+function formatToolDefinitions(tools: LiveSessionToolDefinition[]): string {
+  if (tools.length === 0) {
+    return '';
+  }
+
+  return tools
+    .map((tool) => {
+      const parameters = JSON.stringify(tool.parameters, null, 2);
+      return [`### ${tool.name}`, tool.description.trim(), '```json', parameters, '```'].filter(Boolean).join('\n');
+    })
+    .join('\n\n');
+}
+
+export const SystemPromptMessage = memo(function SystemPromptMessage({
+  text,
+  toolDefinitions = [],
+}: {
+  text: string;
+  toolDefinitions?: LiveSessionToolDefinition[];
+}) {
   const normalizedText = text.trim();
-  if (!normalizedText) {
+  const toolDefinitionsText = formatToolDefinitions(toolDefinitions);
+  if (!normalizedText && !toolDefinitionsText) {
     return null;
   }
+  const tokenText = [normalizedText, toolDefinitionsText].filter(Boolean).join('\n\n');
 
   return (
     <SystemEventFrame
       label="System prompt"
-      preview="Runtime instructions available for inspection."
-      tokenCount={estimateTextTokens(normalizedText)}
+      preview={
+        toolDefinitions.length > 0
+          ? `Runtime instructions and ${toolDefinitions.length} tool definitions available for inspection.`
+          : 'Runtime instructions available for inspection.'
+      }
+      tokenCount={estimateTextTokens(tokenText)}
       dataAttributes={{ 'data-context-type': 'system_prompt' }}
     >
-      <div className="pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">{renderText(normalizedText)}</div>
+      <div className="space-y-4 pt-2 pl-5 text-[13px] leading-relaxed text-primary/90">
+        {normalizedText ? <div>{renderText(normalizedText)}</div> : null}
+        {toolDefinitionsText ? (
+          <div>
+            <div className="mb-2 font-medium text-primary">Available tool definitions</div>
+            {renderText(toolDefinitionsText)}
+          </div>
+        ) : null}
+      </div>
     </SystemEventFrame>
   );
 });

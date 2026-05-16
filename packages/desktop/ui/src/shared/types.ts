@@ -971,6 +971,12 @@ export interface ParallelPromptPreview {
   error?: string;
 }
 
+export interface LiveSessionToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
 interface DesktopConversationStreamState {
   blocks: MessageBlock[];
   blockOffset: number;
@@ -987,6 +993,7 @@ interface DesktopConversationStreamState {
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   systemPrompt: string | null;
+  toolDefinitions: LiveSessionToolDefinition[];
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -1008,6 +1015,7 @@ export type SseEvent =
       isStreaming: boolean;
       goalState?: ThreadGoal | null;
       systemPrompt?: string | null;
+      toolDefinitions?: LiveSessionToolDefinition[];
     }
   | { type: 'agent_start' }
   | { type: 'agent_end' }

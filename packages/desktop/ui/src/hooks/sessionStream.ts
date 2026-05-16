@@ -6,6 +6,7 @@
 import type {
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
+  LiveSessionToolDefinition,
   MessageBlock,
   ParallelPromptPreview,
   QueuedPromptPreview,
@@ -30,6 +31,7 @@ export interface StreamState {
   presence: LiveSessionPresenceState;
   goalState: ThreadGoal | null;
   systemPrompt: string | null;
+  toolDefinitions: LiveSessionToolDefinition[];
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -59,6 +61,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   presence: createEmptyLiveSessionPresenceState(),
   goalState: null,
   systemPrompt: null,
+  toolDefinitions: [],
   cwdChange: null,
 };
 

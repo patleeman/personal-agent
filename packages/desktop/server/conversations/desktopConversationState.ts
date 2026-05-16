@@ -66,6 +66,7 @@ export interface DesktopConversationStreamState {
   presence: LiveSessionPresenceState;
   goalState: import('./sessions.js').ThreadGoal | null;
   systemPrompt: string | null;
+  toolDefinitions: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -117,6 +118,7 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
     cwdChange: null,
     goalState: null,
     systemPrompt: null,
+    toolDefinitions: [],
   };
 }
 
@@ -285,6 +287,7 @@ export function createDesktopConversationStreamStateFromSnapshot(snapshot: LiveS
     presence: snapshot.presence,
     cwdChange: snapshot.cwdChange,
     systemPrompt: snapshot.systemPrompt,
+    toolDefinitions: snapshot.toolDefinitions,
     autoModeState: null,
     ...(snapshot.goalState ? { goalState: snapshot.goalState } : {}),
   };
@@ -312,6 +315,7 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
         error: null,
         goalState: 'goalState' in event ? (event.goalState as import('./sessions.js').ThreadGoal | null) : prev.goalState,
         systemPrompt: 'systemPrompt' in event ? (event.systemPrompt ?? null) : prev.systemPrompt,
+        toolDefinitions: 'toolDefinitions' in event ? (event.toolDefinitions ?? []) : prev.toolDefinitions,
       };
     }
 
