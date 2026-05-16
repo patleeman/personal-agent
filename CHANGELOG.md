@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.8.0-rc.16 — 2026-05-16
+
+- fix: tolerate missing artifact UI invalidation
+- fix: stabilize rc validation
+- fix: enforce ask-user question limit
+- fix: report MCP logout failures
+- fix: normalize web search pagination inputs
+- fix: reject duplicate image probe ids
+- fix: use changelog for GitHub release notes
+- fix: align macOS traffic lights with top bar
+- fix: unblock rc build validation
+- feat: add extension search and stream events
+- refactor: remove legacy reminder scheduling kind
+- feat: add extension lifecycle surfaces
+- fix: notify when daemon health recovers
+- fix: restart local daemon when socket disappears
+- fix: await scheduled task resolution before run
+- feat: add notification copy action
+- refactor: replace reminders with follow-up queue
+- fix: align telemetry endpoint shapes with UI
+- fix: clarify conversation inspect tool schema
+- fix: return model throughput metrics
+- fix: format cached share percentage
+- fix: require active browser for tools
+- fix: drop invalid browser screenshots
+- fix: prevent stale desktop shell chunks
+- fix: bundle Pi README with server app
+- fix: smooth chat scroll loading
+- fix: align desktop server typings with pi tools
+- fix: keep transcript context menu open after right click
+- test: fix unified node test typings
+- fix: recover stale host view chunks
+- fix: drop empty native compaction images
+- chore: enforce no explicit any
+- fix: close activity context menu on outside click
+- fix: separate subagent and command tools
+- fix: type conversation inspect pointer APIs
+- fix: harden conversation inspect pointer telemetry
+- fix: refresh executions when runs change
+- fix: launch bundled background agent runner
+- feat: auto-register extension open commands
+- fix: keep exa action opt-in
+- fix: use quick-open registration section for knowledge files
+- fix: disable exa web search by default
+- fix: align MCP form buttons
+- fix: remove readability web extraction
+- fix: tolerate missing readability dependency
+- fix: repair packaged web tool dependencies
+- fix: harden web and browser tools
+- feat: replace MCP JSON editor with server manager
+- chore: remove doom extension
+- fix: make load previous advance from latest tail state
+- feat: add MCP config editor
+- fix: restore extension settings divider
+- fix: remove dictation settings divider
+- fix: simplify emoji reply drafts
+- fix: separate reply emoji row
+- feat: improve local dictation model selection
+- Avoid premature conversations redirect
+- feat: add extension reply selection actions
+- fix: place dictation by composer submit
+- fix: collapse model picker on narrow composer
+- Show pending background work in thread list
+
 ## 0.8.0-rc.15 — 2026-05-15
 
 - fix: run packaged background agents reliably
