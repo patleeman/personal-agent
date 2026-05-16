@@ -450,7 +450,7 @@ function WorkspaceOpenFilesSection({
                   type="button"
                   title={path}
                   className={cx(
-                    'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35',
+                    'flex min-h-7 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35',
                     isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
                   )}
                   onClick={() => onSelect(path)}
@@ -673,7 +673,7 @@ function WorkspaceTreeRow({
     <div>
       <div
         className={cx(
-          'group flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-secondary hover:bg-surface/70 hover:text-primary',
+          'group flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[12px] text-secondary hover:bg-surface/70 hover:text-primary',
           selected && 'bg-accent/10 text-primary',
         )}
         style={{ paddingLeft: `${8 + depth * 14}px` }}

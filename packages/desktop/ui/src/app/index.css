@@ -407,7 +407,7 @@
   }
 
   .ui-sidebar-nav-item {
-    @apply relative flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-steel/10 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-steel/25 focus-visible:bg-steel/10 focus-visible:text-primary active:bg-steel/10 active:text-primary;
+    @apply relative flex min-h-7 items-center gap-2 px-2.5 py-1 mx-1 rounded-md text-[13px] font-medium leading-5 text-secondary transition-colors hover:bg-steel/10 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-steel/25 focus-visible:bg-steel/10 focus-visible:text-primary active:bg-steel/10 active:text-primary;
   }
 
   .ui-sidebar-nav-item-active {
@@ -439,7 +439,7 @@
   }
 
   .ui-sidebar-subnav-item {
-    @apply block px-3 py-1.5 mx-1 rounded-lg text-[12px] text-dim transition-colors hover:bg-steel/5 hover:text-secondary;
+    @apply block min-h-7 px-3 py-1 mx-1 rounded-lg text-[12px] leading-5 text-dim transition-colors hover:bg-steel/5 hover:text-secondary;
   }
 
   .ui-sidebar-subnav-item-active {
@@ -448,7 +448,7 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1 rounded-md text-secondary transition-colors hover:bg-steel/5 hover:text-primary;
+    @apply relative mx-1 flex min-h-7 items-center gap-1.5 px-2 py-1 rounded-md text-secondary transition-colors hover:bg-steel/5 hover:text-primary;
   }
 
   .ui-sidebar-pinned-icon {
@@ -491,7 +491,7 @@
   }
 
   .ui-sidebar-shelf-row {
-    @apply mx-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-dim transition-colors hover:bg-steel/5 hover:text-secondary;
+    @apply mx-1 flex min-h-7 w-full items-center gap-2 rounded-lg px-2.5 py-1 text-left text-dim transition-colors hover:bg-steel/5 hover:text-secondary;
   }
 
   .ui-loading-state {

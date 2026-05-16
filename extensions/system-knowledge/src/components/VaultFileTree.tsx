@@ -652,7 +652,7 @@ function OpenFilesSection({
                   aria-label={`Open file ${fileId}`}
                   title={fileId}
                   className={[
-                    'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                    'flex min-h-7 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
                     isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
                   ].join(' ')}
                   aria-current={isActive ? 'true' : undefined}
