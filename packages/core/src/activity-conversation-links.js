@@ -12,6 +12,13 @@ function validateProfileName(profile) {
     throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
+function normalizeIsoTimestamp(value, label) {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return new Date(parsed).toISOString();
+}
 function normalizeRelatedConversationIds(conversationIds) {
   const unique = [];
   const seen = new Set();
@@ -42,12 +49,9 @@ export function readActivityConversationLink(path) {
     ? parsed.relatedConversationIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
     : [];
   validateActivityId(activityId);
-  if (updatedAt.length === 0 || !Number.isFinite(Date.parse(updatedAt))) {
-    throw new Error(`Invalid activity conversation link updatedAt in ${path}`);
-  }
   return {
     activityId,
-    updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(updatedAt, `activity conversation link updatedAt in ${path}`),
     relatedConversationIds: normalizeRelatedConversationIds(relatedConversationIds),
   };
 }
@@ -72,7 +76,7 @@ export function writeActivityConversationLink(options) {
   });
   const normalized = {
     activityId: options.document.activityId,
-    updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(options.document.updatedAt, 'activity conversation link updatedAt'),
     relatedConversationIds: normalizeRelatedConversationIds(options.document.relatedConversationIds),
   };
   mkdirSync(resolveProfileActivityConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile }), {

@@ -32,6 +32,14 @@ function validateProfileName(profile: string): void {
   }
 }
 
+function normalizeIsoTimestamp(value: string, label: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return new Date(parsed).toISOString();
+}
+
 function normalizeRelatedConversationIds(conversationIds: string[]): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
@@ -69,13 +77,9 @@ export function readActivityConversationLink(path: string): ActivityConversation
     : [];
 
   validateActivityId(activityId);
-  if (updatedAt.length === 0 || !Number.isFinite(Date.parse(updatedAt))) {
-    throw new Error(`Invalid activity conversation link updatedAt in ${path}`);
-  }
-
   return {
     activityId,
-    updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(updatedAt, `activity conversation link updatedAt in ${path}`),
     relatedConversationIds: normalizeRelatedConversationIds(relatedConversationIds),
   };
 }
@@ -109,7 +113,7 @@ export function writeActivityConversationLink(options: {
 
   const normalized: ActivityConversationLinkDocument = {
     activityId: options.document.activityId,
-    updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(options.document.updatedAt, 'activity conversation link updatedAt'),
     relatedConversationIds: normalizeRelatedConversationIds(options.document.relatedConversationIds),
   };
 

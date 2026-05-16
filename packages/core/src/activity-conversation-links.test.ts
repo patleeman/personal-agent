@@ -68,6 +68,20 @@ describe('activity conversation links', () => {
     expect(getActivityConversationLink({ stateRoot, profile: 'assistant', activityId: 'daily-report' })).toBeNull();
   });
 
+  it('rejects invalid updatedAt values before writing', () => {
+    const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
+
+    expect(() =>
+      setActivityConversationLinks({
+        stateRoot,
+        profile: 'assistant',
+        activityId: 'daily-report',
+        relatedConversationIds: ['conv-123'],
+        updatedAt: 'not-a-date',
+      }),
+    ).toThrow('Invalid activity conversation link updatedAt');
+  });
+
   it('clears the durable link file when no conversation ids remain', () => {
     const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
 
