@@ -730,6 +730,52 @@ describe('openai native compaction extension', () => {
     ]);
   });
 
+  it('does not crash without UI notifications when all compaction paths fail', async () => {
+    const harness = createPiHarness();
+    openaiNativeCompactionExtension(harness.pi as never);
+
+    const beforeCompact =
+      harness.getHandler<(event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown>>('session_before_compact');
+
+    compactMock.mockRejectedValue(new Error('local failed'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        text: async () => 'native failed',
+      }),
+    );
+
+    const result = await beforeCompact(
+      {
+        branchEntries: [userMessageEntry('user-1', 'Prompt after compaction')],
+        preparation: {
+          firstKeptEntryId: 'user-1',
+          tokensBefore: 321,
+        },
+        signal: new AbortController().signal,
+      },
+      {
+        model: OPENAI_MODEL,
+        hasUI: true,
+        getSystemPrompt: () => 'System instructions',
+        sessionManager: {
+          getSessionId: () => 'session-compact-no-ui',
+        },
+        modelRegistry: {
+          getApiKeyAndHeaders: vi.fn().mockResolvedValue({
+            ok: true,
+            apiKey: 'sk-openai',
+          }),
+        },
+      },
+    );
+
+    expect(result).toBeUndefined();
+  });
+
   it('falls back to the normal Pi compaction when the native request fails', async () => {
     const harness = createPiHarness();
     openaiNativeCompactionExtension(harness.pi as never);

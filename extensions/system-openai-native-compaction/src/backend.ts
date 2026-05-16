@@ -716,10 +716,8 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
         notify(ctx, `${describeProviderCompaction(model)} failed; using normal Pi compaction`, 'warning');
         return { compaction: localSummary.value };
       }
-      if (ctx.hasUI) {
-        const message = remoteCompaction.reason instanceof Error ? remoteCompaction.reason.message : String(remoteCompaction.reason);
-        ctx.ui.notify(`${describeProviderCompaction(model)} failed; using normal Pi behavior. ${message}`, 'warning');
-      }
+      const message = remoteCompaction.reason instanceof Error ? remoteCompaction.reason.message : String(remoteCompaction.reason);
+      notify(ctx, `${describeProviderCompaction(model)} failed; using normal Pi behavior. ${message}`, 'warning');
       return undefined;
     }
 
