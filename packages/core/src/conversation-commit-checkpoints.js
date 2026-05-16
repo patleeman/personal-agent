@@ -196,7 +196,13 @@ export function listConversationCommitCheckpoints(options) {
   }
   return readdirSync(dir)
     .filter((entry) => entry.endsWith('.json'))
-    .map((entry) => readCheckpoint(join(dir, entry)))
+    .flatMap((entry) => {
+      try {
+        return [readCheckpoint(join(dir, entry))];
+      } catch {
+        return [];
+      }
+    })
     .map(({ files: _files, comments: _comments, ...summary }) => summary)
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || left.id.localeCompare(right.id));
 }

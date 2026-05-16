@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -124,6 +124,32 @@ describe('conversation commit checkpoint storage', () => {
         commentCount: 1,
       },
     ]);
+  });
+
+  it('skips unreadable checkpoint files while listing', () => {
+    const stateRoot = createTempStateRoot();
+    const record = saveConversationCommitCheckpoint({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conversation-1',
+      commitSha: 'abc1234def567890abc1234def567890abc12345',
+      shortSha: 'abc1234',
+      title: 'feat: add checkpoint review',
+      cwd: '/tmp/workspace',
+      subject: 'feat: add checkpoint review',
+      authorName: 'Test User',
+      committedAt: '2026-04-14T12:00:00.000Z',
+      linesAdded: 12,
+      linesDeleted: 3,
+      files: [],
+    });
+    const dir = join(stateRoot, 'pi-agent', 'state', 'conversation-commit-checkpoints', 'assistant', 'conversation-1');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'abcdef0.json'), '{ nope');
+
+    expect(
+      listConversationCommitCheckpoints({ stateRoot, profile: 'assistant', conversationId: 'conversation-1' }).map((item) => item.id),
+    ).toEqual([record.id]);
   });
 
   it('appends checkpoint comments and migrates legacy note fields', () => {
