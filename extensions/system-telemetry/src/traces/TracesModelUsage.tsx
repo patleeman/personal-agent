@@ -32,6 +32,7 @@ export function TracesModelUsage({
   const totalThroughputTokensPerSec =
     totalThroughputDurationMs > 0 ? Math.round(totalThroughputOutputTokens / (totalThroughputDurationMs / 1000)) : 0;
   const peakThroughputTokensPerSec = Math.max(...throughput.map((t) => t.peakTokensPerSec), 0);
+  const cacheHitRateLabel = formatPercent(cacheHitRate);
 
   return (
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
@@ -50,7 +51,7 @@ export function TracesModelUsage({
             <Metric value={formatNumber(tokensOutput)} label="Output" />
             <Metric value={formatNumber(tokensCached)} label="Cache Read" cls="text-success" />
             <Metric value={formatNumber(tokensCachedWrite)} label="Cache Write" cls="text-warning" />
-            <Metric value={`${cacheHitRate}%`} label="Cached Share" cls="text-accent" />
+            <Metric value={cacheHitRateLabel} label="Cached Share" cls="text-accent" />
           </div>
           {models.map((m) => {
             const hitRate = cacheByModel[m.modelId];
@@ -61,7 +62,7 @@ export function TracesModelUsage({
                 value={formatNumber(m.tokens)}
                 pct={m.tokens / maxTokens}
                 color="bg-accent"
-                badge={hitRate != null ? `${hitRate}% cache` : undefined}
+                badge={hitRate != null ? `${formatPercent(hitRate)} cache` : undefined}
                 badgeCls={hitRate != null ? (hitRate > 30 ? 'text-success' : hitRate > 10 ? 'text-warning' : 'text-danger') : undefined}
               />
             );
@@ -130,7 +131,7 @@ export function TracesModelUsage({
             pct={Math.min(tokensCached / Math.max(tokensInput + tokensCached, 1), 1)}
             color="bg-steel/50"
           />
-          <CacheRow label="Cached share" value={`${cacheHitRate}%`} pct={cacheHitRate / 100} color="bg-success" />
+          <CacheRow label="Cached share" value={cacheHitRateLabel} pct={cacheHitRate / 100} color="bg-success" />
           <CacheRow
             label="Total prompt in"
             value={formatNumber(tokensInput + tokensCached)}
@@ -138,7 +139,7 @@ export function TracesModelUsage({
             color="bg-success"
           />
           <div className="mt-2 pt-2 border-t border-border-subtle text-[11px] text-dim">
-            {cacheHitRate > 0 ? <span className="text-warning">{cacheHitRate}%</span> : null} of prompt input read from cache
+            {cacheHitRate > 0 ? <span className="text-warning">{cacheHitRateLabel}</span> : null} of prompt input read from cache
           </div>
         </div>
       </div>
@@ -208,4 +209,9 @@ function formatNumber(n: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
   return String(value);
+}
+
+function formatPercent(n: number): string {
+  const value = Number.isFinite(n) ? n : 0;
+  return `${value.toFixed(2)}%`;
 }
