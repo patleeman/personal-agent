@@ -8,12 +8,44 @@ interface LocalBackendStatus {
   daemonHealthy: boolean;
 }
 
+type DaemonHealthNotificationKind = 'unhealthy' | 'recovered' | 'restart-failed';
+
+async function showDaemonHealthNotification(kind: DaemonHealthNotificationKind, detail?: string): Promise<void> {
+  try {
+    const { Notification } = await import('electron');
+    if (!Notification.isSupported()) {
+      return;
+    }
+
+    const copy =
+      kind === 'unhealthy'
+        ? {
+            title: 'Personal Agent daemon stopped',
+            body: 'Background commands, subagents, and automations were unavailable. Restarting runtime…',
+          }
+        : kind === 'recovered'
+          ? {
+              title: 'Personal Agent daemon recovered',
+              body: 'Background commands, subagents, and automations are available again.',
+            }
+          : {
+              title: 'Personal Agent daemon restart failed',
+              body: detail ? `Runtime is still unavailable: ${detail}` : 'Runtime is still unavailable. Open logs for details.',
+            };
+
+    new Notification(copy).show();
+  } catch {
+    // Desktop notifications are best-effort; never let them affect daemon recovery.
+  }
+}
+
 export class LocalBackendProcesses {
   private daemon?: PersonalAgentDaemon;
   private clearInProcessClientBinding?: () => void;
   private startPromise?: Promise<void>;
   private logStream?: WriteStream;
   private healthTimer?: NodeJS.Timeout;
+  private notifiedUnhealthy = false;
 
   async ensureStarted(): Promise<void> {
     if (this.startPromise) {
@@ -81,13 +113,31 @@ export class LocalBackendProcesses {
     }
 
     this.healthTimer = setInterval(() => {
-      if (!this.daemon || this.startPromise || this.hasOwnedRuntime()) {
+      if (!this.daemon || this.startPromise) {
         return;
       }
 
-      void this.restart().catch((error) => {
-        console.warn('[desktop] local daemon health restart failed', error);
-      });
+      if (this.hasOwnedRuntime()) {
+        return;
+      }
+
+      if (!this.notifiedUnhealthy) {
+        this.notifiedUnhealthy = true;
+        void showDaemonHealthNotification('unhealthy');
+      }
+
+      void this.restart()
+        .then(() => {
+          if (this.hasOwnedRuntime()) {
+            this.notifiedUnhealthy = false;
+            void showDaemonHealthNotification('recovered');
+          }
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn('[desktop] local daemon health restart failed', error);
+          void showDaemonHealthNotification('restart-failed', message);
+        });
     }, 5000);
     this.healthTimer.unref?.();
   }
