@@ -28,6 +28,14 @@ describe('parseSkillBlock', () => {
     expect(result!.content).toBe('line 1\nline 2\nline 3');
   });
 
+  it('parses skill blocks with CRLF line endings', () => {
+    const text = '<skill name="test-skill" location="skills/test/SKILL.md">\r\nline 1\r\nline 2\r\n</skill>\r\n\r\nUse it.';
+    const result = parseSkillBlock(text);
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('line 1\nline 2');
+    expect(result!.userMessage).toBe('Use it.');
+  });
+
   it('parses a skill block with a user message after the closing tag', () => {
     const text = '<skill name="greeter" location="skills/greet/SKILL.md">\nHello world\n</skill>\n\nPlease use this skill.';
     const result = parseSkillBlock(text);

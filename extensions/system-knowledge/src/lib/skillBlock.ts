@@ -6,7 +6,8 @@ export interface ParsedSkillBlock {
 }
 
 export function parseSkillBlock(text: string): ParsedSkillBlock | null {
-  const match = text.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
+  const normalized = text.replace(/\r\n/g, '\n');
+  const match = normalized.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
   if (!match) {
     return null;
   }
