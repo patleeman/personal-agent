@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,6 +51,30 @@ describe('background runs', () => {
     expect(argv).toEqual(expect.arrayContaining(['--prompt', 'Review the latest diff']));
     expect(argv).not.toContain('pi');
     expect(argv).not.toContain('pa');
+  });
+
+  it('prefers the bundled repo runner over tsc output when repo root is set', () => {
+    const previousRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
+    const repoRoot = createTempDir('pa-background-runner-repo-');
+    const bundledRunner = join(repoRoot, 'packages/desktop/server/dist/daemon/background-agent-runner.js');
+    const tscRunner = join(repoRoot, 'packages/desktop/dist/server/daemon/background-agent-runner.js');
+
+    mkdirSync(join(repoRoot, 'packages/desktop/server/dist/daemon'), { recursive: true });
+    mkdirSync(join(repoRoot, 'packages/desktop/dist/server/daemon'), { recursive: true });
+    writeFileSync(bundledRunner, '');
+    writeFileSync(tscRunner, '');
+
+    try {
+      process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+      const argv = buildBackgroundAgentArgv({ prompt: 'Review the latest diff' });
+      expect(argv[1]).toBe(bundledRunner);
+    } finally {
+      if (previousRepoRoot === undefined) {
+        delete process.env.PERSONAL_AGENT_REPO_ROOT;
+      } else {
+        process.env.PERSONAL_AGENT_REPO_ROOT = previousRepoRoot;
+      }
+    }
   });
 
   it('materializes agent runs into durable argv and stores the structured agent spec', async () => {

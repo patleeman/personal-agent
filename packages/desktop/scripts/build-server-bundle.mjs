@@ -169,11 +169,33 @@ const bundledRuntimePackageJson = {
   piConfig: piCodingAgentPackageMetadata.piConfig ?? { configDir: '.pi' },
   type: 'module',
 };
+const desktopPackageMetadata = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf-8'));
+const bundledPackageJsonByDir = new Map([
+  [
+    resolve(outdir, 'daemon'),
+    {
+      name: '@personal-agent/daemon',
+      version: desktopPackageMetadata.version ?? '0.0.0',
+      type: 'module',
+      main: './index.js',
+    },
+  ],
+  [
+    resolve(outdir, 'core'),
+    {
+      name: '@personal-agent/core',
+      version: desktopPackageMetadata.version ?? '0.0.0',
+      type: 'module',
+      main: './index.js',
+    },
+  ],
+]);
 
 for (const bundleOutput of bundleOutputs) {
   const outputDir = dirname(bundleOutput);
   const workerOutput = resolve(outputDir, 'xhr-sync-worker.js');
   mkdirSync(outputDir, { recursive: true });
   copyFileSync(jsdomXhrSyncWorker, workerOutput);
-  writeFileSync(resolve(outputDir, 'package.json'), `${JSON.stringify(bundledRuntimePackageJson, null, 2)}\n`);
+  const packageJson = bundledPackageJsonByDir.get(outputDir) ?? bundledRuntimePackageJson;
+  writeFileSync(resolve(outputDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
 }

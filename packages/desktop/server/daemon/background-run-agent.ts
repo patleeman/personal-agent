@@ -24,12 +24,12 @@ export function looksLikeBackgroundAgentRunnerEntryPath(value: string | undefine
 function resolveBackgroundAgentRunnerEntryPath(): string {
   const daemonModulePath = fileURLToPath(import.meta.url);
   const moduleDir = dirname(daemonModulePath);
+  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
   const candidates = [
+    repoRoot ? resolve(repoRoot, 'packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
     resolve(moduleDir, 'background-agent-runner.js'),
     resolve(moduleDir, '../server/daemon/background-agent-runner.js'),
-    process.env.PERSONAL_AGENT_REPO_ROOT
-      ? resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/dist/server/daemon/background-agent-runner.js')
-      : undefined,
+    repoRoot ? resolve(repoRoot, 'packages/desktop/dist/server/daemon/background-agent-runner.js') : undefined,
   ].filter((candidate): candidate is string => Boolean(candidate));
 
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;
