@@ -216,6 +216,32 @@ function extractRequestShape(payload: Record<string, unknown>): RequestShape {
   };
 }
 
+function normalizeBase64ImageData(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const data = value.trim();
+  if (!data || data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return undefined;
+  return Buffer.from(data, 'base64').length > 0 ? data : undefined;
+}
+
+function normalizeImageDataUrl(value: string): string | undefined {
+  const url = value.trim();
+  const commaIndex = url.indexOf(',');
+  if (commaIndex < 0) return undefined;
+
+  const metadata = url.slice(0, commaIndex).toLowerCase();
+  if (!metadata.startsWith('data:image/') || !metadata.includes(';base64')) return undefined;
+
+  const data = normalizeBase64ImageData(url.slice(commaIndex + 1));
+  return data ? `${url.slice(0, commaIndex + 1)}${data}` : undefined;
+}
+
+function normalizeInputImageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const url = value.trim();
+  if (!url) return undefined;
+  return url.toLowerCase().startsWith('data:') ? normalizeImageDataUrl(url) : url;
+}
+
 function normalizeTextInput(content: unknown): Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> {
   if (typeof content === 'string') {
     return content ? [{ type: 'input_text', text: content }] : [];
@@ -230,11 +256,22 @@ function normalizeTextInput(content: unknown): Array<{ type: 'input_text'; text:
       continue;
     }
     if (part.type === 'image' && typeof part.data === 'string' && typeof part.mimeType === 'string') {
-      items.push({ type: 'input_image', image_url: `data:${part.mimeType};base64,${part.data}` });
+      const data = normalizeBase64ImageData(part.data);
+      const mimeType = part.mimeType.trim();
+      if (data && mimeType.toLowerCase().startsWith('image/')) {
+        items.push({ type: 'input_image', image_url: `data:${mimeType};base64,${data}` });
+      }
       continue;
     }
-    if (part.type === 'input_image' && isRecord(part.source) && part.source.type === 'url' && typeof part.source.url === 'string') {
-      items.push({ type: 'input_image', image_url: part.source.url });
+    if (part.type === 'input_image') {
+      const imageUrl = normalizeInputImageUrl(
+        typeof part.image_url === 'string'
+          ? part.image_url
+          : isRecord(part.source) && part.source.type === 'url'
+            ? part.source.url
+            : undefined,
+      );
+      if (imageUrl) items.push({ type: 'input_image', image_url: imageUrl });
     }
   }
   return items;
@@ -420,11 +457,52 @@ function assistantMatchesModel(message: AgentMessage, targetModelKey: string): b
   return !!provider && !!api && !!id && message.role === 'assistant' && message.provider === provider && message.model === id;
 }
 
+function sanitizeResponseContent(content: unknown): ResponseContentItem[] {
+  if (!Array.isArray(content)) return [];
+
+  const sanitized: ResponseContentItem[] = [];
+  for (const part of content) {
+    if (!isRecord(part)) continue;
+
+    if ((part.type === 'input_text' || part.type === 'output_text') && typeof part.text === 'string') {
+      sanitized.push({ type: part.type, text: part.text });
+      continue;
+    }
+
+    if (part.type === 'input_image') {
+      const imageUrl = normalizeInputImageUrl(part.image_url);
+      if (imageUrl) sanitized.push({ type: 'input_image', image_url: imageUrl });
+    }
+  }
+
+  return sanitized;
+}
+
+function sanitizeFunctionCallOutput(
+  output: ResponseItem & { type: 'function_call_output' },
+): string | Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> {
+  if (typeof output.output === 'string') return output.output;
+
+  const sanitized = sanitizeResponseContent(output.output).flatMap((part) => {
+    if (part.type === 'output_text') return [{ type: 'input_text' as const, text: part.text }];
+    return [part];
+  });
+
+  return sanitized.length > 0 ? sanitized : '';
+}
+
 function sanitizeResponseHistory(items: ResponseItem[]): ResponseItem[] {
   const knownToolCallIds = new Set<string>();
   const sanitized: ResponseItem[] = [];
 
   for (const item of items) {
+    if (item.type === 'message') {
+      const content = sanitizeResponseContent(item.content);
+      if (content.length === 0) continue;
+      sanitized.push({ ...item, content });
+      continue;
+    }
+
     if (item.type === 'function_call') {
       const callId = typeof item.call_id === 'string' ? item.call_id.trim() : '';
       if (!callId) {
@@ -442,7 +520,7 @@ function sanitizeResponseHistory(items: ResponseItem[]): ResponseItem[] {
         continue;
       }
 
-      sanitized.push(item);
+      sanitized.push({ ...item, output: sanitizeFunctionCallOutput(item) });
       continue;
     }
 

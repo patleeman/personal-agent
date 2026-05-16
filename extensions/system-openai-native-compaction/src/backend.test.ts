@@ -261,6 +261,63 @@ describe('openai native compaction extension', () => {
     expect(notify).toHaveBeenCalledWith(`Using OpenAI compaction for ${OPENAI_MODEL.provider}/${OPENAI_MODEL.id}`, 'info');
   });
 
+  it('removes invalid image URLs from native replay history', () => {
+    const state = reconstructNativeState(
+      [
+        {
+          id: 'compaction-1',
+          type: 'compaction',
+          summary: 'Portable summary',
+          details: {
+            nativeCompaction: {
+              version: 1,
+              provider: 'openai-responses-compact',
+              modelKey: modelKey(OPENAI_MODEL),
+              replacementHistory: [
+                {
+                  type: 'message',
+                  role: 'user',
+                  content: [
+                    { type: 'input_text', text: 'Here is the screenshot' },
+                    { type: 'input_image', image_url: 'data:image/png;base64,' },
+                    { type: 'input_image', image_url: 'data:image/png;base64,aW1hZ2U=' },
+                  ],
+                },
+                { type: 'function_call', name: 'bash', call_id: 'call-1', arguments: '{}' },
+                {
+                  type: 'function_call_output',
+                  call_id: 'call-1',
+                  output: [
+                    { type: 'input_text', text: 'cleanup ok' },
+                    { type: 'input_image', image_url: 'data:image/png;base64,' },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ] as never[],
+      OPENAI_MODEL,
+    );
+
+    expect(state?.explicitHistory).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is the screenshot' },
+          { type: 'input_image', image_url: 'data:image/png;base64,aW1hZ2U=' },
+        ],
+      },
+      { type: 'function_call', name: 'bash', call_id: 'call-1', arguments: '{}' },
+      {
+        type: 'function_call_output',
+        call_id: 'call-1',
+        output: [{ type: 'input_text', text: 'cleanup ok' }],
+      },
+    ]);
+  });
+
   it('drops orphan tool outputs when reconstructing replay history across model changes', () => {
     const state = reconstructNativeState(
       [
@@ -526,6 +583,98 @@ describe('openai native compaction extension', () => {
         },
       },
     });
+  });
+
+  it('omits empty image attachments from native compaction input', async () => {
+    const harness = createPiHarness();
+    openaiNativeCompactionExtension(harness.pi as never);
+
+    const beforeCompact =
+      harness.getHandler<(event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown>>('session_before_compact');
+
+    compactMock.mockResolvedValue({
+      summary: 'Portable summary',
+      firstKeptEntryId: 'user-1',
+      tokensBefore: 321,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Native replacement history' }],
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await beforeCompact(
+      {
+        branchEntries: [
+          {
+            id: 'assistant-1',
+            type: 'message',
+            message: {
+              role: 'assistant',
+              provider: OPENAI_MODEL.provider,
+              model: OPENAI_MODEL.id,
+              content: [{ type: 'toolCall', id: 'call-1', name: 'bash', arguments: {} }],
+            },
+          },
+          {
+            id: 'tool-1',
+            type: 'message',
+            message: {
+              role: 'toolResult',
+              toolCallId: 'call-1',
+              toolName: 'bash',
+              content: [
+                { type: 'text', text: 'cleanup ok' },
+                { type: 'image', mimeType: 'image/png', data: '' },
+                { type: 'image', mimeType: 'image/png', data: 'aW1hZ2U=' },
+              ],
+            },
+          },
+        ],
+        preparation: {
+          firstKeptEntryId: 'user-1',
+          tokensBefore: 321,
+        },
+        signal: new AbortController().signal,
+      },
+      {
+        model: OPENAI_MODEL,
+        hasUI: false,
+        ui: { notify: vi.fn() },
+        getSystemPrompt: () => 'System instructions',
+        sessionManager: {
+          getSessionId: () => 'session-compact-images',
+        },
+        modelRegistry: {
+          getApiKeyAndHeaders: vi.fn().mockResolvedValue({
+            ok: true,
+            apiKey: 'sk-openai',
+          }),
+        },
+      },
+    );
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.input).toEqual([
+      { type: 'function_call', name: 'bash', call_id: 'call-1', arguments: '{}' },
+      {
+        type: 'function_call_output',
+        call_id: 'call-1',
+        output: [
+          { type: 'input_text', text: 'cleanup ok' },
+          { type: 'input_image', image_url: 'data:image/png;base64,aW1hZ2U=' },
+        ],
+      },
+    ]);
   });
 
   it('falls back to the normal Pi compaction when the native request fails', async () => {
