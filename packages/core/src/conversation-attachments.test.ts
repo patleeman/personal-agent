@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -146,6 +146,31 @@ describe('conversation attachment storage', () => {
 
     expect(loaded).not.toBeNull();
     expect(loaded?.revisions.map((revision) => revision.revision)).toEqual([1, 2]);
+  });
+
+  it('skips unreadable attachment metadata while listing', () => {
+    const stateRoot = createTempStateRoot();
+
+    const saved = saveConversationAttachment({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      title: 'Good attachment',
+      sourceData: toBase64('{"type":"excalidraw"}'),
+      previewData: toBase64('preview'),
+    });
+    const brokenDir = resolveConversationAttachmentDir({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      attachmentId: 'broken',
+    });
+    mkdirSync(brokenDir, { recursive: true });
+    writeFileSync(join(brokenDir, 'metadata.json'), '{ nope');
+
+    expect(listConversationAttachments({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }).map((item) => item.id)).toEqual([
+      saved.id,
+    ]);
   });
 
   it('reads source/preview downloads and resolves prompt files', () => {

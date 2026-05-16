@@ -283,8 +283,12 @@ export function listConversationAttachments(options) {
     if (!existsSync(metadataPath)) {
       return [];
     }
-    const document = readAttachmentDocumentFromPath(metadataPath);
-    return [mapSummary(document)];
+    try {
+      const document = readAttachmentDocumentFromPath(metadataPath);
+      return [mapSummary(document)];
+    } catch {
+      return [];
+    }
   });
   summaries.sort((left, right) => {
     const updatedDiff = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);

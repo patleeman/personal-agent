@@ -436,8 +436,12 @@ export function listConversationAttachments(options: ResolveConversationAttachme
       return [];
     }
 
-    const document = readAttachmentDocumentFromPath(metadataPath);
-    return [mapSummary(document)];
+    try {
+      const document = readAttachmentDocumentFromPath(metadataPath);
+      return [mapSummary(document)];
+    } catch {
+      return [];
+    }
   });
 
   summaries.sort((left, right) => {
