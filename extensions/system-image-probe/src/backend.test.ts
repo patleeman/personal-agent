@@ -72,6 +72,14 @@ describe('system-image-probe backend', () => {
     ).rejects.toThrow('Probe image requires a configured preferred vision model');
   });
 
+  it('throws for duplicate image ids before probing attachments', async () => {
+    await expect(probeImage({ imageIds: ['img_a1b2c3d4e5f6', 'img_a1b2c3d4e5f6'], question: '?' }, createCtx())).rejects.toThrow(
+      'Duplicate image ID: img_a1b2c3d4e5f6',
+    );
+    expect(getImageProbeAttachmentsMock).not.toHaveBeenCalled();
+    expect(getImageProbeAttachmentsByIdMock).not.toHaveBeenCalled();
+  });
+
   it('throws for unknown image ids', async () => {
     getImageProbeAttachmentsMock.mockReturnValue([attachment]);
     getImageProbeAttachmentsByIdMock.mockReturnValue([]);

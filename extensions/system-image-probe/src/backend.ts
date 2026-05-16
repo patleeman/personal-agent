@@ -22,8 +22,11 @@ interface ProbeFailureDetails {
 function readImageIds(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0) throw new Error('Probe image requires at least one image ID.');
   if (value.length > 8) throw new Error('Probe image supports at most 8 image IDs.');
+  const seen = new Set<string>();
   return value.map((item) => {
     if (typeof item !== 'string' || !/^img_[a-f0-9]{12}$/.test(item)) throw new Error(`Invalid image ID: ${String(item)}`);
+    if (seen.has(item)) throw new Error(`Duplicate image ID: ${item}`);
+    seen.add(item);
     return item;
   });
 }
