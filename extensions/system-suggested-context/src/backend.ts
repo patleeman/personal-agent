@@ -371,7 +371,9 @@ async function buildRelatedConversationPointers(input: {
 
     for (const pointer of indexedCandidates) {
       if (pointers.length >= limit) break;
+      if (used.has(pointer.sessionId)) continue;
       pointers.push(pointer);
+      used.add(pointer.sessionId);
     }
   }
 
