@@ -232,7 +232,6 @@ export const knowledgeQuickOpenProvider = {
       .filter((file) => file.kind === 'file' && file.name.endsWith('.md'))
       .map((file, index) => ({
         id: `knowledge-file:${file.id}`,
-        section: 'knowledge',
         title: quickOpenFileTitle(file.name),
         subtitle: quickOpenFileLocation(file.id),
         meta: file.id,
@@ -245,7 +244,6 @@ export const knowledgeQuickOpenProvider = {
     const result = await knowledgeApi.search(query, limit);
     return result.results.map((file, index) => ({
       id: `knowledge-file-search:${file.id}`,
-      section: 'knowledge',
       title: quickOpenFileTitle(file.name),
       subtitle: quickOpenFileLocation(file.id),
       meta: quickOpenExcerpt(file.excerpt) ?? file.id,
