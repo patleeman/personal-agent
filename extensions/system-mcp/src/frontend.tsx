@@ -1,4 +1,4 @@
-import { api, cx, Pill, useApi } from '@personal-agent/extensions/settings';
+import { api, cx, Pill, ToolbarButton, useApi } from '@personal-agent/extensions/settings';
 import React, { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 
 type McpServerConfig = {
@@ -295,16 +295,12 @@ export function McpSettingsPanel() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-foreground disabled:opacity-50"
-                    disabled={saveState.busy}
-                  >
+                  <ToolbarButton type="submit" disabled={saveState.busy || Boolean(validateDraft(draft))}>
                     {saveState.busy ? 'Saving…' : 'Save server'}
-                  </button>
-                  <button type="button" className={buttonClass} onClick={() => setDraft(null)}>
+                  </ToolbarButton>
+                  <ToolbarButton type="button" onClick={() => setDraft(null)}>
                     Cancel
-                  </button>
+                  </ToolbarButton>
                 </div>
               </form>
             ) : null}
