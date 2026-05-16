@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.8.0-rc.17 — 2026-05-16
+
+- fix: guard reply selection range documents
+- docs: rewrite README voice
+- fix: make executions primary background work surface
+- fix: align notification top bar button
+- fix: disable kitty litter extension by default
+- fix: simplify automations list view
+- fix: improve automation runtime controls
+- fix: replace queue followup with deferred resume tool
+- fix: select existing automation thread
+- fix: hide raw cron in automation editor
+- fix: add deferred resume tool alias
+- fix: refresh conversation executions on run updates
+- feat: redesign automation editor
+- fix: split desktop runtime roots
+- fix: refresh executions on runs snapshot
+- polish: quiet startup context disclosures
+- fix: enlarge artifact modal
+- fix: resolve packaged subagent runner
+- fix: simplify conversation scrolling
+- feat: show tool definitions in prompt disclosure
+- fix: align sidebar footer nav width
+- fix: standardize sidebar item heights
+- fix: ignore dangerous machine config keys
+- fix: validate task callback timestamps
+- fix: validate alert mutation timestamps
+- fix: validate unified node timestamps
+- fix: constrain MCP auth file paths
+- fix: dedupe project activity links
+- fix: validate parsed project timestamps
+- fix: validate formatted project timestamps
+- fix: validate project artifact timestamps
+- fix: normalize conversation project links
+- fix: return normalized activity links
+- fix: validate activity link timestamps
+- fix: skip corrupt bundled MCP manifests
+- fix: ignore corrupt activity links
+- fix: skip corrupt attachment metadata
+- fix: skip corrupt checkpoint records
+- fix: skip corrupt artifact records
+- fix: parse CRLF skill blocks
+- fix: validate task callback before save
+- fix: isolate suggested context cache by profile
+- fix: dedupe suggested context pointers
+- fix: tolerate corrupt dictation settings
+- fix: guard checkpoint UI invalidation
+- fix: guard onboarding UI invalidation
+- fix: guard compaction failure notification
+- fix: guard run UI invalidation
+- fix: guard scheduled task UI invalidation
+- fix: guard queue UI invalidation
+
 ## 0.8.0-rc.16 — 2026-05-16
 
 - fix: tolerate missing artifact UI invalidation
