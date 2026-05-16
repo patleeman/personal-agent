@@ -33,9 +33,10 @@ import {
 // ── window — desktop window helper functions ─────────────────────────────
 
 describe('getDesktopWindowChromeOptions', () => {
-  it('returns hiddenInset title bar on macOS', () => {
+  it('returns hiddenInset title bar with top-bar aligned traffic lights on macOS', () => {
     const options = getDesktopWindowChromeOptions('darwin');
     expect(options.titleBarStyle).toBe('hiddenInset');
+    expect(options.trafficLightPosition).toEqual({ x: 14, y: 14 });
   });
 
   it('returns hidden title bar on non-macOS', () => {
