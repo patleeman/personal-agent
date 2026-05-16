@@ -41,9 +41,23 @@ const EDITOR_TOC_ITEMS: Array<{ id: EditorSectionId; label: string; summary: str
 ];
 
 const CRON_PRESETS = [
-  { label: 'Morning', summary: '8:00 AM daily', cron: '0 8 * * *' },
-  { label: 'Workday start', summary: '9:00 AM weekdays', cron: '0 9 * * 1-5' },
-  { label: 'End of day', summary: '5:00 PM weekdays', cron: '0 17 * * 1-5' },
+  { label: 'Every 15 minutes', summary: 'Good for short polling', cron: '*/15 * * * *', preview: 'Runs every 15 minutes.' },
+  { label: 'Hourly', summary: 'On the hour', cron: '0 * * * *', preview: 'Runs every hour on the hour.' },
+  { label: 'Every 2 hours', summary: 'Light recurring check', cron: '0 */2 * * *', preview: 'Runs every 2 hours.' },
+  { label: 'Every 4 hours', summary: 'A few times per day', cron: '0 */4 * * *', preview: 'Runs every 4 hours.' },
+  { label: 'Daily morning', summary: '8:00 AM every day', cron: '0 8 * * *', preview: 'Runs every day at 8:00 AM.' },
+  { label: 'Daily noon', summary: '12:00 PM every day', cron: '0 12 * * *', preview: 'Runs every day at 12:00 PM.' },
+  { label: 'Daily evening', summary: '5:00 PM every day', cron: '0 17 * * *', preview: 'Runs every day at 5:00 PM.' },
+  { label: 'Workday start', summary: '9:00 AM weekdays', cron: '0 9 * * 1-5', preview: 'Runs every weekday at 9:00 AM.' },
+  { label: 'Workday end', summary: '5:00 PM weekdays', cron: '0 17 * * 1-5', preview: 'Runs every weekday at 5:00 PM.' },
+  { label: 'Monday morning', summary: '9:00 AM Mondays', cron: '0 9 * * 1', preview: 'Runs every Monday at 9:00 AM.' },
+  { label: 'Friday wrap-up', summary: '4:00 PM Fridays', cron: '0 16 * * 5', preview: 'Runs every Friday at 4:00 PM.' },
+  {
+    label: 'Monthly kickoff',
+    summary: '9:00 AM on the 1st',
+    cron: '0 9 1 * *',
+    preview: 'Runs at 9:00 AM on the first day of each month.',
+  },
 ];
 
 const FILTER_LABELS: Record<AutomationFilter, string> = {
@@ -309,10 +323,9 @@ function schedulePreview(form: AutomationFormState) {
     return form.at.trim() ? `Runs once at ${form.at.trim()}.` : 'Runs once at the selected time.';
   }
   const cron = form.cron.trim();
-  if (cron === '0 9 * * 1-5') return 'Runs every weekday at 9:00 AM.';
-  if (cron === '0 8 * * *') return 'Runs every day at 8:00 AM.';
-  if (cron === '0 17 * * 1-5') return 'Runs every weekday at 5:00 PM.';
-  return cron ? `Runs on cron ${cron}.` : 'Runs on the selected recurring schedule.';
+  const preset = CRON_PRESETS.find((candidate) => candidate.cron === cron);
+  if (preset) return preset.preview;
+  return cron ? 'Uses a custom saved schedule.' : 'Choose a recurring schedule.';
 }
 
 function MoreIcon() {
@@ -871,7 +884,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
               <FormSection
                 id="automation-schedule"
                 title="Schedule"
-                description="Use presets for common schedules. Raw cron stays available when needed."
+                description="Choose a human-readable schedule. The app handles the scheduler syntax."
               >
                 <div className="grid gap-4">
                   <div className="inline-flex w-fit rounded-lg border border-border-subtle bg-surface/40 p-1">
@@ -898,35 +911,34 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                   </div>
 
                   {form.scheduleType === 'cron' ? (
-                    <>
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        {CRON_PRESETS.map((preset) => (
-                          <button
-                            key={preset.cron}
-                            type="button"
-                            className={cx(
-                              'rounded-lg border px-3 py-3 text-left transition-colors',
-                              form.cron === preset.cron
-                                ? 'border-accent/60 bg-surface text-primary'
-                                : 'border-border-subtle bg-surface/30 text-secondary hover:border-border-default hover:text-primary',
-                            )}
-                            onClick={() => setForm({ ...form, cron: preset.cron })}
-                          >
-                            <span className="block text-[13px] font-semibold">{preset.label}</span>
-                            <span className="mt-0.5 block text-[11px] text-dim">{preset.summary}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <Field label="Cron expression" hint="Five-field cron. Presets above fill this in for common cases.">
-                        <input
-                          className={fieldClass()}
-                          autoComplete="off"
-                          name="automation-cron"
-                          value={form.cron}
-                          onChange={(event) => setForm({ ...form, cron: event.target.value })}
-                        />
-                      </Field>
-                    </>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {form.cron && !CRON_PRESETS.some((preset) => preset.cron === form.cron) ? (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-accent/60 bg-surface px-3 py-3 text-left text-primary transition-colors"
+                          onClick={() => setForm({ ...form, cron: form.cron })}
+                        >
+                          <span className="block text-[13px] font-semibold">Custom saved schedule</span>
+                          <span className="mt-0.5 block text-[11px] text-dim">Keep this existing schedule</span>
+                        </button>
+                      ) : null}
+                      {CRON_PRESETS.map((preset) => (
+                        <button
+                          key={preset.cron}
+                          type="button"
+                          className={cx(
+                            'rounded-lg border px-3 py-3 text-left transition-colors',
+                            form.cron === preset.cron
+                              ? 'border-accent/60 bg-surface text-primary'
+                              : 'border-border-subtle bg-surface/30 text-secondary hover:border-border-default hover:text-primary',
+                          )}
+                          onClick={() => setForm({ ...form, cron: preset.cron })}
+                        >
+                          <span className="block text-[13px] font-semibold">{preset.label}</span>
+                          <span className="mt-0.5 block text-[11px] text-dim">{preset.summary}</span>
+                        </button>
+                      ))}
+                    </div>
                   ) : (
                     <Field label="Run at" hint="ISO timestamp or natural phrase, depending on backend support.">
                       <input

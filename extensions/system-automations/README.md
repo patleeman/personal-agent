@@ -61,11 +61,11 @@ A chronological log of every execution:
 From the list view, click "New Automation". The editor uses the Settings page layout with a right-side "On this page" rail and four sections:
 
 - **General** — automation name, recurring instruction, and enabled state
-- **Schedule** — recurring vs one-time scheduling, common cron presets, raw cron, and a human-readable preview
+- **Schedule** — recurring vs one-time scheduling, human-readable schedule presets, and a preview
 - **Delivery** — background/conversation target plus thread binding summary
 - **Runtime** — optional working directory, model, timeout, and catch-up window
 
-Raw daemon fields are still available, but common schedules can be selected from presets instead of starting with cron syntax.
+The UI avoids raw cron entry for common creation/editing paths; selected presets are translated to scheduler syntax internally.
 
 ## Inspecting Runs
 
