@@ -24,6 +24,17 @@ function readOptionalString(value) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
+function normalizeOptionalIsoTimestamp(value, label) {
+  const trimmed = readOptionalString(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${label}: ${trimmed}`);
+  }
+  return new Date(parsed).toISOString();
+}
 function readStringArray(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -296,8 +307,8 @@ function parseUnifiedNode(filePath) {
     summary,
     ...(description ? { description } : {}),
     status,
-    createdAt: readOptionalString(attributes.createdAt),
-    updatedAt: readOptionalString(attributes.updatedAt) ?? readOptionalString(attributes.updated),
+    createdAt: normalizeOptionalIsoTimestamp(attributes.createdAt, 'node createdAt'),
+    updatedAt: normalizeOptionalIsoTimestamp(attributes.updatedAt ?? attributes.updated, 'node updatedAt'),
     createdBy: readOptionalString(attributes.createdBy),
     type,
     kinds,
@@ -357,8 +368,8 @@ function parseSkillNode(filePath) {
     summary,
     ...(description ? { description } : {}),
     status,
-    createdAt: readOptionalString(metadata.createdAt),
-    updatedAt: readOptionalString(metadata.updatedAt),
+    createdAt: normalizeOptionalIsoTimestamp(metadata.createdAt, 'node createdAt'),
+    updatedAt: normalizeOptionalIsoTimestamp(metadata.updatedAt, 'node updatedAt'),
     createdBy: readOptionalString(metadata.createdBy),
     type: 'skill',
     kinds: ['skill'],
@@ -610,8 +621,8 @@ function buildNodeFrontmatter(input) {
     summary: input.summary,
     ...(input.description ? { description: input.description } : {}),
     status: input.status,
-    ...(input.createdAt ? { createdAt: input.createdAt } : {}),
-    ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
+    ...(input.createdAt ? { createdAt: normalizeOptionalIsoTimestamp(input.createdAt, 'node createdAt') } : {}),
+    ...(input.updatedAt ? { updatedAt: normalizeOptionalIsoTimestamp(input.updatedAt, 'node updatedAt') } : {}),
     ...(input.createdBy ? { createdBy: input.createdBy } : {}),
     tags,
     ...(Object.keys(links).length > 0 ? { links } : {}),
@@ -632,8 +643,8 @@ function writeSkillNode(targetPath, input) {
       title: input.title,
       summary: input.summary,
       status: input.status,
-      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
-      ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
+      ...(input.createdAt ? { createdAt: normalizeOptionalIsoTimestamp(input.createdAt, 'node createdAt') } : {}),
+      ...(input.updatedAt ? { updatedAt: normalizeOptionalIsoTimestamp(input.updatedAt, 'node updatedAt') } : {}),
       ...(input.createdBy ? { createdBy: input.createdBy } : {}),
       ...(input.profiles[0] ? { profile: input.profiles[0] } : {}),
     },

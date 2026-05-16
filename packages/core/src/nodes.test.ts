@@ -132,6 +132,23 @@ describe('unified nodes', () => {
     expect(loadUnifiedNodes({ vaultRoot }).nodes).toHaveLength(0);
   });
 
+  it('rejects invalid timestamps when creating nodes', () => {
+    const stateRoot = createTempStateRoot();
+    const vaultRoot = join(stateRoot, 'sync');
+
+    expect(() =>
+      createUnifiedNode(
+        {
+          id: 'bad-time',
+          title: 'Bad Time',
+          summary: 'Bad timestamp.',
+          createdAt: 'not-a-date',
+        },
+        { vaultRoot },
+      ),
+    ).toThrow('Invalid node createdAt');
+  });
+
   it('loads notes, skills, and projects from the canonical vault layout', () => {
     const stateRoot = createTempStateRoot();
     const vaultRoot = join(stateRoot, 'sync');
