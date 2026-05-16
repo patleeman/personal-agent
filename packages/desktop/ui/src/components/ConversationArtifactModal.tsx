@@ -25,6 +25,7 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
   const { versions } = useAppEvents();
   const [showSource, setShowSource] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const artifactFetcher = useCallback(() => api.conversationArtifact(conversationId, artifactId), [artifactId, conversationId]);
   const listFetcher = useCallback(() => api.conversationArtifacts(conversationId), [conversationId]);
@@ -123,7 +124,11 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
         aria-modal="true"
         aria-label="Conversation artifact"
         className="ui-dialog-shell"
-        style={{ width: 'min(1200px, calc(100vw - 3rem))', height: 'min(85vh, 920px)', maxHeight: 'calc(100vh - 3rem)' }}
+        style={
+          expanded
+            ? { width: 'calc(100vw - 1rem)', height: 'calc(100vh - 1rem)', maxHeight: 'calc(100vh - 1rem)' }
+            : { width: 'min(1600px, calc(100vw - 2rem))', height: 'min(92vh, 1100px)', maxHeight: 'calc(100vh - 2rem)' }
+        }
       >
         <div className="border-b border-border-subtle px-4 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -164,6 +169,9 @@ export function ConversationArtifactModal({ conversationId, artifactId }: { conv
                   ) : null}
                 </>
               ) : null}
+              <button type="button" onClick={() => setExpanded((current) => !current)} className="ui-toolbar-button px-2 py-1 text-[10px]">
+                {expanded ? 'restore' : 'fullscreen'}
+              </button>
               <button type="button" onClick={closeArtifact} className="ui-toolbar-button px-2 py-1 text-[10px]">
                 close
               </button>
