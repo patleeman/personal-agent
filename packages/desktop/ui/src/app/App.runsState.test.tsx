@@ -207,6 +207,8 @@ describe('App execution state integration', () => {
     });
 
     expect(apiExecutionsMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('executions version 1');
+    expect(container.textContent).toContain('runs version 1');
     expect(container.textContent).not.toContain('stale active run');
   });
 

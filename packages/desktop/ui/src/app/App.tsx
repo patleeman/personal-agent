@@ -281,6 +281,11 @@ export function App() {
             .catch(() => {
               // Keep the last known projection until the next app event or manual refresh.
             });
+          setEventVersions((prev) => ({
+            ...prev,
+            runs: prev.runs + 1,
+            executions: prev.executions + 1,
+          }));
           return;
         case 'daemon':
           setDaemon(payload.state);
