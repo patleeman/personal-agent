@@ -11,7 +11,7 @@ export function NotificationBell({ onClick }: { onClick: () => void }) {
 
   return (
     <ToolbarButton
-      className="relative"
+      className="ui-desktop-top-bar__icon-button relative"
       onClick={onClick}
       aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
       title={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
