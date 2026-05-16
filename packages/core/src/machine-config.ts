@@ -41,10 +41,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const DANGEROUS_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
   const output: Record<string, unknown> = { ...base };
 
   for (const [key, value] of Object.entries(overlay)) {
+    if (DANGEROUS_MERGE_KEYS.has(key)) {
+      continue;
+    }
+
     if (Array.isArray(value)) {
       output[key] = [...value];
       continue;

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -57,6 +57,18 @@ describe('machine config', () => {
 
     expect(readMachineConfigSection('daemon')).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
     expect(JSON.parse(readFileSync(daemonConfigPath, 'utf-8'))).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
+  });
+
+  it('ignores dangerous merge keys in machine config sections', () => {
+    const configDir = createTempDir('pa-machine-config-');
+    const raw = '{"daemon":{"__proto__":{"polluted":true},"constructor":{"polluted":true},"modules":{"tasks":true}}}';
+    // Use raw JSON so __proto__ is an own parsed key, not an object literal prototype setter.
+    writeFileSync(join(configDir, 'config.json'), raw);
+
+    const section = readMachineConfigSection('daemon', { configRoot: configDir }) as Record<string, unknown>;
+    expect(section.modules).toEqual({ tasks: true });
+    expect('polluted' in section).toBe(false);
+    expect(section).not.toHaveProperty('constructor');
   });
 
   it('reads and writes the managed knowledge base repo in config.json', () => {

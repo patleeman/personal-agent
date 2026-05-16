@@ -7,9 +7,13 @@ export const DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH = 'main';
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+const DANGEROUS_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function deepMerge(base, overlay) {
   const output = { ...base };
   for (const [key, value] of Object.entries(overlay)) {
+    if (DANGEROUS_MERGE_KEYS.has(key)) {
+      continue;
+    }
     if (Array.isArray(value)) {
       output[key] = [...value];
       continue;
