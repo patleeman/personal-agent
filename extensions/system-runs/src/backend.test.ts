@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   startBackgroundRun: vi.fn(),
   listDurableRuns: vi.fn(),
   getDurableRun: vi.fn(),
+  getDurableRunLog: vi.fn(),
   cancelDurableRun: vi.fn(),
   rerunDurableRun: vi.fn(),
+  followUpDurableRun: vi.fn(),
 }));
 
 vi.mock('./runTool.js', () => ({
@@ -22,7 +24,9 @@ vi.mock('./runTool.js', () => ({
 
 vi.mock('@personal-agent/extensions/backend/runs', () => ({
   cancelDurableRun: mocks.cancelDurableRun,
+  followUpDurableRun: mocks.followUpDurableRun,
   getDurableRun: mocks.getDurableRun,
+  getDurableRunLog: mocks.getDurableRunLog,
   listDurableRuns: mocks.listDurableRuns,
   pingDaemon: mocks.pingDaemon,
   rerunDurableRun: mocks.rerunDurableRun,
@@ -53,6 +57,15 @@ function createCtx(overrides?: Record<string, unknown>) {
     ui: { invalidate: vi.fn() },
     shell: { exec: vi.fn().mockResolvedValue({ stdout: 'ok', stderr: '', executionWrappers: [] }) },
     ...overrides,
+  };
+}
+
+function durableRun(runId: string, kind: string, taskSlug: string, status = 'running') {
+  return {
+    runId,
+    manifest: { kind, spec: { metadata: { taskSlug }, ...(kind === 'raw-shell' ? { shellCommand: 'echo ok' } : {}) } },
+    status: { status },
+    paths: { outputLogPath: `/tmp/${runId}.log` },
   };
 }
 
@@ -136,13 +149,26 @@ describe('system-runs backend', () => {
   });
 
   describe('background_command handler', () => {
-    it('lists durable runs through the host runs backend API', async () => {
-      mocks.listDurableRuns.mockResolvedValue({ runs: [], summary: { total: 0 } });
+    it('lists only shell background commands through the host runs backend API', async () => {
+      mocks.listDurableRuns.mockResolvedValue({
+        runs: [durableRun('run-shell', 'raw-shell', 'shell-task'), durableRun('run-agent', 'background-run', 'agent-task')],
+        summary: { total: 2 },
+      });
 
       const result = await background_command({ action: 'list' }, createCtx());
 
       expect(mocks.listDurableRuns).toHaveBeenCalled();
-      expect(result.text).toBe('No durable runs found.');
+      expect(result.text).toContain('Background commands (1):');
+      expect(result.text).toContain('run-shell');
+      expect(result.text).not.toContain('run-agent');
+    });
+
+    it('rejects subagent runs with a clear tool hint', async () => {
+      mocks.getDurableRun.mockResolvedValue({ run: durableRun('run-agent', 'background-run', 'agent-task') });
+
+      await expect(background_command({ action: 'logs', runId: 'run-agent' }, createCtx())).rejects.toThrow(
+        'Use subagent for this execution',
+      );
     });
   });
 
@@ -156,6 +182,30 @@ describe('system-runs backend', () => {
 
       expect(result.text).toBe('Started subagent run-789.');
       expect(mocks.subagentExecute).toHaveBeenCalled();
+    });
+
+    it('lists only subagent runs', async () => {
+      mocks.listDurableRuns.mockResolvedValue({
+        runs: [durableRun('run-shell', 'raw-shell', 'shell-task'), durableRun('run-agent', 'background-run', 'agent-task')],
+        summary: { total: 2 },
+      });
+
+      const result = await subagent({ action: 'list' }, createCtx());
+
+      expect(result.text).toContain('Subagents (1):');
+      expect(result.text).toContain('run-agent');
+      expect(result.text).not.toContain('run-shell');
+    });
+
+    it('reads subagent logs without using background_command', async () => {
+      mocks.getDurableRun.mockResolvedValue({ run: durableRun('run-agent', 'background-run', 'agent-task') });
+      mocks.getDurableRunLog.mockResolvedValue({ path: '/tmp/run-agent.log', log: 'agent failed' });
+
+      const result = await subagent({ action: 'logs', runId: 'run-agent' }, createCtx());
+
+      expect(result.text).toContain('Subagent logs: run-agent');
+      expect(result.text).toContain('agent failed');
+      expect(mocks.getDurableRunLog).toHaveBeenCalledWith('run-agent', 120);
     });
   });
 });

@@ -55,7 +55,7 @@ Start delegated agent work:
 }
 ```
 
-Use `follow_up` to continue a stopped subagent and `get`, `logs`, `rerun`, and `cancel` for lifecycle management.
+Use `follow_up` to continue a stopped subagent and `get`, `logs`, `rerun`, and `cancel` for lifecycle management. Do not use `background_command` on subagent IDs.
 
 ## Compatibility
 

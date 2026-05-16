@@ -2,7 +2,9 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 
 import {
   cancelDurableRun,
+  followUpDurableRun,
   getDurableRun,
+  getDurableRunLog,
   listDurableRuns,
   pingDaemon,
   rerunDurableRun,
@@ -147,21 +149,75 @@ function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 6
   }
 }
 
-function formatBackgroundRunList(result: { runs?: Array<Record<string, unknown>>; summary?: { total?: number } }): string {
-  const runs = Array.isArray(result.runs) ? result.runs : [];
+function readRunId(run: Record<string, unknown>): string {
+  return readString(run.runId) ?? 'unknown';
+}
+
+function readRunStatus(run: Record<string, unknown>): string {
+  const status = isRecord(run.status) ? readString(run.status.status) : undefined;
+  return status ?? 'unknown';
+}
+
+function readManifestKind(run: Record<string, unknown>): string | undefined {
+  const manifest = isRecord(run.manifest) ? run.manifest : undefined;
+  return readString(manifest?.kind);
+}
+
+function readRunSpec(run: Record<string, unknown>): Record<string, unknown> {
+  const manifest = isRecord(run.manifest) ? run.manifest : undefined;
+  return isRecord(manifest?.spec) ? manifest.spec : {};
+}
+
+function readRunTitle(run: Record<string, unknown>): string {
+  const spec = readRunSpec(run);
+  const metadata = isRecord(spec.metadata) ? spec.metadata : isRecord(spec.manifestMetadata) ? spec.manifestMetadata : {};
+  const agent = isRecord(spec.agent) ? spec.agent : {};
+  const prompt = readString(spec.prompt) ?? readString(agent.prompt);
+  return (
+    readString(metadata.title) ??
+    readString(metadata.taskSlug) ??
+    readString(spec.taskSlug) ??
+    readString(spec.shellCommand) ??
+    (prompt ? prompt.split(/\s+/).slice(0, 8).join(' ') : undefined) ??
+    readRunId(run)
+  );
+}
+
+function isBackgroundCommandRun(run: Record<string, unknown>): boolean {
+  return readManifestKind(run) === 'raw-shell' || Boolean(readString(readRunSpec(run).shellCommand));
+}
+
+function isSubagentRun(run: Record<string, unknown>): boolean {
+  return readManifestKind(run) === 'background-run';
+}
+
+function describeRunKind(run: Record<string, unknown>): string {
+  if (isSubagentRun(run)) return 'subagent';
+  if (isBackgroundCommandRun(run)) return 'background command';
+  return readManifestKind(run) ?? 'unknown execution';
+}
+
+function assertRunKind(run: Record<string, unknown>, expected: 'background command' | 'subagent'): void {
+  const matches = expected === 'background command' ? isBackgroundCommandRun(run) : isSubagentRun(run);
+  if (matches) return;
+
+  const actual = describeRunKind(run);
+  const alternateTool = expected === 'background command' ? 'subagent' : 'background_command';
+  throw new Error(`Run ${readRunId(run)} is a ${actual}, not a ${expected}. Use ${alternateTool} for this execution.`);
+}
+
+function formatScopedRunList(label: string, runs: Array<Record<string, unknown>>): string {
   if (runs.length === 0) {
-    return 'No durable runs found.';
+    return `No ${label.toLowerCase()} found.`;
   }
 
-  return [
-    `Durable runs (${result.summary?.total ?? runs.length}):`,
-    ...runs.map((run) => {
-      const status = isRecord(run.status) ? (readString(run.status.status) ?? 'unknown') : 'unknown';
-      const manifest = isRecord(run.manifest) ? run.manifest : {};
-      const source = isRecord(manifest.source) ? (readString(manifest.source.type) ?? 'unknown') : 'unknown';
-      return `- ${String(run.runId ?? 'unknown')} [${status}] ${String(manifest.kind ?? 'unknown')} · source ${source}`;
-    }),
-  ].join('\n');
+  return [`${label} (${runs.length}):`, ...runs.map((run) => `- ${readRunId(run)} [${readRunStatus(run)}] ${readRunTitle(run)}`)].join(
+    '\n',
+  );
+}
+
+function formatRunSummary(label: string, run: Record<string, unknown>): string {
+  return [`${label} ${readRunId(run)}`, `status: ${readRunStatus(run)}`, `title: ${readRunTitle(run)}`].join('\n');
 }
 
 async function startBackgroundCommand(input: unknown, ctx: NativeBackendContext) {
@@ -269,27 +325,31 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
 
   if (action === 'list') {
     const result = await listDurableRuns();
-    return { text: formatBackgroundRunList(result), details: { action: 'list', runCount: result.runs.length } };
+    const runs = (Array.isArray(result.runs) ? result.runs : []).filter(isBackgroundCommandRun);
+    return {
+      text: formatScopedRunList('Background commands', runs),
+      details: { action: 'list', runCount: runs.length, runIds: runs.map(readRunId) },
+    };
   }
 
   const runId = readRequiredString(params.runId, 'runId');
+  const existing = await getDurableRun(runId);
+  if (!existing) throw new Error(`Run not found: ${runId}`);
+  const run = existing.run as Record<string, unknown>;
+  assertRunKind(run, 'background command');
+
   if (action === 'get') {
-    const result = await getDurableRun(runId);
-    if (!result) throw new Error(`Run not found: ${runId}`);
-    const run = result.run;
     return {
-      text: [`Run ${run.runId}`, `status: ${run.status?.status ?? 'unknown'}`, `kind: ${run.manifest?.kind ?? 'unknown'}`].join('\n'),
-      details: { action: 'get', runId, status: run.status?.status },
+      text: formatRunSummary('Background command', run),
+      details: { action: 'get', runId, status: readRunStatus(run) },
     };
   }
 
   if (action === 'logs') {
-    const result = await getDurableRun(runId);
-    if (!result) throw new Error(`Run not found: ${runId}`);
-    const path = result.run.paths.outputLogPath;
+    const path = isRecord(run.paths) ? readString(run.paths.outputLogPath) : undefined;
     const tail = normalizeRunLogTail(params.tail);
     return {
-      text: [`Run logs: ${runId}`, `path: ${path}`, '', readTailText(path, tail) || '(empty log)'].join('\n'),
+      text: [`Background command logs: ${runId}`, `path: ${path ?? ''}`, '', readTailText(path, tail) || '(empty log)'].join('\n'),
       details: { action: 'logs', runId, tail, path },
     };
   }
@@ -297,14 +357,14 @@ export async function background_command(input: unknown, ctx: NativeBackendConte
   if (action === 'cancel') {
     const result = await cancelDurableRun(runId);
     ctx.ui.invalidate(['executions', 'runs', 'tasks']);
-    if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel run ${runId}.`);
-    return { text: `Cancelled background work ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
+    if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel background command ${runId}.`);
+    return { text: `Cancelled background command ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
   }
 
   if (action === 'rerun') {
     const result = await rerunDurableRun(runId);
     ctx.ui.invalidate(['executions', 'runs', 'tasks']);
-    if (!result.accepted) throw new Error(result.reason ?? `Could not rerun ${runId}.`);
+    if (!result.accepted) throw new Error(result.reason ?? `Could not rerun background command ${runId}.`);
     return { text: `Rerun started ${result.runId} from ${runId}.`, details: { action: 'rerun', runId: result.runId, sourceRunId: runId } };
   }
 
@@ -315,6 +375,69 @@ export async function subagent(input: unknown, ctx: NativeBackendContext) {
   const params = typeof input === 'object' && input !== null && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
   if (params.action === 'start') {
     params.action = 'start_agent';
+    return executeRunInput(params, ctx, 'subagent');
   }
-  return executeRunInput(params, ctx, 'subagent');
+
+  const action = readRequiredString(params.action, 'action');
+  if (action === 'list') {
+    const result = await listDurableRuns();
+    const runs = (Array.isArray(result.runs) ? result.runs : []).filter(isSubagentRun);
+    return {
+      text: formatScopedRunList('Subagents', runs),
+      details: { action: 'list', runCount: runs.length, runIds: runs.map(readRunId) },
+    };
+  }
+
+  const runId = readRequiredString(params.runId, 'runId');
+  const existing = await getDurableRun(runId);
+  if (!existing) throw new Error(`Subagent not found: ${runId}`);
+  const run = existing.run as Record<string, unknown>;
+  assertRunKind(run, 'subagent');
+
+  if (action === 'get') {
+    return {
+      text: formatRunSummary('Subagent', run),
+      details: { action: 'get', runId, status: readRunStatus(run) },
+    };
+  }
+
+  if (action === 'logs') {
+    const tail = normalizeRunLogTail(params.tail);
+    const result = await getDurableRunLog(runId, tail);
+    if (!result) throw new Error(`Subagent not found: ${runId}`);
+    return {
+      text: [`Subagent logs: ${runId}`, `path: ${result.path}`, '', result.log || '(empty log)'].join('\n'),
+      details: { action: 'logs', runId, tail, path: result.path },
+    };
+  }
+
+  if (action === 'cancel') {
+    const result = await cancelDurableRun(runId);
+    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    if (!result.cancelled) throw new Error(result.reason ?? `Could not cancel subagent ${runId}.`);
+    return { text: `Cancelled subagent ${runId}.`, details: { action: 'cancel', runId, cancelled: true } };
+  }
+
+  if (action === 'rerun') {
+    const result = await rerunDurableRun(runId);
+    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    if (!result.accepted) throw new Error(result.reason ?? `Could not rerun subagent ${runId}.`);
+    return {
+      text: `Subagent rerun started ${result.runId} from ${runId}.`,
+      details: { action: 'rerun', runId: result.runId, sourceRunId: runId },
+    };
+  }
+
+  if (action === 'follow_up') {
+    const prompt = readString(params.prompt) ?? 'Continue from where you left off.';
+    const result = await followUpDurableRun(runId, prompt);
+    ctx.ui.invalidate(['executions', 'runs', 'tasks']);
+    if (!result.accepted) throw new Error(result.reason ?? `Could not continue subagent ${runId}.`);
+    return {
+      text: `Subagent follow-up started ${result.runId} from ${runId}.`,
+      details: { action: 'follow_up', runId: result.runId, sourceRunId: runId, prompt },
+    };
+  }
+
+  throw new Error(`Unsupported subagent action: ${action}`);
 }
