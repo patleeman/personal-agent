@@ -19,6 +19,9 @@ export interface NativeExtensionClient {
     listSurfaces(): Promise<unknown>;
   };
   automations: typeof api.automations;
+  conversations: {
+    list(): Promise<unknown>;
+  };
   executions: {
     start(input: unknown): Promise<unknown>;
     get(executionId: string): Promise<unknown>;
@@ -131,6 +134,11 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
     },
     automations: api.automations,
+    conversations: {
+      list() {
+        return api.sessions();
+      },
+    },
     executions: {
       start(input) {
         return api.startExtensionRun(extensionId, input);

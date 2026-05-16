@@ -14,6 +14,12 @@ import {
 } from '@personal-agent/extensions/ui';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+interface ConversationOption {
+  id: string;
+  title: string;
+  cwd?: string;
+}
+
 interface AutomationFormState {
   title: string;
   prompt: string;
@@ -110,6 +116,22 @@ function sortTasks(tasks: ScheduledTaskSummary[]) {
 
 function sortPastDueTasks(tasks: ScheduledTaskSummary[]) {
   return [...tasks].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')) || taskName(a).localeCompare(taskName(b)));
+}
+
+function readConversationOptions(input: unknown): ConversationOption[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const record = item as Record<string, unknown>;
+      const id = typeof record.id === 'string' ? record.id.trim() : '';
+      if (!id) return null;
+      const rawTitle = typeof record.title === 'string' ? record.title.trim() : '';
+      const cwd = typeof record.cwd === 'string' ? record.cwd : undefined;
+      return { id, title: rawTitle || id, cwd } satisfies ConversationOption;
+    })
+    .filter((item): item is ConversationOption => Boolean(item))
+    .sort((left, right) => left.title.localeCompare(right.title));
 }
 
 function oneTimeTaskAtMs(task: Pick<ScheduledTaskSummary, 'at'>) {
@@ -596,12 +618,18 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
   const [filter, setFilter] = useState<AutomationFilter>('all');
   const [query, setQuery] = useState('');
   const [activeEditorSection, setActiveEditorSection] = useState<EditorSectionId>('automation-general');
+  const [conversationOptions, setConversationOptions] = useState<ConversationOption[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
-    const [nextTasks, nextHealth] = await Promise.all([pa.automations.list(), pa.automations.readSchedulerHealth()]);
+    const [nextTasks, nextHealth, nextConversations] = await Promise.all([
+      pa.automations.list(),
+      pa.automations.readSchedulerHealth(),
+      (pa as NativeExtensionClient & { conversations?: { list(): Promise<unknown> } }).conversations?.list?.() ?? Promise.resolve([]),
+    ]);
     setTasks(sortTasks(Array.isArray(nextTasks) ? nextTasks : []));
     setHealth(nextHealth as ScheduledTaskSchedulerHealth);
+    setConversationOptions(readConversationOptions(nextConversations));
     setLoading(false);
   }, [pa]);
 
@@ -986,14 +1014,31 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                     </Field>
                   </div>
                   {form.threadMode === 'existing' ? (
-                    <Field label="Thread conversation ID">
-                      <input
+                    <Field
+                      label="Thread"
+                      hint={
+                        conversationOptions.length === 0
+                          ? 'No saved threads found yet.'
+                          : 'Choose the conversation that should receive automation results.'
+                      }
+                    >
+                      <select
                         className={fieldClass()}
-                        autoComplete="off"
                         name="automation-thread-conversation-id"
+                        required
                         value={form.threadConversationId}
                         onChange={(event) => setForm({ ...form, threadConversationId: event.target.value })}
-                      />
+                      >
+                        <option value="">Choose thread</option>
+                        {form.threadConversationId && !conversationOptions.some((option) => option.id === form.threadConversationId) ? (
+                          <option value={form.threadConversationId}>Current saved thread</option>
+                        ) : null}
+                        {conversationOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.cwd ? `${option.title} · ${option.cwd}` : option.title}
+                          </option>
+                        ))}
+                      </select>
                     </Field>
                   ) : null}
                   <div className="rounded-lg border border-border-subtle bg-surface/30 p-3 text-[12px] text-secondary">

@@ -62,7 +62,7 @@ From the list view, click "New Automation". The editor uses the Settings page la
 
 - **General** — automation name, recurring instruction, and enabled state
 - **Schedule** — recurring vs one-time scheduling, human-readable schedule presets, and a preview
-- **Delivery** — background/conversation target plus thread binding summary
+- **Delivery** — background/conversation target plus thread binding; existing threads are selected from a dropdown
 - **Runtime** — optional working directory, model, timeout, and catch-up window
 
 The UI avoids raw cron entry for common creation/editing paths; selected presets are translated to scheduler syntax internally.
