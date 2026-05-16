@@ -58,31 +58,14 @@ A chronological log of every execution:
 
 ## Creating an Automation
 
-From the list view, click "New Automation" and fill in:
+From the list view, click "New Automation". The editor uses the Settings page layout with a right-side "On this page" rail and four sections:
 
-### Schedule
+- **General** — automation name, recurring instruction, and enabled state
+- **Schedule** — recurring vs one-time scheduling, common cron presets, raw cron, and a human-readable preview
+- **Delivery** — background/conversation target plus thread binding summary
+- **Runtime** — optional working directory, model, timeout, and catch-up window
 
-- **Cron** — standard 5-field cron expression
-- **One-time** — ISO timestamp or natural language
-
-### Target
-
-| Target           | Behavior                                  |
-| ---------------- | ----------------------------------------- |
-| Background agent | Runs in the daemon without a conversation |
-| Conversation     | Posts result to a conversation thread     |
-
-### Thread binding
-
-| Mode      | When to use                              |
-| --------- | ---------------------------------------- |
-| Dedicated | Each execution gets a fresh conversation |
-| Existing  | Posts to an existing conversation        |
-| None      | No thread (background agent only)        |
-
-### Prompt
-
-The prompt to execute when the automation fires. Supports the same content as a normal conversation prompt.
+Raw daemon fields are still available, but common schedules can be selected from presets instead of starting with cron syntax.
 
 ## Inspecting Runs
 

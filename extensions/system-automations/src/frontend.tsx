@@ -4,6 +4,7 @@ import { timeAgo } from '@personal-agent/extensions/data';
 import {
   AppPageIntro,
   AppPageLayout,
+  AppPageToc,
   cx,
   EmptyState,
   ErrorState,
@@ -30,6 +31,20 @@ interface AutomationFormState {
 }
 
 type AutomationFilter = 'all' | 'current' | 'past-due' | 'failed' | 'disabled';
+type EditorSectionId = 'automation-general' | 'automation-schedule' | 'automation-delivery' | 'automation-runtime';
+
+const EDITOR_TOC_ITEMS: Array<{ id: EditorSectionId; label: string; summary: string }> = [
+  { id: 'automation-general', label: 'General', summary: 'Name and instruction' },
+  { id: 'automation-schedule', label: 'Schedule', summary: 'When it runs' },
+  { id: 'automation-delivery', label: 'Delivery', summary: 'Where results go' },
+  { id: 'automation-runtime', label: 'Runtime', summary: 'Model, cwd, and timeout' },
+];
+
+const CRON_PRESETS = [
+  { label: 'Morning', summary: '8:00 AM daily', cron: '0 8 * * *' },
+  { label: 'Workday start', summary: '9:00 AM weekdays', cron: '0 9 * * 1-5' },
+  { label: 'End of day', summary: '5:00 PM weekdays', cron: '0 17 * * 1-5' },
+];
 
 const FILTER_LABELS: Record<AutomationFilter, string> = {
   all: 'All',
@@ -263,17 +278,41 @@ function Field({ label, children, hint }: { label: string; children: React.React
   );
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+function FormSection({
+  id,
+  title,
+  description,
+  children,
+}: {
+  id: EditorSectionId;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="border-t border-border-subtle pt-5">
-      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{title}</h3>
-      {children}
+    <section id={id} className="grid scroll-mt-8 gap-6 border-t border-border-subtle py-7 md:grid-cols-[13rem_minmax(0,1fr)]">
+      <div className="space-y-2">
+        <h3 className="text-[16px] font-semibold tracking-tight text-primary">{title}</h3>
+        <p className="text-[13px] leading-6 text-secondary">{description}</p>
+      </div>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
 
 function fieldClass() {
-  return 'w-full rounded-lg border border-border-subtle bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent';
+  return 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none outline-none transition-colors placeholder:text-dim focus:border-accent/50 focus:bg-surface';
+}
+
+function schedulePreview(form: AutomationFormState) {
+  if (form.scheduleType === 'at') {
+    return form.at.trim() ? `Runs once at ${form.at.trim()}.` : 'Runs once at the selected time.';
+  }
+  const cron = form.cron.trim();
+  if (cron === '0 9 * * 1-5') return 'Runs every weekday at 9:00 AM.';
+  if (cron === '0 8 * * *') return 'Runs every day at 8:00 AM.';
+  if (cron === '0 17 * * 1-5') return 'Runs every weekday at 5:00 PM.';
+  return cron ? `Runs on cron ${cron}.` : 'Runs on the selected recurring schedule.';
 }
 
 function MoreIcon() {
@@ -543,6 +582,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<AutomationFilter>('all');
   const [query, setQuery] = useState('');
+  const [activeEditorSection, setActiveEditorSection] = useState<EditorSectionId>('automation-general');
 
   const load = useCallback(async () => {
     setError(null);
@@ -753,170 +793,291 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         )}
 
         {editorOpen && (
-          <form className="space-y-6" onSubmit={save}>
-            <div className="flex items-start justify-between gap-4 border-b border-border-subtle pb-5">
-              <div className="min-w-0">
-                <p className="text-[13px] text-secondary">← Automations</p>
-                <h2 className="mt-6 text-[32px] font-semibold tracking-tight text-primary">
-                  {editingId ? 'Edit automation' : 'New automation'}
-                </h2>
-                <p className="mt-2 text-[13px] text-secondary">Define the schedule, runtime, and delivery target.</p>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <ToolbarButton type="submit" disabled={busy === 'save'}>
-                  {busy === 'save' ? 'Saving…' : 'Save'}
-                </ToolbarButton>
-                <ToolbarButton type="button" onClick={closeEditor}>
-                  Cancel
-                </ToolbarButton>
-              </div>
-            </div>
-
-            <FormSection title="Basics">
-              <div className="grid gap-4">
-                <Field label="Title">
-                  <input
-                    className={fieldClass()}
-                    required
-                    value={form.title}
-                    onChange={(event) => setForm({ ...form, title: event.target.value })}
-                  />
-                </Field>
-                <Field label="Prompt" hint="This is the exact instruction sent when the automation runs.">
-                  <textarea
-                    className={fieldClass()}
-                    required
-                    rows={9}
-                    value={form.prompt}
-                    onChange={(event) => setForm({ ...form, prompt: event.target.value })}
-                  />
-                </Field>
-                <label className="flex items-center gap-2 text-[13px] text-secondary">
-                  <input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} />
-                  Enabled
-                </label>
-              </div>
-            </FormSection>
-
-            <FormSection title="Schedule">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Type">
-                  <select
-                    className={fieldClass()}
-                    value={form.scheduleType}
-                    onChange={(event) => setForm({ ...form, scheduleType: event.target.value as 'cron' | 'at' })}
-                  >
-                    <option value="cron">Recurring cron</option>
-                    <option value="at">Run once</option>
-                  </select>
-                </Field>
-                {form.scheduleType === 'cron' ? (
-                  <Field label="Cron expression" hint="Five-field cron, for example 0 9 * * 1-5.">
-                    <input
-                      className={fieldClass()}
-                      value={form.cron}
-                      onChange={(event) => setForm({ ...form, cron: event.target.value })}
-                    />
-                  </Field>
-                ) : (
-                  <Field label="Run at" hint="ISO timestamp or natural phrase, depending on backend support.">
-                    <input className={fieldClass()} value={form.at} onChange={(event) => setForm({ ...form, at: event.target.value })} />
-                  </Field>
-                )}
-                {form.scheduleType === 'cron' ? (
-                  <Field label="Catch-up window seconds" hint="How long a missed run remains eligible after wake.">
-                    <input
-                      className={fieldClass()}
-                      type="number"
-                      min="1"
-                      value={form.catchUpWindowSeconds}
-                      onChange={(event) => setForm({ ...form, catchUpWindowSeconds: event.target.value })}
-                    />
-                  </Field>
-                ) : null}
-              </div>
-            </FormSection>
-
-            <FormSection title="Delivery">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Target">
-                  <select
-                    className={fieldClass()}
-                    value={form.targetType}
-                    onChange={(event) => setForm({ ...form, targetType: event.target.value as 'background-agent' | 'conversation' })}
-                  >
-                    <option value="background-agent">Background job</option>
-                    <option value="conversation">Conversation</option>
-                  </select>
-                </Field>
-                <Field label="Thread mode">
-                  <select
-                    className={fieldClass()}
-                    value={form.threadMode}
-                    onChange={(event) => setForm({ ...form, threadMode: event.target.value as 'dedicated' | 'existing' | 'none' })}
-                  >
-                    <option value="dedicated">Dedicated thread</option>
-                    <option value="existing">Existing thread</option>
-                    <option value="none">No thread</option>
-                  </select>
-                </Field>
-                {form.threadMode === 'existing' ? (
-                  <Field label="Thread conversation ID">
-                    <input
-                      className={fieldClass()}
-                      value={form.threadConversationId}
-                      onChange={(event) => setForm({ ...form, threadConversationId: event.target.value })}
-                    />
-                  </Field>
-                ) : null}
-              </div>
-            </FormSection>
-
-            <FormSection title="Runtime">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Working directory">
-                  <input className={fieldClass()} value={form.cwd} onChange={(event) => setForm({ ...form, cwd: event.target.value })} />
-                </Field>
-                <Field label="Model">
-                  <input
-                    className={fieldClass()}
-                    value={form.model}
-                    onChange={(event) => setForm({ ...form, model: event.target.value })}
-                  />
-                </Field>
-                <Field label="Timeout seconds">
-                  <input
-                    className={fieldClass()}
-                    type="number"
-                    min="1"
-                    value={form.timeoutSeconds}
-                    onChange={(event) => setForm({ ...form, timeoutSeconds: event.target.value })}
-                  />
-                </Field>
-              </div>
-            </FormSection>
-
-            <div className="flex flex-wrap justify-between gap-2 border-t border-border-subtle pt-5">
-              <div>
-                {editingId ? (
-                  <ToolbarButton
-                    type="button"
-                    disabled={busy === `delete:${editingId}`}
-                    onClick={() => void deleteTask({ id: editingId, title: form.title })}
-                  >
-                    Delete
+          <form onSubmit={save}>
+            <AppPageLayout
+              shellClassName="max-w-[72rem]"
+              contentClassName="space-y-0"
+              aside={
+                <AppPageToc
+                  items={EDITOR_TOC_ITEMS}
+                  activeId={activeEditorSection}
+                  onNavigate={(sectionId) => {
+                    setActiveEditorSection(sectionId);
+                    document.getElementById(sectionId)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                  }}
+                />
+              }
+            >
+              <div className="flex items-start justify-between gap-4 pb-10">
+                <div className="min-w-0">
+                  <button type="button" className="text-[13px] text-secondary hover:text-primary" onClick={closeEditor}>
+                    ← Automations
+                  </button>
+                  <h2 className="mt-6 text-[32px] font-semibold tracking-tight text-primary">
+                    {editingId ? 'Edit automation' : 'New automation'}
+                  </h2>
+                  <p className="mt-2 text-[13px] text-secondary">
+                    Define what the agent should do, when it should run, and where results should appear.
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <ToolbarButton type="button" onClick={closeEditor}>
+                    Cancel
                   </ToolbarButton>
-                ) : null}
+                  <ToolbarButton type="submit" disabled={busy === 'save'}>
+                    {busy === 'save' ? 'Saving…' : editingId ? 'Save changes' : 'Create'}
+                  </ToolbarButton>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <ToolbarButton type="button" onClick={closeEditor}>
-                  Cancel
-                </ToolbarButton>
-                <ToolbarButton type="submit" disabled={busy === 'save'}>
-                  {busy === 'save' ? 'Saving…' : 'Save automation'}
-                </ToolbarButton>
+
+              <FormSection
+                id="automation-general"
+                title="General"
+                description="Name the automation and give the agent its recurring instruction."
+              >
+                <div className="grid gap-4">
+                  <Field label="Name">
+                    <input
+                      className={fieldClass()}
+                      required
+                      autoComplete="off"
+                      name="automation-title"
+                      value={form.title}
+                      onChange={(event) => setForm({ ...form, title: event.target.value })}
+                    />
+                  </Field>
+                  <Field label="Instruction" hint="This prompt is sent each time the automation runs.">
+                    <textarea
+                      className={fieldClass()}
+                      required
+                      name="automation-prompt"
+                      rows={7}
+                      value={form.prompt}
+                      onChange={(event) => setForm({ ...form, prompt: event.target.value })}
+                    />
+                  </Field>
+                  <label className="flex items-center gap-2 text-[13px] text-secondary">
+                    <input
+                      className="h-4 w-4 rounded border-border-default bg-base text-accent focus:outline-none"
+                      type="checkbox"
+                      checked={form.enabled}
+                      onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
+                    />
+                    Enabled
+                  </label>
+                </div>
+              </FormSection>
+
+              <FormSection
+                id="automation-schedule"
+                title="Schedule"
+                description="Use presets for common schedules. Raw cron stays available when needed."
+              >
+                <div className="grid gap-4">
+                  <div className="inline-flex w-fit rounded-lg border border-border-subtle bg-surface/40 p-1">
+                    <button
+                      type="button"
+                      className={cx(
+                        'rounded-md px-3 py-1.5 text-[12px]',
+                        form.scheduleType === 'cron' ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:text-primary',
+                      )}
+                      onClick={() => setForm({ ...form, scheduleType: 'cron', cron: form.cron || '0 9 * * 1-5' })}
+                    >
+                      Recurring
+                    </button>
+                    <button
+                      type="button"
+                      className={cx(
+                        'rounded-md px-3 py-1.5 text-[12px]',
+                        form.scheduleType === 'at' ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:text-primary',
+                      )}
+                      onClick={() => setForm({ ...form, scheduleType: 'at' })}
+                    >
+                      Once
+                    </button>
+                  </div>
+
+                  {form.scheduleType === 'cron' ? (
+                    <>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {CRON_PRESETS.map((preset) => (
+                          <button
+                            key={preset.cron}
+                            type="button"
+                            className={cx(
+                              'rounded-lg border px-3 py-3 text-left transition-colors',
+                              form.cron === preset.cron
+                                ? 'border-accent/60 bg-surface text-primary'
+                                : 'border-border-subtle bg-surface/30 text-secondary hover:border-border-default hover:text-primary',
+                            )}
+                            onClick={() => setForm({ ...form, cron: preset.cron })}
+                          >
+                            <span className="block text-[13px] font-semibold">{preset.label}</span>
+                            <span className="mt-0.5 block text-[11px] text-dim">{preset.summary}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <Field label="Cron expression" hint="Five-field cron. Presets above fill this in for common cases.">
+                        <input
+                          className={fieldClass()}
+                          autoComplete="off"
+                          name="automation-cron"
+                          value={form.cron}
+                          onChange={(event) => setForm({ ...form, cron: event.target.value })}
+                        />
+                      </Field>
+                    </>
+                  ) : (
+                    <Field label="Run at" hint="ISO timestamp or natural phrase, depending on backend support.">
+                      <input
+                        className={fieldClass()}
+                        autoComplete="off"
+                        name="automation-at"
+                        placeholder="tomorrow 8pm"
+                        value={form.at}
+                        onChange={(event) => setForm({ ...form, at: event.target.value })}
+                      />
+                    </Field>
+                  )}
+
+                  <div className="border-l-2 border-accent/60 pl-3 text-[13px] leading-6 text-secondary">
+                    <span className="font-medium text-primary">{schedulePreview(form)}</span>
+                  </div>
+                </div>
+              </FormSection>
+
+              <FormSection id="automation-delivery" title="Delivery" description="Choose how visible the run should be when it completes.">
+                <div className="grid gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Results">
+                      <select
+                        className={fieldClass()}
+                        name="automation-target"
+                        value={form.targetType}
+                        onChange={(event) => setForm({ ...form, targetType: event.target.value as 'background-agent' | 'conversation' })}
+                      >
+                        <option value="background-agent">Background job</option>
+                        <option value="conversation">Conversation</option>
+                      </select>
+                    </Field>
+                    <Field label="Thread mode">
+                      <select
+                        className={fieldClass()}
+                        name="automation-thread-mode"
+                        value={form.threadMode}
+                        onChange={(event) => setForm({ ...form, threadMode: event.target.value as 'dedicated' | 'existing' | 'none' })}
+                      >
+                        <option value="dedicated">Dedicated thread</option>
+                        <option value="existing">Existing thread</option>
+                        <option value="none">No thread</option>
+                      </select>
+                    </Field>
+                  </div>
+                  {form.threadMode === 'existing' ? (
+                    <Field label="Thread conversation ID">
+                      <input
+                        className={fieldClass()}
+                        autoComplete="off"
+                        name="automation-thread-conversation-id"
+                        value={form.threadConversationId}
+                        onChange={(event) => setForm({ ...form, threadConversationId: event.target.value })}
+                      />
+                    </Field>
+                  ) : null}
+                  <div className="rounded-lg border border-border-subtle bg-surface/30 p-3 text-[12px] text-secondary">
+                    <div className="flex justify-between gap-4 border-b border-border-subtle/70 pb-2">
+                      <span className="text-dim">Run target</span>
+                      <span className="text-primary">{form.targetType === 'conversation' ? 'Conversation' : 'Background agent'}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 pt-2">
+                      <span className="text-dim">Thread binding</span>
+                      <span className="text-primary">
+                        {form.threadMode === 'dedicated' ? 'Dedicated thread' : form.threadMode === 'existing' ? 'Existing thread' : 'None'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </FormSection>
+
+              <FormSection
+                id="automation-runtime"
+                title="Runtime"
+                description="Defaults are usually right. Change these only when the automation needs a specific workspace or model."
+              >
+                <div className="grid gap-4">
+                  <Field label="Working directory" hint="Leave blank to use the current runtime cwd.">
+                    <input
+                      className={fieldClass()}
+                      autoComplete="off"
+                      name="automation-cwd"
+                      placeholder="~/workingdir/repo"
+                      value={form.cwd}
+                      onChange={(event) => setForm({ ...form, cwd: event.target.value })}
+                    />
+                  </Field>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Model">
+                      <input
+                        className={fieldClass()}
+                        autoComplete="off"
+                        name="automation-model"
+                        placeholder="Default model"
+                        value={form.model}
+                        onChange={(event) => setForm({ ...form, model: event.target.value })}
+                      />
+                    </Field>
+                    <Field label="Timeout seconds">
+                      <input
+                        className={fieldClass()}
+                        type="number"
+                        min="1"
+                        inputMode="numeric"
+                        name="automation-timeout-seconds"
+                        placeholder="Default"
+                        value={form.timeoutSeconds}
+                        onChange={(event) => setForm({ ...form, timeoutSeconds: event.target.value })}
+                      />
+                    </Field>
+                  </div>
+                  {form.scheduleType === 'cron' ? (
+                    <Field label="Catch-up window seconds" hint="How long a missed run remains eligible after wake.">
+                      <input
+                        className={fieldClass()}
+                        type="number"
+                        min="1"
+                        inputMode="numeric"
+                        name="automation-catch-up-window-seconds"
+                        placeholder="Default"
+                        value={form.catchUpWindowSeconds}
+                        onChange={(event) => setForm({ ...form, catchUpWindowSeconds: event.target.value })}
+                      />
+                    </Field>
+                  ) : null}
+                </div>
+              </FormSection>
+
+              <div className="flex flex-wrap justify-between gap-2 border-t border-border-subtle pt-5">
+                <div>
+                  {editingId ? (
+                    <ToolbarButton
+                      type="button"
+                      disabled={busy === `delete:${editingId}`}
+                      onClick={() => void deleteTask({ id: editingId, title: form.title })}
+                    >
+                      Delete
+                    </ToolbarButton>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <ToolbarButton type="button" onClick={closeEditor}>
+                    Cancel
+                  </ToolbarButton>
+                  <ToolbarButton type="submit" disabled={busy === 'save'}>
+                    {busy === 'save' ? 'Saving…' : editingId ? 'Save changes' : 'Create automation'}
+                  </ToolbarButton>
+                </div>
               </div>
-            </div>
+            </AppPageLayout>
           </form>
         )}
 
