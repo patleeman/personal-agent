@@ -37,8 +37,8 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
 
   const cellColors = ['bg-elevated', 'bg-accent/25', 'bg-accent/45', 'bg-accent/65', 'bg-accent'];
 
-  const total = values.reduce((a, b) => a + b, 0);
-  const avg = total / Math.max(values.length, 1);
+  const total = data.reduce((a, d) => a + d.tokensInput + d.tokensOutput + d.tokensCached + d.tokensCachedWrite, 0);
+  const avg = total / Math.max(data.length, 1);
 
   return (
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">

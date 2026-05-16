@@ -182,6 +182,15 @@ function percentile(values: number[], pct: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * pct))] ?? 0;
 }
 
+function average(values: number[]): number {
+  const finite = values.filter((value) => Number.isFinite(value));
+  return finite.length ? finite.reduce((a, b) => a + b, 0) / finite.length : 0;
+}
+
+function boolValue(value: unknown): boolean {
+  return value === true || value === 1;
+}
+
 function dayKey(ts: string): string {
   return ts.slice(0, 10);
 }
@@ -350,8 +359,8 @@ function bashComplexityScore(command: string): { score: number; shape: string; c
     : command.includes('&&') || command.includes('||')
       ? 'chain'
       : commandCount > 1
-        ? 'compound'
-        : 'simple';
+        ? 'unknown'
+        : 'single';
   return { score, shape, commandCount };
 }
 
@@ -374,15 +383,20 @@ function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
       const bashBreakdown = [...byCommand.entries()].map(([command, commandRows]) => {
         const commandLatencies = commandRows.map((event) => numberValue(event.payload.durationMs)).filter((value) => value > 0);
         const commandErrors = commandRows.filter((event) => event.payload.status === 'error').length;
+        const avgLatencyMs = commandLatencies.length ? commandLatencies.reduce((a, b) => a + b, 0) / commandLatencies.length : 0;
         return {
           command,
           calls: commandRows.length,
           errors: commandErrors,
           errorRate: commandRows.length > 0 ? (commandErrors / commandRows.length) * 100 : 0,
+          successRate: commandRows.length > 0 ? ((commandRows.length - commandErrors) / commandRows.length) * 100 : 100,
+          avgLatencyMs,
           p95LatencyMs: percentile(commandLatencies, 0.95),
+          maxLatencyMs: commandLatencies.length ? Math.max(...commandLatencies) : 0,
         };
       });
-      const complexities = bashRows.map((event) => bashComplexityScore(bashCommand(event) ?? bashLabel(event) ?? ''));
+      const commands = bashRows.map((event) => bashCommand(event) ?? bashLabel(event) ?? '');
+      const complexities = commands.map((command) => bashComplexityScore(command));
       const shapeCounts = new Map<string, number>();
       for (const complexity of complexities) shapeCounts.set(complexity.shape, (shapeCounts.get(complexity.shape) ?? 0) + 1);
       const bashComplexity =
@@ -390,7 +404,12 @@ function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
           ? {
               avgScore: complexities.length ? complexities.reduce((total, row) => total + row.score, 0) / complexities.length : 0,
               maxScore: complexities.length ? Math.max(...complexities.map((row) => row.score)) : 0,
+              avgCommandCount: complexities.length
+                ? complexities.reduce((total, row) => total + row.commandCount, 0) / complexities.length
+                : 0,
               maxCommandCount: complexities.length ? Math.max(...complexities.map((row) => row.commandCount)) : 0,
+              avgCharCount: commands.length ? commands.reduce((total, command) => total + command.length, 0) / commands.length : 0,
+              maxCharCount: commands.length ? Math.max(...commands.map((command) => command.length)) : 0,
               pipelineCalls: bashRows.filter((event) => bashCommand(event)?.includes('|')).length,
               chainCalls: bashRows.filter((event) => /&&|\|\|/.test(bashCommand(event) ?? '')).length,
               redirectCalls: bashRows.filter((event) => /[<>]/.test(bashCommand(event) ?? '')).length,
@@ -404,6 +423,7 @@ function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
         toolName,
         calls: rows.length,
         errors,
+        successRate: rows.length > 0 ? ((rows.length - errors) / rows.length) * 100 : 100,
         avgLatencyMs: latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0,
         p95LatencyMs: percentile(latencies, 0.95),
         maxLatencyMs: latencies.length ? Math.max(...latencies) : 0,
@@ -414,19 +434,49 @@ function queryToolHealthFromEvents(events: TraceTelemetryLogEvent[]) {
     .sort((a, b) => b.calls - a.calls);
 }
 
+function runKey(event: TraceTelemetryLogEvent): string {
+  return event.runId || event.sessionId;
+}
+
 function queryAgentLoopFromEvents(events: TraceTelemetryLogEvent[]) {
   const stats = statsEvents(events);
+  const tools = toolEvents(events);
+  const runIds = new Set([...stats, ...tools].map(runKey));
+  const runCount = Math.max(runIds.size, 1);
   const durations = stats.map((event) => numberValue(event.payload.durationMs)).filter((value) => value > 0);
-  const steps = stats.map((event) => numberValue(event.payload.stepCount));
-  const runs = new Set(stats.map((event) => event.runId).filter(Boolean));
+  const steps = stats.map((event) => numberValue(event.payload.stepCount)).filter((value) => value > 0);
+  const toolCountsByRun = new Map<string, number>();
+  for (const event of tools) toolCountsByRun.set(runKey(event), (toolCountsByRun.get(runKey(event)) ?? 0) + 1);
+  const toolCounts = [...toolCountsByRun.values()];
+  const tokensByRun = new Map<string, number>();
+  for (const event of stats) {
+    tokensByRun.set(
+      runKey(event),
+      (tokensByRun.get(runKey(event)) ?? 0) +
+        numberValue(event.payload.tokensInput) +
+        numberValue(event.payload.tokensOutput) +
+        numberValue(event.payload.tokensCachedInput) +
+        numberValue(event.payload.tokensCachedWrite),
+    );
+  }
+  const subagentRuns = new Set(tools.filter((event) => stringValue(event.payload.toolName) === 'subagent').map(runKey));
+  const stuckRuns = new Set(stats.filter((event) => numberValue(event.payload.durationMs) > 10 * 60_000).map(runKey));
+  const toolErrors = tools.filter((event) => event.payload.status === 'error').length;
   return {
-    turns: stats.length,
-    turnsPerRun: runs.size > 0 ? stats.length / runs.size : stats.length,
+    turnsPerRun: stats.length / runCount,
+    stepsPerTurn: steps.length ? steps.reduce((a, b) => a + b, 0) / steps.length : 0,
+    runsOver20Turns: [...runIds].filter((id) => stats.filter((event) => runKey(event) === id).length > 20).length,
+    subagentsPerRun: subagentRuns.size / runCount,
+    toolCallsPerRun: tools.length / runCount,
+    toolCallsP95: percentile(toolCounts, 0.95),
+    toolErrorRatePct: tools.length > 0 ? (toolErrors / tools.length) * 100 : 0,
+    avgTokensPerRun: tokensByRun.size ? [...tokensByRun.values()].reduce((a, b) => a + b, 0) / tokensByRun.size : 0,
+    stuckRunPct: (stuckRuns.size / runCount) * 100,
     avgDurationMs: durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,
-    maxDurationMs: durations.length ? Math.max(...durations) : 0,
-    avgSteps: steps.length ? steps.reduce((a, b) => a + b, 0) / steps.length : 0,
-    errors: toolEvents(events).filter((event) => event.payload.status === 'error').length,
-    recent: stats.slice(-20).reverse(),
+    durationP50Ms: percentile(durations, 0.5),
+    durationP95Ms: percentile(durations, 0.95),
+    durationP99Ms: percentile(durations, 0.99),
+    stuckRuns: stuckRuns.size,
   };
 }
 
@@ -532,10 +582,17 @@ export function context(req: ExtensionRouteRequest): ExtensionRouteResponse {
       tokensAfter: numberValue(event.payload.tokensAfter),
       tokensSaved: numberValue(event.payload.tokensSaved),
     }));
+  const autoCount = compactions.filter((row) => row.reason === 'overflow' || row.reason === 'threshold').length;
+  const manualCount = compactions.filter((row) => row.reason === 'manual').length;
   return ok({
     sessions,
     compactions,
-    compactionAggs: { count: compactions.length, tokensSaved: compactions.reduce((total, row) => total + row.tokensSaved, 0) },
+    compactionAggs: {
+      autoCount,
+      manualCount,
+      totalTokensSaved: compactions.reduce((total, row) => total + row.tokensSaved, 0),
+      overflowPct: compactions.length > 0 ? (compactions.filter((row) => row.reason === 'overflow').length / compactions.length) * 100 : 0,
+    },
   });
 }
 
@@ -544,22 +601,56 @@ export function agentLoop(req: ExtensionRouteRequest): ExtensionRouteResponse {
 }
 
 export function tokensDaily(req: ExtensionRouteRequest): ExtensionRouteResponse {
-  const buckets = new Map<string, { date: string; tokens: number; cost: number; calls: number }>();
+  const buckets = new Map<
+    string,
+    {
+      date: string;
+      tokensInput: number;
+      tokensOutput: number;
+      tokensCached: number;
+      tokensCachedWrite: number;
+      toolErrors: number;
+      cost: number;
+    }
+  >();
   const events = eventsSince(parseRangeParam(req.query.range));
   const stats = statsEvents(events);
   const sourceEvents = stats.length > 0 ? stats : latestContextBySession(events);
   for (const event of sourceEvents) {
     const date = dayKey(event.ts);
-    const bucket = buckets.get(date) ?? { date, tokens: 0, cost: 0, calls: 0 };
-    bucket.tokens +=
-      stats.length > 0
-        ? numberValue(event.payload.tokensInput) +
-          numberValue(event.payload.tokensOutput) +
-          numberValue(event.payload.tokensCachedInput) +
-          numberValue(event.payload.tokensCachedWrite)
-        : numberValue(event.payload.totalTokens);
-    bucket.cost += numberValue(event.payload.cost);
-    bucket.calls += 1;
+    const bucket = buckets.get(date) ?? {
+      date,
+      tokensInput: 0,
+      tokensOutput: 0,
+      tokensCached: 0,
+      tokensCachedWrite: 0,
+      toolErrors: 0,
+      cost: 0,
+    };
+    if (stats.length > 0) {
+      bucket.tokensInput += numberValue(event.payload.tokensInput);
+      bucket.tokensOutput += numberValue(event.payload.tokensOutput);
+      bucket.tokensCached += numberValue(event.payload.tokensCachedInput);
+      bucket.tokensCachedWrite += numberValue(event.payload.tokensCachedWrite);
+      bucket.cost += numberValue(event.payload.cost);
+    } else {
+      bucket.tokensInput += numberValue(event.payload.totalTokens);
+    }
+    buckets.set(date, bucket);
+  }
+  for (const event of toolEvents(events)) {
+    if (event.payload.status !== 'error') continue;
+    const date = dayKey(event.ts);
+    const bucket = buckets.get(date) ?? {
+      date,
+      tokensInput: 0,
+      tokensOutput: 0,
+      tokensCached: 0,
+      tokensCachedWrite: 0,
+      toolErrors: 0,
+      cost: 0,
+    };
+    bucket.toolErrors += 1;
     buckets.set(date, bucket);
   }
   return ok([...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)));
@@ -570,50 +661,125 @@ export function toolFlow(req: ExtensionRouteRequest): ExtensionRouteResponse {
 }
 
 export function cacheEfficiency(req: ExtensionRouteRequest): ExtensionRouteResponse {
-  const summary = querySummaryFromEvents(eventsSince(parseRangeParam(req.query.range)));
+  const stats = statsEvents(eventsSince(parseRangeParam(req.query.range)));
+  const series = stats.map((event) => {
+    const totalInput =
+      numberValue(event.payload.tokensInput) + numberValue(event.payload.tokensCachedInput) + numberValue(event.payload.tokensCachedWrite);
+    const cachedInput = numberValue(event.payload.tokensCachedInput);
+    return {
+      ts: event.ts,
+      modelId: stringValue(event.payload.modelId) ?? 'unknown',
+      totalInput,
+      cachedInput,
+      hitRate: totalInput > 0 ? (cachedInput / totalInput) * 100 : 0,
+    };
+  });
+  const byModelRaw = new Map<
+    string,
+    { totalInput: number; totalCached: number; totalCachedWrite: number; requests: number; cachedRequests: number }
+  >();
+  for (const event of stats) {
+    const modelId = stringValue(event.payload.modelId) ?? 'unknown';
+    const current = byModelRaw.get(modelId) ?? { totalInput: 0, totalCached: 0, totalCachedWrite: 0, requests: 0, cachedRequests: 0 };
+    const input = numberValue(event.payload.tokensInput);
+    const cached = numberValue(event.payload.tokensCachedInput);
+    const cachedWrite = numberValue(event.payload.tokensCachedWrite);
+    current.totalInput += input + cached + cachedWrite;
+    current.totalCached += cached;
+    current.totalCachedWrite += cachedWrite;
+    current.requests += input + cached + cachedWrite > 0 ? 1 : 0;
+    current.cachedRequests += cached > 0 ? 1 : 0;
+    byModelRaw.set(modelId, current);
+  }
+  const totalInput = [...byModelRaw.values()].reduce((total, row) => total + row.totalInput, 0);
+  const totalCached = [...byModelRaw.values()].reduce((total, row) => total + row.totalCached, 0);
+  const totalCachedWrite = [...byModelRaw.values()].reduce((total, row) => total + row.totalCachedWrite, 0);
+  const requests = [...byModelRaw.values()].reduce((total, row) => total + row.requests, 0);
+  const cachedRequests = [...byModelRaw.values()].reduce((total, row) => total + row.cachedRequests, 0);
   return ok({
-    series: [],
+    series,
     aggregate: {
-      requestCacheHitRate: Math.round(summary.cacheHitRate * 10) / 10,
-      overallHitRate: Math.round(summary.cacheHitRate * 10) / 10,
-      totalCached: summary.tokensCached,
-      cachedRequests: summary.tokensCached > 0 ? 1 : 0,
-      requests: summary.tokensInput + summary.tokensCached + summary.tokensCachedWrite > 0 ? 1 : 0,
-      byModel: [],
+      overallHitRate: totalInput > 0 ? (totalCached / totalInput) * 100 : 0,
+      requestCacheHitRate: requests > 0 ? (cachedRequests / requests) * 100 : 0,
+      totalInput,
+      totalCached,
+      totalCachedWrite,
+      requests,
+      cachedRequests,
+      byModel: [...byModelRaw.entries()].map(([modelId, row]) => ({
+        modelId,
+        hitRate: row.totalInput > 0 ? (row.totalCached / row.totalInput) * 100 : 0,
+        requestCacheHitRate: row.requests > 0 ? (row.cachedRequests / row.requests) * 100 : 0,
+        ...row,
+      })),
     },
   });
 }
 
-export function systemPrompt(): ExtensionRouteResponse {
+export function systemPrompt(req: ExtensionRouteRequest): ExtensionRouteResponse {
+  const series = contextEvents(eventsSince(parseRangeParam(req.query.range)))
+    .map((event) => {
+      const systemPromptTokens = numberValue(event.payload.systemPromptTokens);
+      const totalTokens = numberValue(event.payload.totalTokens);
+      const contextWindow = numberValue(event.payload.contextWindow);
+      return {
+        ts: event.ts,
+        sessionId: event.sessionId,
+        modelId: stringValue(event.payload.modelId) ?? 'unknown',
+        systemPromptTokens,
+        totalTokens,
+        contextWindow,
+        pctOfTotal: totalTokens > 0 ? (systemPromptTokens / totalTokens) * 100 : 0,
+        pctOfContextWindow: contextWindow > 0 ? (systemPromptTokens / contextWindow) * 100 : 0,
+      };
+    })
+    .filter((row) => row.systemPromptTokens > 0);
+  const byModelRaw = new Map<string, typeof series>();
+  for (const row of series) byModelRaw.set(row.modelId, [...(byModelRaw.get(row.modelId) ?? []), row]);
   return ok({
-    series: [],
+    series,
     aggregate: {
-      avgSystemPromptTokens: 0,
-      avgPctOfContextWindow: 0,
-      maxSystemPromptTokens: 0,
-      samples: 0,
-      byModel: [],
+      avgSystemPromptTokens: average(series.map((row) => row.systemPromptTokens)),
+      avgPctOfTotal: average(series.map((row) => row.pctOfTotal)),
+      avgPctOfContextWindow: average(series.map((row) => row.pctOfContextWindow)),
+      maxSystemPromptTokens: series.length ? Math.max(...series.map((row) => row.systemPromptTokens)) : 0,
+      samples: series.length,
+      byModel: [...byModelRaw.entries()].map(([modelId, rows]) => ({
+        modelId,
+        avgSystemPromptTokens: average(rows.map((row) => row.systemPromptTokens)),
+        maxSystemPromptTokens: rows.length ? Math.max(...rows.map((row) => row.systemPromptTokens)) : 0,
+        contextWindow: Math.max(...rows.map((row) => row.contextWindow), 0),
+        avgPctOfContextWindow: average(rows.map((row) => row.pctOfContextWindow)),
+        samples: rows.length,
+      })),
     },
   });
 }
 
 export function autoMode(req: ExtensionRouteRequest): ExtensionRouteResponse {
   const events = eventsSince(parseRangeParam(req.query.range)).filter((event) => event.type === 'auto_mode');
-  const recentEvents = events
-    .slice(-20)
-    .reverse()
-    .map((event) => ({
-      ts: event.ts,
-      sessionId: event.sessionId,
-      enabled: event.payload.enabled === 1 || event.payload.enabled === true,
-      stopReason: stringValue(event.payload.stopReason),
-    }));
+  const allEvents = events.map((event) => ({
+    ts: event.ts,
+    sessionId: event.sessionId,
+    enabled: boolValue(event.payload.enabled),
+    stopReason: stringValue(event.payload.stopReason),
+  }));
+  const latestBySession = new Map<string, (typeof allEvents)[number]>();
+  for (const event of allEvents) {
+    const current = latestBySession.get(event.sessionId);
+    if (!current || event.ts > current.ts) latestBySession.set(event.sessionId, event);
+  }
+  const stopReasons = new Map<string, number>();
+  for (const event of allEvents) {
+    if (event.enabled || !event.stopReason) continue;
+    stopReasons.set(event.stopReason, (stopReasons.get(event.stopReason) ?? 0) + 1);
+  }
   return ok({
-    currentActive: recentEvents.filter((event) => event.enabled).length,
-    enabledCount: recentEvents.filter((event) => event.enabled).length,
-    disabledCount: recentEvents.filter((event) => !event.enabled).length,
-    topStopReasons: [],
-    recentEvents,
+    currentActive: [...latestBySession.values()].filter((event) => event.enabled).length,
+    enabledCount: allEvents.filter((event) => event.enabled).length,
+    disabledCount: allEvents.filter((event) => !event.enabled).length,
+    topStopReasons: [...stopReasons.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    recentEvents: allEvents.slice(-20).reverse(),
   });
 }
 
@@ -622,7 +788,7 @@ export function contextPointers(req: ExtensionRouteRequest): ExtensionRouteRespo
   const suggested = events.filter((event) => event.type === 'suggested_context');
   const inspected = events.filter((event) => event.type === 'context_pointer_inspect');
   const totalSuggested = suggested.reduce((total, event) => total + numberValue(event.payload.pointerCount), 0);
-  const totalInspects = inspected.filter((event) => event.payload.wasSuggested === 1).length;
+  const totalInspects = inspected.filter((event) => boolValue(event.payload.wasSuggested)).length;
   const daily = new Map<string, { date: string; suggested: number; inspected: number }>();
   for (const event of suggested) {
     const date = dayKey(event.ts);
@@ -633,7 +799,7 @@ export function contextPointers(req: ExtensionRouteRequest): ExtensionRouteRespo
   for (const event of inspected) {
     const date = dayKey(event.ts);
     const bucket = daily.get(date) ?? { date, suggested: 0, inspected: 0 };
-    bucket.inspected += event.payload.wasSuggested === 1 ? 1 : 0;
+    bucket.inspected += boolValue(event.payload.wasSuggested) ? 1 : 0;
     daily.set(date, bucket);
   }
   return ok({
