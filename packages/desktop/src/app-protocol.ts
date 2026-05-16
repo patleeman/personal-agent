@@ -358,6 +358,7 @@ function createDesktopProtocolHandler(options?: {
         status: 200,
         headers: {
           'Content-Type': getMimeType(targetPath),
+          'Cache-Control': 'no-store',
         },
       });
     } catch (error) {
@@ -375,6 +376,15 @@ function configureDesktopProtocolSession(partitionSession: ElectronSession, host
   if (hostId === 'local') {
     void partitionSession.setProxy({ mode: 'direct' }).catch(() => {
       // Keep the desktop shell usable even if Chromium rejects a proxy update.
+    });
+
+    // App shell asset URLs are content-hashed, but Chromium can keep a stale
+    // personal-agent://app main bundle across app updates. That stale bundle can
+    // then try to dynamically import extension chunks that no longer exist,
+    // blanking every extension-owned page. Clear only the desktop shell session;
+    // browser/workbench web sessions use their own partitions.
+    void partitionSession.clearCache().catch(() => {
+      // Cache clearing is a repair path, not a startup blocker.
     });
   }
 }
