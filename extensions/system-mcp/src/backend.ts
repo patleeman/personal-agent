@@ -150,6 +150,48 @@ export function saveExplicitMcpConfig(input: unknown, ctx: McpRuntimeContext): M
   return inspectMcpSettings({}, ctx);
 }
 
+function readServerName(input: unknown): string {
+  if (!input || typeof input !== 'object' || typeof (input as { server?: unknown }).server !== 'string') {
+    throw new Error('server is required.');
+  }
+  return validateMcpString((input as { server: string }).server, 'Server name');
+}
+
+export async function testMcpServer(input: unknown): Promise<{ ok: boolean; message: string; toolCount?: number }> {
+  const server = readServerName(input);
+  const result = await inspectMcpServer(server, {});
+  if (!result.data) {
+    return { ok: false, message: result.error ?? result.stderr ?? `Failed to inspect ${server}.` };
+  }
+  return {
+    ok: true,
+    message: `${server} connected with ${result.data.toolCount ?? result.data.tools.length} tools.`,
+    toolCount: result.data.toolCount ?? result.data.tools.length,
+  };
+}
+
+export async function authMcpServer(input: unknown): Promise<{ ok: boolean; message: string; toolCount?: number }> {
+  const server = readServerName(input);
+  const result = await authenticateMcpServer(server, {});
+  if (!result.data) {
+    return { ok: false, message: result.error ?? result.stderr ?? `Failed to authenticate ${server}.` };
+  }
+  return {
+    ok: true,
+    message: `${server} authenticated with ${result.data.toolCount ?? result.data.tools.length} tools.`,
+    toolCount: result.data.toolCount ?? result.data.tools.length,
+  };
+}
+
+export async function logoutMcpServer(input: unknown): Promise<{ ok: boolean; message: string }> {
+  const server = readServerName(input);
+  const result = await clearMcpServerAuth(server, {});
+  if (result.error || result.exitCode !== 0) {
+    return { ok: false, message: result.error ?? result.stderr ?? `Failed to clear OAuth state for ${server}.` };
+  }
+  return { ok: true, message: `Cleared stored OAuth state for ${server}.` };
+}
+
 export function inspectMcpSettings(_input: unknown, ctx: McpRuntimeContext): McpSettingsState {
   const resourceOptions = ctx.runtime.getLiveSessionResourceOptions();
   const skillDirs = resourceOptions.additionalSkillPaths ?? [];
@@ -197,7 +239,7 @@ export function inspectMcpSettings(_input: unknown, ctx: McpRuntimeContext): Mcp
         hasOAuth: Boolean(server.oauthClientInfo || server.oauthClientMetadata || callbackUrl),
         callbackUrl,
         authorizeResource: server.authorizeResource,
-        raw: {},
+        raw: server.raw,
       };
     }),
     bundledSkills: bundledSkillManifests.map((manifest) => ({

@@ -14,7 +14,10 @@
     "agentExtension": "createMcpAgentExtension",
     "actions": [
       { "id": "inspectSettings", "handler": "inspectMcpSettings", "title": "Inspect MCP settings" },
-      { "id": "saveExplicitConfig", "handler": "saveExplicitMcpConfig", "title": "Save explicit MCP config" }
+      { "id": "saveExplicitConfig", "handler": "saveExplicitMcpConfig", "title": "Save explicit MCP config" },
+      { "id": "testServer", "handler": "testMcpServer", "title": "Test MCP server" },
+      { "id": "authServer", "handler": "authMcpServer", "title": "Authenticate MCP server" },
+      { "id": "logoutServer", "handler": "logoutMcpServer", "title": "Logout MCP server" }
     ]
   },
   "contributes": {

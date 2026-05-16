@@ -1,6 +1,6 @@
 # MCP Extension
 
-This extension owns the agent MCP tool and the Settings → Tools MCP panel. The panel shows effective skill-bundled and explicit servers, and includes a JSON editor for the explicit `mcp_servers.json` file. Keep extension-specific user and agent docs here so the implementation and documentation move together.
+This extension owns the agent MCP tool and the Settings → Tools MCP panel. The panel manages explicit MCP servers with add/edit/remove/test/auth controls, while showing skill-bundled servers as read-only effective configuration. Keep extension-specific user and agent docs here so the implementation and documentation move together.
 
 ---
 

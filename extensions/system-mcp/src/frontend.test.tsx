@@ -34,7 +34,8 @@ describe('McpSettingsPanel', () => {
         configPath: '/tmp/mcp_servers.json',
         configExists: true,
         searchedPaths: ['/tmp/mcp_servers.json'],
-        explicitConfigJson: '{\n  "mcpServers": {}\n}\n',
+        explicitConfigJson:
+          '{\n  "mcpServers": {\n    "github": {\n      "command": "npx",\n      "args": ["@mcp/github"]\n    }\n  }\n}\n',
         servers: [
           {
             name: 'atlassian',
@@ -77,11 +78,13 @@ describe('McpSettingsPanel', () => {
     const html = renderToString(<McpSettingsPanel />);
 
     expect(mocks.useApi).toHaveBeenCalledWith(expect.any(Function), 'system-mcp-settings');
-    expect(html).toContain('Bundled MCP wrappers');
+    expect(html).toContain('MCP servers');
+    expect(html).toContain('Add server');
+    expect(html).toContain('Explicit servers');
+    expect(html).toContain('Skill-bundled servers');
     expect(html).toContain('Bundled with dd-atlassian-mcp');
-    expect(html).toContain('Callback');
-    expect(html).toContain('http://localhost:3118/callback');
-    expect(html).toContain('Manifest');
+    expect(html).toContain('Test');
+    expect(html).toContain('Remove');
     expect(html).toContain('npx @mcp/github');
   });
 });
