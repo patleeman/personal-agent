@@ -37,7 +37,7 @@ import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, w
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { useConversationArtifactSummaries } from './conversationArtifactHooks';
 import { UNCOMMITTED_SENTINEL, useConversationCheckpointSummaries, useUncommittedDiff } from './conversationCheckpointHooks';
-import { useConversationRunList } from './conversationRunHooks';
+import { useConversationExecutionList } from './conversationRunHooks';
 import { DesktopTopBar } from './DesktopTopBar';
 import { NotificationBell } from './notifications/NotificationBell';
 import { NotificationCenter } from './notifications/NotificationCenter';
@@ -666,7 +666,7 @@ function WorkbenchKnowledgeRail({
 }) {
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
-  const { runs, sessions, tasks } = useAppData();
+  const { sessions, tasks, executions } = useAppData();
   const artifactsEnabled = isArtifactsRailMode(activeTool) || activeArtifactId !== null;
   const diffsEnabled = isDiffsRailMode(activeTool) || activeCheckpointId !== null;
   const runsEnabled = isRunsRailMode(activeTool) || activeRunId !== null;
@@ -682,13 +682,13 @@ function WorkbenchKnowledgeRail({
   } = useConversationCheckpointSummaries(diffsEnabled ? conversationId : null);
   const { result: uncommittedResult } = useUncommittedDiff(diffsEnabled ? workspaceCwd : null);
   const runLookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
-  const connectedRuns = useConversationRunList(runsEnabled ? conversationId : null, runs, runLookups);
-  const activeRunConnected = activeRunId !== null && connectedRuns.some((run) => run.runId === activeRunId);
+  const connectedExecutions = useConversationExecutionList(runsEnabled ? conversationId : null, executions);
+  const activeRunConnected = activeRunId !== null && connectedExecutions.some((execution) => execution.id === activeRunId);
   const showRunsTab = shouldShowConversationRunsTab({
-    runCount: connectedRuns.length,
+    runCount: connectedExecutions.length,
     activeRunId,
     activeRunConnected,
-    runsLoaded: runs !== null,
+    runsLoaded: executions !== null,
   });
   const availableExtensionToolPanels = extensionToolPanels;
   const activeExtensionToolPanel = useMemo(() => {
@@ -1130,7 +1130,6 @@ function WorkbenchKnowledgeRail({
             <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading runs…</div>}>
               <ConversationBackgroundWorkRailContent
                 conversationId={conversationId}
-                runs={runs}
                 activeRunId={activeRunId}
                 lookups={runLookups}
                 onOpenRun={handleRunSelect}

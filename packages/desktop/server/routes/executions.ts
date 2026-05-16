@@ -3,10 +3,12 @@ import type { Express, Response } from 'express';
 import { getDurableRunLogCursor, readDurableRunLogDelta } from '../automation/durableRuns.js';
 import {
   cancelExecution,
+  followUpExecution,
   getExecution,
   getExecutionLog,
   listConversationExecutions,
   listExecutions,
+  rerunExecution,
 } from '../executions/executionService.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
@@ -180,6 +182,35 @@ export function registerExecutionRoutes(router: Pick<Express, 'get' | 'post'>): 
       const result = await cancelExecution(req.params.id);
       if (!result.cancelled) {
         res.status(409).json({ error: result.reason ?? 'Could not cancel execution.' });
+        return;
+      }
+      invalidateAppTopics('executions', 'runs');
+      res.json(result);
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  router.post('/api/executions/:id/rerun', async (req, res) => {
+    try {
+      const result = await rerunExecution(req.params.id);
+      if (!result.accepted) {
+        res.status(409).json({ error: result.reason ?? 'Could not rerun execution.' });
+        return;
+      }
+      invalidateAppTopics('executions', 'runs');
+      res.json(result);
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  router.post('/api/executions/:id/follow-up', async (req, res) => {
+    try {
+      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : undefined;
+      const result = await followUpExecution(req.params.id, prompt);
+      if (!result.accepted) {
+        res.status(409).json({ error: result.reason ?? 'Could not continue execution.' });
         return;
       }
       invalidateAppTopics('executions', 'runs');

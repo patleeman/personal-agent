@@ -2,28 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   cancelExecutionMock,
+  followUpExecutionMock,
   getExecutionLogMock,
   getExecutionMock,
   invalidateAppTopicsMock,
   listConversationExecutionsMock,
   listExecutionsMock,
   logErrorMock,
+  rerunExecutionMock,
 } = vi.hoisted(() => ({
   cancelExecutionMock: vi.fn(),
+  followUpExecutionMock: vi.fn(),
   getExecutionLogMock: vi.fn(),
   getExecutionMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   listConversationExecutionsMock: vi.fn(),
   listExecutionsMock: vi.fn(),
   logErrorMock: vi.fn(),
+  rerunExecutionMock: vi.fn(),
 }));
 
 vi.mock('../executions/executionService.js', () => ({
   cancelExecution: cancelExecutionMock,
+  followUpExecution: followUpExecutionMock,
   getExecution: getExecutionMock,
   getExecutionLog: getExecutionLogMock,
   listConversationExecutions: listConversationExecutionsMock,
   listExecutions: listExecutionsMock,
+  rerunExecution: rerunExecutionMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -36,12 +42,14 @@ import { registerExecutionRoutes } from './executions.js';
 describe('registerExecutionRoutes', () => {
   beforeEach(() => {
     cancelExecutionMock.mockReset();
+    followUpExecutionMock.mockReset();
     getExecutionLogMock.mockReset();
     getExecutionMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     listConversationExecutionsMock.mockReset();
     listExecutionsMock.mockReset();
     logErrorMock.mockReset();
+    rerunExecutionMock.mockReset();
   });
 
   function createHarness() {
@@ -63,6 +71,8 @@ describe('registerExecutionRoutes', () => {
       detailHandler: handlers['GET /api/executions/:id']!,
       logHandler: handlers['GET /api/executions/:id/log']!,
       cancelHandler: handlers['POST /api/executions/:id/cancel']!,
+      followUpHandler: handlers['POST /api/executions/:id/follow-up']!,
+      rerunHandler: handlers['POST /api/executions/:id/rerun']!,
     };
   }
 
@@ -111,14 +121,27 @@ describe('registerExecutionRoutes', () => {
     expect(missingRes.json).toHaveBeenCalledWith({ error: 'Execution not found' });
   });
 
-  it('cancels executions and invalidates execution plus legacy run topics', async () => {
-    const { cancelHandler } = createHarness();
+  it('cancels, reruns, and follows up executions through the execution surface', async () => {
+    const { cancelHandler, followUpHandler, rerunHandler } = createHarness();
     cancelExecutionMock.mockResolvedValue({ cancelled: true, runId: 'run-1' });
+    rerunExecutionMock.mockResolvedValue({ accepted: true, runId: 'run-rerun', sourceRunId: 'run-1' });
+    followUpExecutionMock.mockResolvedValue({ accepted: true, runId: 'run-follow-up', sourceRunId: 'run-1' });
 
-    const res = createJsonResponse();
-    await cancelHandler({ params: { id: 'run-1' } }, res);
+    const cancelRes = createJsonResponse();
+    await cancelHandler({ params: { id: 'run-1' } }, cancelRes);
+    expect(cancelRes.json).toHaveBeenCalledWith({ cancelled: true, runId: 'run-1' });
 
+    const rerunRes = createJsonResponse();
+    await rerunHandler({ params: { id: 'run-1' } }, rerunRes);
+    expect(rerunExecutionMock).toHaveBeenCalledWith('run-1');
+    expect(rerunRes.json).toHaveBeenCalledWith({ accepted: true, runId: 'run-rerun', sourceRunId: 'run-1' });
+
+    const followUpRes = createJsonResponse();
+    await followUpHandler({ params: { id: 'run-1' }, body: { prompt: 'Continue' } }, followUpRes);
+    expect(followUpExecutionMock).toHaveBeenCalledWith('run-1', 'Continue');
+    expect(followUpRes.json).toHaveBeenCalledWith({ accepted: true, runId: 'run-follow-up', sourceRunId: 'run-1' });
+
+    expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(3);
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('executions', 'runs');
-    expect(res.json).toHaveBeenCalledWith({ cancelled: true, runId: 'run-1' });
   });
 });

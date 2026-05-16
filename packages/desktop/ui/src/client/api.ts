@@ -823,6 +823,13 @@ export const api = {
     );
   },
   cancelExecution: async (id: string) => post<{ cancelled: boolean; runId: string }>(`/executions/${encodeURIComponent(id)}/cancel`),
+  rerunExecution: async (id: string) =>
+    post<{ accepted: boolean; runId: string; sourceRunId?: string; logPath?: string }>(`/executions/${encodeURIComponent(id)}/rerun`),
+  followUpExecution: async (id: string, prompt?: string) =>
+    post<{ accepted: boolean; runId: string; sourceRunId?: string; logPath?: string }>(
+      `/executions/${encodeURIComponent(id)}/follow-up`,
+      prompt ? { prompt } : {},
+    ),
 
   // ── Workspace helpers ────────────────────────────────────────────────────
   pickFolder: async (input?: string | { cwd?: string | null; prompt?: string | null }) => {

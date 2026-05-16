@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAppEvents } from '../app/contexts';
-import { listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
+import type { RunPresentationLookups } from '../automation/runPresentation';
 import { api } from '../client/api';
 import { useExecutionStream } from '../hooks/useExecutionStream';
-import type { ConversationExecutionsResult, DurableRunListResult, ExecutionRecord } from '../shared/types';
+import type { ConversationExecutionsResult, ExecutionRecord } from '../shared/types';
 import { cx, ErrorState, LoadingState } from './ui';
 
 function timeAgo(iso: string | undefined): string {
@@ -33,17 +33,6 @@ function executionSortTimestamp(execution: ExecutionRecord): string {
   return execution.updatedAt ?? execution.startedAt ?? execution.createdAt ?? '';
 }
 
-export function useConversationRunList(
-  conversationId: string | null | undefined,
-  runs: DurableRunListResult | null,
-  lookups: RunPresentationLookups,
-) {
-  return useMemo(() => {
-    if (!conversationId) return [];
-    return listConnectedConversationBackgroundRuns({ conversationId, runs, lookups });
-  }, [conversationId, lookups, runs]);
-}
-
 type RunGroup = 'command' | 'subagent';
 
 const RUN_GROUP_CONFIG: Record<RunGroup, { label: string; icon: string; tone: string }> = {
@@ -53,19 +42,14 @@ const RUN_GROUP_CONFIG: Record<RunGroup, { label: string; icon: string; tone: st
 
 export function ConversationBackgroundWorkRailContent({
   conversationId,
-  runs,
   activeRunId,
-  lookups,
   onOpenRun,
 }: {
   conversationId: string | null;
-  runs: DurableRunListResult | null;
   activeRunId: string | null;
   lookups: RunPresentationLookups;
   onOpenRun: (runId: string) => void;
 }) {
-  void runs;
-  void lookups;
   const { versions } = useAppEvents();
   const [conversationExecutions, setConversationExecutions] = useState<ConversationExecutionsResult | null>(null);
 
@@ -211,6 +195,7 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
   void lookups;
   const { detail, log, loading, error, reconnect } = useExecutionStream(runId, 360);
   const [cancelling, setCancelling] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const outputRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -229,6 +214,8 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
   const isCommand = execution.kind === 'background-command';
   const running = execution.status === 'queued' || execution.status === 'waiting' || execution.status === 'running';
   const canCancel = execution.capabilities.canCancel;
+  const canRerun = execution.capabilities.canRerun;
+  const canFollowUp = execution.capabilities.canFollowUp;
 
   async function cancelExecution() {
     if (!canCancel || cancelling) return;
@@ -238,6 +225,28 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
       reconnect();
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function rerunExecution() {
+    if (!canRerun || restarting) return;
+    setRestarting(true);
+    try {
+      await api.rerunExecution(execution.id);
+      reconnect();
+    } finally {
+      setRestarting(false);
+    }
+  }
+
+  async function followUpExecution() {
+    if (!canFollowUp || restarting) return;
+    setRestarting(true);
+    try {
+      await api.followUpExecution(execution.id);
+      reconnect();
+    } finally {
+      setRestarting(false);
     }
   }
 
@@ -261,6 +270,21 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            {canFollowUp ? (
+              <button
+                type="button"
+                className="ui-toolbar-button text-[11px]"
+                disabled={restarting}
+                onClick={() => void followUpExecution()}
+              >
+                {restarting ? 'Starting…' : 'Follow up'}
+              </button>
+            ) : null}
+            {canRerun ? (
+              <button type="button" className="ui-toolbar-button text-[11px]" disabled={restarting} onClick={() => void rerunExecution()}>
+                {restarting ? 'Starting…' : 'Rerun'}
+              </button>
+            ) : null}
             {canCancel ? (
               <button
                 type="button"

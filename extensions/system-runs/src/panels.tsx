@@ -13,7 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 
 export function ConversationBackgroundWorkPanel({ context }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { runs, sessions, tasks } = useAppData();
+  const { sessions, tasks } = useAppData();
   const lookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
   const activeRunId = getConversationRunIdFromSearch(searchParams.toString());
   const handleOpenRun = useCallback(
@@ -32,7 +32,6 @@ export function ConversationBackgroundWorkPanel({ context }: ExtensionSurfacePro
   return (
     <ConversationBackgroundWorkRailContent
       conversationId={context.conversationId ?? null}
-      runs={runs}
       activeRunId={activeRunId}
       lookups={lookups}
       onOpenRun={handleOpenRun}

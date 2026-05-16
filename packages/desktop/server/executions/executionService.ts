@@ -1,6 +1,13 @@
 import type { ScannedDurableRun } from '@personal-agent/daemon';
 
-import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from '../automation/durableRuns.js';
+import {
+  cancelDurableRun,
+  followUpDurableRun,
+  getDurableRun,
+  getDurableRunLog,
+  listDurableRuns,
+  rerunDurableRun,
+} from '../automation/durableRuns.js';
 
 export type ExecutionKind = 'background-command' | 'subagent' | 'scheduled-task' | 'deferred-resume' | 'conversation' | 'unknown';
 export type ExecutionVisibility = 'primary' | 'system' | 'hidden';
@@ -187,4 +194,9 @@ export async function getExecution(id: string): Promise<{ execution: ExecutionRe
   return result ? { execution: projectExecution(result.run) } : undefined;
 }
 
-export { cancelDurableRun as cancelExecution, getDurableRunLog as getExecutionLog };
+export {
+  cancelDurableRun as cancelExecution,
+  followUpDurableRun as followUpExecution,
+  getDurableRunLog as getExecutionLog,
+  rerunDurableRun as rerunExecution,
+};

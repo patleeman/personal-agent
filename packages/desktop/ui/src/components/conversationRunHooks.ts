@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 
-import { listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
-import type { DurableRunListResult } from '../shared/types';
+import type { ExecutionListResult } from '../shared/types';
 
-export function useConversationRunList(
-  conversationId: string | null | undefined,
-  runs: DurableRunListResult | null,
-  lookups: RunPresentationLookups,
-) {
+export function useConversationExecutionList(conversationId: string | null | undefined, executions: ExecutionListResult | null) {
   return useMemo(() => {
     if (!conversationId) return [];
-    return listConnectedConversationBackgroundRuns({ conversationId, runs, lookups });
-  }, [conversationId, lookups, runs]);
+    return (executions?.executions ?? []).filter(
+      (execution) =>
+        execution.conversationId === conversationId &&
+        execution.visibility === 'primary' &&
+        (execution.kind === 'background-command' || execution.kind === 'subagent'),
+    );
+  }, [conversationId, executions]);
 }
