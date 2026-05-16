@@ -59,6 +59,10 @@ function createToolContext(conversationId = 'conv-self') {
   };
 }
 
+async function flushAsyncTelemetry() {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+}
+
 beforeEach(() => {
   executeConversationInspectMock.mockReset();
   persistTraceContextPointerInspectMock.mockReset();
@@ -351,6 +355,47 @@ describe('conversation inspect agent extension', () => {
       scope: 'live',
       currentConversationId: 'conv-self',
     });
+  });
+
+  it('tracks suggested pointer inspections from async backend lookups', async () => {
+    querySessionSuggestedPointerIdsMock.mockResolvedValue(new Set<string>(['conv-2']));
+    executeConversationInspectMock.mockResolvedValue({
+      action: 'query',
+      result: { conversationId: 'conv-2', returnedBlocks: 1, blocks: [{ id: 'block-1' }] },
+      text: 'query text',
+    });
+
+    const tool = registerConversationInspectTool();
+    const ctx = createToolContext('conv-self');
+
+    const result = await tool.execute('tool-1', { action: 'query', conversationId: 'conv-2' }, undefined, undefined, ctx);
+
+    expect(result.content[0]?.text).toBe('query text');
+    await flushAsyncTelemetry();
+    expect(persistTraceContextPointerInspectMock).toHaveBeenCalledWith({
+      sessionId: 'conv-self',
+      inspectedConversationId: 'conv-2',
+      wasSuggested: true,
+    });
+  });
+
+  it('does not fail inspect calls when pointer telemetry fails', async () => {
+    querySessionSuggestedPointerIdsMock.mockRejectedValue(new Error('trace unavailable'));
+    executeConversationInspectMock.mockResolvedValue({
+      action: 'query',
+      result: { conversationId: 'conv-2', returnedBlocks: 1, blocks: [{ id: 'block-1' }] },
+      text: 'query text',
+    });
+
+    const tool = registerConversationInspectTool();
+    const ctx = createToolContext('conv-self');
+
+    const result = await tool.execute('tool-1', { action: 'query', conversationId: 'conv-2' }, undefined, undefined, ctx);
+
+    expect(result.content[0]?.text).toBe('query text');
+    await flushAsyncTelemetry();
+    expect(querySessionSuggestedPointerIdsMock).toHaveBeenCalledWith('conv-self');
+    expect(persistTraceContextPointerInspectMock).not.toHaveBeenCalled();
   });
 
   it('forwards errors from the worker client', async () => {

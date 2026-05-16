@@ -104,6 +104,28 @@ async function buildWorkerConversationInspectSessionSnapshot(
   }
 }
 
+function hasSuggestedConversationId(suggestedIds: unknown, conversationId: string): boolean {
+  if (suggestedIds instanceof Set) return suggestedIds.has(conversationId);
+  if (Array.isArray(suggestedIds)) return suggestedIds.includes(conversationId);
+  if (suggestedIds && typeof suggestedIds === 'object' && typeof (suggestedIds as { has?: unknown }).has === 'function') {
+    return Boolean((suggestedIds as { has: (id: string) => boolean }).has(conversationId));
+  }
+  return false;
+}
+
+async function trackContextPointerInspect(currentSessionId: string, targetConversationId: string): Promise<void> {
+  try {
+    const suggestedIds = await querySessionSuggestedPointerIds(currentSessionId);
+    await persistTraceContextPointerInspect({
+      sessionId: currentSessionId,
+      inspectedConversationId: targetConversationId,
+      wasSuggested: hasSuggestedConversationId(suggestedIds, targetConversationId),
+    });
+  } catch {
+    // Telemetry should never break the read-only inspect tool.
+  }
+}
+
 export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
@@ -144,12 +166,7 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
         // Track whether this inspect targets a suggested pointer.
         // Looks up the DB instead of an in-memory registry so it survives server restarts.
         if (targetConversationId && currentSessionId) {
-          const suggestedIds = querySessionSuggestedPointerIds(currentSessionId);
-          persistTraceContextPointerInspect({
-            sessionId: currentSessionId,
-            inspectedConversationId: targetConversationId,
-            wasSuggested: suggestedIds.has(targetConversationId),
-          });
+          void trackContextPointerInspect(currentSessionId, targetConversationId);
         }
 
         return {

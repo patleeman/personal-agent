@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { resolveObservabilityDbPath } from './observability-db.js';
-import { closeTraceTelemetryLogs, writeTraceTelemetryLogEvent } from './trace-telemetry-log.js';
+import { closeTraceTelemetryLogs, resolveTraceTelemetryLogDir, writeTraceTelemetryLogEvent } from './trace-telemetry-log.js';
 
 export interface TraceDbMaintenanceResult {
   dbPath: string;
@@ -216,6 +218,59 @@ export function writeTraceSuggestedContext(params: { sessionId: string; pointerI
     profile: params.profile ?? '',
     payload: { pointerIds: params.pointerIds.join(','), pointerCount: params.pointerIds.length },
   });
+}
+
+function parseSuggestedPointerIds(value: unknown): string[] {
+  if (typeof value === 'string')
+    return value
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+  if (!Array.isArray(value)) return [];
+  return value.filter((id): id is string => typeof id === 'string' && id.trim().length > 0).map((id) => id.trim());
+}
+
+export function querySessionSuggestedPointerIds(
+  sessionId: string,
+  options?: { since?: string; limit?: number; stateRoot?: string },
+): Set<string> {
+  const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+  if (!normalizedSessionId) return new Set();
+
+  const dir = resolveTraceTelemetryLogDir(options?.stateRoot);
+  if (!existsSync(dir)) return new Set();
+
+  const since = options?.since ?? '1970-01-01T00:00:00.000Z';
+  const limit = options?.limit ?? 100_000;
+  let scanned = 0;
+
+  try {
+    const files = readdirSync(dir)
+      .filter((fileName) => fileName.startsWith('trace-telemetry-') && fileName.endsWith('.jsonl'))
+      .sort((left, right) => right.localeCompare(left));
+
+    for (const fileName of files) {
+      const lines = readFileSync(join(dir, fileName), 'utf-8').split('\n').filter(Boolean).reverse();
+      for (const line of lines) {
+        if (scanned >= limit) return new Set();
+        let event: { ts?: unknown; type?: unknown; sessionId?: unknown; payload?: unknown };
+        try {
+          event = JSON.parse(line) as typeof event;
+        } catch {
+          continue;
+        }
+        if (typeof event.ts !== 'string' || event.ts < since) continue;
+        scanned += 1;
+        if (event.type !== 'suggested_context' || event.sessionId !== normalizedSessionId) continue;
+        const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload) ? event.payload : {};
+        return new Set(parseSuggestedPointerIds((payload as { pointerIds?: unknown }).pointerIds));
+      }
+    }
+  } catch {
+    return new Set();
+  }
+
+  return new Set();
 }
 
 export function writeTraceContextPointerInspect(params: {

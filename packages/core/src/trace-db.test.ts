@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   closeTraceDbs,
   maintainTraceDb,
+  querySessionSuggestedPointerIds,
   writeTraceAutoMode,
   writeTraceCompaction,
   writeTraceContext,
@@ -73,6 +74,16 @@ describe('trace-db JSONL writers', () => {
     ]);
     expect(rows[0]).toMatchObject({ sessionId: 's1', runId: 'r1', payload: { modelId: 'gpt-4o', tokensInput: 10 } });
     expect(rows[1].payload).toMatchObject({ toolName: 'bash', bashCommand: 'git status --short', bashCommandLabel: 'git' });
+  });
+
+  it('returns the latest suggested pointer ids for a session', () => {
+    writeTraceSuggestedContext({ sessionId: 's1', pointerIds: ['old-a', 'old-b'] });
+    writeTraceSuggestedContext({ sessionId: 's2', pointerIds: ['other'] });
+    writeTraceSuggestedContext({ sessionId: 's1', pointerIds: ['new-a', 'new-b'] });
+
+    expect([...querySessionSuggestedPointerIds('s1', { stateRoot: testDir })]).toEqual(['new-a', 'new-b']);
+    expect([...querySessionSuggestedPointerIds('s2', { stateRoot: testDir })]).toEqual(['other']);
+    expect([...querySessionSuggestedPointerIds('missing', { stateRoot: testDir })]).toEqual([]);
   });
 
   it('keeps maintenance as a no-op for old trace SQLite state', () => {
