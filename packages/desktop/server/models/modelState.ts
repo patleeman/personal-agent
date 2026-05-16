@@ -24,6 +24,11 @@ function readModelInput(model: unknown): Array<'text' | 'image'> {
   return input.includes('image') ? ['text', 'image'] : ['text'];
 }
 
+function readModelReasoning(model: unknown): boolean | undefined {
+  const reasoning = (model as { reasoning?: unknown } | undefined)?.reasoning;
+  return typeof reasoning === 'boolean' ? reasoning : undefined;
+}
+
 export function listModelDefinitions() {
   try {
     return getAvailableModels().map((model) => ({
@@ -32,7 +37,7 @@ export function listModelDefinitions() {
       name: model.name,
       context: model.contextWindow ?? model.context ?? 128_000,
       input: readModelInput(model),
-      reasoning: ('reasoning' in model ? (model as unknown).reasoning : undefined) as boolean | undefined,
+      reasoning: readModelReasoning(model),
       supportedServiceTiers: getSupportedServiceTiersForModel(model),
     }));
   } catch {

@@ -1,4 +1,4 @@
-import type { AgentToolUpdateCallback, ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import type { ServerRouteContext } from '../routes/context.js';
 import { invokeExtensionAction } from './extensionBackend.js';
@@ -25,6 +25,12 @@ function isOverridableTool(toolName: string): boolean {
   return OVERRIDABLE_TOOLS.has(toolName);
 }
 
+type ManifestToolResult = AgentToolResult<unknown> & { isError?: boolean };
+
+function normalizeUpdateContent(content: Array<{ type: string; text: string }> | undefined): AgentToolResult<unknown>['content'] {
+  return (content ?? []).map((item) => ({ type: 'text' as const, text: item.text }));
+}
+
 export function createManifestToolAgentExtensions(options: ManifestToolFactoryOptions): Array<(pi: ExtensionAPI) => void> {
   return listExtensionToolRegistrations().map((tool) => {
     // When `replaces` is set and the target tool is overridable, use that name
@@ -44,7 +50,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             ? { promptGuidelines: [`This tool replaces the built-in "${registerName}" tool.`] }
             : {}),
         parameters: tool.inputSchema,
-        async execute(_toolCallId, params, signal, onUpdate: unknown, ctx: unknown) {
+        async execute(_toolCallId, params, signal, onUpdate, ctx): Promise<ManifestToolResult> {
           const invokeResult = await invokeExtensionAction(
             tool.extensionId,
             tool.action,
@@ -60,17 +66,14 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
               // send progress updates during long-running tool execution.
               onUpdate: (update) => {
                 onUpdate?.({
-                  content: update.content ?? [],
+                  content: normalizeUpdateContent(update.content),
+                  details: undefined,
                 });
               },
             },
             // Forward the streaming callback so backend handlers can
             // send progress updates during tool execution.
-            { onUpdate, signal, toolContext: ctx } satisfies {
-              onUpdate?: AgentToolUpdateCallback;
-              signal?: AbortSignal;
-              toolContext: unknown;
-            },
+            { onUpdate, signal, toolContext: ctx },
           );
 
           // Handle backend invocation error (build failure, not found, etc.)
@@ -84,7 +87,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
                 error: invokeResult.error,
               },
               isError: true,
-            } as unknown;
+            };
           }
 
           const extensionResult = invokeResult.result as
@@ -115,7 +118,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
               result: extensionResult?.details ?? invokeResult.result,
             },
             ...(extensionResult?.isError === true ? ({ isError: true } as const) : {}),
-          } as unknown;
+          };
         },
       });
     };
