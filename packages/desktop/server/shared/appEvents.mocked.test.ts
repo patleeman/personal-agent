@@ -251,7 +251,7 @@ describe('appEvents mocked behavior', () => {
     unsubscribe();
     publishAppEvent({ type: 'connected' });
 
-    expect(events).toEqual([{ type: 'invalidate', topics: ['runs', 'tasks'] }]);
+    expect(events).toEqual([{ type: 'invalidate', topics: ['executions', 'runs', 'tasks'] }]);
     expect(clearDurableRunsListCacheMock).toHaveBeenCalledTimes(1);
   });
 

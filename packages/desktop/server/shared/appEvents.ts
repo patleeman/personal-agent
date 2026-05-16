@@ -507,7 +507,8 @@ export function publishAppEvent(event: AppEvent): void {
 }
 
 export function invalidateAppTopics(...topics: AppEventTopic[]): void {
-  const uniqueTopics = [...new Set(topics)].sort();
+  const expandedTopics = topics.includes('runs') ? [...topics, 'executions' as const] : topics;
+  const uniqueTopics = [...new Set(expandedTopics)].sort();
   if (uniqueTopics.length === 0) {
     return;
   }

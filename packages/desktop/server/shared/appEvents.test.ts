@@ -7,7 +7,7 @@ import { getConfigRoot, getDurableSessionsDir, getStateRoot } from '@personal-ag
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AppEvent } from './appEvents.js';
-import { startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from './appEvents.js';
+import { invalidateAppTopics, startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -18,6 +18,7 @@ const ALL_TOPICS = [
   'attachments',
   'tasks',
   'runs',
+  'executions',
   'automation',
   'daemon',
   'workspace',
@@ -56,6 +57,18 @@ afterEach(async () => {
 });
 
 describe('app event monitor', () => {
+  it('invalidates executions when runs change', () => {
+    const events: AppEvent[] = [];
+    const unsubscribe = subscribeAppEvents((event) => {
+      events.push(event);
+    });
+
+    invalidateAppTopics('runs');
+
+    expect(events).toContainEqual({ type: 'invalidate', topics: ['executions', 'runs'] });
+    unsubscribe();
+  });
+
   it('invalidates sessionFiles when an existing session file changes', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
     const sessionsDir = getDurableSessionsDir();
