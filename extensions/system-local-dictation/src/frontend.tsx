@@ -7,7 +7,18 @@ import { bytesToBase64, type ComposerDictationCapture, startComposerDictationCap
 const INPUT_CLASS =
   'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
-const TRANSCRIPTION_MODEL_OPTIONS = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
+const CUSTOM_MODEL_VALUE = '__custom__';
+const TRANSCRIPTION_MODEL_OPTIONS = [
+  { id: 'tiny.en', label: 'Tiny English · fastest' },
+  { id: 'base.en', label: 'Base English · default' },
+  { id: 'small.en', label: 'Small English · recommended' },
+  { id: 'medium.en', label: 'Medium English · most accurate' },
+  { id: 'tiny', label: 'Tiny multilingual' },
+  { id: 'base', label: 'Base multilingual' },
+  { id: 'small', label: 'Small multilingual' },
+  { id: 'medium', label: 'Medium multilingual' },
+];
+const TRANSCRIPTION_MODEL_IDS = new Set(TRANSCRIPTION_MODEL_OPTIONS.map((option) => option.id));
 
 interface DictationSettings {
   enabled: boolean;
@@ -228,6 +239,7 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
   const [settings, setSettings] = useState<DictationSettings | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState('base.en');
+  const [customModelUrl, setCustomModelUrl] = useState('');
   const [status, setStatus] = useState<DictationModelStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -237,6 +249,7 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
     setSettings(state.settings);
     setEnabled(state.settings.enabled);
     setModel(state.settings.model);
+    setCustomModelUrl(TRANSCRIPTION_MODEL_IDS.has(state.settings.model) ? '' : state.settings.model);
   }, [pa]);
 
   useEffect(() => {
@@ -343,22 +356,53 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
                   <label className="ui-card-meta pt-1" htmlFor="settings-dictation-model">
                     Model
                   </label>
-                  <input
+                  <select
                     id="settings-dictation-model"
-                    list="settings-dictation-model-options"
-                    value={model}
-                    onChange={(event) => setModel(event.target.value)}
-                    onBlur={() => void saveFields(enabled)}
-                    className={`${INPUT_CLASS} font-mono text-[13px]`}
-                    placeholder="base.en"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <datalist id="settings-dictation-model-options">
+                    value={TRANSCRIPTION_MODEL_IDS.has(model) ? model : CUSTOM_MODEL_VALUE}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (next === CUSTOM_MODEL_VALUE) {
+                        const custom = customModelUrl.trim();
+                        setModel(custom);
+                        setCustomModelUrl(custom);
+                        return;
+                      }
+                      setModel(next);
+                      void saveFields(enabled, next);
+                    }}
+                    className={INPUT_CLASS}
+                  >
                     {TRANSCRIPTION_MODEL_OPTIONS.map((option) => (
-                      <option key={option} value={option} />
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
                     ))}
-                  </datalist>
+                    <option value={CUSTOM_MODEL_VALUE}>Custom Hugging Face URL…</option>
+                  </select>
+                  {!TRANSCRIPTION_MODEL_IDS.has(model) ? (
+                    <div className="space-y-1.5">
+                      <label className="ui-card-meta" htmlFor="settings-dictation-custom-model">
+                        Custom model URL
+                      </label>
+                      <input
+                        id="settings-dictation-custom-model"
+                        value={customModelUrl}
+                        onChange={(event) => {
+                          setCustomModelUrl(event.target.value);
+                          setModel(event.target.value);
+                        }}
+                        onBlur={() => void saveFields(enabled, customModelUrl)}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        placeholder="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <p className="text-[12px] leading-5 text-dim">
+                        Use a direct Hugging Face <span className="font-mono">/resolve/</span> URL to a Whisper.cpp-compatible{' '}
+                        <span className="font-mono">ggml-*.bin</span> file.
+                      </p>
+                    </div>
+                  ) : null}
                   <p className={cx('text-[12px]', status?.installed ? 'text-success' : 'text-dim')}>{statusLabel}</p>
                   <ToolbarButton
                     type="button"

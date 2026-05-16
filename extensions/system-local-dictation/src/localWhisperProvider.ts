@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type {
@@ -61,7 +61,27 @@ function normalizeLocalWhisperModel(value: string | undefined): string {
   return MODEL_ALIASES[model] ?? model;
 }
 
+function resolveCustomHuggingFaceUrl(model: string): URL | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(model);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'huggingface.co') return null;
+  if (!parsed.pathname.includes('/resolve/')) return null;
+  if (!basename(parsed.pathname).endsWith('.bin')) return null;
+  return parsed;
+}
+
 function resolveModelFileName(model: string): string {
+  const trimmed = model.trim();
+  const customUrl = resolveCustomHuggingFaceUrl(trimmed);
+  if (customUrl) return basename(customUrl.pathname);
+  if (/^https?:\/\//i.test(trimmed)) {
+    throw new Error('Custom Whisper models must be direct Hugging Face /resolve/ URLs to .bin files.');
+  }
   return MODEL_FILE_NAMES[normalizeLocalWhisperModel(model)] ?? `ggml-${model}.bin`;
 }
 
@@ -70,6 +90,8 @@ function resolveModelFilePath(modelRootPath: string, model: string): string {
 }
 
 function resolveModelDownloadUrl(model: string): string {
+  const customUrl = resolveCustomHuggingFaceUrl(model.trim());
+  if (customUrl) return customUrl.toString();
   return `${MODEL_DOWNLOAD_BASE_URL}/${resolveModelFileName(model)}`;
 }
 
@@ -277,6 +299,7 @@ export class LocalWhisperTranscriptionProvider {
 export const testExports = {
   buildWhisperRequireCandidatePaths,
   normalizeLocalWhisperModel,
+  resolveCustomHuggingFaceUrl,
   resolveModelFileName,
   resolveModelDownloadUrl,
   pcm16ToFloat32,

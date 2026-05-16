@@ -12,6 +12,29 @@ describe('local whisper provider', () => {
     expect(candidates).toContain('/repo/packages/desktop/package.json');
   });
 
+  it('resolves curated and custom Hugging Face model downloads', () => {
+    expect(testExports.resolveModelFileName('small.en')).toBe('ggml-small.en.bin');
+    expect(testExports.resolveModelDownloadUrl('small.en')).toBe(
+      'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin',
+    );
+
+    const custom = 'https://huggingface.co/acme/whisper-models/resolve/main/ggml-custom.bin';
+    expect(testExports.resolveCustomHuggingFaceUrl(custom)?.toString()).toBe(custom);
+    expect(testExports.resolveModelFileName(custom)).toBe('ggml-custom.bin');
+    expect(testExports.resolveModelDownloadUrl(custom)).toBe(custom);
+  });
+
+  it('rejects vague or non-Hugging Face custom model URLs', () => {
+    expect(testExports.resolveCustomHuggingFaceUrl('https://huggingface.co/acme/whisper-models')).toBeNull();
+    expect(() => testExports.resolveModelFileName('https://huggingface.co/acme/whisper-models')).toThrow(
+      'Custom Whisper models must be direct Hugging Face /resolve/ URLs to .bin files.',
+    );
+    expect(testExports.resolveCustomHuggingFaceUrl('https://example.com/ggml-model.bin')).toBeNull();
+    expect(() => testExports.resolveModelFileName('https://example.com/ggml-model.bin')).toThrow(
+      'Custom Whisper models must be direct Hugging Face /resolve/ URLs to .bin files.',
+    );
+  });
+
   it('formats tuple segments returned by whisper-cpp-node', () => {
     expect(
       testExports.formatWhisperSegments([
