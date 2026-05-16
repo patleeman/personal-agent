@@ -20,6 +20,12 @@ interface ConversationOption {
   cwd?: string;
 }
 
+interface ModelOption {
+  id: string;
+  name: string;
+  provider?: string;
+}
+
 interface AutomationFormState {
   title: string;
   prompt: string;
@@ -31,6 +37,7 @@ interface AutomationFormState {
   threadMode: 'dedicated' | 'existing' | 'none';
   threadConversationId: string;
   model: string;
+  thinkingLevel: string;
   timeoutSeconds: string;
   catchUpWindowSeconds: string;
   enabled: boolean;
@@ -44,6 +51,15 @@ const EDITOR_TOC_ITEMS: Array<{ id: EditorSectionId; label: string; summary: str
   { id: 'automation-schedule', label: 'Schedule', summary: 'When it runs' },
   { id: 'automation-delivery', label: 'Delivery', summary: 'Where results go' },
   { id: 'automation-runtime', label: 'Runtime', summary: 'Model, cwd, and timeout' },
+];
+
+const THINKING_LEVEL_OPTIONS = [
+  { value: '', label: 'Default' },
+  { value: 'off', label: 'Off' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
 ];
 
 const CRON_PRESETS = [
@@ -85,6 +101,7 @@ const emptyForm: AutomationFormState = {
   threadMode: 'dedicated',
   threadConversationId: '',
   model: '',
+  thinkingLevel: '',
   timeoutSeconds: '',
   catchUpWindowSeconds: '',
   enabled: true,
@@ -132,6 +149,33 @@ function readConversationOptions(input: unknown): ConversationOption[] {
     })
     .filter((item): item is ConversationOption => Boolean(item))
     .sort((left, right) => left.title.localeCompare(right.title));
+}
+
+function readModelOptions(input: unknown): ModelOption[] {
+  const models =
+    input && typeof input === 'object' && Array.isArray((input as { models?: unknown }).models)
+      ? (input as { models: unknown[] }).models
+      : [];
+  return models
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const record = item as Record<string, unknown>;
+      const id = typeof record.id === 'string' ? record.id.trim() : '';
+      if (!id) return null;
+      const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : id;
+      const provider = typeof record.provider === 'string' ? record.provider : undefined;
+      return { id, name, provider } satisfies ModelOption;
+    })
+    .filter((item): item is ModelOption => Boolean(item))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function readPickedFolderPath(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const record = input as Record<string, unknown>;
+  if (record.cancelled === true) return null;
+  const path = typeof record.path === 'string' ? record.path.trim() : '';
+  return path || null;
 }
 
 function oneTimeTaskAtMs(task: Pick<ScheduledTaskSummary, 'at'>) {
@@ -257,6 +301,7 @@ function formFromTask(task: ScheduledTaskSummary): AutomationFormState {
     threadMode: 'dedicated',
     threadConversationId: task.threadConversationId || '',
     model: task.model || '',
+    thinkingLevel: task.thinkingLevel || '',
     timeoutSeconds: '',
     catchUpWindowSeconds: task.catchUpWindowSeconds ? String(task.catchUpWindowSeconds) : '',
     enabled: task.enabled !== false,
@@ -275,6 +320,7 @@ function readFormInput(form: AutomationFormState) {
     threadMode: form.threadMode,
     threadConversationId: form.threadConversationId.trim() || null,
     model: form.model.trim() || null,
+    thinkingLevel: form.thinkingLevel.trim() || null,
     timeoutSeconds: numberOrNull(form.timeoutSeconds),
     catchUpWindowSeconds: numberOrNull(form.catchUpWindowSeconds),
   };
@@ -619,17 +665,24 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
   const [query, setQuery] = useState('');
   const [activeEditorSection, setActiveEditorSection] = useState<EditorSectionId>('automation-general');
   const [conversationOptions, setConversationOptions] = useState<ConversationOption[]>([]);
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
-    const [nextTasks, nextHealth, nextConversations] = await Promise.all([
+    const extensionClient = pa as NativeExtensionClient & {
+      conversations?: { list(): Promise<unknown> };
+      models?: () => Promise<unknown>;
+    };
+    const [nextTasks, nextHealth, nextConversations, nextModels] = await Promise.all([
       pa.automations.list(),
       pa.automations.readSchedulerHealth(),
-      (pa as NativeExtensionClient & { conversations?: { list(): Promise<unknown> } }).conversations?.list?.() ?? Promise.resolve([]),
+      extensionClient.conversations?.list?.() ?? Promise.resolve([]),
+      extensionClient.models?.() ?? Promise.resolve({ models: [] }),
     ]);
     setTasks(sortTasks(Array.isArray(nextTasks) ? nextTasks : []));
     setHealth(nextHealth as ScheduledTaskSchedulerHealth);
     setConversationOptions(readConversationOptions(nextConversations));
+    setModelOptions(readModelOptions(nextModels));
     setLoading(false);
   }, [pa]);
 
@@ -710,6 +763,24 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
     },
     [load, pa],
   );
+
+  const pickCwd = useCallback(async () => {
+    try {
+      const result = await (
+        pa as NativeExtensionClient & { pickFolder?: (input?: { cwd?: string | null; prompt?: string | null }) => Promise<unknown> }
+      ).pickFolder?.({
+        cwd: form.cwd || null,
+        prompt: 'Choose automation working directory',
+      });
+      const path = readPickedFolderPath(result);
+      if (path) {
+        setForm((current) => ({ ...current, cwd: path }));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pa.ui.notify({ type: 'error', message: `Could not choose working directory: ${msg}`, source: 'system-automations' });
+    }
+  }, [form.cwd, pa]);
 
   const deleteTask = useCallback(
     async (task: Pick<ScheduledTaskSummary, 'id' | 'title'>) => {
@@ -1063,25 +1134,52 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
               >
                 <div className="grid gap-4">
                   <Field label="Working directory" hint="Leave blank to use the current runtime cwd.">
-                    <input
-                      className={fieldClass()}
-                      autoComplete="off"
-                      name="automation-cwd"
-                      placeholder="~/workingdir/repo"
-                      value={form.cwd}
-                      onChange={(event) => setForm({ ...form, cwd: event.target.value })}
-                    />
-                  </Field>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Model">
+                    <div className="flex gap-2">
                       <input
                         className={fieldClass()}
                         autoComplete="off"
+                        name="automation-cwd"
+                        placeholder="~/workingdir/repo"
+                        value={form.cwd}
+                        onChange={(event) => setForm({ ...form, cwd: event.target.value })}
+                      />
+                      <ToolbarButton type="button" className="shrink-0" onClick={() => void pickCwd()}>
+                        Choose…
+                      </ToolbarButton>
+                    </div>
+                  </Field>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Model">
+                      <select
+                        className={fieldClass()}
                         name="automation-model"
-                        placeholder="Default model"
                         value={form.model}
                         onChange={(event) => setForm({ ...form, model: event.target.value })}
-                      />
+                      >
+                        <option value="">Default model</option>
+                        {form.model && !modelOptions.some((option) => option.id === form.model) ? (
+                          <option value={form.model}>Current saved model</option>
+                        ) : null}
+                        {modelOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.provider ? `${option.name} · ${option.provider}` : option.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Thinking level">
+                      <select
+                        className={fieldClass()}
+                        name="automation-thinking-level"
+                        value={form.thinkingLevel}
+                        onChange={(event) => setForm({ ...form, thinkingLevel: event.target.value })}
+                      >
+                        {THINKING_LEVEL_OPTIONS.map((option) => (
+                          <option key={option.value || 'default'} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </Field>
                     <Field label="Timeout seconds">
                       <input

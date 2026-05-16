@@ -22,6 +22,8 @@ export interface NativeExtensionClient {
   conversations: {
     list(): Promise<unknown>;
   };
+  models(): Promise<unknown>;
+  pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown>;
   executions: {
     start(input: unknown): Promise<unknown>;
     get(executionId: string): Promise<unknown>;
@@ -138,6 +140,12 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       list() {
         return api.sessions();
       },
+    },
+    models() {
+      return api.models();
+    },
+    pickFolder(input) {
+      return api.pickFolder(input);
     },
     executions: {
       start(input) {
