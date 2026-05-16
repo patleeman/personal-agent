@@ -2,7 +2,7 @@ import { createScheduledTaskAgentExtension } from './scheduledTaskTool.js';
 
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
-  ui: { invalidate(topics: string | string[]): void };
+  ui?: { invalidate?(topics: string | string[]): void };
 }
 
 interface RegisteredTool {
@@ -42,7 +42,7 @@ async function executeRegisteredTool(input: unknown, ctx: NativeBackendContext) 
 
 export async function scheduledTask(input: unknown, ctx: NativeBackendContext) {
   const result = (await executeRegisteredTool(input, ctx)) as ToolExecutionResult;
-  ctx.ui.invalidate(['tasks', 'runs', 'sessions']);
+  ctx.ui?.invalidate?.(['tasks', 'runs', 'sessions']);
   const text = Array.isArray(result?.content)
     ? result.content.map((item) => (item.type === 'text' ? (item.text ?? '') : JSON.stringify(item))).join('\n')
     : JSON.stringify(result, null, 2);

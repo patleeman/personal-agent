@@ -75,6 +75,17 @@ describe('system-automations backend', () => {
       expect(mocks.invalidateTopics).toHaveBeenCalledWith(['tasks', 'runs']);
       expect(invalidate).toHaveBeenCalledWith(['tasks', 'runs', 'sessions']);
     });
+
+    it('does not fail when UI invalidation is unavailable', async () => {
+      backendAutomationMock.resolveScheduledTaskForProfile.mockResolvedValue({
+        task: { id: 'daily-check', title: 'Daily Check' },
+      });
+      backendAutomationMock.startScheduledTaskRun.mockResolvedValue({ accepted: true, runId: 'run-1' });
+
+      const result = await scheduledTask({ action: 'run', taskId: 'daily-check' }, createCtx({ ui: undefined }));
+
+      expect(result.text).toContain('Started scheduled task @daily-check as run run-1');
+    });
   });
 
   describe('queueFollowup handler', () => {
