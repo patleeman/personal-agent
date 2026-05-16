@@ -196,8 +196,8 @@ function formatProjectState(document) {
   return {
     id: assertNonEmptyText(document.id, 'Project id'),
     ownerProfile: assertNonEmptyText(document.ownerProfile, 'Project ownerProfile'),
-    createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    createdAt: normalizeIsoTimestamp(document.createdAt, 'Project createdAt'),
+    updatedAt: normalizeIsoTimestamp(document.updatedAt, 'Project updatedAt'),
     ...(archivedAt ? { archivedAt } : {}),
     title: assertNonEmptyText(document.title, 'Project title'),
     description: assertNonEmptyText(document.description, 'Project description'),
@@ -228,8 +228,8 @@ function buildProjectIndexFrontmatter(document) {
     summary: assertNonEmptyText(document.summary, 'Project summary'),
     status: assertNonEmptyText(document.status, 'Project status'),
     ownerProfile,
-    createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    createdAt: normalizeIsoTimestamp(document.createdAt, 'Project createdAt'),
+    updatedAt: normalizeIsoTimestamp(document.updatedAt, 'Project updatedAt'),
     tags,
   };
 }
@@ -605,7 +605,7 @@ export function createProjectActivityEntry(input) {
 export function formatProjectActivityEntry(document) {
   const frontmatterAttributes = {
     id: assertNonEmptyText(document.id, 'Activity id'),
-    createdAt: assertNonEmptyText(document.createdAt, 'Activity createdAt'),
+    createdAt: normalizeIsoTimestamp(document.createdAt, 'Activity createdAt'),
     profile: assertNonEmptyText(document.profile, 'Activity profile'),
     kind: assertNonEmptyText(document.kind, 'Activity kind'),
     notificationState: document.notificationState ?? 'none',

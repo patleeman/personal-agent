@@ -73,6 +73,18 @@ describe('project artifacts', () => {
     });
   });
 
+  it('rejects invalid project timestamps when formatting', () => {
+    const document = createInitialProject({
+      id: 'artifact-model',
+      ownerProfile: 'assistant',
+      title: 'Durable artifact model',
+      description: 'Create a durable artifact model.',
+      createdAt: '2026-03-10T12:00:00.000Z',
+    });
+
+    expect(() => formatProject({ ...document, updatedAt: 'not-a-date' })).toThrow('Invalid Project updatedAt');
+  });
+
   it('formats project yaml as the canonical state record', () => {
     const document: ProjectDocument = {
       id: 'artifact-model',
@@ -204,6 +216,18 @@ describe('project activity artifacts', () => {
 
     expect(entry.notificationState).toBe('none');
     expect(entry.kind).toBe('scheduled-task');
+  });
+
+  it('rejects invalid activity timestamps when formatting', () => {
+    const document = createProjectActivityEntry({
+      id: 'daily-report',
+      createdAt: '2026-03-10T14:00:00.000Z',
+      profile: 'datadog',
+      kind: 'scheduled-task',
+      summary: 'Daily report completed.',
+    });
+
+    expect(() => formatProjectActivityEntry({ ...document, createdAt: 'not-a-date' })).toThrow('Invalid Activity createdAt');
   });
 
   it('formats and parses activity markdown as a round trip', () => {
