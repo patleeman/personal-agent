@@ -478,7 +478,10 @@ export function createMcpAgentExtension(): ExtensionAPI {
 
             case 'logout': {
               const logoutServer = validateMcpString(server, 'Server name');
-              await clearMcpServerAuth(logoutServer, commonOptions);
+              const result = await clearMcpServerAuth(logoutServer, commonOptions);
+              if (result?.error || result?.exitCode !== 0) {
+                throw new Error(result?.error ?? result?.stderr ?? `Failed to clear OAuth state for ${logoutServer}.`);
+              }
 
               return {
                 content: [{ type: 'text', text: `Cleared stored OAuth state for ${logoutServer}` }],

@@ -369,13 +369,23 @@ describe('mcpAgentExtension', () => {
 
   describe('action: logout', () => {
     it('clears OAuth state for the server', async () => {
-      vi.mocked(core.clearMcpServerAuth).mockResolvedValue(undefined);
+      vi.mocked(core.clearMcpServerAuth).mockResolvedValue({ exitCode: 0 });
 
       const handler = buildHandler();
       const result = await handler({ action: 'logout', server: 'github' });
 
       expect(core.clearMcpServerAuth).toHaveBeenCalledWith('github', expect.any(Object));
       expect(result.content[0].text).toContain('Cleared stored OAuth state for github');
+    });
+
+    it('returns an error when clearing OAuth state fails', async () => {
+      vi.mocked(core.clearMcpServerAuth).mockResolvedValue({ exitCode: 1, error: 'session not found' });
+
+      const handler = buildHandler();
+      const result = await handler({ action: 'logout', server: 'github' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('session not found');
     });
   });
 
