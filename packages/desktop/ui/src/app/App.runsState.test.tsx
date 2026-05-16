@@ -181,6 +181,35 @@ describe('App execution state integration', () => {
     expect(container.textContent).toContain('review diff');
   });
 
+  it('refreshes execution projections when a runs snapshot arrives', async () => {
+    apiExecutionsMock.mockResolvedValueOnce({
+      executions: [
+        {
+          id: 'run-1',
+          kind: 'subagent',
+          visibility: 'primary',
+          conversationId: 'conv-1',
+          title: 'stale active run',
+          status: 'running',
+          capabilities: { canCancel: true, canRerun: false, canFollowUp: false, hasLog: true, hasResult: false },
+        },
+      ],
+    });
+    ({ container, root } = await renderApp());
+    expect(container.textContent).toContain('stale active run');
+
+    apiExecutionsMock.mockClear();
+    apiExecutionsMock.mockResolvedValueOnce({ executions: [] });
+
+    await emitDesktopEvent({
+      type: 'runs',
+      result: { scannedAt: 'later', runsRoot: '/runs', summary: { total: 0, recoveryActions: {}, statuses: {} }, runs: [] },
+    });
+
+    expect(apiExecutionsMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain('stale active run');
+  });
+
   it('updates conversation running state immediately from session meta change events', async () => {
     apiSessionMetaMock.mockResolvedValue({ id: 'conv-1', title: 'Conversation', cwd: '/repo', timestamp: '2026-01-01T00:00:00.000Z' });
     ({ container, root } = await renderApp());

@@ -273,6 +273,14 @@ export function App() {
           return;
         case 'runs':
           setRuns(payload.result);
+          void api
+            .executions()
+            .then((result) => {
+              setExecutions(result);
+            })
+            .catch(() => {
+              // Keep the last known projection until the next app event or manual refresh.
+            });
           return;
         case 'daemon':
           setDaemon(payload.state);
