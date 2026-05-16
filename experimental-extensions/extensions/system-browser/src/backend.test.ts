@@ -153,7 +153,7 @@ describe('workbench browser agent extension', () => {
 
     const result = await pending;
     expect(result.isError).toBe(true);
-    expect(result.content?.[0]?.text).toContain('Browser snapshot failed: Browser snapshot cancelled.');
+    expect(result.content?.[0]?.text).toContain('Browser snapshot failed: Browser tab listing cancelled.');
 
     setWorkbenchBrowserToolHost(null);
   });
@@ -164,7 +164,7 @@ describe('workbench browser agent extension', () => {
     expect(pi.on).not.toHaveBeenCalled();
   });
 
-  it('lets stale tool calls create or reuse a browser session without requiring the panel to be active', async () => {
+  it('rejects browser tools when the browser panel is not active', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => false,
       listTabs: async () => [],
@@ -178,8 +178,8 @@ describe('workbench browser agent extension', () => {
       isError?: boolean;
       content?: Array<{ text?: string }>;
     };
-    expect(result.isError).not.toBe(true);
-    expect(result.content?.[0]?.text).toContain('https://example.com/');
+    expect(result.isError).toBe(true);
+    expect(result.content?.[0]?.text).toContain('Workbench Browser is not active for this conversation');
 
     setWorkbenchBrowserToolHost(null);
   });

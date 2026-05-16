@@ -10,6 +10,15 @@ function requireHost(): WorkbenchBrowserToolHost {
   return host;
 }
 
+async function requireActiveHost(conversationId: string, signal: AbortSignal | undefined): Promise<WorkbenchBrowserToolHost> {
+  const host = requireHost();
+  const active = await withBrowserToolDeadline('Browser active check', signal, host.isActive(conversationId));
+  if (!active) {
+    throw new Error('Workbench Browser is not active for this conversation. Open the Browser workbench panel before using browser tools.');
+  }
+  return host;
+}
+
 const BROWSER_TOOL_TIMEOUT_MS = 10_000;
 
 class BrowserToolAbortError extends Error {
@@ -181,7 +190,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const host = requireHost();
+          const host = await requireActiveHost(conversationId, signal);
           const tabs = await withBrowserToolDeadline('Browser tab listing', signal, host.listTabs());
           const tabId = (params as { tabId?: string }).tabId;
           const snapshot = await withBrowserToolDeadline('Browser snapshot', signal, host.snapshot(conversationId, tabId));
@@ -213,10 +222,11 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
+          const host = await requireActiveHost(conversationId, signal);
           const result = await withBrowserToolDeadline(
             'Browser CDP command',
             signal,
-            requireHost().cdp({
+            host.cdp({
               conversationId,
               command: params.command,
               ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
@@ -256,7 +266,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const host = requireHost();
+          const host = await requireActiveHost(conversationId, signal);
           const tabId = (params as { tabId?: string }).tabId;
           const screenshot = (await withBrowserToolDeadline('Browser screenshot', signal, host.screenshot(conversationId, tabId))) as {
             dataBase64?: string;
