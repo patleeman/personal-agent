@@ -51,6 +51,14 @@ export function resolveConversationLinkPath(options: ResolveConversationLinkPath
   return join(resolveProfileConversationLinksDir(options), `${options.conversationId}.json`);
 }
 
+function normalizeIsoTimestamp(value: string, label: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return new Date(parsed).toISOString();
+}
+
 function normalizeRelatedProjectIds(projectIds: string[]): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
@@ -77,13 +85,9 @@ export function readConversationProjectLink(path: string): ConversationProjectLi
     : [];
 
   validateConversationId(conversationId);
-  if (updatedAt.length === 0 || !Number.isFinite(Date.parse(updatedAt))) {
-    throw new Error(`Invalid conversation link updatedAt in ${path}`);
-  }
-
   return {
     conversationId,
-    updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(updatedAt, `conversation link updatedAt in ${path}`),
     relatedProjectIds: normalizeRelatedProjectIds(relatedProjectIds),
   };
 }
@@ -144,7 +148,7 @@ export function writeConversationProjectLink(options: {
 
   const normalized: ConversationProjectLinkDocument = {
     conversationId: options.document.conversationId,
-    updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(options.document.updatedAt, 'conversation link updatedAt'),
     relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
   };
 
@@ -186,7 +190,7 @@ export function setConversationProjectLinks(options: {
     document,
   });
 
-  return document;
+  return getConversationProjectLink({ stateRoot: options.stateRoot, profile: options.profile, conversationId: options.conversationId })!;
 }
 
 export function addConversationProjectLink(options: {

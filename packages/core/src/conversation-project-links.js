@@ -28,6 +28,13 @@ export function resolveConversationLinkPath(options) {
   validateConversationId(options.conversationId);
   return join(resolveProfileConversationLinksDir(options), `${options.conversationId}.json`);
 }
+function normalizeIsoTimestamp(value, label) {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return new Date(parsed).toISOString();
+}
 function normalizeRelatedProjectIds(projectIds) {
   const unique = [];
   const seen = new Set();
@@ -49,12 +56,9 @@ export function readConversationProjectLink(path) {
     ? parsed.relatedProjectIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
     : [];
   validateConversationId(conversationId);
-  if (updatedAt.length === 0 || !Number.isFinite(Date.parse(updatedAt))) {
-    throw new Error(`Invalid conversation link updatedAt in ${path}`);
-  }
   return {
     conversationId,
-    updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(updatedAt, `conversation link updatedAt in ${path}`),
     relatedProjectIds: normalizeRelatedProjectIds(relatedProjectIds),
   };
 }
@@ -102,7 +106,7 @@ export function writeConversationProjectLink(options) {
   });
   const normalized = {
     conversationId: options.document.conversationId,
-    updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
+    updatedAt: normalizeIsoTimestamp(options.document.updatedAt, 'conversation link updatedAt'),
     relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
   };
   const dir = resolveProfileConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile });
@@ -132,7 +136,7 @@ export function setConversationProjectLinks(options) {
     profile: options.profile,
     document,
   });
-  return document;
+  return getConversationProjectLink({ stateRoot: options.stateRoot, profile: options.profile, conversationId: options.conversationId });
 }
 export function addConversationProjectLink(options) {
   const existing = getConversationProjectLink(options);

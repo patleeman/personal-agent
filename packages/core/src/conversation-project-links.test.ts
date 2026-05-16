@@ -72,6 +72,38 @@ describe('conversation project links', () => {
     });
   });
 
+  it('returns the normalized document after writing', () => {
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
+
+    const result = setConversationProjectLinks({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      relatedProjectIds: ['desktop-ui'],
+      updatedAt: '2026-03-10T15:00:00.000-05:00',
+    });
+
+    expect(result).toEqual({
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-10T20:00:00.000Z',
+      relatedProjectIds: ['desktop-ui'],
+    });
+  });
+
+  it('rejects invalid updatedAt values before writing', () => {
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
+
+    expect(() =>
+      setConversationProjectLinks({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-123',
+        relatedProjectIds: ['desktop-ui'],
+        updatedAt: 'not-a-date',
+      }),
+    ).toThrow('Invalid conversation link updatedAt');
+  });
+
   it('adds links idempotently and keeps the file on disk', () => {
     const stateRoot = createTempDir('personal-agent-conversation-links-state-');
 
