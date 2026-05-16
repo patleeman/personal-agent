@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -116,6 +116,26 @@ describe('conversation artifact storage', () => {
     expect(listConversationArtifacts({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }).map((artifact) => artifact.id)).toEqual(
       [other.id, first.id],
     );
+  });
+
+  it('skips unreadable artifact files while listing', () => {
+    const stateRoot = createTempStateRoot();
+
+    const artifact = saveConversationArtifact({
+      stateRoot,
+      profile: 'datadog',
+      conversationId: 'conv-123',
+      title: 'Good artifact',
+      kind: 'html',
+      content: '<div>Good</div>',
+    });
+    const dir = resolveConversationArtifactsDir({ stateRoot, profile: 'datadog', conversationId: 'conv-123' });
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'broken.json'), '{ nope');
+
+    expect(listConversationArtifacts({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }).map((item) => item.id)).toEqual([
+      artifact.id,
+    ]);
   });
 
   it('creates unique ids when titles collide', () => {

@@ -178,7 +178,13 @@ export function listConversationArtifacts(options: ResolveConversationArtifactOp
 
   return readdirSync(dir)
     .filter((entry) => entry.endsWith('.json'))
-    .map((entry) => readConversationArtifact(join(dir, entry)))
+    .flatMap((entry) => {
+      try {
+        return [readConversationArtifact(join(dir, entry))];
+      } catch {
+        return [];
+      }
+    })
     .map(({ content: _content, ...summary }) => summary)
     .sort((left, right) => {
       const updatedDiff = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
