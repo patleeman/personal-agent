@@ -159,7 +159,9 @@ for (const bundleOutput of bundleOutputs) {
 }
 
 const jsdomXhrSyncWorker = resolve(packageRoot, 'node_modules/jsdom/lib/jsdom/living/xhr/xhr-sync-worker.js');
-const piCodingAgentPackageJson = resolve(packageRoot, 'node_modules/@earendil-works/pi-coding-agent/package.json');
+const piCodingAgentRoot = resolve(packageRoot, 'node_modules/@earendil-works/pi-coding-agent');
+const piCodingAgentPackageJson = resolve(piCodingAgentRoot, 'package.json');
+const piCodingAgentReadme = resolve(piCodingAgentRoot, 'README.md');
 const piCodingAgentPackageMetadata = existsSync(piCodingAgentPackageJson)
   ? JSON.parse(readFileSync(piCodingAgentPackageJson, 'utf-8'))
   : { name: '@earendil-works/pi-coding-agent', version: '0.0.0', piConfig: { configDir: '.pi' } };
@@ -198,4 +200,8 @@ for (const bundleOutput of bundleOutputs) {
   copyFileSync(jsdomXhrSyncWorker, workerOutput);
   const packageJson = bundledPackageJsonByDir.get(outputDir) ?? bundledRuntimePackageJson;
   writeFileSync(resolve(outputDir, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
+}
+
+if (existsSync(piCodingAgentReadme)) {
+  copyFileSync(piCodingAgentReadme, resolve(outdir, 'app', 'README.md'));
 }
