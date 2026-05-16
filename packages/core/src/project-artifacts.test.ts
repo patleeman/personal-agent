@@ -225,10 +225,12 @@ describe('project activity artifacts', () => {
       profile: 'datadog',
       kind: 'scheduled-task',
       summary: 'Daily report completed.',
+      relatedProjectIds: ['artifact-model', 'artifact-model', '  daily-review  '],
     });
 
     expect(entry.notificationState).toBe('none');
     expect(entry.kind).toBe('scheduled-task');
+    expect(entry.relatedProjectIds).toEqual(['artifact-model', 'daily-review']);
   });
 
   it('rejects invalid activity timestamps when formatting', () => {

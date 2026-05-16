@@ -587,12 +587,23 @@ function parseOptionalListAttribute(attributes, key) {
     .filter((value) => value.length > 0);
   return values.length > 0 ? values : undefined;
 }
-function formatOptionalListAttribute(values) {
+function normalizeStringList(values, label) {
   if (!values || values.length === 0) {
     return undefined;
   }
-  const normalized = values.map((value) => assertNonEmptyText(value, 'List attribute value')).join(', ');
+  const seen = new Set();
+  const normalized = [];
+  for (const value of values) {
+    const item = assertNonEmptyText(value, label);
+    if (seen.has(item)) continue;
+    seen.add(item);
+    normalized.push(item);
+  }
   return normalized.length > 0 ? normalized : undefined;
+}
+function formatOptionalListAttribute(values) {
+  const normalized = normalizeStringList(values, 'List attribute value');
+  return normalized ? normalized.join(', ') : undefined;
 }
 export function createProjectActivityEntry(input) {
   return {
@@ -602,7 +613,7 @@ export function createProjectActivityEntry(input) {
     kind: assertNonEmptyText(input.kind, 'Activity kind'),
     summary: assertNonEmptyText(input.summary, 'Activity summary'),
     details: input.details ? assertNonEmptyText(input.details, 'Activity details') : undefined,
-    relatedProjectIds: input.relatedProjectIds?.map((value) => assertNonEmptyText(value, 'Related project id')),
+    relatedProjectIds: normalizeStringList(input.relatedProjectIds, 'Related project id'),
     notificationState: input.notificationState ?? 'none',
   };
 }
