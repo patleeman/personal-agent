@@ -30,6 +30,49 @@ describe('system-suggested-context backend', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps warmed pointer caches isolated by profile', async () => {
+    mocks.readSessionBlocks.mockResolvedValue({ totalBlocks: 0 });
+    mocks.searchIndexedConversationDocuments
+      .mockResolvedValueOnce([
+        {
+          sessionId: 'conv-profile-a',
+          title: 'Architecture Review',
+          cwd: '/repo',
+          timestamp: '2026-05-01T00:00:00.000Z',
+          searchText: 'architecture review routing',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          sessionId: 'conv-profile-b',
+          title: 'Architecture Review',
+          cwd: '/repo',
+          timestamp: '2026-05-01T00:00:00.000Z',
+          searchText: 'architecture review routing',
+        },
+      ]);
+
+    await warmPointers({ prompt: 'architecture routing review', currentConversationId: 'conv-new', currentCwd: '/repo' }, {
+      profile: 'a',
+    } as never);
+    await warmPointers({ prompt: 'architecture routing review', currentConversationId: 'conv-new', currentCwd: '/repo' }, {
+      profile: 'b',
+    } as never);
+    const profileBResult = await providePromptContext(
+      { prompt: 'architecture routing review', conversationId: 'conv-new', currentCwd: '/repo' },
+      { profile: 'b' } as never,
+    );
+    const profileAResult = await providePromptContext(
+      { prompt: 'architecture routing review', conversationId: 'conv-new', currentCwd: '/repo' },
+      { profile: 'a' } as never,
+    );
+
+    expect(profileBResult.contextMessages[0]?.content).toContain('id: conv-profile-b');
+    expect(profileBResult.contextMessages[0]?.content).not.toContain('id: conv-profile-a');
+    expect(profileAResult.contextMessages[0]?.content).toContain('id: conv-profile-a');
+    expect(profileAResult.contextMessages[0]?.content).not.toContain('id: conv-profile-b');
+  });
+
   it('deduplicates indexed pointer candidates before injecting context', async () => {
     mocks.readSessionBlocks.mockResolvedValue({ totalBlocks: 0 });
     mocks.searchIndexedConversationDocuments.mockResolvedValue([

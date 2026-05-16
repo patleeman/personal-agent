@@ -138,8 +138,15 @@ function normalizeCacheText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ');
 }
 
-function buildPointerCacheKey(input: { prompt: string; currentConversationId?: string; currentCwd?: string; limit?: number }): string {
+function buildPointerCacheKey(input: {
+  prompt: string;
+  currentConversationId?: string;
+  currentCwd?: string;
+  limit?: number;
+  profile?: string;
+}): string {
   return JSON.stringify({
+    profile: input.profile ?? '',
     prompt: normalizeCacheText(input.prompt).toLowerCase(),
     currentConversationId: input.currentConversationId ?? '',
     currentCwd: input.currentCwd ?? '',
@@ -399,6 +406,7 @@ function readCachedRelatedConversationPointers(input: {
   currentCwd?: string;
   limit?: number;
   nowMs?: number;
+  profile?: string;
 }): RelatedConversationPointersResult | null {
   const key = buildPointerCacheKey(input);
   const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
@@ -416,6 +424,7 @@ async function warmRelatedConversationPointerCache(input: {
   currentCwd?: string;
   limit?: number;
   nowMs?: number;
+  profile?: string;
 }): Promise<RelatedConversationPointersResult> {
   void scheduleConversationSearchIndexing();
   const started = Date.now();
@@ -445,9 +454,10 @@ async function warmRelatedConversationPointerCache(input: {
 
 export async function warmPointers(
   input: { prompt: string; currentConversationId?: string; currentCwd?: string },
-  _ctx: ExtensionBackendContext,
+  ctx: ExtensionBackendContext,
 ): Promise<{ ok: boolean; pointerCount: number }> {
   const result = await warmRelatedConversationPointerCache({
+    profile: ctx.profile,
     prompt: input.prompt,
     currentConversationId: input.currentConversationId,
     currentCwd: input.currentCwd,
@@ -485,6 +495,7 @@ export async function providePromptContext(
           includeAuto: false,
         })
       : (readCachedRelatedConversationPointers({
+          profile: _ctx.profile,
           prompt: input.prompt,
           currentConversationId: input.conversationId,
           currentCwd: input.currentCwd,
