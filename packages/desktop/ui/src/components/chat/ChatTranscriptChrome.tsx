@@ -45,31 +45,34 @@ export function SelectionContextMenu({
         {menuState.replySelection ? (
           <>
             {selectionActions.length > 0 ? (
-              <div className="flex items-center gap-1 px-2 py-1" role="group" aria-label="Selection reply starters">
-                {selectionActions.map((action) => (
-                  <button
-                    key={`${action.extensionId}:${action.id}`}
-                    type="button"
-                    title={action.title}
-                    aria-label={action.title}
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={() => {
-                      void onAction(action);
-                    }}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-base hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    role="menuitem"
-                  >
-                    {action.icon ?? action.title}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="flex items-center gap-1 px-2 py-1" role="group" aria-label="Selection reply starters">
+                  {selectionActions.map((action) => (
+                    <button
+                      key={`${action.extensionId}:${action.id}`}
+                      type="button"
+                      title={action.title}
+                      aria-label={action.title}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={() => {
+                        void onAction(action);
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-base hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      role="menuitem"
+                    >
+                      {action.icon ?? action.title}
+                    </button>
+                  ))}
+                </div>
+                <div className="mx-1 my-1 h-px bg-border-subtle" role="separator" />
+              </>
             ) : null}
             <button
               type="button"
