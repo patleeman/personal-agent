@@ -14,36 +14,12 @@ export interface SearchHtmlResult {
 }
 
 export async function extractReadableHtml(input: { html: string; url: string }): Promise<ReadableHtmlResult> {
-  let markdown: string;
-  let title: string | undefined;
-
-  try {
-    const { JSDOM } = require('jsdom') as typeof import('jsdom');
-    const { Readability } = require('@mozilla/readability') as typeof import('@mozilla/readability');
-    const TurndownModule = require('turndown') as typeof import('turndown') | { default: typeof import('turndown') };
-    const Turndown = 'default' in TurndownModule ? TurndownModule.default : TurndownModule;
-
-    const dom = new JSDOM(input.html, { url: input.url });
-    const article = new Readability(dom.window.document).parse();
-    title = article?.title;
-
-    if (article?.content) {
-      const td = new Turndown({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
-      markdown = td.turndown(article.content);
-      if (article.title) markdown = `# ${article.title}\n\n${markdown}`;
-    } else {
-      markdown = extractTextFallback(input.html);
-    }
-  } catch {
-    markdown = extractTextFallback(input.html);
-  }
-
-  markdown = markdown
+  const markdown = extractTextFallback(input.html)
     .replace(/ +/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   if (!markdown) return { markdown: '(Could not extract readable content from page)' };
-  return { markdown, ...(title ? { title } : {}) };
+  return { markdown };
 }
 
 function extractTextFallback(html: string): string {

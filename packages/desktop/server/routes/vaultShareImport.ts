@@ -1,9 +1,7 @@
 import { extname, join } from 'node:path';
 
-import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { extension as mimeExtension } from 'mime-types';
-import TurndownService from 'turndown';
 import { stringify as stringifyYaml } from 'yaml';
 
 import type { ScopedFileSystem } from '../filesystem/filesystemAuthority.js';
@@ -184,14 +182,13 @@ async function extractReadableUrlShare(url: string): Promise<{
       .querySelector('meta[property="article:published_time"], meta[name="article:published_time"], meta[name="parsely-pub-date"]')
       ?.getAttribute('content')
       ?.trim() || undefined;
-  const article = new Readability(document).parse();
-  const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
-  const title = article?.title?.trim() || document.title?.trim() || url;
-  const sourceHtml = article?.content?.trim() || document.body?.innerHTML?.trim() || '';
-  const markdown = sourceHtml.length > 0 ? turndown.turndown(sourceHtml).trim() : '';
+  document.querySelectorAll('script, style, noscript, nav, header, footer, aside').forEach((element) => element.remove());
+  const title = document.title?.trim() || url;
+  const markdown =
+    (document.querySelector('main, article, [role="main"]') || document.body)?.textContent?.replace(/\s+/g, ' ').trim() || '';
   return {
     title,
-    summary: article?.excerpt?.trim() || description,
+    summary: description || summarizeShareText(markdown),
     siteName,
     author,
     publishedAt,
