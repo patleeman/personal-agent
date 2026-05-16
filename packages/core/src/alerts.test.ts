@@ -104,6 +104,30 @@ describe('alerts', () => {
     );
   });
 
+  it('rejects invalid mutation timestamps', () => {
+    const stateRoot = createTempDir('pa-alerts-');
+
+    expect(() =>
+      upsertAlert({
+        stateRoot,
+        profile: 'datadog',
+        alert: {
+          id: 'wakeup-1',
+          profile: 'datadog',
+          kind: 'deferred-resume',
+          severity: 'disruptive',
+          status: 'active',
+          title: 'Watch the prod gates',
+          body: 'Approve the kube changes when the prompt appears.',
+          createdAt: 'not-a-date',
+          sourceKind: 'queue-followup-tool',
+          sourceId: 'resume_123',
+          requiresAck: true,
+        },
+      }),
+    ).toThrow('Invalid alert createdAt');
+  });
+
   it('acknowledges and dismisses alerts without losing the durable record', () => {
     const stateRoot = createTempDir('pa-alerts-');
 

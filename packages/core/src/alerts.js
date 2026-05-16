@@ -23,6 +23,19 @@ function normalizeIsoTimestamp(value, fallback) {
   }
   return new Date().toISOString();
 }
+function requireIsoTimestamp(value, label, fallback) {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  if (fallback) {
+    return fallback;
+  }
+  throw new Error(`${label} is required`);
+}
 function normalizeOptionalString(value) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
@@ -179,8 +192,8 @@ export function getAlert(options) {
 }
 export function upsertAlert(options) {
   const state = loadAlertState(options);
-  const createdAt = normalizeIsoTimestamp(options.alert.createdAt);
-  const updatedAt = normalizeIsoTimestamp(options.alert.updatedAt, createdAt);
+  const createdAt = requireIsoTimestamp(options.alert.createdAt, 'alert createdAt');
+  const updatedAt = requireIsoTimestamp(options.alert.updatedAt, 'alert updatedAt', createdAt);
   const next = {
     ...options.alert,
     profile: normalizeRuntimeScope(options.alert.profile),
@@ -197,7 +210,7 @@ export function acknowledgeAlert(options) {
   if (!existing) {
     return undefined;
   }
-  const at = normalizeIsoTimestamp(options.at, new Date().toISOString());
+  const at = requireIsoTimestamp(options.at, 'alert acknowledgedAt', new Date().toISOString());
   existing.status = 'acknowledged';
   existing.updatedAt = at;
   existing.acknowledgedAt = at;
@@ -210,7 +223,7 @@ export function dismissAlert(options) {
   if (!existing) {
     return undefined;
   }
-  const at = normalizeIsoTimestamp(options.at, new Date().toISOString());
+  const at = requireIsoTimestamp(options.at, 'alert dismissedAt', new Date().toISOString());
   existing.status = 'dismissed';
   existing.updatedAt = at;
   existing.dismissedAt = at;
