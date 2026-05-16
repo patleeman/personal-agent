@@ -1,6 +1,6 @@
 import type { FileTreeContextMenuOpenContext } from '@pierre/trees';
 import type { CSSProperties, DragEvent, ReactNode } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ConversationStatusText } from '../components/ConversationStatusText';
 import { timeAgoCompact } from '../shared/utils';
@@ -92,11 +92,30 @@ export function ActivityTreeView({
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [contextMenu, setContextMenu] = useState<ActivityTreeContextMenuState | null>(null);
+  const contextMenuRootRef = useRef<HTMLDivElement | null>(null);
   const draggedItemIdRef = useRef<string | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ itemId: string; position: ActivityTreeDropPosition } | null>(null);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  useEffect(() => {
+    if (!contextMenu || typeof document === 'undefined') return;
+
+    const closeIfOutsideMenu = (event: MouseEvent | PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && contextMenuRootRef.current?.contains(target)) return;
+      closeContextMenu();
+    };
+
+    document.addEventListener('pointerdown', closeIfOutsideMenu, true);
+    document.addEventListener('contextmenu', closeIfOutsideMenu, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeIfOutsideMenu, true);
+      document.removeEventListener('contextmenu', closeIfOutsideMenu, true);
+    };
+  }, [closeContextMenu, contextMenu]);
+
   const toggleGroupCollapsed = useCallback(
     (item: ActivityTreeItem) => {
       if (collapsedGroupItemIds && onToggleGroupItem) {
@@ -396,6 +415,7 @@ export function ActivityTreeView({
       </div>
       {contextMenu && renderContextMenu ? (
         <div
+          ref={contextMenuRootRef}
           data-file-tree-context-menu-root="true"
           className="fixed z-[1000]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
