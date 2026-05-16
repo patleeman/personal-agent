@@ -56,7 +56,7 @@ Each release command performs these steps in order:
 6. **Notarize** — submits the built `.app` for Apple notarization
 7. **Smoke test** — launches the built app in an isolated environment and verifies basic functionality
 8. **Git push** — pushes the version commit and tag to the remote
-9. **GitHub release** — creates or updates the matching release in the releases repository
+9. **GitHub release** — creates or updates the matching release in the releases repository, using the matching `CHANGELOG.md` section as the release notes
 
 ## Automated Smoke Test
 
@@ -98,7 +98,7 @@ If the version bump and build succeeded but the publish step failed:
 pnpm run release:publish
 ```
 
-This runs the smoke test, push, and GitHub release creation without repeating the version bump, changelog update, and build steps. For non-interactive reruns of an already-tested build, set `PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1`.
+This runs the smoke test, push, and GitHub release creation without repeating the version bump, changelog update, and build steps. The publish step reads the matching `CHANGELOG.md` section and fails if it is missing, so GitHub release notes stay aligned with the changelog. For non-interactive reruns of an already-tested build, set `PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1`.
 
 ## Release artifacts
 

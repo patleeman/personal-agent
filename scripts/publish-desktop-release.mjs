@@ -86,6 +86,35 @@ function readJsonFile(pathname) {
   return JSON.parse(readFileSync(pathname, 'utf8'));
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function getChangelogReleaseNotes(version) {
+  const changelogPath = resolve(repoRoot, 'CHANGELOG.md');
+  if (!existsSync(changelogPath)) {
+    fail('CHANGELOG.md does not exist; cannot build GitHub release notes.');
+  }
+
+  const changelog = readFileSync(changelogPath, 'utf8');
+  const headingPattern = new RegExp(`^##\\s+v?${escapeRegExp(version)}(?:\\s|$).*$`, 'mu');
+  const headingMatch = headingPattern.exec(changelog);
+  if (!headingMatch) {
+    fail(`CHANGELOG.md does not contain a release section for ${version}.`);
+  }
+
+  const sectionStart = headingMatch.index;
+  const remaining = changelog.slice(sectionStart + headingMatch[0].length);
+  const nextHeadingMatch = /^##\s+/mu.exec(remaining);
+  const sectionEnd = nextHeadingMatch ? sectionStart + headingMatch[0].length + nextHeadingMatch.index : changelog.length;
+  const section = changelog.slice(sectionStart, sectionEnd).trim();
+  if (!section) {
+    fail(`CHANGELOG.md release section for ${version} is empty.`);
+  }
+
+  return section;
+}
+
 function parseEnvFile(content) {
   const parsed = {};
 
@@ -711,7 +740,7 @@ const releaseProductName = packagedAppPath
       ?.replace(/\.app$/u, '') || 'Personal Agent'
   : 'Personal Agent';
 const releaseNotes = [
-  `Signed desktop release artifacts for ${releaseProductName} ${version}.`,
+  getChangelogReleaseNotes(version),
   '',
   'Release assets and update metadata are hosted alongside the source repo.',
 ].join('\n');
