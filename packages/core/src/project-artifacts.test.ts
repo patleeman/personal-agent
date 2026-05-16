@@ -38,6 +38,18 @@ function createTempDir(): string {
 }
 
 describe('project artifacts', () => {
+  it('rejects invalid project timestamps when creating the default document', () => {
+    expect(() =>
+      createInitialProject({
+        id: 'artifact-model',
+        ownerProfile: 'assistant',
+        title: 'Durable artifact model',
+        description: 'Create a durable artifact model.',
+        createdAt: 'not-a-date',
+      }),
+    ).toThrow('Invalid Project createdAt');
+  });
+
   it('creates the simplified default project document', () => {
     const project = createInitialProject({
       id: 'artifact-model',
@@ -169,6 +181,18 @@ status: created
 });
 
 describe('project activity artifacts', () => {
+  it('rejects invalid activity timestamps', () => {
+    expect(() =>
+      createProjectActivityEntry({
+        id: 'daily-report',
+        createdAt: 'not-a-date',
+        profile: 'datadog',
+        kind: 'scheduled-task',
+        summary: 'Daily report completed.',
+      }),
+    ).toThrow('Invalid Activity createdAt');
+  });
+
   it('creates the default activity document', () => {
     const entry = createProjectActivityEntry({
       id: 'daily-report',

@@ -98,6 +98,15 @@ function assertNonEmptyText(value: string, label: string): string {
   return trimmed;
 }
 
+function normalizeIsoTimestamp(value: string, label: string): string {
+  const normalized = assertNonEmptyText(value, label);
+  const parsed = Date.parse(normalized);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${label}: ${normalized}`);
+  }
+  return new Date(parsed).toISOString();
+}
+
 function normalizeOptionalText(value: string | undefined, label: string): string | undefined {
   if (value === undefined) {
     return undefined;
@@ -289,8 +298,8 @@ export function createInitialProject(input: {
   const title = assertNonEmptyText(input.title, 'Project title');
   const description = assertNonEmptyText(input.description, 'Project description');
   const repoRoot = normalizeOptionalText(input.repoRoot, 'Project repoRoot');
-  const createdAt = assertNonEmptyText(input.createdAt, 'Project createdAt');
-  const updatedAt = assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Project updatedAt');
+  const createdAt = normalizeIsoTimestamp(input.createdAt, 'Project createdAt');
+  const updatedAt = normalizeIsoTimestamp(input.updatedAt ?? input.createdAt, 'Project updatedAt');
 
   return {
     id: assertNonEmptyText(input.id, 'Project id'),
@@ -810,7 +819,7 @@ export function createProjectActivityEntry(input: {
 }): ProjectActivityEntryDocument {
   return {
     id: assertNonEmptyText(input.id, 'Activity id'),
-    createdAt: assertNonEmptyText(input.createdAt, 'Activity createdAt'),
+    createdAt: normalizeIsoTimestamp(input.createdAt, 'Activity createdAt'),
     profile: assertNonEmptyText(input.profile, 'Activity profile'),
     kind: assertNonEmptyText(input.kind, 'Activity kind'),
     summary: assertNonEmptyText(input.summary, 'Activity summary'),
