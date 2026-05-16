@@ -4062,7 +4062,7 @@ export function Sidebar() {
               {sidebarNotice.text}
             </div>
           ) : null}
-          <div className="border-t border-border-subtle px-2 py-2 space-y-0.5">
+          <div className="border-t border-border-subtle px-0 py-2 space-y-0.5">
             {settingsNavItems.map((item) => (
               <TopNavItem
                 key={`${item.extensionId}:${item.id}`}
