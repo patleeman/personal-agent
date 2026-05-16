@@ -45,6 +45,21 @@ describe('task callback bindings', () => {
     );
   });
 
+  it('rejects invalid updatedAt timestamps when setting bindings', () => {
+    const stateRoot = createTempDir('pa-task-callbacks-');
+
+    expect(() =>
+      setTaskCallbackBinding({
+        stateRoot,
+        profile: 'datadog',
+        taskId: 'watch-prod-gates',
+        conversationId: 'conv-123',
+        sessionFile: '/tmp/conv-123.jsonl',
+        updatedAt: 'not-a-date',
+      }),
+    ).toThrow('Invalid task callback updatedAt');
+  });
+
   it('clears bindings cleanly', () => {
     const stateRoot = createTempDir('pa-task-callbacks-');
 

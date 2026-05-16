@@ -40,6 +40,18 @@ function normalizeIsoTimestamp(value: unknown, fallback: string): string {
   return fallback;
 }
 
+function requireIsoTimestamp(value: unknown, label: string, fallback: string): string {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+
+  return fallback;
+}
+
 function normalizeNotify(value: unknown): AlertSeverity | 'none' {
   if (value === 'passive' || value === 'disruptive' || value === 'none') {
     return value;
@@ -174,7 +186,7 @@ export function setTaskCallbackBinding(options: {
 }): TaskCallbackBinding {
   const bindings = loadTaskCallbackBindings(options);
   const existing = bindings[options.taskId];
-  const timestamp = normalizeIsoTimestamp(options.updatedAt, new Date().toISOString());
+  const timestamp = requireIsoTimestamp(options.updatedAt, 'task callback updatedAt', new Date().toISOString());
   const next: TaskCallbackBinding = {
     taskId: options.taskId,
     profile: normalizeRuntimeScope(options.profile),

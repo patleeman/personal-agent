@@ -17,6 +17,16 @@ function normalizeIsoTimestamp(value, fallback) {
   }
   return fallback;
 }
+function requireIsoTimestamp(value, label, fallback) {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return fallback;
+}
 function normalizeNotify(value) {
   if (value === 'passive' || value === 'disruptive' || value === 'none') {
     return value;
@@ -114,7 +124,7 @@ export function getTaskCallbackBinding(options) {
 export function setTaskCallbackBinding(options) {
   const bindings = loadTaskCallbackBindings(options);
   const existing = bindings[options.taskId];
-  const timestamp = normalizeIsoTimestamp(options.updatedAt, new Date().toISOString());
+  const timestamp = requireIsoTimestamp(options.updatedAt, 'task callback updatedAt', new Date().toISOString());
   const next = {
     taskId: options.taskId,
     profile: normalizeRuntimeScope(options.profile),
