@@ -261,6 +261,59 @@ describe('openai native compaction extension', () => {
     expect(notify).toHaveBeenCalledWith(`Using OpenAI compaction for ${OPENAI_MODEL.provider}/${OPENAI_MODEL.id}`, 'info');
   });
 
+  it('does not crash if UI notifications are unavailable while reusing native history', () => {
+    const harness = createPiHarness();
+    openaiNativeCompactionExtension(harness.pi as never);
+
+    const beforeProviderRequest =
+      harness.getHandler<
+        (event: { payload: Record<string, unknown> }, ctx: Record<string, unknown>) => Record<string, unknown> | undefined
+      >('before_provider_request');
+
+    const result = beforeProviderRequest(
+      {
+        payload: {
+          model: OPENAI_MODEL.id,
+          input: [
+            { role: 'system', content: 'system prompt' },
+            { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Current prompt' }] },
+          ],
+        },
+      },
+      {
+        model: OPENAI_MODEL,
+        hasUI: true,
+        sessionManager: {
+          getSessionId: () => 'session-native-no-ui',
+          getBranch: () => [
+            {
+              id: 'compaction-1',
+              type: 'compaction',
+              summary: 'Portable summary',
+              details: {
+                nativeCompaction: {
+                  version: 1,
+                  provider: 'openai-responses-compact',
+                  modelKey: modelKey(OPENAI_MODEL),
+                  replacementHistory: [
+                    {
+                      type: 'message',
+                      role: 'assistant',
+                      content: [{ type: 'output_text', text: 'Native compacted context' }],
+                    },
+                  ],
+                },
+              },
+            },
+            userMessageEntry('user-1', 'Current prompt'),
+          ],
+        },
+      },
+    );
+
+    expect(result).toBeDefined();
+  });
+
   it('removes invalid image URLs from native replay history', () => {
     const state = reconstructNativeState(
       [

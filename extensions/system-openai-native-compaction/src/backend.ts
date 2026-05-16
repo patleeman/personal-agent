@@ -73,11 +73,11 @@ function cloneJson<T>(value: T): T {
 }
 
 function notify(
-  ctx: { hasUI: boolean; ui: { notify(message: string, level: 'info' | 'warning' | 'error'): void } },
+  ctx: { hasUI: boolean; ui?: { notify?(message: string, level: 'info' | 'warning' | 'error'): void } },
   message: string,
   level: 'info' | 'warning' | 'error' = 'info',
 ): void {
-  if (ctx.hasUI) ctx.ui.notify(message, level);
+  if (ctx.hasUI) ctx.ui?.notify?.(message, level);
 }
 
 function getSessionId(ctx: { sessionManager: { getSessionId(): string } }): string {
