@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Provide localStorage before module-level code runs
 vi.hoisted(() => {
   let store: Record<string, string> = {};
-  (globalThis as any).localStorage = {
+  (globalThis as unknown).localStorage = {
     getItem: (key: string) => store[key] ?? null,
     setItem: (key: string, value: string) => {
       store[key] = String(value);

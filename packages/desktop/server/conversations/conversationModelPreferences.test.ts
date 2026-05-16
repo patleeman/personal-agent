@@ -18,7 +18,7 @@ function createTestModel(input: {
   api?: 'openai-responses' | 'openai-codex-responses' | 'openai-completions';
   provider?: string;
   reasoning?: boolean;
-}): Model<any> {
+}): Model<unknown> {
   return {
     id: input.id,
     name: input.id,

@@ -13,10 +13,10 @@ import {
 } from './agent.js';
 
 function createSession(overrides?: { prompt?: () => Promise<void>; messages?: unknown[]; emitText?: boolean }) {
-  const subscribers: Array<(event: any) => void> = [];
+  const subscribers: Array<(event: unknown) => void> = [];
   const session = {
     messages: overrides?.messages ?? [],
-    subscribe: vi.fn((handler: (event: any) => void) => {
+    subscribe: vi.fn((handler: (event: unknown) => void) => {
       subscribers.push(handler);
       return () => undefined;
     }),
@@ -205,14 +205,10 @@ describe('extension agent backend API', () => {
   });
 
   it('aborts and disposes the session when a task times out', async () => {
-    vi.useFakeTimers();
     const session = createSession({ prompt: () => new Promise(() => undefined) });
     installImporter({ session });
 
-    const assertion = expect(runAgentTask({ prompt: 'Describe', timeoutMs: 10 }, createCtx())).rejects.toThrow('timed out after 10ms');
-    await vi.advanceTimersByTimeAsync(10);
-
-    await assertion;
+    await expect(runAgentTask({ prompt: 'Describe', timeoutMs: 1 }, createCtx())).rejects.toThrow('timed out after 1ms');
     expect(session.abort).toHaveBeenCalled();
     expect(session.dispose).toHaveBeenCalled();
   });

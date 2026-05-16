@@ -56,12 +56,12 @@ describe('app telemetry routes', () => {
   });
 
   it('accepts renderer telemetry events', () => {
-    const routes: Record<string, (req: any, res: any) => void> = {};
+    const routes: Record<string, (req: unknown, res: unknown) => void> = {};
     registerAppTelemetryRoutes({
-      get: (path: string, handler: any) => {
+      get: (path: string, handler: unknown) => {
         routes[path] = handler;
       },
-      post: (path: string, handler: any) => {
+      post: (path: string, handler: unknown) => {
         routes[path] = handler;
       },
     });
@@ -89,7 +89,7 @@ describe('app telemetry routes', () => {
   });
 
   it('reports telemetry log diagnostics', () => {
-    const routes: Record<string, (req: any, res: any) => void> = {};
+    const routes: Record<string, (req: unknown, res: unknown) => void> = {};
     const files = [
       {
         path: '/tmp/pa/logs/telemetry/app-telemetry-2026-05-14.jsonl',
@@ -100,8 +100,8 @@ describe('app telemetry routes', () => {
     ];
     listAppTelemetryLogFilesMock.mockReturnValue(files);
     registerAppTelemetryRoutes({
-      get: (path: string, handler: any) => void (routes[path] = handler),
-      post: (path: string, handler: any) => void (routes[path] = handler),
+      get: (path: string, handler: unknown) => void (routes[path] = handler),
+      post: (path: string, handler: unknown) => void (routes[path] = handler),
     });
     const json = vi.fn();
 
@@ -111,7 +111,7 @@ describe('app telemetry routes', () => {
   });
 
   it('exports telemetry log bundles', () => {
-    const routes: Record<string, (req: any, res: any) => void> = {};
+    const routes: Record<string, (req: unknown, res: unknown) => void> = {};
     exportAppTelemetryLogBundleMock.mockReturnValue({
       path: '/tmp/pa/exports/telemetry/app-telemetry.jsonl',
       fileCount: 1,
@@ -119,8 +119,8 @@ describe('app telemetry routes', () => {
       sizeBytes: 99,
     });
     registerAppTelemetryRoutes({
-      get: (path: string, handler: any) => void (routes[path] = handler),
-      post: (path: string, handler: any) => void (routes[path] = handler),
+      get: (path: string, handler: unknown) => void (routes[path] = handler),
+      post: (path: string, handler: unknown) => void (routes[path] = handler),
     });
     const status = vi.fn().mockReturnThis();
     const json = vi.fn();
@@ -138,10 +138,10 @@ describe('app telemetry routes', () => {
   });
 
   it('runs telemetry database maintenance', () => {
-    const routes: Record<string, (req: any, res: any) => void> = {};
+    const routes: Record<string, (req: unknown, res: unknown) => void> = {};
     registerAppTelemetryRoutes({
-      get: (path: string, handler: any) => void (routes[path] = handler),
-      post: (path: string, handler: any) => void (routes[path] = handler),
+      get: (path: string, handler: unknown) => void (routes[path] = handler),
+      post: (path: string, handler: unknown) => void (routes[path] = handler),
     });
     const json = vi.fn();
 
@@ -162,10 +162,10 @@ describe('app telemetry routes', () => {
   });
 
   it('rejects events missing category or name', () => {
-    const routes: Record<string, (req: any, res: any) => void> = {};
+    const routes: Record<string, (req: unknown, res: unknown) => void> = {};
     registerAppTelemetryRoutes({
-      get: (path: string, handler: any) => void (routes[path] = handler),
-      post: (path: string, handler: any) => void (routes[path] = handler),
+      get: (path: string, handler: unknown) => void (routes[path] = handler),
+      post: (path: string, handler: unknown) => void (routes[path] = handler),
     });
     const status = vi.fn().mockReturnThis();
     const json = vi.fn();

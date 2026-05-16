@@ -1,6 +1,6 @@
-import { cx, Keycap } from '@personal-agent/extensions/ui';
-import { summarizeConversationCwd, timeAgo } from '@personal-agent/extensions/data';
 import type { RelatedConversationSearchResult } from '@personal-agent/extensions/data';
+import { summarizeConversationCwd, timeAgo } from '@personal-agent/extensions/data';
+import { cx, Keycap } from '@personal-agent/extensions/ui';
 
 const DEFAULT_RELATED_THREAD_HOTKEY_LIMIT = 9;
 const WEAK_SELECTED_RELATED_THREAD_SCORE = 6;

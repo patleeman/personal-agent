@@ -24,7 +24,7 @@ describe('LocalApiWorkerClient', () => {
     expect(mockWorkerOn).toHaveBeenCalled();
 
     // message handler should have been registered via .on('message', ...)
-    const messageHandlerCall = mockWorkerOn.mock.calls.find((call: any[]) => call[0] === 'message');
+    const messageHandlerCall = mockWorkerOn.mock.calls.find((call: unknown[]) => call[0] === 'message');
     expect(messageHandlerCall).toBeDefined();
 
     // postMessage should have been called with request

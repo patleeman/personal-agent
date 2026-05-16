@@ -32,7 +32,7 @@ function mockRes() {
   const writeHead = vi.fn();
   const write = vi.fn();
   const end = vi.fn();
-  return { json, status, writeHead, write, end, headersSent: false } as any;
+  return { json, status, writeHead, write, end, headersSent: false } as unknown;
 }
 
 function mockContext() {
@@ -53,8 +53,10 @@ function getHandler(router: ReturnType<typeof mockRouter>, method: 'get' | 'post
 describe('registerWorkspaceExplorerRoutes', () => {
   it('registers all expected routes', () => {
     const router = mockRouter();
-    registerWorkspaceExplorerRoutes(router as any, mockContext());
-    const paths = ['get', 'post', 'put', 'delete'].flatMap((m) => (router as any)[m].mock.calls.map((c: any) => `${m} ${c[0]}`)).sort();
+    registerWorkspaceExplorerRoutes(router as unknown, mockContext());
+    const paths = ['get', 'post', 'put', 'delete']
+      .flatMap((m) => (router as unknown)[m].mock.calls.map((c: unknown) => `${m} ${c[0]}`))
+      .sort();
     expect(paths).toContain('get /api/workspace/tree');
     expect(paths).toContain('get /api/workspace/file');
     expect(paths).toContain('get /api/workspace/diff');
@@ -69,9 +71,9 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('GET /api/workspace/tree', () => {
     it('returns directory listing', async () => {
-      vi.mocked(workspace.listWorkspaceDirectory).mockReturnValue([{ name: 'src', type: 'dir' }] as any);
+      vi.mocked(workspace.listWorkspaceDirectory).mockReturnValue([{ name: 'src', type: 'dir' }] as unknown);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/tree');
       const res = mockRes();
       await h({ query: { cwd: '/repo' } }, res);
@@ -81,7 +83,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
     it('returns 400 when cwd resolution fails', async () => {
       const ctx = { getDefaultWebCwd: () => '/repo', resolveRequestedCwd: () => null };
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, ctx);
+      registerWorkspaceExplorerRoutes(router as unknown, ctx);
       const h = getHandler(router, 'get', '/api/workspace/tree');
       const res = mockRes();
       await h({ query: { cwd: '../escape' } }, res);
@@ -92,9 +94,9 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('GET /api/workspace/file', () => {
     it('returns file content', async () => {
-      vi.mocked(workspace.readWorkspaceFile).mockReturnValue({ content: 'hello' } as any);
+      vi.mocked(workspace.readWorkspaceFile).mockReturnValue({ content: 'hello' } as unknown);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/file');
       const res = mockRes();
       await h({ query: { cwd: '/repo', path: 'src/index.ts' } }, res);
@@ -103,7 +105,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
     it('returns 400 when path missing', async () => {
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/file');
       const res = mockRes();
       await h({ query: { cwd: '/repo' } }, res);
@@ -114,9 +116,9 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('PUT /api/workspace/file', () => {
     it('writes file content', async () => {
-      vi.mocked(workspace.writeWorkspaceFile).mockReturnValue({ ok: true } as any);
+      vi.mocked(workspace.writeWorkspaceFile).mockReturnValue({ ok: true } as unknown);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'put', '/api/workspace/file');
       const res = mockRes();
       await h({ body: { cwd: '/repo', path: 'src/test.txt', content: 'hi' } }, res);
@@ -125,7 +127,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
     it('returns 400 when path or content missing', async () => {
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'put', '/api/workspace/file');
       const res = mockRes();
       await h({ body: { cwd: '/repo' } }, res);
@@ -135,9 +137,9 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('DELETE /api/workspace/path', () => {
     it('deletes a path', async () => {
-      vi.mocked(workspace.deleteWorkspacePath).mockReturnValue({ ok: true } as any);
+      vi.mocked(workspace.deleteWorkspacePath).mockReturnValue({ ok: true } as unknown);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'delete', '/api/workspace/path');
       const res = mockRes();
       await h({ query: { cwd: '/repo', path: 'old-file.ts' } }, res);
@@ -146,7 +148,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
     it('returns 400 when path missing', async () => {
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'delete', '/api/workspace/path');
       const res = mockRes();
       await h({ query: { cwd: '/repo' } }, res);
@@ -156,9 +158,9 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('POST /api/workspace/folder', () => {
     it('creates a folder', async () => {
-      vi.mocked(workspace.createWorkspaceFolder).mockReturnValue({ path: 'new-folder' } as any);
+      vi.mocked(workspace.createWorkspaceFolder).mockReturnValue({ path: 'new-folder' } as unknown);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'post', '/api/workspace/folder');
       const res = mockRes();
       await h({ body: { cwd: '/repo', path: 'new-folder' } }, res);
@@ -168,9 +170,9 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
   describe('POST /api/workspace/rename', () => {
     it('renames a path', async () => {
-      vi.mocked(workspace.renameWorkspacePath).mockReturnValue({ ok: true } as any);
+      vi.mocked(workspace.renameWorkspacePath).mockReturnValue({ ok: true } as unknown);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'post', '/api/workspace/rename');
       const res = mockRes();
       await h({ body: { cwd: '/repo', path: 'old', newName: 'new' } }, res);
@@ -179,7 +181,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
 
     it('returns 400 when newName missing', async () => {
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'post', '/api/workspace/rename');
       const res = mockRes();
       await h({ body: { cwd: '/repo', path: 'old' } }, res);
@@ -191,7 +193,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
     it('returns diff or empty state', async () => {
       vi.mocked(workspace.readUncommittedDiffAsync).mockResolvedValue(null);
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/uncommitted-diff');
       const res = mockRes();
       await h({ query: { cwd: '/repo' } }, res);
@@ -205,7 +207,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
         throw new Error('escapes workspace root');
       });
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/tree');
       const res = mockRes();
       await h({ query: { cwd: '/repo' } }, res);
@@ -217,7 +219,7 @@ describe('registerWorkspaceExplorerRoutes', () => {
         throw new Error('internal error');
       });
       const router = mockRouter();
-      registerWorkspaceExplorerRoutes(router as any, mockContext());
+      registerWorkspaceExplorerRoutes(router as unknown, mockContext());
       const h = getHandler(router, 'get', '/api/workspace/tree');
       const res = mockRes();
       await h({ query: { cwd: '/repo' } }, res);

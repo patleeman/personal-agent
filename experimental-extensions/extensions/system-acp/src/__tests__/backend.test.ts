@@ -86,7 +86,7 @@ function createProtocolHarness(input: Record<string, unknown> = {}) {
       getRepoRoot: () => process.cwd(),
     },
     storage: {
-      get: async (key) => (storage.has(key) ? (storage.get(key) as any) : null),
+      get: async (key) => (storage.has(key) ? (storage.get(key) as unknown) : null),
       put: async (key, value) => {
         storage.set(key, value);
         return { ok: true as const };
@@ -96,7 +96,7 @@ function createProtocolHarness(input: Record<string, unknown> = {}) {
         return { ok: true as const, deleted };
       },
       list: async (prefix = '') =>
-        [...storage.entries()].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, value: value as any })),
+        [...storage.entries()].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, value: value as unknown })),
     },
     runs: {},
     automations: {},

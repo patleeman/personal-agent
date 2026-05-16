@@ -39,7 +39,7 @@ export async function scheduleConversationSearchIndexing(...args: unknown[]) {
 }
 
 export async function searchIndexedConversationDocuments(...args: unknown[]) {
-  return callModuleExport<Array<Record<string, any>>>(
+  return callModuleExport<Array<Record<string, unknown>>>(
     '../../conversations/conversationSearchIndex.js',
     'searchIndexedConversationDocuments',
     ...args,
@@ -63,7 +63,7 @@ export async function readConversationSessionSearchIndexCapability(...args: unkn
 }
 
 export async function readConversationSummary(...args: unknown[]) {
-  return callModuleExport<Record<string, any> | undefined>(
+  return callModuleExport<Record<string, unknown> | undefined>(
     '../../conversations/conversationSummaries.js',
     'readConversationSummary',
     ...args,
@@ -131,11 +131,11 @@ export async function importConversationSession(...args: unknown[]) {
 }
 
 export async function readSessionBlocks(...args: unknown[]) {
-  return callModuleExport<Record<string, any> | undefined>('../../conversations/sessions.js', 'readSessionBlocks', ...args);
+  return callModuleExport<Record<string, unknown> | undefined>('../../conversations/sessions.js', 'readSessionBlocks', ...args);
 }
 
 export async function readSessionMeta(...args: unknown[]) {
-  return callModuleExport<Record<string, any> | undefined>('../../conversations/sessions.js', 'readSessionMeta', ...args);
+  return callModuleExport<Record<string, unknown> | undefined>('../../conversations/sessions.js', 'readSessionMeta', ...args);
 }
 
 export async function persistTraceContextPointerInspect(...args: unknown[]) {

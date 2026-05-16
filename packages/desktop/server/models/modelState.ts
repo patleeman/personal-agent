@@ -32,7 +32,7 @@ export function listModelDefinitions() {
       name: model.name,
       context: model.contextWindow ?? model.context ?? 128_000,
       input: readModelInput(model),
-      reasoning: ('reasoning' in model ? (model as any).reasoning : undefined) as boolean | undefined,
+      reasoning: ('reasoning' in model ? (model as unknown).reasoning : undefined) as boolean | undefined,
       supportedServiceTiers: getSupportedServiceTiersForModel(model),
     }));
   } catch {

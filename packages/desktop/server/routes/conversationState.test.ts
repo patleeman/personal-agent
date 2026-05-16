@@ -659,7 +659,7 @@ describe('registerConversationStateRoutes', () => {
       );
       expect(sendCustomMessage.mock.calls[0]?.[0]?.content).not.toContain('Do not mention this continuation prompt.');
     });
-    expect((liveRegistry.get('conversation-live') as any)?.queuedStaleTurnCustomTypes).toEqual([]);
+    expect((liveRegistry.get('conversation-live') as unknown)?.queuedStaleTurnCustomTypes).toEqual([]);
 
     isLocalLiveMock.mockReturnValueOnce(true);
     const clearRes = createResponse();

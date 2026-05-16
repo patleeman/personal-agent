@@ -25,7 +25,7 @@ const {
   syncWebLiveConversationRunMock,
 } = vi.hoisted(() => {
   const defaultResourceLoaderReloadMock = vi.fn(async () => undefined);
-  const DefaultResourceLoaderMock = vi.fn().mockImplementation(function DefaultResourceLoader(this: any, options: unknown) {
+  const DefaultResourceLoaderMock = vi.fn().mockImplementation(function DefaultResourceLoader(this: unknown, options: unknown) {
     this.options = options;
     this.reload = defaultResourceLoaderReloadMock;
     return this;
@@ -134,7 +134,7 @@ import {
 } from './liveSessions.js';
 
 type MockSessionBundle = {
-  session: any;
+  session: unknown;
   emit: (event: unknown) => void;
 };
 
@@ -143,14 +143,14 @@ function createMockManager(overrides: Record<string, unknown> = {}) {
     persist: true,
     sessionFile: '/tmp/session.jsonl',
     flushed: false,
-    _rewriteFile: vi.fn(function rewriteFile(this: any) {
+    _rewriteFile: vi.fn(function rewriteFile(this: unknown) {
       this.flushed = true;
     }),
     appendModelChange: vi.fn(),
     createBranchedSession: vi.fn(),
     getCwd: vi.fn(() => '/tmp/workspace'),
     getEntry: vi.fn(),
-    getSessionFile: vi.fn(function getSessionFile(this: any) {
+    getSessionFile: vi.fn(function getSessionFile(this: unknown) {
       return this.sessionFile;
     }),
     ...overrides,
@@ -163,7 +163,7 @@ function createMockSession(options: {
   activeToolNames?: string[];
   allTools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
   cwd?: string;
-  manager?: any;
+  manager?: unknown;
   model?: { id: string; provider?: string };
   sessionFile?: string;
   sessionId: string;
@@ -174,14 +174,14 @@ function createMockSession(options: {
   isStreaming?: boolean;
   extensionRunner?: { emitBeforeAgentStart: (prompt: string, images: unknown[] | undefined, systemPrompt: string) => Promise<unknown> };
 }): MockSessionBundle {
-  const listeners = new Set<(event: any) => void>();
+  const listeners = new Set<(event: unknown) => void>();
   const sessionManager =
     options.manager ??
     createMockManager({
       sessionFile: options.sessionFile ?? `/tmp/${options.sessionId}.jsonl`,
       getCwd: vi.fn(() => options.cwd ?? '/tmp/workspace'),
     });
-  const session: any = {
+  const session: unknown = {
     _baseToolRegistry: new Map<string, unknown>(),
     _refreshToolRegistry: vi.fn(),
     _extensionRunner: options.extensionRunner,
@@ -225,7 +225,7 @@ function createMockSession(options: {
       tools: options.tools ?? [],
     },
     steer: vi.fn(async () => undefined),
-    subscribe: vi.fn((listener: (event: any) => void) => {
+    subscribe: vi.fn((listener: (event: unknown) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     }),
@@ -243,7 +243,7 @@ function createMockSession(options: {
   };
 }
 
-function setLiveEntry(sessionId: string, entry: { cwd: string; title: string; session: any }) {
+function setLiveEntry(sessionId: string, entry: { cwd: string; title: string; session: unknown }) {
   registry.set(sessionId, {
     sessionId,
     cwd: entry.cwd,
@@ -260,7 +260,7 @@ function setLiveEntry(sessionId: string, entry: { cwd: string; title: string; se
     controllerSurfaceId: null,
     controllerAcquiredAt: null,
     session: entry.session,
-  } as any);
+  } as unknown);
 }
 
 describe('liveSessions bootstrap helpers', () => {

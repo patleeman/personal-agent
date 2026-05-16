@@ -15,10 +15,10 @@ describe('live session stale turn state', () => {
     state.activeStaleTurnCustomType = 'legacy-active';
 
     expect(hasQueuedOrActiveStaleTurn(state)).toBe(false);
-    expect(clearQueuedStaleTurn(state, { type: 'agent_start' } as any)).toBeNull();
+    expect(clearQueuedStaleTurn(state, { type: 'agent_start' } as unknown)).toBeNull();
     expect(state.queuedStaleTurnCustomTypes).toEqual([]);
     expect(state.activeStaleTurnCustomType).toBeNull();
-    expect(shouldSuppressLiveEventForStaleTurn(state, { type: 'message_update' } as any)).toBe(false);
+    expect(shouldSuppressLiveEventForStaleTurn(state, { type: 'message_update' } as unknown)).toBe(false);
   });
 
   it('clears stale turn state without preserving suppression behavior', () => {
@@ -26,7 +26,7 @@ describe('live session stale turn state', () => {
     state.queuedStaleTurnCustomTypes = ['queued'];
     state.activeStaleTurnCustomType = 'active';
 
-    expect(clearStaleTurnStateAfterTerminalEvent(state, { type: 'turn_end' } as any)).toBe(true);
+    expect(clearStaleTurnStateAfterTerminalEvent(state, { type: 'turn_end' } as unknown)).toBe(true);
     expect(state.queuedStaleTurnCustomTypes).toEqual([]);
     expect(state.activeStaleTurnCustomType).toBeNull();
     expect(hasQueuedOrActiveStaleTurn(state)).toBe(false);

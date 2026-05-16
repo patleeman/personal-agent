@@ -15,7 +15,7 @@ function createEntry(overrides?: Record<string, unknown>) {
       getFollowUpMessages: vi.fn().mockReturnValue([]),
     },
     ...overrides,
-  } as any;
+  } as unknown;
 }
 
 afterEach(() => {

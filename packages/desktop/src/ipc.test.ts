@@ -123,7 +123,7 @@ describe('registerDesktopIpc', () => {
   it('registers a conversation lifecycle handler', () => {
     const calls = mockIpcHandle.mock.calls;
     const conversationHandler = calls.find(
-      (call: any[]) => (call[0] as string).includes('conversation') || (call[0] as string).includes('live-session'),
+      (call: unknown[]) => (call[0] as string).includes('conversation') || (call[0] as string).includes('live-session'),
     );
     expect(conversationHandler).toBeDefined();
   });
@@ -131,14 +131,14 @@ describe('registerDesktopIpc', () => {
   it('registers settings-related handlers', () => {
     const calls = mockIpcHandle.mock.calls;
     const hasSettingsHandler = calls.some(
-      (call: any[]) => (call[0] as string).includes('preferences') || (call[0] as string).includes('default-cwd'),
+      (call: unknown[]) => (call[0] as string).includes('preferences') || (call[0] as string).includes('default-cwd'),
     );
     expect(hasSettingsHandler).toBe(true);
   });
 
   it('registers workbench browser handlers', () => {
     const calls = mockIpcHandle.mock.calls;
-    const hasBrowserHandler = calls.some((call: any[]) => (call[0] as string).includes('workbench-browser'));
+    const hasBrowserHandler = calls.some((call: unknown[]) => (call[0] as string).includes('workbench-browser'));
     expect(hasBrowserHandler).toBe(true);
   });
 });

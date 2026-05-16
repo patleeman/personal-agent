@@ -18,4 +18,4 @@ export interface ExtensionTelemetryEventInput {
   metadata?: Record<string, unknown>;
 }
 
-export const recordTelemetryEvent = (..._args: any[]): any => hostResolved();
+export const recordTelemetryEvent = (..._args: unknown[]): unknown => hostResolved();

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createConversationAutoModeAgentExtension } from './backend.js';
 
-type RegisteredTool = { name: string; execute: (...args: any[]) => Promise<{ content?: Array<{ text?: string }>; details?: unknown }> };
+type RegisteredTool = { name: string; execute: (...args: unknown[]) => Promise<{ content?: Array<{ text?: string }>; details?: unknown }> };
 type AgentEventHandler = (event: unknown, ctx: TestContext) => void | Promise<void>;
 
 interface TestContext {
@@ -39,22 +39,22 @@ function completeGoal(stopReason = 'goal achieved', updatedAt = '2026-05-09T00:0
 }
 
 function createHarness(initialEntries: unknown[] = []) {
-  const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
+  const handlers = new Map<string, Array<(event: unknown, ctx: unknown) => void | Promise<void>>>();
   const registeredTools: RegisteredTool[] = [];
-  const registeredCommands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+  const registeredCommands = new Map<string, { handler: (args: string, ctx: unknown) => Promise<void> }>();
   const entries = [...initialEntries];
   const appendEntry = vi.fn((customType: string, data: unknown) => entries.push(customEntry(customType, data)));
   const sendMessage = vi.fn();
   const sendUserMessage = vi.fn();
   const pi = {
     registerTool: vi.fn((tool: RegisteredTool) => registeredTools.push(tool)),
-    registerCommand: vi.fn((name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) => {
+    registerCommand: vi.fn((name: string, command: { handler: (args: string, ctx: unknown) => Promise<void> }) => {
       registeredCommands.set(name, command);
     }),
     sendMessage,
     sendUserMessage,
     appendEntry,
-    on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
+    on: vi.fn((name: string, handler: (event: unknown, ctx: unknown) => void | Promise<void>) => {
       handlers.set(name, [...(handlers.get(name) ?? []), handler]);
     }),
   } as unknown as ExtensionAPI;

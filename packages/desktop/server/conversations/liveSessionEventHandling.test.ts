@@ -31,10 +31,10 @@ describe('streaming lifecycle callbacks', () => {
   function makeEntry(overrides: Record<string, unknown> = {}) {
     return {
       sessionId: 'sess-1',
-      session: {} as any,
+      session: {} as unknown,
       title: 'Test',
       ...overrides,
-    } as any;
+    } as unknown;
   }
 
   function makeCallbacks() {
@@ -61,7 +61,7 @@ describe('streaming lifecycle callbacks', () => {
   it('agent_start marks durable run as running and syncs running state', () => {
     const entry = makeEntry();
     const cbs = makeCallbacks();
-    handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
+    handleLiveSessionEvent(entry, { type: 'agent_start' } as unknown, cbs);
     expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'running');
     expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
   });
@@ -73,7 +73,7 @@ describe('streaming lifecycle callbacks', () => {
       traceRunStepCount: 0,
     });
     const cbs = makeCallbacks();
-    handleLiveSessionEvent(entry, { type: 'agent_end', messages: [] } as any, cbs);
+    handleLiveSessionEvent(entry, { type: 'agent_end', messages: [] } as unknown, cbs);
     expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'waiting');
     expect(cbs.clearContextUsageTimer).toHaveBeenCalled();
     expect(cbs.broadcastContextUsage).toHaveBeenCalled();
@@ -82,7 +82,7 @@ describe('streaming lifecycle callbacks', () => {
   it('turn_end keeps the durable run active and notifies lifecycle handlers', () => {
     const entry = makeEntry();
     const cbs = makeCallbacks();
-    handleLiveSessionEvent(entry, { type: 'turn_end', message: {}, toolResults: [] } as any, cbs);
+    handleLiveSessionEvent(entry, { type: 'turn_end', message: {}, toolResults: [] } as unknown, cbs);
     expect(cbs.syncDurableConversationRun).not.toHaveBeenCalledWith(entry, 'waiting');
     expect(cbs.notifyLifecycleHandlers).toHaveBeenCalledWith(entry, 'turn_end');
     expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
@@ -93,7 +93,7 @@ describe('streaming lifecycle callbacks', () => {
     const entry = makeEntry({ title: 'Old title' });
     const cbs = makeCallbacks();
 
-    handleLiveSessionEvent(entry, { type: 'session_info_changed', name: 'New title' } as any, cbs);
+    handleLiveSessionEvent(entry, { type: 'session_info_changed', name: 'New title' } as unknown, cbs);
 
     expect(entry.title).toBe('New title');
     expect(cbs.broadcastTitle).toHaveBeenCalledWith(entry);
@@ -106,7 +106,7 @@ describe('streaming lifecycle callbacks', () => {
       { type: 'tool_execution_start', toolCallId: 'tc-1', toolName: 'bash', args: {} },
       { type: 'message_update', message: {}, assistantMessageEvent: { type: 'text_delta', delta: 'hi' } },
       { type: 'tool_execution_end', toolCallId: 'tc-1', toolName: 'bash', result: { exitCode: 0 }, isError: false },
-    ] as any;
+    ] as unknown;
     for (const event of events) handleLiveSessionEvent(entry, event, cbs);
     expect(cbs.syncRunningState).toHaveBeenCalledTimes(events.length);
     expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
@@ -115,9 +115,9 @@ describe('streaming lifecycle callbacks', () => {
   it('agent_start then agent_end broadcasts to subscribers via broadcast', () => {
     const entry = makeEntry({ traceRunStartedAtMs: Date.now(), traceRunTurnCount: 0, traceRunStepCount: 0 });
     const cbs = makeCallbacks();
-    handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
-    handleLiveSessionEvent(entry, { type: 'agent_end', messages: [] } as any, cbs);
-    const broadcastedTypes = cbs.broadcast.mock.calls.map((c: any[]) => c[1]?.type);
+    handleLiveSessionEvent(entry, { type: 'agent_start' } as unknown, cbs);
+    handleLiveSessionEvent(entry, { type: 'agent_end', messages: [] } as unknown, cbs);
+    const broadcastedTypes = cbs.broadcast.mock.calls.map((c: unknown[]) => c[1]?.type);
     expect(broadcastedTypes).toContain('agent_start');
     expect(broadcastedTypes).toContain('agent_end');
   });
@@ -135,7 +135,7 @@ describe('streaming lifecycle callbacks', () => {
           errorMessage: 'server overloaded',
           content: [],
         },
-      } as any,
+      } as unknown,
       cbs,
     );
     expect(entry.currentTurnError).toBe('server overloaded');
@@ -153,7 +153,7 @@ describe('streaming lifecycle callbacks', () => {
           stopReason: 'stop',
           content: [{ type: 'text', text: 'Done.' }],
         },
-      } as any,
+      } as unknown,
       cbs,
     );
     expect(entry.currentTurnError).toBeNull();
@@ -162,7 +162,7 @@ describe('streaming lifecycle callbacks', () => {
   it('schedules context usage update on agent_start, message_update, and tool events', () => {
     const entry = makeEntry();
     const cbs = makeCallbacks();
-    const events: any[] = [
+    const events: unknown[] = [
       { type: 'agent_start' },
       { type: 'message_update', message: {}, assistantMessageEvent: { type: 'text_delta', delta: 'hi' } },
       { type: 'tool_execution_start', toolCallId: 'tc-1', toolName: 'bash', args: {} },
@@ -176,7 +176,7 @@ describe('trace persistence hooks', () => {
   const mockSession = {
     sessionId: 'test-session',
     title: 'Test conversation',
-  } as any;
+  } as unknown;
 
   const mockCallbacks = {
     maybeAutoTitleConversation: vi.fn(),
@@ -208,7 +208,7 @@ describe('trace persistence hooks', () => {
       session: mockSession,
       title: 'Test conversation',
       traceRunId: 'run-1',
-    } as any;
+    } as unknown;
 
     // First fire tool_execution_start to set up the timer
     handleLiveSessionEvent(
@@ -218,7 +218,7 @@ describe('trace persistence hooks', () => {
         toolCallId: 'tc-1',
         toolName: 'bash',
         args: { command: 'git status --short' },
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -231,7 +231,7 @@ describe('trace persistence hooks', () => {
         toolName: 'bash',
         result: { exitCode: 0 },
         isError: false,
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -251,7 +251,7 @@ describe('trace persistence hooks', () => {
       sessionId: 'test-session',
       session: mockSession,
       title: 'Test conversation',
-    } as any;
+    } as unknown;
 
     handleLiveSessionEvent(
       entry,
@@ -260,7 +260,7 @@ describe('trace persistence hooks', () => {
         toolCallId: 'tc-2',
         toolName: 'read',
         args: { path: '/nonexistent' },
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -272,7 +272,7 @@ describe('trace persistence hooks', () => {
         toolName: 'read',
         result: 'File not found',
         isError: true,
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -288,7 +288,7 @@ describe('trace persistence hooks', () => {
       sessionId: 'test-session',
       session: mockSession,
       title: 'Test conversation',
-    } as any;
+    } as unknown;
 
     handleLiveSessionEvent(
       entry,
@@ -297,7 +297,7 @@ describe('trace persistence hooks', () => {
         toolCallId: 'tc-json-error',
         toolName: 'bash',
         args: { command: 'npm test' },
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -309,7 +309,7 @@ describe('trace persistence hooks', () => {
         toolName: 'bash',
         result: { exitCode: 1, stderr: 'failed' },
         isError: true,
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -323,7 +323,7 @@ describe('trace persistence hooks', () => {
       session: mockSession,
       title: 'Test conversation',
       isCompacting: true,
-    } as any;
+    } as unknown;
 
     handleLiveSessionEvent(
       entry,
@@ -333,7 +333,7 @@ describe('trace persistence hooks', () => {
         aborted: false,
         willRetry: false,
         result: { tokensBefore: 120000, summary: 'test' },
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -350,7 +350,7 @@ describe('trace persistence hooks', () => {
       session: mockSession,
       title: 'Test',
       isCompacting: true,
-    } as any;
+    } as unknown;
 
     handleLiveSessionEvent(
       entry,
@@ -360,7 +360,7 @@ describe('trace persistence hooks', () => {
         aborted: true,
         willRetry: false,
         result: undefined,
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -372,7 +372,7 @@ describe('trace persistence hooks', () => {
       sessionId: 'test-session',
       session: mockSession,
       title: 'Test',
-    } as any;
+    } as unknown;
 
     // Start two tools
     handleLiveSessionEvent(
@@ -382,7 +382,7 @@ describe('trace persistence hooks', () => {
         toolCallId: 'tc-a',
         toolName: 'bash',
         args: {},
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -393,7 +393,7 @@ describe('trace persistence hooks', () => {
         toolCallId: 'tc-b',
         toolName: 'edit',
         args: {},
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -406,7 +406,7 @@ describe('trace persistence hooks', () => {
         toolName: 'edit',
         result: {},
         isError: false,
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -418,7 +418,7 @@ describe('trace persistence hooks', () => {
         toolName: 'bash',
         result: {},
         isError: false,
-      } as any,
+      } as unknown,
       mockCallbacks,
     );
 
@@ -434,13 +434,13 @@ describe('legacy auto mode continuation quarantine', () => {
   function makeEntry(overrides: Record<string, unknown> = {}) {
     return {
       sessionId: 'sess-auto',
-      session: {} as any,
+      session: {} as unknown,
       title: 'Auto mode',
       pendingAutoModeContinuation: false,
       queuedStaleTurnCustomTypes: [] as string[],
       activeStaleTurnCustomType: null,
       ...overrides,
-    } as any;
+    } as unknown;
   }
 
   function makeCallbacks() {
@@ -472,7 +472,7 @@ describe('legacy auto mode continuation quarantine', () => {
       });
       const cbs = makeCallbacks();
 
-      handleLiveSessionEvent(entry, { type: 'turn_end' } as any, cbs);
+      handleLiveSessionEvent(entry, { type: 'turn_end' } as unknown, cbs);
 
       // The handler uses queueMicrotask; flush microtasks
       await new Promise((resolve) => queueMicrotask(resolve));
@@ -488,7 +488,7 @@ describe('legacy auto mode continuation quarantine', () => {
       });
       const cbs = makeCallbacks();
 
-      handleLiveSessionEvent(entry, { type: 'turn_end' } as any, cbs);
+      handleLiveSessionEvent(entry, { type: 'turn_end' } as unknown, cbs);
 
       // Flag is cleared synchronously, not in microtask
       expect(entry.pendingAutoModeContinuation).toBe(false);
@@ -506,7 +506,7 @@ describe('legacy auto mode continuation quarantine', () => {
           {
             type: 'message_start',
             message: { role: 'custom', customType: 'goal-continuation', display: false, content: 'Goal continuation.' },
-          } as any,
+          } as unknown,
           cbs,
         ),
       ).not.toThrow();
@@ -523,7 +523,7 @@ describe('legacy auto mode continuation quarantine', () => {
       });
       const cbs = makeCallbacks();
 
-      handleLiveSessionEvent(entry, { type: 'turn_end' } as any, cbs);
+      handleLiveSessionEvent(entry, { type: 'turn_end' } as unknown, cbs);
 
       await new Promise((resolve) => queueMicrotask(resolve));
 

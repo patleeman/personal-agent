@@ -4,7 +4,7 @@ async function callCoreExport<T>(name: string, ...args: unknown[]): Promise<T> {
   return callServerModuleExport<T>('@personal-agent/core', name, ...args);
 }
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, any>>;
+const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<Record<string, unknown>>;
 
 async function invalidateKnowledgeBase(): Promise<void> {
   try {

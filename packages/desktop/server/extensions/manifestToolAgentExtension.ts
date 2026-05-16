@@ -44,7 +44,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             ? { promptGuidelines: [`This tool replaces the built-in "${registerName}" tool.`] }
             : {}),
         parameters: tool.inputSchema,
-        async execute(_toolCallId, params, signal, onUpdate: any, ctx: any) {
+        async execute(_toolCallId, params, signal, onUpdate: unknown, ctx: unknown) {
           const invokeResult = await invokeExtensionAction(
             tool.extensionId,
             tool.action,
@@ -84,7 +84,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
                 error: invokeResult.error,
               },
               isError: true,
-            } as any;
+            } as unknown;
           }
 
           const extensionResult = invokeResult.result as
@@ -115,7 +115,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
               result: extensionResult?.details ?? invokeResult.result,
             },
             ...(extensionResult?.isError === true ? ({ isError: true } as const) : {}),
-          } as any;
+          } as unknown;
         },
       });
     };

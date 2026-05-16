@@ -6,7 +6,7 @@ import { computeLiveSessionRunning } from './liveSessionReadApi.js';
 function makeEntry(overrides: Partial<LiveSessionReadHost> = {}): LiveSessionReadHost {
   return {
     cwd: '/repo',
-    session: { isStreaming: false } as any,
+    session: { isStreaming: false } as unknown,
     title: 'Test',
     activeStaleTurnCustomType: null,
     queuedStaleTurnCustomTypes: [],
@@ -24,7 +24,7 @@ describe('computeLiveSessionRunning', () => {
       computeLiveSessionRunning(
         makeEntry({
           lastDurableRunState: 'waiting',
-          session: { isStreaming: false } as any,
+          session: { isStreaming: false } as unknown,
         }),
       ),
     ).toBe(false);
@@ -38,7 +38,7 @@ describe('computeLiveSessionRunning', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
-          session: { isStreaming: true } as any,
+          session: { isStreaming: true } as unknown,
           activeStaleTurnCustomType: null,
         }),
       ),
@@ -49,7 +49,7 @@ describe('computeLiveSessionRunning', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
-          session: { isStreaming: true } as any,
+          session: { isStreaming: true } as unknown,
           activeStaleTurnCustomType: 'auto_mode',
         }),
       ),
@@ -63,7 +63,7 @@ describe('computeLiveSessionRunning', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
-          session: { isStreaming: true } as any,
+          session: { isStreaming: true } as unknown,
           lastDurableRunState: 'waiting',
         }),
       ),
@@ -74,7 +74,7 @@ describe('computeLiveSessionRunning', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
-          session: { isStreaming: false } as any,
+          session: { isStreaming: false } as unknown,
           lastDurableRunState: 'waiting',
           queuedStaleTurnCustomTypes: ['auto_mode'],
           activeStaleTurnCustomType: 'auto_mode',
@@ -95,7 +95,7 @@ describe('computeLiveSessionRunning', () => {
     expect(
       computeLiveSessionRunning(
         makeEntry({
-          session: { isStreaming: true } as any,
+          session: { isStreaming: true } as unknown,
           activeStaleTurnCustomType: 'auto_mode',
         }),
       ),
