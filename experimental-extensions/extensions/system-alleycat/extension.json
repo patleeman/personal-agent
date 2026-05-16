@@ -3,6 +3,7 @@
   "id": "system-alleycat",
   "name": "Kitty Litter Mobile Pairing (Alleycat)",
   "packageType": "user",
+  "defaultEnabled": false,
   "description": "Pair the Kitty Litter iOS app directly with Personal Agent using a PA-owned Alleycat-compatible host and Codex-shaped conversation APIs.",
   "version": "0.1.0",
   "frontend": {
