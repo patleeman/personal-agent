@@ -14,33 +14,51 @@ export interface SearchHtmlResult {
 }
 
 export async function extractReadableHtml(input: { html: string; url: string }): Promise<ReadableHtmlResult> {
-  const { JSDOM } = require('jsdom') as typeof import('jsdom');
-  const { Readability } = require('@mozilla/readability') as typeof import('@mozilla/readability');
-  const TurndownModule = require('turndown') as typeof import('turndown') | { default: typeof import('turndown') };
-  const Turndown = 'default' in TurndownModule ? TurndownModule.default : TurndownModule;
-
-  const dom = new JSDOM(input.html, { url: input.url });
-  const article = new Readability(dom.window.document).parse();
   let markdown: string;
+  let title: string | undefined;
 
-  if (article?.content) {
-    const td = new Turndown({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
-    markdown = td.turndown(article.content);
-    if (article.title) markdown = `# ${article.title}\n\n${markdown}`;
-  } else {
-    const fallbackDom = new JSDOM(input.html, { url: input.url });
-    const document = fallbackDom.window.document;
-    document.querySelectorAll('script, style, noscript, nav, header, footer, aside').forEach((element: Element) => element.remove());
-    const main = document.querySelector("main, article, [role='main'], .content, #content") || document.body;
-    markdown = (main?.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!markdown) return { markdown: '(Could not extract readable content from page)' };
+  try {
+    const { JSDOM } = require('jsdom') as typeof import('jsdom');
+    const { Readability } = require('@mozilla/readability') as typeof import('@mozilla/readability');
+    const TurndownModule = require('turndown') as typeof import('turndown') | { default: typeof import('turndown') };
+    const Turndown = 'default' in TurndownModule ? TurndownModule.default : TurndownModule;
+
+    const dom = new JSDOM(input.html, { url: input.url });
+    const article = new Readability(dom.window.document).parse();
+    title = article?.title;
+
+    if (article?.content) {
+      const td = new Turndown({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+      markdown = td.turndown(article.content);
+      if (article.title) markdown = `# ${article.title}\n\n${markdown}`;
+    } else {
+      markdown = extractTextFallback(input.html);
+    }
+  } catch {
+    markdown = extractTextFallback(input.html);
   }
 
   markdown = markdown
     .replace(/ +/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return { markdown, ...(article?.title ? { title: article.title } : {}) };
+  if (!markdown) return { markdown: '(Could not extract readable content from page)' };
+  return { markdown, ...(title ? { title } : {}) };
+}
+
+function extractTextFallback(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export async function parseDuckDuckGoHtml(input: { html: string; maxResults: number }): Promise<SearchHtmlResult[]> {
