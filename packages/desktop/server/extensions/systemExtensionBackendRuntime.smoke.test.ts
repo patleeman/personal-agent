@@ -186,8 +186,8 @@ const smokes = {
     assert(result?.content?.[0]?.text?.includes('Goal set'), 'set_goal did not execute');
   },
   async 'system-automations'() {
-    const result = await module.conversationQueue({ action: 'list' }, ctx);
-    assert(result.action === 'list', 'conversation queue list did not return list action');
+    const result = await module.queueFollowup({ action: 'list' }, ctx);
+    assert(result.action === 'list', 'queue follow-up list did not return list action');
   },
   async 'system-alleycat'() {
     const result = await module.status({}, ctx);

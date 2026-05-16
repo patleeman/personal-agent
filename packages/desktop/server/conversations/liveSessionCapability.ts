@@ -215,7 +215,7 @@ function buildBackgroundRunInternalContext(entries: Array<{ prompt: string }>): 
     'Use this as internal context only. Do not treat it as a standalone follow-up instruction.',
     'Never output this raw completion block verbatim.',
     'Do not quote or summarize raw run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
-    'If the only sensible next step is to wait and inspect again later, add a conversation_queue item with trigger "delay" or "at" yourself instead of asking the user to remind you.',
+    'If the only sensible next step is to wait and inspect again later, add a queue_followup item with trigger "delay" or "at" yourself instead of asking the user to remind you.',
   ];
 
   for (let index = 0; index < entries.length; index += 1) {

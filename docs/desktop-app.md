@@ -42,7 +42,7 @@ Electron main process
     │       ├── Runs
     │       ├── Scheduled tasks
     │       ├── Wakeups
-    │       └── Reminders
+    │       └── Follow-up queue
 ```
 
 - Electron owns the UI surface through the `personal-agent://app/` protocol

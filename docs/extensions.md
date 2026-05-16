@@ -1194,7 +1194,7 @@ from statically importing known heavy/runtime internals. They also run
 `scripts/check-packaged-extensions.mjs`. That packaged check imports every system
 and experimental extension backend from its built `dist` output, verifies backend
 action handler exports, smoke-calls known safe `list` tools (`scheduled_task`,
-`conversation_queue`, `run`), and runs product-critical smoke calls for Knowledge,
+`queue_followup`, `run`), and runs product-critical smoke calls for Knowledge,
 Automations, and Diffs extension actions. It fails on forbidden bare imports
 that are not available inside the packaged desktop app, such as
 `@earendil-works/pi-coding-agent`, `@personal-agent/core`,
@@ -1272,7 +1272,7 @@ See the system extensions in `extensions/` for practical examples:
 
 - **`system-artifacts`** — Tools + views + transcript renderer + skills
 - **`system-browser`** — Experimental browser automation tool + views (`experimental-extensions/extensions/system-browser`)
-- **`system-automations`** — Scheduled tasks, reminders, conversation queues, and the Automations page
+- **`system-automations`** — Scheduled tasks, follow-up queues, and the Automations page
 - **`system-images`** — Experimental image generation tool (`experimental-extensions/extensions/system-images`)
 - **`system-conversation-tools`** — Agent lifecycle hooks + contextMenus
 - **`system-extension-manager`** — Extension management UI + nav

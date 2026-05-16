@@ -1009,7 +1009,7 @@ export async function invokeExtensionProtocolEntrypoint(
 }
 
 const PRODUCT_CRITICAL_EXTENSION_SELF_TESTS: Record<string, Record<string, unknown>> = {
-  'system-automations': { scheduledTask: { action: 'list' }, conversationQueue: { action: 'list' } },
+  'system-automations': { scheduledTask: { action: 'list' }, queueFollowup: { action: 'list' } },
   'system-diffs': { checkpoint: { action: 'list' } },
   'system-knowledge': { readState: {}, vaultTree: {}, vaultSearch: { q: '', limit: 1 } },
 };

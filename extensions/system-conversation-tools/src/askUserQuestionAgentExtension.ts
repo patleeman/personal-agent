@@ -263,7 +263,7 @@ export function createAskUserQuestionAgentExtension(): (pi: ExtensionAPI) => voi
       description: 'Ask one or more focused questions in the desktop UI and wait for the user to answer or skip with a normal prompt.',
       promptSnippet: 'Ask one or more focused questions in the desktop UI.',
       promptGuidelines: [
-        'Ask only when blocked on a user answer/approval; use questions[] with radio/check style for structured choices, and use conversation_queue for time-based follow-up.',
+        'Ask only when blocked on a user answer/approval; use questions[] with radio/check style for structured choices, and use queue_followup for time-based follow-up.',
       ],
       parameters: AskUserQuestionToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

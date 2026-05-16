@@ -38,13 +38,11 @@ const backendAutomationMock = vi.hoisted(() => ({
   clearTaskCallbackBinding: vi.fn(),
 }));
 
-// Mock the backend API for the reminder handler
 vi.mock('@personal-agent/extensions/backend', () => backendAutomationMock);
 vi.mock('@personal-agent/extensions/backend/automations', () => backendAutomationMock);
 vi.mock('@personal-agent/extensions/backend/telemetry', () => ({ recordTelemetryEvent: vi.fn() }), { virtual: true });
 
-import { reminder } from './backend.js';
-import { conversationQueue } from './conversationQueueBackend.js';
+import { queueFollowup } from './conversationQueueBackend.js';
 
 function createCtx(overrides?: Record<string, unknown>) {
   return {
@@ -60,80 +58,13 @@ describe('system-automations backend', () => {
     vi.clearAllMocks();
   });
 
-  describe('reminder handler', () => {
-    it('schedules a deferred resume with delay', async () => {
-      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-1', dueAt: '2025-01-01T01:00:00Z', prompt: 'Wake up!', title: 'Alert' });
-
-      const result = await reminder({ prompt: 'Wake up!', title: 'Alert', delay: '1h' }, createCtx());
-      expect(result.text).toContain('Scheduled reminder rem-1');
-      expect(result.text).toContain('in 1h');
-      expect(result.id).toBe('rem-1');
-      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionFile: '/tmp/session.json',
-          delay: '1h',
-          prompt: 'Wake up!',
-          title: 'Alert',
-          kind: 'reminder',
-          source: { kind: 'reminder-tool' },
-        }),
-      );
-    });
-
-    it('schedules a deferred resume with at time', async () => {
-      mocks.parseFutureDateTime.mockReturnValue({
-        input: 'tomorrow 9am',
-        dueAt: '2025-01-02T09:00:00Z',
-        interpretation: '2025-01-02 09:00:00',
-      });
-      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-2', dueAt: '2025-01-02T09:00:00Z', prompt: 'Meeting', title: 'Meeting' });
-
-      const result = await reminder({ prompt: 'Meeting', title: 'Meeting', at: 'tomorrow 9am' }, createCtx());
-      expect(result.text).toContain('Scheduled reminder rem-2');
-      expect(result.localDueAt).toBe('2025-01-02 09:00:00');
-      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
-        expect.objectContaining({
-          delay: undefined,
-          at: '2025-01-02T09:00:00Z',
-        }),
-      );
-    });
-
-    it('uses disruptive notify and requireAck true by default', async () => {
-      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-3', dueAt: '2025-01-01T00:00:00Z', prompt: 'Ping' });
-
-      await reminder({ prompt: 'Ping' }, createCtx());
-      expect(mocks.scheduleDeferredResume).toHaveBeenCalledWith(
-        expect.objectContaining({
-          notify: 'disruptive',
-          requireAck: true,
-          autoResumeIfOpen: true,
-        }),
-      );
-    });
-
-    it('invalidates sessions and runs topics', async () => {
-      const invalidate = vi.fn();
-      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'rem-4', dueAt: '2025-01-01T00:00:00Z', prompt: 'Ping' });
-
-      await reminder({ prompt: 'Ping' }, createCtx({ ui: { invalidate } }));
-      expect(invalidate).toHaveBeenCalledWith(['sessions', 'runs']);
-    });
-
-    it('throws when sessionFile is missing', async () => {
-      await expect(reminder({ prompt: 'Wake up!' }, createCtx({ toolContext: { sessionId: 'sess-1' } }))).rejects.toThrow(
-        'Reminder requires a persisted session file',
-      );
-    });
-  });
-
-  describe('conversationQueue handler', () => {
+  describe('queueFollowup handler', () => {
     it('requires trigger for add action', async () => {
-      await expect(conversationQueue({ action: 'add' } as never, createCtx())).rejects.toThrow('trigger is required');
+      await expect(queueFollowup({ action: 'add' } as never, createCtx())).rejects.toThrow('trigger is required');
     });
 
     it('throws for cancel action without id', async () => {
-      await expect(conversationQueue({ action: 'cancel' } as never, createCtx())).rejects.toThrow('id is required');
+      await expect(queueFollowup({ action: 'cancel' } as never, createCtx())).rejects.toThrow('id is required');
     });
 
     it('schedules time-based queue entries as visible deferred resumes', async () => {
@@ -141,7 +72,7 @@ describe('system-automations backend', () => {
       mocks.parseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
       mocks.scheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
 
-      const result = await conversationQueue(
+      const result = await queueFollowup(
         { action: 'add', trigger: 'delay', delay: '4h', prompt: 'Keep going', deliverAs: 'followUp', title: 'Resume later' },
         createCtx({ ui: { invalidate } }),
       );
@@ -160,18 +91,18 @@ describe('system-automations backend', () => {
           notify: 'passive',
           requireAck: false,
           autoResumeIfOpen: true,
-          source: { kind: 'conversation-queue-tool' },
+          source: { kind: 'queue-followup-tool' },
         }),
       );
       expect(invalidate).toHaveBeenCalledWith(['sessions', 'runs']);
     });
 
     it('throws for unsupported action', async () => {
-      await expect(conversationQueue({ action: 'unknown' } as never, createCtx())).rejects.toThrow('Unsupported conversation queue action');
+      await expect(queueFollowup({ action: 'unknown' } as never, createCtx())).rejects.toThrow('Unsupported queue follow-up action');
     });
 
     it('throws for invalid trigger value', async () => {
-      await expect(conversationQueue({ action: 'add', prompt: 'Do thing', trigger: 'invalid' } as never, createCtx())).rejects.toThrow(
+      await expect(queueFollowup({ action: 'add', prompt: 'Do thing', trigger: 'invalid' } as never, createCtx())).rejects.toThrow(
         'trigger',
       );
     });

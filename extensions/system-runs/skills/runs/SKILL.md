@@ -19,13 +19,13 @@ Use intent-shaped tools first. The old generic `run` tool is compatibility plumb
 
 ## Choose the tool
 
-| Tool                              | Use case                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `bash`                            | Shell commands; set `background: true` for durable background commands.  |
-| `background_command`              | Compatibility lifecycle tool for background command records.             |
-| `subagent`                        | A delegated agent task that should run durably outside the current turn. |
-| `scheduled_task`                  | A persistent automation with a cron/time trigger and delivery policy.    |
-| `conversation_queue` / `reminder` | Attention or follow-up without background execution.                     |
+| Tool                 | Use case                                                                 |
+| -------------------- | ------------------------------------------------------------------------ |
+| `bash`               | Shell commands; set `background: true` for durable background commands.  |
+| `background_command` | Compatibility lifecycle tool for background command records.             |
+| `subagent`           | A delegated agent task that should run durably outside the current turn. |
+| `scheduled_task`     | A persistent automation with a cron/time trigger and delivery policy.    |
+| `queue_followup`     | Attention or follow-up without background execution.                     |
 
 ## Background commands
 

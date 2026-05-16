@@ -9,7 +9,7 @@ The daemon is a long-lived background process that owns durable runtime behavior
 | Runs            | Detached agent work, started from conversations, inspected later          |
 | Scheduled tasks | Recurring or one-time automations with cron or natural-language schedules |
 | Wakeups         | Conversation callbacks triggered by completed runs and tasks              |
-| Reminders       | Tell-me-later wakeups that resume a specific conversation                 |
+| Follow-up queue | Tell-me-later wakeups that resume a specific conversation                 |
 
 ## Lifecycle
 

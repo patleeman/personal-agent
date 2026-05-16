@@ -18,14 +18,9 @@
         "title": "Scheduled task"
       },
       {
-        "id": "reminder",
-        "handler": "reminder",
-        "title": "Reminder"
-      },
-      {
-        "id": "conversationQueue",
-        "handler": "conversationQueue",
-        "title": "Conversation queue"
+        "id": "queueFollowup",
+        "handler": "queueFollowup",
+        "title": "Queue follow-up"
       }
     ]
   },
@@ -115,11 +110,11 @@
         }
       },
       {
-        "id": "conversation-queue",
-        "name": "conversation_queue",
-        "title": "Conversation queue",
-        "description": "Queue future continuation work for the current conversation.",
-        "action": "conversationQueue",
+        "id": "queue-followup",
+        "name": "queue_followup",
+        "title": "Queue follow-up",
+        "description": "Queue, list, or cancel future follow-up work for the current conversation.",
+        "action": "queueFollowup",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -154,42 +149,6 @@
           "required": ["action"],
           "additionalProperties": false
         }
-      },
-      {
-        "id": "reminder",
-        "name": "reminder",
-        "title": "Reminder",
-        "description": "Schedule a reminder for this same conversation and make sure it will visibly alert later.",
-        "action": "reminder",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "delay": {
-              "type": "string"
-            },
-            "at": {
-              "type": "string"
-            },
-            "prompt": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            },
-            "notify": {
-              "type": "string",
-              "enum": ["passive", "disruptive"]
-            },
-            "requireAck": {
-              "type": "boolean"
-            },
-            "autoResumeIfOpen": {
-              "type": "boolean"
-            }
-          },
-          "required": ["prompt"],
-          "additionalProperties": false
-        }
       }
     ],
     "nav": [
@@ -216,7 +175,7 @@
       {
         "id": "async-attention",
         "title": "Async Attention and Wakeups",
-        "description": "Built-in routing guide for conversation queueing, reminders, owning surfaces, and later attention.",
+        "description": "Built-in routing guide for follow-up queues, owning surfaces, and later attention.",
         "path": "skills/async-attention/SKILL.md"
       },
       {

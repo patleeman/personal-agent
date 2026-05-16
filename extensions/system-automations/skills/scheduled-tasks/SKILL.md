@@ -35,7 +35,7 @@ Good fits:
 Do not confuse scheduled tasks with:
 
 - **project tasks** in `state.yaml` — those are planning/checklist items
-- **reminders** — those are conversation-bound wakeups with alert delivery
+- **follow-up queue entries** — those are conversation-bound wakeups
 - **durable background runs** — those are detached jobs launched on demand with the `run` tool
 
 ## Where automations live
@@ -163,7 +163,7 @@ This is the right fit for:
 - "run this later and tell me what happened"
 - "watch for deployment gates and bring this thread back when it matters"
 
-It is **not** the same as a generic reminder. For direct human reminders, prefer the reminder/conversation-wakeup path.
+It is **not** the same as a same-thread follow-up. For direct human tell-me-later requests, prefer `queue_followup`.
 
 ## Managing tasks from the web UI
 

@@ -19,21 +19,21 @@ import {
 const DELIVER_AS_VALUES = ['steer', 'followUp'] as const;
 type DeliverAs = (typeof DELIVER_AS_VALUES)[number];
 
-type ConversationQueueAction = 'add' | 'list' | 'cancel';
-type ConversationQueueTrigger = 'after_turn' | 'delay' | 'at';
+type QueueFollowupAction = 'add' | 'list' | 'cancel';
+type QueueFollowupTrigger = 'after_turn' | 'delay' | 'at';
 
-export interface ConversationQueueInput {
-  action: ConversationQueueAction;
+export interface QueueFollowupInput {
+  action: QueueFollowupAction;
   id?: string;
   prompt?: string;
-  trigger?: ConversationQueueTrigger;
+  trigger?: QueueFollowupTrigger;
   delay?: string;
   at?: string;
   deliverAs?: DeliverAs;
   title?: string;
 }
 
-export interface ConversationQueueContext {
+export interface QueueFollowupContext {
   profile: string;
   toolContext?: { sessionId?: string; sessionFile?: string; cwd?: string };
   ui: { invalidate(topics: string | string[]): void };
@@ -164,8 +164,8 @@ function formatQueueItem(item: ConversationQueueItem): string {
 
 function formatQueueList(items: ConversationQueueItem[]): string {
   return items.length === 0
-    ? 'Conversation queue is empty.'
-    : [`Conversation queue (${items.length}):`, ...items.map(formatQueueItem)].join('\n');
+    ? 'Follow-up queue is empty.'
+    : [`Follow-up queue (${items.length}):`, ...items.map(formatQueueItem)].join('\n');
 }
 
 function parseLiveQueueId(id: string): { behavior: DeliverAs; previewId: string } | null {
@@ -200,7 +200,7 @@ async function findConversationAutomation(id: string, sessionFile: string) {
   );
 }
 
-export async function conversationQueue(input: ConversationQueueInput, ctx: ConversationQueueContext) {
+export async function queueFollowup(input: QueueFollowupInput, ctx: QueueFollowupContext) {
   const sessionId = readOptionalString(ctx.toolContext?.sessionId);
   const sessionFile = readOptionalString(ctx.toolContext?.sessionFile);
 
@@ -219,7 +219,7 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
         if (!sessionId) throw new Error('trigger="after_turn" requires a live conversation.');
         await promptSession(sessionId, prompt, deliverAs ?? 'followUp');
         return {
-          text: `Queued conversation continuation after the current turn (${deliverAs ?? 'followUp'}).`,
+          text: `Queued follow-up after the current turn (${deliverAs ?? 'followUp'}).`,
           action: 'add',
           trigger,
           sessionId,
@@ -243,11 +243,11 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
         notify: 'passive',
         requireAck: false,
         autoResumeIfOpen: true,
-        source: { kind: 'conversation-queue-tool' },
+        source: { kind: 'queue-followup-tool' },
       });
       ctx.ui.invalidate(['sessions', 'runs']);
       return {
-        text: `Queued conversation continuation ${resume.id} (${trigger === 'delay' ? `in ${delay}` : `for ${scheduled.interpretation ?? resume.dueAt}`}).`,
+        text: `Queued follow-up ${resume.id} (${trigger === 'delay' ? `in ${delay}` : `for ${scheduled.interpretation ?? resume.dueAt}`}).`,
         action: 'add',
         trigger,
         sessionId,
@@ -266,7 +266,7 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
       if (liveQueueId) {
         if (!sessionId) throw new Error('Live queue cancellation requires a live conversation.');
         const cancelled = await cancelQueuedPrompt(sessionId, liveQueueId.behavior, liveQueueId.previewId);
-        return { text: `Cancelled queued ${liveQueueId.behavior} continuation.`, action: 'cancel', sessionId, id, cancelled };
+        return { text: `Cancelled queued ${liveQueueId.behavior} follow-up.`, action: 'cancel', sessionId, id, cancelled };
       }
       if (!sessionFile) throw new Error('Deferred queue cancellation requires a persisted session file.');
       const automation = await findConversationAutomation(id, sessionFile);
@@ -274,7 +274,7 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
         await deleteStoredAutomation(automation.id);
         ctx.ui.invalidate(['tasks', 'sessions']);
         return {
-          text: `Cancelled queued continuation ${automation.id}.`,
+          text: `Cancelled queued follow-up ${automation.id}.`,
           action: 'cancel',
           sessionId,
           sessionFile,
@@ -285,7 +285,7 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
       const cancelled = await cancelDeferredResumeForSessionFile({ sessionFile, id });
       ctx.ui.invalidate('sessions');
       return {
-        text: `Cancelled queued continuation ${cancelled.id}.`,
+        text: `Cancelled queued follow-up ${cancelled.id}.`,
         action: 'cancel',
         sessionId,
         sessionFile,
@@ -294,6 +294,6 @@ export async function conversationQueue(input: ConversationQueueInput, ctx: Conv
       };
     }
     default:
-      throw new Error(`Unsupported conversation queue action: ${String(input.action)}`);
+      throw new Error(`Unsupported queue follow-up action: ${String(input.action)}`);
   }
 }

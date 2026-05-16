@@ -223,7 +223,7 @@ export function createRunAgentExtension(options: {
         'Use run only when you need the legacy generic list/get/logs/rerun/cancel surface.',
         'Runs are detached by default. Only set deliverResultToConversation=true when the result should flow back to this conversation.',
         'For persistent time-based automations, prefer scheduled_task.',
-        'For pure conversation follow-up later, prefer conversation_queue with trigger="after_turn", "delay", or "at" instead.',
+        'For pure conversation follow-up later, prefer queue_followup with trigger="after_turn", "delay", or "at" instead.',
       ],
       parameters: RunToolParams,
       async execute(

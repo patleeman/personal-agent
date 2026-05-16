@@ -204,11 +204,7 @@ function isParallelSideEffectBlock(block: Extract<DisplayBlock, { type: 'tool_us
     return action === 'save';
   }
 
-  if (block.tool === 'reminder') {
-    return true;
-  }
-
-  if (block.tool === 'conversation_queue') {
+  if (block.tool === 'queue_followup') {
     return action === 'add' || action === 'cancel';
   }
 

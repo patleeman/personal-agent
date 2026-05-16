@@ -31,7 +31,7 @@ export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
 export const FORBIDDEN_BUNDLED_PATH_FRAGMENTS = ['/node_modules/@personal-agent/daemon/', '/packages/daemon/'];
 
 export const PRODUCT_CRITICAL_EXTENSION_SMOKE_ACTIONS = new Map([
-  ['system-automations', { scheduledTask: { action: 'list' }, conversationQueue: { action: 'list' } }],
+  ['system-automations', { scheduledTask: { action: 'list' }, queueFollowup: { action: 'list' } }],
   ['system-diffs', { checkpoint: { action: 'list' } }],
   ['system-knowledge', { readState: {}, vaultTree: {}, vaultSearch: { q: '', limit: 1 } }],
 ]);
