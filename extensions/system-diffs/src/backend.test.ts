@@ -123,6 +123,46 @@ describe('system-diffs backend', () => {
     });
   });
 
+  describe('save action', () => {
+    it('does not fail when UI invalidation is unavailable', async () => {
+      const shell = {
+        exec: vi.fn(async ({ args }: { args: string[] }) => {
+          const command = args.join(' ');
+          if (command === 'rev-parse --show-toplevel') return { stdout: '/tmp/test-repo\n' };
+          if (command.startsWith('add --all --')) return { stdout: '' };
+          if (command.startsWith('diff --cached --name-only --')) return { stdout: 'src/file.ts\n' };
+          if (command.startsWith('commit --only -m msg --')) return { stdout: '' };
+          if (command === 'rev-parse HEAD') return { stdout: 'abc1234def5678\n' };
+          if (command.startsWith('show -s --format=')) {
+            return {
+              stdout: 'abc1234def5678\u0000abc1234\u0000msg\u0000msg\u0000Test User\u0000test@example.com\u00002025-01-01T00:00:00Z',
+            };
+          }
+          if (command.startsWith('show --format= --patch')) {
+            return { stdout: 'diff --git a/src/file.ts b/src/file.ts\n--- a/src/file.ts\n+++ b/src/file.ts\n@@ -1 +1 @@\n-old\n+new\n' };
+          }
+          throw new Error(`unexpected git command: ${command}`);
+        }),
+      };
+      mockSaveCheckpoint.mockReturnValue({
+        id: 'abc1234def5678',
+        commitSha: 'abc1234def5678',
+        shortSha: 'abc1234',
+        title: 'msg',
+        subject: 'msg',
+        fileCount: 1,
+        linesAdded: 1,
+        linesDeleted: 1,
+        cwd: '/tmp/test-repo',
+        updatedAt: '2025-01-01T00:00:00Z',
+      });
+
+      const result = await checkpoint({ action: 'save', message: 'msg', paths: ['src/file.ts'] }, createCtx({ shell, ui: undefined }));
+
+      expect(result.text).toContain('Saved checkpoint abc1234 msg');
+    });
+  });
+
   describe('save action validation', () => {
     it('throws when cwd is missing from toolContext', async () => {
       await expect(

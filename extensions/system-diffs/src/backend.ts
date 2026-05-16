@@ -244,7 +244,7 @@ export async function checkpoint(input: CheckpointInput, ctx: CheckpointBackendC
         linesAdded,
         linesDeleted,
       });
-      ctx.ui.invalidate(['checkpoints', 'sessions']);
+      ctx.ui?.invalidate?.(['checkpoints', 'sessions']);
       return {
         text: `Saved checkpoint ${record.shortSha} ${record.subject} (${record.fileCount} files, +${record.linesAdded} -${record.linesDeleted}).`,
         action: 'save',
