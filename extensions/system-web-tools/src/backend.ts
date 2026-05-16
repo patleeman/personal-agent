@@ -4,28 +4,12 @@ import { extractReadableHtml, parseDuckDuckGoHtml } from '@personal-agent/extens
 const DEFAULT_MAX_BYTES = 50 * 1024;
 const DEFAULT_MAX_LINES = 2000;
 
-interface ExaSearchResult {
-  title?: string;
-  url?: string;
-  text?: string;
-  highlights?: string[];
-  summary?: string;
-}
-
-interface ExaSearchResponse {
-  results?: ExaSearchResult[];
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 function createRequestSignal(timeoutMs: number): AbortSignal {
   return AbortSignal.timeout(timeoutMs);
-}
-
-function getExaApiKey(ctx?: ExtensionBackendContext): string | undefined {
-  return ctx?.secrets.get('exaApiKey');
 }
 
 function formatSize(bytes: number): string {
@@ -95,45 +79,6 @@ export async function webFetch(input: { url: string; raw?: boolean }, _ctx?: Ext
   } catch (error) {
     throw new Error(`Error fetching ${url}: ${getErrorMessage(error)}`);
   }
-}
-
-export async function exaSearch(input: { query: string; count?: number; page?: number }, ctx?: ExtensionBackendContext) {
-  const { query, count = 5, page = 1 } = input;
-  const maxResults = Math.min(count, 20);
-  const offset = (Math.max(page, 1) - 1) * 20;
-  const exaApiKey = getExaApiKey(ctx);
-  if (!exaApiKey) throw new Error('Exa API key is not configured. Set Web tools → Exa API key or EXA_API_KEY.');
-
-  const requestedResults = Math.min(offset + maxResults, 100);
-  const response = await fetch('https://api.exa.ai/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${exaApiKey}` },
-    body: JSON.stringify({ query, numResults: requestedResults, contents: { text: true, highlights: true } }),
-    signal: createRequestSignal(10000),
-  });
-  if (!response.ok) throw new Error(`Exa search failed: HTTP ${response.status}`);
-
-  const data = (await response.json()) as ExaSearchResponse;
-  const results = (data.results ?? []).slice(offset, offset + maxResults);
-  if (results.length === 0) return { text: `No results found for: ${query}`, query, page, count: 0, source: 'exa' };
-
-  const resultStart = offset + 1;
-  const output = results
-    .map((result, index) => {
-      let snippet = result.text || result.highlights?.[0] || result.summary || '';
-      if (snippet.length > 500) snippet = `${snippet.slice(0, 500)}...`;
-      return `--- Result ${resultStart + index} ---\nTitle: ${result.title || '(no title)'}\nURL: ${result.url}\nSnippet: ${
-        snippet || '(no snippet available)'
-      }`;
-    })
-    .join('\n\n');
-  return {
-    text: `Exa Search | Page ${page} | Results ${resultStart}-${resultStart + results.length - 1} | Use page: ${page + 1} for more results\n\n${output}`,
-    query,
-    page,
-    count: results.length,
-    source: 'exa',
-  };
 }
 
 export async function duckDuckGoSearch(input: { query: string; count?: number; page?: number }, ctx?: ExtensionBackendContext) {

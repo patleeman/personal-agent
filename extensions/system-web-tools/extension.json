@@ -9,20 +9,10 @@
     "entry": "src/backend.ts",
     "actions": [
       { "id": "webFetch", "handler": "webFetch", "title": "Fetch URL" },
-      { "id": "exaSearch", "handler": "exaSearch", "title": "Search with Exa" },
       { "id": "duckDuckGoSearch", "handler": "duckDuckGoSearch", "title": "Search with DuckDuckGo" }
     ]
   },
   "contributes": {
-    "secrets": {
-      "exaApiKey": {
-        "label": "Exa API key",
-        "description": "Used by exa_search for Exa-backed search.",
-        "env": "EXA_API_KEY",
-        "placeholder": "exa_…",
-        "order": 1
-      }
-    },
     "tools": [
       {
         "id": "web-fetch",
@@ -37,23 +27,6 @@
             "raw": { "type": "boolean", "description": "Return raw HTML instead of extracted markdown (default: false)" }
           },
           "required": ["url"],
-          "additionalProperties": false
-        }
-      },
-      {
-        "id": "exa-search",
-        "name": "exa_search",
-        "title": "Search Exa",
-        "description": "Search the web using Exa and return titles, URLs, and snippets.",
-        "action": "exaSearch",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "query": { "type": "string", "description": "Search query" },
-            "count": { "type": "number", "description": "Number of results to return (default: 5, max: 20)" },
-            "page": { "type": "number", "description": "Page number for pagination (default: 1)" }
-          },
-          "required": ["query"],
           "additionalProperties": false
         }
       },
@@ -76,5 +49,5 @@
       }
     ]
   },
-  "permissions": ["network:read", "secrets:read"]
+  "permissions": ["network:read"]
 }

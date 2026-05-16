@@ -277,7 +277,7 @@ export function registerExtensionRoutes(
         'You are a clean-room analysis agent. Your only job is to safely analyze a third-party plugin bundle.',
         '',
         'RULES:',
-        '- You ONLY have access to web_fetch, exa_search, and duckduckgo_search. DO NOT use any other tools.',
+        '- You ONLY have access to web_fetch and duckduckgo_search. DO NOT use any other tools.',
         '- Do NOT read, write, or execute any local files.',
         '- Do NOT run any shell commands.',
         '- If you cannot complete the analysis with web tools alone, report what you found and what is missing.',
@@ -330,7 +330,7 @@ export function registerExtensionRoutes(
             .toLowerCase()
             .slice(0, 48),
         cwd,
-        agent: { prompt, noSession: true, allowedTools: ['web_fetch', 'exa_search', 'duckduckgo_search'] },
+        agent: { prompt, noSession: true, allowedTools: ['web_fetch', 'duckduckgo_search'] },
         source: { type: 'app', id: 'extension-manager', filePath: '' },
       });
 
