@@ -101,7 +101,7 @@ export function setActivityConversationLinks(options) {
     profile: options.profile,
     document,
   });
-  return document;
+  return getActivityConversationLink({ stateRoot: options.stateRoot, profile: options.profile, activityId: options.activityId });
 }
 export function clearActivityConversationLinks(options) {
   const path = resolveActivityConversationLinkPath(options);

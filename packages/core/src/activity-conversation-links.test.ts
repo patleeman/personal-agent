@@ -68,6 +68,24 @@ describe('activity conversation links', () => {
     expect(getActivityConversationLink({ stateRoot, profile: 'assistant', activityId: 'daily-report' })).toBeNull();
   });
 
+  it('returns the normalized document after writing', () => {
+    const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
+
+    const result = setActivityConversationLinks({
+      stateRoot,
+      profile: 'assistant',
+      activityId: 'daily-report',
+      relatedConversationIds: ['conv-123'],
+      updatedAt: '2026-03-12T06:00:00.000-05:00',
+    });
+
+    expect(result).toEqual({
+      activityId: 'daily-report',
+      updatedAt: '2026-03-12T11:00:00.000Z',
+      relatedConversationIds: ['conv-123'],
+    });
+  });
+
   it('rejects invalid updatedAt values before writing', () => {
     const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
 

@@ -149,7 +149,7 @@ export function setActivityConversationLinks(options: {
     document,
   });
 
-  return document;
+  return getActivityConversationLink({ stateRoot: options.stateRoot, profile: options.profile, activityId: options.activityId });
 }
 
 export function clearActivityConversationLinks(options: { stateRoot?: string; profile: string; activityId: string }): void {
