@@ -222,6 +222,9 @@ function normalizePayload(params: {
   questions?: unknown;
 }): AskUserQuestionPayload {
   if (Array.isArray(params.questions) && params.questions.length > 0) {
+    if (params.questions.length > ASK_USER_QUESTION_MAX_QUESTIONS) {
+      throw new Error(`ask_user_question supports at most ${ASK_USER_QUESTION_MAX_QUESTIONS} questions.`);
+    }
     const questions = dedupeQuestionIds(params.questions.map((question, index) => normalizeStructuredPrompt(question, index)));
     const details = readOptionalString(params.details);
     return {

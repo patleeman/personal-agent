@@ -186,4 +186,24 @@ describe('ask user question agent extension', () => {
       ),
     ).rejects.toThrow('questions[0] requires at least one option.');
   });
+
+  it('rejects structured payloads over the question limit', async () => {
+    const tool = registerAskUserQuestionTool();
+    const ctx = createToolContext();
+
+    await expect(
+      tool.execute(
+        'tool-4',
+        {
+          questions: Array.from({ length: 9 }, (_, index) => ({
+            label: `Question ${index + 1}`,
+            options: ['yes', 'no'],
+          })),
+        },
+        undefined,
+        undefined,
+        ctx,
+      ),
+    ).rejects.toThrow('ask_user_question supports at most 8 questions.');
+  });
 });
