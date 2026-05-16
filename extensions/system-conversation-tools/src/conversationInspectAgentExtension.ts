@@ -14,8 +14,13 @@ import {
 import { Type } from '@sinclair/typebox';
 
 const ConversationInspectToolParams = Type.Object({
-  action: Type.String({ description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` }),
-  conversationId: Type.Optional(Type.String({ description: 'Conversation id for query/diff actions.' })),
+  action: Type.Union(
+    CONVERSATION_INSPECT_ACTION_VALUES.map((value) => Type.Literal(value)),
+    { description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` },
+  ),
+  conversationId: Type.Optional(
+    Type.String({ description: 'Required conversation id for query, outline, read_window, and diff actions.' }),
+  ),
   scope: Type.Optional(Type.String({ description: `List scope. Valid values: ${CONVERSATION_INSPECT_SCOPE_VALUES.join(', ')}.` })),
   cwd: Type.Optional(Type.String({ description: 'Optional cwd filter for list actions.' })),
   query: Type.Optional(
@@ -134,7 +139,7 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
       description: 'List other conversations and query their visible transcript blocks.',
       promptSnippet: 'Inspect other conversations through read-only transcript queries.',
       promptGuidelines: [
-        'read-only cross-conversation inspection: list first, then query/outline/read_window/diff; hidden reasoning is not available.',
+        'read-only cross-conversation inspection: list first, then query/outline/read_window/diff with conversationId; hidden reasoning is not available.',
       ],
       parameters: ConversationInspectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

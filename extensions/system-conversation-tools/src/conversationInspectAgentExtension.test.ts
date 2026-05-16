@@ -103,6 +103,7 @@ describe('conversation inspect agent extension', () => {
     expect(tool.name).toBe('conversation_inspect');
     expect(guidelines).toContain('read-only');
     expect(guidelines).toContain('list first');
+    expect(guidelines).toContain('conversationId');
     expect(guidelines).toContain('hidden reasoning');
   });
 
