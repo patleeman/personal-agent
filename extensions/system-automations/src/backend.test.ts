@@ -86,6 +86,27 @@ describe('system-automations backend', () => {
 
       expect(result.text).toContain('Started scheduled task @daily-check as run run-1');
     });
+
+    it('validates callback conversation before saving background automation', async () => {
+      backendAutomationMock.loadScheduledTasksForProfile.mockResolvedValue({ tasks: [], runtimeState: {}, parseErrors: [] });
+      backendAutomationMock.normalizeAutomationTargetTypeForSelection.mockReturnValue('background-agent');
+
+      const result = await scheduledTask(
+        {
+          action: 'save',
+          taskId: 'notify-me',
+          targetType: 'background-agent',
+          cron: '0 9 * * *',
+          prompt: 'Run check',
+          deliverResultToConversation: true,
+        },
+        createCtx({ toolContext: { cwd: '/tmp/repo', conversationId: 'conv-1' } }),
+      );
+
+      expect(result.text).toContain('deliverResultToConversation requires an active persisted conversation');
+      expect(backendAutomationMock.createStoredAutomation).not.toHaveBeenCalled();
+      expect(backendAutomationMock.updateStoredAutomation).not.toHaveBeenCalled();
+    });
   });
 
   describe('queueFollowup handler', () => {

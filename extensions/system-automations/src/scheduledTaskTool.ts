@@ -379,6 +379,13 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
               if (targetType === 'conversation' && params.deliverResultToConversation === true) {
                 throw new Error('deliverResultToConversation is only supported for background-agent automations.');
               }
+              if (
+                targetType !== 'conversation' &&
+                params.deliverResultToConversation === true &&
+                (!sessionFile || !currentConversationId)
+              ) {
+                throw new Error('deliverResultToConversation requires an active persisted conversation.');
+              }
 
               const saved = existing
                 ? await updateStoredAutomation(taskId, {
@@ -424,10 +431,6 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
               if (targetType === 'conversation') {
                 await clearTaskCallbackBinding({ profile, taskId });
               } else if (params.deliverResultToConversation === true) {
-                if (!sessionFile || !currentConversationId) {
-                  throw new Error('deliverResultToConversation requires an active persisted conversation.');
-                }
-
                 await setTaskCallbackBinding({
                   profile,
                   taskId,
