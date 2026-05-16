@@ -9,6 +9,12 @@ const sourceEventName = (source: string) => (source.includes(':') ? source : `ho
 
 export async function publishExtensionHostEvent(source: string, payload: unknown): Promise<void> {
   await publishExtensionEvent('host', sourceEventName(source), payload);
+  if (!source.includes(':') && payload && typeof payload === 'object') {
+    const type = (payload as { type?: unknown }).type;
+    if (typeof type === 'string' && type.trim()) {
+      await publishExtensionEvent('host', `${sourceEventName(source)}:${type.trim()}`, payload);
+    }
+  }
 }
 
 export async function installExtensionSubscriptions(serverContext?: ExtensionBackendServerContext): Promise<void> {

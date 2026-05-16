@@ -8,6 +8,8 @@ import type {
   ExtensionMentionRegistration,
   ExtensionQuickOpenRegistration,
   ExtensionRouteSummary,
+  ExtensionSearchItem,
+  ExtensionSearchProviderRegistration,
   ExtensionSlashCommandRegistration,
   ExtensionSurfaceSummary,
 } from '../extensions/types';
@@ -310,6 +312,9 @@ export const api = {
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
   extensionMentions: async () => get<ExtensionMentionRegistration[]>('/extensions/mentions'),
   extensionQuickOpen: async () => get<ExtensionQuickOpenRegistration[]>('/extensions/quick-open'),
+  extensionSearchProviders: async () => get<ExtensionSearchProviderRegistration[]>('/extensions/search-providers'),
+  extensionSearch: async (input: { query: string; limit?: number; providerId?: string }) =>
+    post<{ providers: ExtensionSearchProviderRegistration[]; items: ExtensionSearchItem[] }>('/extensions/search', input),
   extensionManifest: async (extensionId: string) => get<ExtensionManifest>(`/extensions/${encodeURIComponent(extensionId)}/manifest`),
   extensionSurfacesForExtension: async (extensionId: string) =>
     get<ExtensionSurfaceSummary[]>(`/extensions/${encodeURIComponent(extensionId)}/surfaces`),

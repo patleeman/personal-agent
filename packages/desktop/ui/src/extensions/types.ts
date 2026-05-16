@@ -44,6 +44,14 @@ interface ExtensionQuickOpenContribution {
   order?: number;
 }
 
+interface ExtensionSearchProviderContribution {
+  id: string;
+  title: string;
+  action: string;
+  kinds?: string[];
+  priority?: number;
+}
+
 interface ExtensionViewContribution {
   id: string;
   title: string;
@@ -348,6 +356,7 @@ interface ExtensionContributions {
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   promptReferences?: ExtensionPromptReferenceContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
+  searchProviders?: ExtensionSearchProviderContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
@@ -583,6 +592,29 @@ export interface ExtensionQuickOpenRegistration {
   title?: string;
   section?: string;
   order?: number;
+}
+
+export interface ExtensionSearchProviderRegistration {
+  extensionId: string;
+  id: string;
+  packageType?: ExtensionPackageType;
+  title: string;
+  action: string;
+  kinds?: string[];
+  priority?: number;
+}
+
+export interface ExtensionSearchItem {
+  id?: string;
+  providerId?: string;
+  extensionId?: string;
+  title: string;
+  subtitle?: string;
+  snippet?: string;
+  meta?: string;
+  keywords?: string[];
+  order?: number;
+  action?: unknown;
 }
 
 export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; packageType?: ExtensionPackageType };

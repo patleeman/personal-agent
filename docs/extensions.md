@@ -121,6 +121,7 @@ The manifest declares what your extension contributes:
 | `transcriptRenderers`         | Custom tool result rendering                                |                                                                                           |
 | `promptReferences`            | @-mention resolvers                                         |                                                                                           |
 | `quickOpen`                   | Command palette surfaces/tabs backed by extension providers | [See below](#quick-open-surfaces-quickopen)                                               |
+| `searchProviders`             | Backend-powered global search providers                     | [See below](#global-search-providers-searchproviders)                                     |
 | `settings`                    | Settings schema contributions                               | [See below](#settings)                                                                    |
 | `settingsComponent`           | Component panel in Settings                                 | [See below](#settings-component-settingscomponent)                                        |
 | `topBarElements`              | Top bar indicator icons                                     | [See below](#top-bar-elements-topbarelements)                                             |
@@ -207,6 +208,31 @@ Backend handler receives:
 }
 ```
 
+### Global Search Providers (`searchProviders`)
+
+Use `searchProviders` for app-level search backed by extension backend actions. The provider appears as a command palette scope; when the user searches that scope, the backend action receives `{ query, limit, providerId }`.
+
+```json
+{
+  "backend": {
+    "actions": [{ "id": "searchTickets", "handler": "searchTickets" }]
+  },
+  "contributes": {
+    "searchProviders": [
+      {
+        "id": "tickets",
+        "title": "Tickets",
+        "action": "searchTickets",
+        "kinds": ["ticket"],
+        "priority": 10
+      }
+    ]
+  }
+}
+```
+
+Return either an array of items or `{ "items": [...] }`. Items support `title`, `subtitle`, `snippet`/`meta`, `keywords`, `order`, and optional `action`. Supported actions today are `{ "kind": "navigate", "to": "/path" }` and `{ "kind": "command", "command": "extension.command", "args": {} }`.
+
 ### Conversation Lifecycle (`conversationLifecycle`)
 
 Add React UI for conversation state transitions such as waiting for user input, blocked/takeover state, model or tool errors, active goal mode, compaction, or an active run.
@@ -228,6 +254,8 @@ Add React UI for conversation state transitions such as waiting for user input, 
 ```
 
 Components receive `{ pa, lifecycleContext }`, where `lifecycleContext` includes `conversationId`, `cwd`, `event`, `isStreaming`, `hasGoal`, `isCompacting`, and optional `error`.
+
+For backend automation, subscribe to `source: "conversation"` and patterns like `tool.started`, `tool.ended`, `tool.failed`, `run.started`, `run.ended`, `model.error`, `compaction.started`, or `compaction.ended`. Handlers receive `{ subscriptionId, event, payload, sourceExtensionId }`; `payload.type` is the lifecycle event name.
 
 ### Composer Attachments
 
@@ -961,7 +989,7 @@ Long-lived backend services are declared under `backend.services` so the host ca
 }
 ```
 
-Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes. The host dispatches these through the extension event bus as `host:{source}` events; `pattern` narrows the event name. Current built-in producers include `host:workspaceFiles` for workspace writes/deletes/renames/moves, `host:settings` for settings updates, and frontend `host:selection` notifications when shared selection changes.
+Event subscriptions are declared under `contributes.subscriptions` for host-owned event sources such as workspace files, vault files, settings, conversations, routes, and selection changes. The host dispatches these through the extension event bus as `host:{source}` events; `pattern` narrows the event name. Current built-in producers include `host:workspaceFiles` for workspace writes/deletes/renames/moves, `host:settings` for settings updates, frontend `host:selection` notifications when shared selection changes, and `host:conversation:*` lifecycle events for live transcript/stream state.
 
 ```json
 {

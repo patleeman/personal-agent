@@ -20,7 +20,13 @@ import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../co
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
 import { createHostCommands, evaluateCommandEnablement, listHostCommands } from '../extensions/commands';
 import { systemExtensionModules } from '../extensions/systemExtensionModules';
-import type { ExtensionCommandRegistration, ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
+import type {
+  ExtensionCommandRegistration,
+  ExtensionQuickOpenRegistration,
+  ExtensionSearchItem,
+  ExtensionSearchProviderRegistration,
+  ExtensionSurfaceSummary,
+} from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
 import type { ConversationContentSearchMatch, SessionMeta } from '../shared/types';
 import { timeAgo } from '../shared/utils';
@@ -47,7 +53,8 @@ type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
   | { kind: 'openFile'; fileId: string; extensionSurfaces?: ExtensionSurfaceSummary[] }
-  | { kind: 'command'; command: string; args?: unknown };
+  | { kind: 'command'; command: string; args?: unknown }
+  | { kind: 'extensionSearchAction'; extensionId: string; action: unknown };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
@@ -122,6 +129,24 @@ function buildConversationItems(section: 'open' | 'archived', sessions: ScopedSe
   });
 }
 
+function normalizeExtensionSearchItem(
+  provider: ExtensionSearchProviderRegistration,
+  item: ExtensionSearchItem,
+  index: number,
+): CommandPaletteItem<CommandPaletteAction> | null {
+  if (!item.title || !item.action) return null;
+  return {
+    id: `extension-search:${provider.extensionId}:${provider.id}:${item.id ?? index}`,
+    section: provider.id,
+    title: item.title,
+    subtitle: item.subtitle,
+    meta: item.snippet ?? item.meta,
+    keywords: item.keywords?.filter((keyword): keyword is string => typeof keyword === 'string'),
+    order: item.order ?? index,
+    action: { kind: 'extensionSearchAction', extensionId: provider.extensionId, action: item.action },
+  };
+}
+
 function normalizeQuickOpenItem(
   registration: ExtensionQuickOpenRegistration,
   item: ExtensionQuickOpenItem,
@@ -136,7 +161,7 @@ function normalizeQuickOpenItem(
     title: item.title,
     subtitle: item.subtitle,
     meta: item.meta,
-    keywords: item.keywords,
+    keywords: item.keywords?.filter((keyword): keyword is string => typeof keyword === 'string'),
     order: item.order ?? index,
     action: item.action,
   };
@@ -194,6 +219,10 @@ export function CommandPalette() {
   const [quickOpenSearchItems, setQuickOpenSearchItems] = useState<CommandPaletteItem<CommandPaletteAction>[]>([]);
   const [quickOpenSearchLoading, setQuickOpenSearchLoading] = useState(false);
   const [quickOpenSearchError, setQuickOpenSearchError] = useState<string | null>(null);
+  const [extensionSearchProviders, setExtensionSearchProviders] = useState<ExtensionSearchProviderRegistration[]>([]);
+  const [extensionSearchItems, setExtensionSearchItems] = useState<CommandPaletteItem<CommandPaletteAction>[]>([]);
+  const [extensionSearchLoading, setExtensionSearchLoading] = useState(false);
+  const [extensionSearchError, setExtensionSearchError] = useState<string | null>(null);
   const [extensionCommands, setExtensionCommands] = useState<ExtensionCommandRegistration[]>([]);
   const openThreadSessions = useMemo(
     () => [...pinnedSessions.map((session) => ({ ...session, pinned: true }) satisfies ScopedSessionMeta), ...tabs],
@@ -222,7 +251,7 @@ export function CommandPalette() {
         title: command.title,
         subtitle: command.id,
         meta: command.category,
-        keywords: [command.id, command.category],
+        keywords: [command.id, command.category].filter((keyword): keyword is string => typeof keyword === 'string'),
         order: index,
         disabled,
         action: { kind: 'command' as const, command: command.id },
@@ -234,7 +263,9 @@ export function CommandPalette() {
       title: command.title,
       subtitle: `${command.extensionId}.${command.surfaceId}`,
       meta: command.category ?? command.extensionId,
-      keywords: [command.surfaceId, command.extensionId, command.category, command.description],
+      keywords: [command.surfaceId, command.extensionId, command.category, command.description].filter(
+        (keyword): keyword is string => typeof keyword === 'string',
+      ),
       order: hostItems.length + index,
       disabled: !evaluateCommandEnablement(command.enablement, {
         route: location.pathname,
@@ -256,18 +287,26 @@ export function CommandPalette() {
         .sort((left, right) => left.order - right.order || left.label.localeCompare(right.label)),
     [quickOpenRegistrations],
   );
+  const searchProviderScopes = useMemo(
+    () => extensionSearchProviders.map((provider) => ({ value: provider.id, label: provider.title })),
+    [extensionSearchProviders],
+  );
   const quickOpenScopeLabel = quickOpenScopes.find((option) => option.value === scope)?.label ?? 'items';
   const scopeOptions = useMemo(
     () => [
       ...COMMAND_PALETTE_SCOPE_OPTIONS,
       { value: 'commands', label: 'Commands' },
       ...quickOpenScopes.map(({ value, label }) => ({ value, label })),
+      ...searchProviderScopes,
     ],
-    [quickOpenScopes],
+    [quickOpenScopes, searchProviderScopes],
   );
   const quickOpenSectionLabels = useMemo(
-    () => Object.fromEntries(quickOpenScopes.map((option) => [option.value, option.label])),
-    [quickOpenScopes],
+    () => ({
+      ...Object.fromEntries(quickOpenScopes.map((option) => [option.value, option.label])),
+      ...Object.fromEntries(extensionSearchProviders.map((provider) => [provider.id, provider.title])),
+    }),
+    [extensionSearchProviders, quickOpenScopes],
   );
   const searchedConversationItems = useMemo(
     () => buildConversationContentSearchItems(conversationContentSearchResults, query.trim()),
@@ -281,9 +320,18 @@ export function CommandPalette() {
       archivedConversationItems,
       fileItems,
       searchedConversationItems,
-      searchedFileItems,
+      searchedFileItems: extensionSearchItems.length > 0 ? extensionSearchItems : searchedFileItems,
     });
-  }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedConversationItems, searchedFileItems]);
+  }, [
+    archivedConversationItems,
+    extensionSearchItems,
+    fileItems,
+    openConversationItems,
+    query,
+    scope,
+    searchedConversationItems,
+    searchedFileItems,
+  ]);
 
   const emptyQueryLimits = useMemo(
     () => (scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length === 0 ? { archived: archivedVisibleLimit } : undefined),
@@ -320,13 +368,18 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    api
-      .extensionCommands()
-      .then((commands) => {
-        if (!cancelled) setExtensionCommands(commands);
+    Promise.all([api.extensionCommands(), api.extensionSearchProviders()])
+      .then(([commands, providers]) => {
+        if (!cancelled) {
+          setExtensionCommands(commands);
+          setExtensionSearchProviders(providers);
+        }
       })
       .catch(() => {
-        if (!cancelled) setExtensionCommands([]);
+        if (!cancelled) {
+          setExtensionCommands([]);
+          setExtensionSearchProviders([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -340,7 +393,7 @@ export function CommandPalette() {
       const registrations = quickOpenRegistrations.length > 0 ? quickOpenRegistrations : await api.extensionQuickOpen();
       setQuickOpenRegistrations(registrations);
       const groups = await Promise.all(
-        registrations.map(async (registration) => {
+        registrations.map(async (registration: ExtensionQuickOpenRegistration) => {
           const loader = systemExtensionModules.get(registration.extensionId);
           if (!loader) return [];
           const module = await loader();
@@ -432,7 +485,10 @@ export function CommandPalette() {
     setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
   }, [canLoadMoreArchivedThreads, groups]);
 
-  const shouldSearchQuickOpenByContent = open && scope !== THREADS_COMMAND_PALETTE_SCOPE && query.trim().length > 0;
+  const activeSearchProvider = extensionSearchProviders.find((provider) => provider.id === scope) ?? null;
+  const shouldSearchExtensionProvider = open && Boolean(activeSearchProvider) && query.trim().length > 0;
+  const shouldSearchQuickOpenByContent =
+    open && scope !== THREADS_COMMAND_PALETTE_SCOPE && !activeSearchProvider && query.trim().length > 0;
 
   const shouldSearchConversationsByContent = open && scope === THREADS_COMMAND_PALETTE_SCOPE && query.trim().length > 0;
 
@@ -451,13 +507,13 @@ export function CommandPalette() {
     const handle = window.setTimeout(() => {
       void api
         .conversationContentSearch(query.trim(), CONVERSATION_CONTENT_SEARCH_LIMIT)
-        .then((result) => {
+        .then((result: { matches: ConversationContentSearchMatch[] }) => {
           if (cancelled) {
             return;
           }
           setConversationContentSearchResults(result.matches);
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           if (cancelled) {
             return;
           }
@@ -478,6 +534,49 @@ export function CommandPalette() {
   }, [query, shouldSearchConversationsByContent]);
 
   useEffect(() => {
+    if (!shouldSearchExtensionProvider || !activeSearchProvider) {
+      setExtensionSearchLoading(false);
+      setExtensionSearchError(null);
+      setExtensionSearchItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    setExtensionSearchLoading(true);
+    setExtensionSearchError(null);
+
+    const handle = window.setTimeout(() => {
+      void api
+        .extensionSearch({ query: query.trim(), limit: FILE_SEARCH_LIMIT, providerId: activeSearchProvider.id })
+        .then((result: { providers: ExtensionSearchProviderRegistration[]; items: ExtensionSearchItem[] }) => {
+          if (cancelled) return;
+          setExtensionSearchItems(
+            result.items.flatMap((item: ExtensionSearchItem, index: number) => {
+              const provider =
+                result.providers.find((candidate: ExtensionSearchProviderRegistration) => candidate.id === item.providerId) ??
+                activeSearchProvider;
+              const normalized = normalizeExtensionSearchItem(provider, item, index);
+              return normalized ? [normalized] : [];
+            }),
+          );
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          setExtensionSearchError(error instanceof Error ? error.message : String(error));
+          setExtensionSearchItems([]);
+        })
+        .finally(() => {
+          if (!cancelled) setExtensionSearchLoading(false);
+        });
+    }, FILE_CONTENT_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [activeSearchProvider, query, shouldSearchExtensionProvider]);
+
+  useEffect(() => {
     if (!shouldSearchQuickOpenByContent) {
       setQuickOpenSearchLoading(false);
       setQuickOpenSearchError(null);
@@ -494,7 +593,7 @@ export function CommandPalette() {
         const registrations = quickOpenRegistrations.length > 0 ? quickOpenRegistrations : await api.extensionQuickOpen();
         setQuickOpenRegistrations(registrations);
         const groups = await Promise.all(
-          registrations.map(async (registration) => {
+          registrations.map(async (registration: ExtensionQuickOpenRegistration) => {
             const loader = systemExtensionModules.get(registration.extensionId);
             if (!loader) return [];
             const module = await loader();
@@ -566,6 +665,24 @@ export function CommandPalette() {
             await api.executeExtensionCommand(item.action.command, item.action.args ?? {});
             closePalette();
             return;
+          case 'extensionSearchAction': {
+            const searchAction = item.action.action;
+            if (searchAction && typeof searchAction === 'object' && 'kind' in searchAction) {
+              const typedAction = searchAction as { kind?: unknown; to?: unknown; command?: unknown; args?: unknown };
+              if (typedAction.kind === 'navigate' && typeof typedAction.to === 'string') {
+                navigate(typedAction.to);
+              } else if (typedAction.kind === 'command' && typeof typedAction.command === 'string') {
+                await api.executeExtensionCommand(typedAction.command, typedAction.args ?? {});
+              }
+            } else if (searchAction && typeof searchAction === 'object' && 'command' in searchAction) {
+              await api.executeExtensionCommand(
+                String((searchAction as { command: unknown }).command),
+                (searchAction as { args?: unknown }).args ?? {},
+              );
+            }
+            closePalette();
+            return;
+          }
           default:
             return;
         }
@@ -724,14 +841,27 @@ export function CommandPalette() {
       sections.add(scope);
     }
 
+    if (extensionSearchLoading) {
+      sections.add(scope);
+    }
+
     return [...sections];
-  }, [conversationContentSearchLoading, fileItems.length, scope, sessions, sessionsLoading, quickOpenLoading, quickOpenSearchLoading]);
+  }, [
+    conversationContentSearchLoading,
+    extensionSearchLoading,
+    fileItems.length,
+    scope,
+    sessions,
+    sessionsLoading,
+    quickOpenLoading,
+    quickOpenSearchLoading,
+  ]);
   const showSectionHeaders = groups.length > 1;
   const labelForSection = useCallback(
     (section: CommandPaletteSection) => quickOpenSectionLabels[section] ?? COMMAND_PALETTE_SECTION_LABELS[section] ?? section,
     [quickOpenSectionLabels],
   );
-  const searchPlaceholder = scope === THREADS_COMMAND_PALETTE_SCOPE ? 'Search threads…' : `Open ${quickOpenScopeLabel.toLowerCase()}…`;
+  const searchPlaceholder = scope === THREADS_COMMAND_PALETTE_SCOPE ? 'Search threads…' : `Open ${labelForSection(scope).toLowerCase()}…`;
 
   if (!open) {
     return null;
@@ -937,11 +1067,20 @@ export function CommandPalette() {
             </section>
           )}
 
+          {extensionSearchError && activeSearchProvider && (
+            <section className="pb-2 last:pb-0">
+              <p className="px-2.5 py-3 text-[12px] text-danger">
+                Failed to search {activeSearchProvider.title.toLowerCase()}: {extensionSearchError}
+              </p>
+            </section>
+          )}
+
           {visibleCount === 0 &&
             loadingSections.length === 0 &&
             !(conversationContentSearchError && scope === THREADS_COMMAND_PALETTE_SCOPE) &&
             !(quickOpenError && scope !== THREADS_COMMAND_PALETTE_SCOPE) &&
-            !(quickOpenSearchError && scope !== THREADS_COMMAND_PALETTE_SCOPE) && (
+            !(quickOpenSearchError && scope !== THREADS_COMMAND_PALETTE_SCOPE) &&
+            !(extensionSearchError && activeSearchProvider) && (
               <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
             )}
         </div>

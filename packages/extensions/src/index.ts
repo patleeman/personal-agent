@@ -194,6 +194,14 @@ export interface ExtensionQuickOpenContribution {
   order?: number;
 }
 
+export interface ExtensionSearchProviderContribution {
+  id: string;
+  title: string;
+  action: string;
+  kinds?: string[];
+  priority?: number;
+}
+
 export interface ExtensionThemeContribution {
   id: string;
   label: string;
@@ -501,6 +509,7 @@ export interface ExtensionContributions {
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   promptReferences?: ExtensionPromptReferenceContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
+  searchProviders?: ExtensionSearchProviderContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];

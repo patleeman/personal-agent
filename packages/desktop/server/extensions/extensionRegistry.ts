@@ -208,6 +208,16 @@ export interface ExtensionQuickOpenRegistration {
   order?: number;
 }
 
+export interface ExtensionSearchProviderRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  title: string;
+  action: string;
+  kinds?: string[];
+  priority?: number;
+}
+
 export interface ExtensionComposerShelfRegistration {
   extensionId: string;
   id: string;
@@ -930,6 +940,18 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.searchProviders !== undefined) {
+    for (const [index, provider] of assertRecordArray(contributes.searchProviders, 'contributes.searchProviders').entries()) {
+      requireString(provider.id, `contributes.searchProviders[${index}].id`);
+      requireString(provider.title, `contributes.searchProviders[${index}].title`);
+      requireString(provider.action, `contributes.searchProviders[${index}].action`);
+      if (provider.kinds !== undefined) requireStringArray(provider.kinds, `contributes.searchProviders[${index}].kinds`);
+      if (provider.priority !== undefined && !Number.isInteger(provider.priority)) {
+        throw new Error(`Extension manifest contributes.searchProviders[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.skills !== undefined) {
     for (const [index, skill] of assertArray(contributes.skills, 'contributes.skills').entries()) {
       if (typeof skill === 'string') {
@@ -1634,6 +1656,7 @@ export function readExtensionSchema() {
       'promptReferences',
       'promptContextProviders',
       'quickOpen',
+      'searchProviders',
       'themes',
       'topBarElements',
       'messageActions',
@@ -1894,6 +1917,29 @@ export function listExtensionQuickOpenRegistrations(stateRoot: string = getState
       ];
     }),
   );
+}
+
+export function listExtensionSearchProviderRegistrations(stateRoot: string = getStateRoot()): ExtensionSearchProviderRegistration[] {
+  return listEnabledExtensionEntries(stateRoot)
+    .flatMap((entry) =>
+      (entry.manifest.contributes?.searchProviders ?? []).flatMap((provider): ExtensionSearchProviderRegistration[] => {
+        const id = provider.id.trim();
+        const action = provider.action.trim();
+        if (!id || !action || !provider.title.trim()) return [];
+        return [
+          {
+            extensionId: entry.manifest.id,
+            id,
+            packageType: entry.manifest.packageType ?? 'user',
+            title: provider.title,
+            action,
+            ...(provider.kinds?.length ? { kinds: provider.kinds } : {}),
+            ...(Number.isInteger(provider.priority) ? { priority: provider.priority } : {}),
+          },
+        ];
+      }),
+    )
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
 
 export function listExtensionComposerShelfRegistrations(stateRoot: string = getStateRoot()): ExtensionComposerShelfRegistration[] {

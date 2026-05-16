@@ -111,6 +111,7 @@ export interface ExtensionContributions {
   promptReferences?: ExtensionPromptReferenceContribution[];
   promptContextProviders?: ExtensionPromptContextProviderContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
+  searchProviders?: ExtensionSearchProviderContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
@@ -394,6 +395,14 @@ export interface ExtensionQuickOpenContribution {
   title?: string;
   section?: string;
   order?: number;
+}
+
+interface ExtensionSearchProviderContribution {
+  id: string;
+  title: string;
+  action: string;
+  kinds?: string[];
+  priority?: number;
 }
 
 export interface ExtensionHostComponentReference {

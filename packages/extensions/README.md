@@ -83,7 +83,7 @@ Supported top-level fields:
 - `id`, `name`, `description`, `version`, `packageType`.
 - `frontend`: native React bundle entry and optional styles.
 - `backend`: backend module entry, backend actions, backend protocol entrypoints, and optional agent lifecycle factory.
-- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, transcript blocks, selection actions, subscriptions, themes, topBarElements, messageActions, composerShelves, composerControls, toolbarActions, conversationDecorators, conversationLifecycle, composer attachment providers/renderers/resolvers, activity tree item elements/styles/actions, contextMenus, statusBarItems, secrets, and settings metadata.
+- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, search providers, prompt reference resolvers, skills, tools, transcript renderers, transcript blocks, selection actions, subscriptions, themes, topBarElements, messageActions, composerShelves, composerControls, toolbarActions, conversationDecorators, conversationLifecycle, composer attachment providers/renderers/resolvers, activity tree item elements/styles/actions, contextMenus, statusBarItems, secrets, and settings metadata.
 - `dependsOn`: required or optional extension dependencies surfaced by diagnostics and available for runtime discovery.
 - `permissions`: declared capability intent.
 
@@ -476,7 +476,9 @@ Use `backend.services` for long-lived backend work. The host starts enabled serv
 
 Use `contributes.subscriptions` for host-owned event sources. Current built-in producers include `workspaceFiles` (`host:workspaceFiles`), `settings` (`host:settings`), and shared selection changes (`host:selection`). Subscription handlers run in the backend through the extension event bus.
 
-Use `contributes.conversationLifecycle` for state-aware conversation banners or inline UI. Components receive `{ pa, lifecycleContext }`, where the event can be `before-run`, `after-run-start`, `blocked`, `waiting-for-user`, `model-error`, `tool-error`, `goal-active`, or `compaction-available`.
+Use `contributes.searchProviders` for backend-powered global search scopes. Provider actions receive `{ query, limit, providerId }` and return either an array or `{ items }` with result rows.
+
+Use `contributes.conversationLifecycle` for state-aware conversation banners or inline UI. Components receive `{ pa, lifecycleContext }`, where the event can be `before-run`, `after-run-start`, `blocked`, `waiting-for-user`, `model-error`, `tool-error`, `goal-active`, or `compaction-available`. Backend extensions can also subscribe to `source: "conversation"` lifecycle patterns such as `tool.started`, `tool.ended`, `tool.failed`, `run.started`, `run.ended`, `model.error`, `compaction.started`, and `compaction.ended`.
 
 Use `contributes.composerAttachmentProviders` for composer attachment/context buttons. Provider actions receive `{ conversationId, cwd, composerText }`; returning a string or `{ text }` appends to the composer. `composerAttachmentRenderers` and `composerAttachmentResolvers` declare extension-owned attachment chip/render and backend-resolution seams.
 

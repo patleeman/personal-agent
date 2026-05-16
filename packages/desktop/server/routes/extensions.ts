@@ -31,6 +31,7 @@ import {
   listExtensionKeybindingRegistrations,
   listExtensionMentionRegistrations,
   listExtensionQuickOpenRegistrations,
+  listExtensionSearchProviderRegistrations,
   listExtensionSlashCommandRegistrations,
   readExtensionRegistrySnapshot,
   readExtensionSchema,
@@ -474,6 +475,48 @@ export function registerExtensionRoutes(
       res.json(listExtensionQuickOpenRegistrations());
     } catch (err) {
       sendRouteError(res, 'extensions quick-open error', err);
+    }
+  });
+
+  router.get('/api/extensions/search-providers', (_req, res) => {
+    try {
+      res.json(listExtensionSearchProviderRegistrations());
+    } catch (err) {
+      sendRouteError(res, 'extensions search providers error', err);
+    }
+  });
+
+  router.post('/api/extensions/search', async (req, res) => {
+    try {
+      const query = typeof req.body?.query === 'string' ? req.body.query : '';
+      const limit = Number.isInteger(req.body?.limit) ? Math.max(1, Math.min(100, req.body.limit)) : 50;
+      const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId : null;
+      const providers = listExtensionSearchProviderRegistrations().filter((provider) => !providerId || provider.id === providerId);
+      const groups = await Promise.all(
+        providers.map(async (provider) => {
+          const result = await invokeExtensionAction(provider.extensionId, provider.action, { query, limit, providerId: provider.id });
+          return { provider, result };
+        }),
+      );
+      res.json({
+        providers,
+        items: groups.flatMap(({ provider, result }) => {
+          if (!result.ok) return [];
+          const payload = result.result;
+          const items = Array.isArray(payload)
+            ? payload
+            : payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)
+              ? (payload as { items: unknown[] }).items
+              : [];
+          return items.map((item) => ({
+            providerId: provider.id,
+            extensionId: provider.extensionId,
+            ...(item && typeof item === 'object' ? item : { title: String(item) }),
+          }));
+        }),
+      });
+    } catch (err) {
+      sendRouteError(res, 'extensions search error', err);
     }
   });
 

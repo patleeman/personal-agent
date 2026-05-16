@@ -1,5 +1,6 @@
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
+import { publishExtensionHostEvent } from '../extensions/extensionSubscriptions.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { persistTraceCompaction, persistTraceToolCall } from '../traces/tracePersistence.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
@@ -66,6 +67,10 @@ function stringifyToolError(result: unknown): string | undefined {
   } catch {
     return String(result);
   }
+}
+
+function publishConversationLifecycleEvent(sessionId: string, type: string, payload: Record<string, unknown> = {}): void {
+  void publishExtensionHostEvent('conversation', { conversationId: sessionId, type, ...payload });
 }
 
 function readToolInputMetadata(toolName: string, toolInput: unknown): Record<string, unknown> | undefined {
@@ -185,6 +190,12 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'tool_execution_start') {
+    publishConversationLifecycleEvent(entry.sessionId, 'tool.started', {
+      toolName: event.toolName,
+      toolCallId: event.toolCallId,
+      args: readToolEventArgs(event),
+      runId: entry.traceRunId ?? undefined,
+    });
     getToolStartTimes(entry.session).set(event.toolCallId, Date.now());
     getToolStartInputs(entry.session).set(event.toolCallId, readToolEventArgs(event));
     if (!entry.traceRunFirstToolAtMs) {
@@ -212,6 +223,14 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     getToolStartInputs(entry.session).delete(event.toolCallId);
 
     const errorMessage = event.isError ? stringifyToolError(event.result) : undefined;
+
+    publishConversationLifecycleEvent(entry.sessionId, event.isError ? 'tool.failed' : 'tool.ended', {
+      toolName: event.toolName,
+      toolCallId: event.toolCallId,
+      durationMs,
+      error: errorMessage,
+      runId: entry.traceRunId ?? undefined,
+    });
 
     persistTraceToolCall({
       sessionId: entry.sessionId,
@@ -241,6 +260,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'agent_start') {
+    publishConversationLifecycleEvent(entry.sessionId, 'run.started', { title: entry.title });
     entry.traceRunId = `${entry.sessionId}:${Date.now().toString(36)}`;
     entry.traceRunStartedAtMs = Date.now();
     entry.traceRunTurnCount = 0;
@@ -260,6 +280,11 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'agent_end') {
+    publishConversationLifecycleEvent(entry.sessionId, 'run.ended', {
+      title: entry.title,
+      error: entry.currentTurnError ?? undefined,
+      runId: entry.traceRunId ?? undefined,
+    });
     persistAppTelemetryEvent({
       source: 'agent',
       category: 'conversation_loop',
@@ -277,6 +302,10 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     const errorMessage = getAssistantErrorDisplayMessage(event.message);
     if (errorMessage) {
       entry.currentTurnError = errorMessage;
+      publishConversationLifecycleEvent(entry.sessionId, 'model.error', {
+        error: errorMessage,
+        runId: entry.traceRunId ?? undefined,
+      });
       persistAppTelemetryEvent({
         source: 'agent',
         category: 'conversation_outcome',
@@ -371,11 +400,22 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'compaction_start') {
+    publishConversationLifecycleEvent(entry.sessionId, 'compaction.started', {
+      mode: event.mode,
+      reason: event.reason,
+      runId: entry.traceRunId ?? undefined,
+    });
     entry.isCompacting = true;
     entry.pendingAutoCompactionReason = event.reason === 'manual' ? null : event.reason;
   }
 
   if (event.type === 'compaction_end') {
+    publishConversationLifecycleEvent(entry.sessionId, 'compaction.ended', {
+      reason: event.reason,
+      aborted: event.aborted,
+      willRetry: event.willRetry,
+      runId: entry.traceRunId ?? undefined,
+    });
     entry.isCompacting = false;
     const compactionReason = event.reason === 'manual' ? null : event.reason;
     entry.pendingAutoCompactionReason = null;
