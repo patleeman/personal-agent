@@ -11,6 +11,19 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DaemonEvent, DaemonPaths, EventPayload } from '../../daemon/types.js';
+import {
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  loadDurableRunManifest,
+  loadDurableRunStatus,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  resolveRuntimeDbPath,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+} from '../../runs/store.js';
+import type { DaemonConfig } from '../config.js';
 import {
   appendAutomationActivityEntry,
   closeAutomationDbs,
@@ -22,20 +35,7 @@ import {
   loadAutomationSchedulerState,
   saveAutomationSchedulerState,
   setStoredAutomationThreadBinding,
-} from '../automation-store.js';
-import type { DaemonConfig } from '../config.js';
-import {
-  createDurableRunManifest,
-  createInitialDurableRunStatus,
-  loadDurableRunManifest,
-  loadDurableRunStatus,
-  resolveDurableRunPaths,
-  resolveDurableRunsRoot,
-  resolveRuntimeDbPath,
-  saveDurableRunManifest,
-  saveDurableRunStatus,
-} from '../runs/store.js';
-import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
+} from '../store.js';
 import { createTasksModule } from './tasks.js';
 import type { TaskRunRequest, TaskRunResult } from './tasks-runner.js';
 import type { DaemonModuleContext } from './types.js';

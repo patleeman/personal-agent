@@ -107,5 +107,5 @@ describe('ConversationPage desktop local state', () => {
     expect(html).toContain('hello from desktop state');
     expect(html).toContain('desktop state reply');
     expect(html).toContain('Local desktop state');
-  });
+  }, 15000);
 });

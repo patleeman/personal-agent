@@ -3703,7 +3703,7 @@ describe('appendVisibleCustomMessage', () => {
       customType: 'automation_note',
       content: 'Show this note.',
       display: true,
-      details: { severity: 'info' },
+      details: expect.objectContaining({ severity: 'info' }),
     });
   });
 

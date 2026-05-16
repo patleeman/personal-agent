@@ -199,8 +199,20 @@ describe('mcp config helpers', () => {
 describe('native MCP client', () => {
   it('inspects and calls a stdio server', async () => {
     const cwd = makeTempDir('pa-mcp-server');
-    const sdkRoot = pathToFileURL(join(process.cwd(), 'node_modules', '@modelcontextprotocol', 'sdk', 'dist', 'esm')).href;
-    const zodUrl = pathToFileURL(join(process.cwd(), 'node_modules', 'zod', 'v4', 'index.js')).href;
+    const sdkRoot = pathToFileURL(
+      join(
+        process.cwd(),
+        'node_modules',
+        '.pnpm',
+        '@modelcontextprotocol+sdk@1.27.1_zod@4.3.6',
+        'node_modules',
+        '@modelcontextprotocol',
+        'sdk',
+        'dist',
+        'esm',
+      ),
+    ).href;
+    const zodUrl = pathToFileURL(join(process.cwd(), 'node_modules', '.pnpm', 'zod@4.3.6', 'node_modules', 'zod', 'v4', 'index.js')).href;
     const serverPath = join(cwd, 'server.mjs');
 
     writeFileSync(

@@ -2,10 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockSetExtensionEnabled = vi.fn();
 
-vi.mock('../../../packages/desktop/server/extensions/extensionRegistry.js', () => ({
-  setExtensionEnabled: (...args: unknown[]) => mockSetExtensionEnabled(...args),
-}));
-
 import { ensure } from './backend.js';
 
 function createCtx(overrides: Record<string, unknown> = {}) {
@@ -28,6 +24,7 @@ function createCtx(overrides: Record<string, unknown> = {}) {
 
   return {
     extensionId: 'system-onboarding',
+    extensions: { setEnabled: mockSetExtensionEnabled },
     profile: 'test-profile',
     storage,
     conversations,

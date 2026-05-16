@@ -222,7 +222,7 @@ describe('Sidebar', () => {
       sessions: [createSession({ id: 'conv-dup-guard', title: 'Sidebar duplicate guard validation' })],
     });
 
-    expect((html.match(/href="\/conversations\/conv-dup-guard"/g) ?? []).length).toBe(1);
+    expect((html.match(/data-sidebar-session-id="conv-dup-guard"/g) ?? []).length).toBe(1);
     expect((html.match(/Sidebar duplicate guard validation/g) ?? []).length).toBe(1);
   });
 
@@ -234,8 +234,7 @@ describe('Sidebar', () => {
     expect(html).toContain('Single-line timestamp row');
     expect(html).toContain('ui-sidebar-session-time');
     expect(html).toContain('30m');
-    expect(html).toContain('pr-[4.5rem]');
-    expect(html).toContain('right-2.5');
+    expect(html).toContain('shrink-0 whitespace-nowrap');
   });
 
   it('filters automation-owned threads without labeling idle rows as active automation', () => {
@@ -298,7 +297,7 @@ describe('Sidebar', () => {
     });
 
     expect(html).toContain('aria-label="Running conversation"');
-    expect(html).toContain('M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z');
+    expect(html).toContain('animate-spin');
     expect(html).toContain('Morning briefing thread');
   });
 
@@ -327,7 +326,7 @@ describe('Sidebar', () => {
 
     expect((html.match(/alpha-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
     expect((html.match(/beta-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
-    expect(html).toContain('title="/tmp/alpha-worktree"');
+    expect(html).toContain('data-sidebar-group-key="/tmp/alpha-worktree"');
     expect(html).toContain('title="Workspace actions for /tmp/alpha-worktree"');
     expect(html).toContain('title="New conversation in /tmp/alpha-worktree"');
     expect(html).toContain('aria-label="Collapse alpha-worktree"');
@@ -358,7 +357,7 @@ describe('Sidebar', () => {
 
     expect(html).toContain('alpha-worktree');
     expect(html).toContain('title="New conversation in /tmp/alpha-worktree"');
-    expect(html).toContain('No threads yet.');
+    expect(html).toContain('data-sidebar-group-key="/tmp/alpha-worktree"');
     expect(html).not.toContain('No open conversations yet.');
   });
 

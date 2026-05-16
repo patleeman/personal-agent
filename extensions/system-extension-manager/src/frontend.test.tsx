@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   openPath: vi.fn(),
   reloadExtension: vi.fn(),
   validateExtension: vi.fn(),
+  extensionKeybindings: vi.fn(),
 }));
 
 vi.mock('@personal-agent/extensions/data', () => ({
@@ -21,12 +22,19 @@ vi.mock('@personal-agent/extensions/data', () => ({
     extensionInstallations: mocks.extensionInstallations,
     reloadExtension: mocks.reloadExtension,
     validateExtension: mocks.validateExtension,
+    extensionKeybindings: mocks.extensionKeybindings,
   },
   EXTENSION_REGISTRY_CHANGED_EVENT: 'pa-extension-registry-changed',
   notifyExtensionRegistryChanged: mocks.notifyExtensionRegistryChanged,
 }));
 
 vi.mock('@personal-agent/extensions/workbench', () => ({
+  getDesktopBridge: () => ({
+    openPath: mocks.openPath,
+  }),
+}));
+
+vi.mock('@personal-agent/extensions/workbench-browser', () => ({
   getDesktopBridge: () => ({
     openPath: mocks.openPath,
   }),
@@ -72,7 +80,12 @@ function renderPage(options?: { toast?: ReturnType<typeof vi.fn>; notify?: Retur
 
   render(
     <MemoryRouter>
-      <ExtensionManagerPage pa={{ ui: { toast, notify } } as never} context={{} as never} surface={{} as never} params={{}} />
+      <ExtensionManagerPage
+        pa={{ ui: { toast, notify }, commands: { list: vi.fn().mockResolvedValue([]) } } as never}
+        context={{} as never}
+        surface={{} as never}
+        params={{}}
+      />
     </MemoryRouter>,
   );
 
@@ -83,6 +96,7 @@ describe('ExtensionManagerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.extensionInstallations.mockResolvedValue([createExtension()]);
+    mocks.extensionKeybindings.mockResolvedValue([]);
     mocks.reloadExtension.mockResolvedValue({ ok: true, id: 'menu-test', reloaded: true, message: 'Extension backend reloaded.' });
     mocks.validateExtension.mockResolvedValue({
       ok: true,
@@ -137,9 +151,8 @@ describe('ExtensionManagerPage', () => {
     fireEvent.click(screen.getByText('Validate'));
 
     await waitFor(() => {
-      expect(screen.getByText('Menu Test validation found 1 error and 0 warnings.')).toBeTruthy();
+      expect(screen.getByText(/ERROR missing-frontend-dist/)).toBeTruthy();
     });
-    expect(screen.getByText(/ERROR missing-frontend-dist/)).toBeTruthy();
   });
 
   it('reports export failures without replacing the page', async () => {

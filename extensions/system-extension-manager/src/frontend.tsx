@@ -1,5 +1,5 @@
 import type { ExtensionSurfaceProps, NativeExtensionClient } from '@personal-agent/extensions';
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 
 const LazyExtensionManagerPage = lazy(async () => ({ default: (await import('./panels.js')).ExtensionManagerPage }));
 const LazyExtensionManagerSettingsPanel = lazy(async () => ({ default: (await import('./panels.js')).ExtensionManagerSettingsPanel }));

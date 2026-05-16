@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe('registerExtensionRoutes', () => {
-  it('serves extension schema, registry, routes, and surfaces', () => {
+  it('serves extension schema, registry, routes, and surfaces', async () => {
     const harness = createHarness();
 
     const schemaRes = createResponse();
@@ -88,7 +88,7 @@ describe('registerExtensionRoutes', () => {
     );
 
     const installedRes = createResponse();
-    harness.getHandler('/api/extensions/installed')({}, installedRes);
+    await harness.getHandler('/api/extensions/installed')({}, installedRes);
     expect(installedRes.json).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: 'system-automations', enabled: true }),
@@ -114,12 +114,12 @@ describe('registerExtensionRoutes', () => {
       expect.arrayContaining([
         expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage' }),
         expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage' }),
-        expect.objectContaining({ extensionId: 'system-files', location: 'rightRail', component: 'WorkspaceFilesPanel' }),
-        expect.objectContaining({ extensionId: 'system-files', location: 'workbench', component: 'WorkspaceFileDetailPanel' }),
-        expect.objectContaining({ extensionId: 'system-diffs', location: 'rightRail', component: 'ConversationDiffsPanel' }),
-        expect.objectContaining({ extensionId: 'system-diffs', location: 'workbench', component: 'ConversationDiffDetailPanel' }),
-        expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: 'ConversationRunsPanel' }),
-        expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: 'ConversationRunDetailPanel' }),
+        expect.objectContaining({ extensionId: 'system-files', location: 'rightRail', component: { host: 'workbench.files.rail' } }),
+        expect.objectContaining({ extensionId: 'system-files', location: 'workbench', component: { host: 'workbench.files.detail' } }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'rightRail', component: { host: 'workbench.diffs.rail' } }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'workbench', component: { host: 'workbench.diffs.detail' } }),
+        expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: { host: 'workbench.runs.rail' } }),
+        expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: { host: 'workbench.runs.detail' } }),
       ]),
     );
   });
@@ -468,7 +468,7 @@ describe('registerExtensionRoutes', () => {
     });
   });
 
-  it('toggles runtime extensions', () => {
+  it('toggles runtime extensions', async () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
@@ -477,7 +477,7 @@ describe('registerExtensionRoutes', () => {
 
     const harness = createHarness();
     const res = createResponse();
-    harness.patchHandler('/api/extensions/:id')({ params: { id: 'agent-board' }, body: { enabled: false } }, res);
+    await harness.patchHandler('/api/extensions/:id')({ params: { id: 'agent-board' }, body: { enabled: false } }, res);
 
     expect(res.json).toHaveBeenCalledWith({ ok: true, extension: expect.objectContaining({ id: 'agent-board', enabled: false }) });
   });
@@ -509,12 +509,12 @@ describe('registerExtensionRoutes', () => {
     expect(reloadRes.json).toHaveBeenCalledWith({ error: expect.stringContaining('contributes.views[0].location') });
   });
 
-  it('toggles system extensions', () => {
+  it('toggles system extensions', async () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const harness = createHarness();
     const res = createResponse();
-    harness.patchHandler('/api/extensions/:id')({ params: { id: 'system-automations' }, body: { enabled: false } }, res);
+    await harness.patchHandler('/api/extensions/:id')({ params: { id: 'system-automations' }, body: { enabled: false } }, res);
 
     expect(res.json).toHaveBeenCalledWith({ ok: true, extension: expect.objectContaining({ id: 'system-automations', enabled: false }) });
   });
@@ -638,8 +638,8 @@ describe('registerExtensionRoutes', () => {
     expect(reloadOneRes.json).toHaveBeenCalledWith({
       ok: true,
       id: 'system-extension-manager',
-      reloaded: false,
-      message: 'Runtime manifests are read on demand.',
+      reloaded: true,
+      message: 'Extension backend reloaded.',
     });
   });
 });

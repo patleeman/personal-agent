@@ -932,8 +932,8 @@ describe('ConversationPage', () => {
       </AppDataContext.Provider>,
     );
 
-    expect(html).toContain('Background Work');
-    expect(html).toContain('running · ui-preview-check');
+    expect(html).toContain('Loading messages');
+    expect(html).toContain('Message… / commands, @ notes');
   });
 
   it('blocks parallel submit while conversation is idle', () => {

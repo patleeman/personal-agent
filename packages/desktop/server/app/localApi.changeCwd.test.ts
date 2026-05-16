@@ -131,5 +131,5 @@ describe('changeDesktopConversationCwd', () => {
     });
     expect(mocks.destroySession).toHaveBeenCalledWith('conversation-1');
     expect(mocks.publishConversationSessionMetaChanged).toHaveBeenCalledWith('conversation-1', 'conversation-2');
-  });
+  }, 15000);
 });

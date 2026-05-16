@@ -13,9 +13,9 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createDeferredResumeConversationRunId } from '../../runs/deferred-resume-conversations.js';
+import { resolveDurableRunsRoot, scanDurableRun } from '../../runs/store.js';
 import type { DaemonConfig } from '../config.js';
-import { createDeferredResumeConversationRunId } from '../runs/deferred-resume-conversations.js';
-import { resolveDurableRunsRoot, scanDurableRun } from '../runs/store.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
 import { createDeferredResumeModule } from './deferred-resume.js';
 import type { DaemonModuleContext } from './types.js';

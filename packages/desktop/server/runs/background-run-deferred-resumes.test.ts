@@ -127,9 +127,9 @@ describe('background run result surfacing', () => {
     ]);
     expect(pending[0]?.prompt).toContain(fast.runId);
     expect(pending[0]?.prompt).toContain(slow.runId);
-    expect(pending[0]?.prompt).toContain('Background tasks have finished.');
+    expect(pending[0]?.prompt).toContain('Background tasks finished.');
     expect(pending[0]?.prompt).not.toContain('Durable runs have finished.');
-    expect(pending[0]?.prompt).toContain('Use run get/logs');
+    expect(pending[0]?.prompt).toContain('Use background_command get/logs');
 
     const fastCheckpoint = loadDurableRunCheckpoint(fast.checkpointPath);
     const slowCheckpoint = loadDurableRunCheckpoint(slow.paths.checkpointPath);

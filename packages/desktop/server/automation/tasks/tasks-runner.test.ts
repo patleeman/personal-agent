@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CompanionRuntime } from '../companion/types.js';
+import type { CompanionRuntime } from '../../daemon/companion/types.js';
 import type { RunnableTaskDefinition } from './tasks-runner.js';
 
 const mocks = vi.hoisted(() => ({
@@ -12,11 +12,11 @@ const mocks = vi.hoisted(() => ({
   loadDaemonConfig: vi.fn(),
 }));
 
-vi.mock('../companion/runtime.js', () => ({
+vi.mock('../../daemon/companion/runtime.js', () => ({
   resolveCompanionRuntime: mocks.resolveCompanionRuntime,
 }));
 
-vi.mock('../config.js', () => ({
+vi.mock('../../config.js', () => ({
   loadDaemonConfig: mocks.loadDaemonConfig,
 }));
 

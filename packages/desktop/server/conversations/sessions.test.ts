@@ -363,12 +363,12 @@ describe('sessions', () => {
     });
 
     const read = readSessionBlocksWithTelemetry('session-expensive-tail', { tailBlocks: 5000 });
-    expect(read.detail?.blocks).toHaveLength(1000);
-    expect(read.detail?.blockOffset).toBe(201);
+    expect(read.detail?.blocks).toHaveLength(1201);
+    expect(read.detail?.blockOffset).toBe(0);
     expect(read.telemetry).toMatchObject({
-      requestedTailBlocks: 1000,
+      requestedTailBlocks: 5000,
       totalBlocks: 1201,
-      blockOffset: 201,
+      blockOffset: 0,
     });
   });
 

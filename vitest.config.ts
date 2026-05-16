@@ -6,9 +6,12 @@ export default defineConfig({
     alias: {
       '@personal-agent/core': resolve(process.cwd(), 'packages/core/src/index.ts'),
       '@personal-agent/daemon': resolve(process.cwd(), 'packages/desktop/server/daemon/index.ts'),
+      '@testing-library/react': resolve(process.cwd(), 'packages/desktop/node_modules/@testing-library/react'),
       '@personal-agent/extensions/host': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/host.ts'),
       '@personal-agent/extensions/ui': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/ui.ts'),
       '@personal-agent/extensions/workbench': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/workbench.ts'),
+      '@personal-agent/extensions/workbench-browser': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/workbench-browser.ts'),
+      '@personal-agent/extensions/workbench-diffs': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/workbench-diffs.ts'),
       '@personal-agent/extensions/host-view-components': resolve(process.cwd(), 'packages/extensions/src/host-view-components.ts'),
       '@personal-agent/extensions/data': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/data.ts'),
       '@personal-agent/extensions/settings': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/settings.ts'),
@@ -42,6 +45,7 @@ export default defineConfig({
       '@personal-agent/extensions/backend/mcp': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/mcp.ts'),
       '@personal-agent/extensions/backend/runs': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/runs.ts'),
       '@personal-agent/extensions/backend/runtime': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/runtime.ts'),
+      '@personal-agent/extensions/backend/telemetry': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/telemetry.ts'),
       '@personal-agent/extensions/backend/slackMcpGateway': resolve(
         process.cwd(),
         'packages/desktop/server/extensions/backendApi/slackMcpGateway.ts',
@@ -51,6 +55,7 @@ export default defineConfig({
         'packages/desktop/server/extensions/backendApi/webContent.ts',
       ),
       '@personal-agent/extensions/backend': resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi/index.ts'),
+      '@personal-agent/extensions': resolve(process.cwd(), 'packages/extensions/src/index.ts'),
     },
   },
   test: {

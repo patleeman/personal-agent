@@ -108,7 +108,7 @@ describe('web live conversation durable runs', () => {
     });
 
     const runId = createWebLiveConversationRunId('conv-123');
-    const scanned = scanDurableRun(resolveDurableRunsRoot(join(stateRoot, 'daemon')), runId);
+    const scanned = scanDurableRun(resolveDurableRunsRoot(daemonSocketDir), runId);
     expect(scanned).toMatchObject({
       runId,
       recoveryAction: 'resume',
@@ -139,7 +139,7 @@ describe('web live conversation durable runs', () => {
       }),
     });
 
-    const runPaths = resolveDurableRunPaths(resolveDurableRunsRoot(join(stateRoot, 'daemon')), runId);
+    const runPaths = resolveDurableRunPaths(resolveDurableRunsRoot(daemonSocketDir), runId);
     expect(runPaths.statusPath).toContain(runId);
     await expect(listRecoverableWebLiveConversationRuns()).resolves.toEqual([
       expect.objectContaining({

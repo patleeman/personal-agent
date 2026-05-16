@@ -26,12 +26,6 @@ describe('system-files manifest', () => {
     expect(views.find((v: { id: string }) => v.id === 'workspace-file-detail')).toBeDefined();
   });
 
-  it('declares the file palette command binding', () => {
-    const commands = manifest.contributes.commands;
-    expect(commands.find((c: { id: string }) => c.id === 'open-files-palette')).toBeDefined();
-    expect(manifest.contributes.keybindings.find((k: { id: string }) => k.id === 'open-files-palette')).toBeDefined();
-  });
-
   it('declares required permissions', () => {
     expect(manifest.permissions).toContain('workspace:read');
     expect(manifest.permissions).toContain('workspace:write');

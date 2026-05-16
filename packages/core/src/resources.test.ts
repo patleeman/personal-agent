@@ -251,9 +251,9 @@ description: Commit and push the agent's current work.
     expect(runtimePrompt).not.toContain("Commit and push the agent's current work.");
     expect(runtimePrompt).toContain(`Vault root: ${syncRoot}`);
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Durable shared');
-    expect(runtimeSettings.defaultModel).toBe('gpt-5.4');
+    expect(runtimeSettings.defaultModel).toBe('gpt-5.5');
     expect(runtimeSettings.defaultProvider).toBe('openai-codex');
-    expect(runtimeSettings.defaultThinkingLevel).toBe('high');
+    expect(runtimeSettings.defaultThinkingLevel).toBe('low');
   });
 
   it('installs package sources into local settings', () => {

@@ -633,7 +633,7 @@ describe('readDesktopConversationState', () => {
       tailBlocks: 5000,
     });
 
-    expect(readLiveSessionStateSnapshotMock).toHaveBeenCalledWith('conv-live', 1000);
+    expect(readLiveSessionStateSnapshotMock).toHaveBeenCalledWith('conv-live', 5000);
   });
 
   it('falls back to stored session detail when the conversation is not live', async () => {

@@ -26,7 +26,7 @@ describe('system-telemetry manifest', () => {
     expect(view.component).toBe('TelemetryPage');
     expect(view.route).toBe('/telemetry');
 
-    const nav = manifest.contributes.nav.find((n: { id: string }) => n.id === 'nav');
+    const nav = manifest.contributes.nav.find((n: { id: string }) => n.id === 'telemetry-nav');
     expect(nav).toBeDefined();
     expect(nav.route).toBe('/telemetry');
   });

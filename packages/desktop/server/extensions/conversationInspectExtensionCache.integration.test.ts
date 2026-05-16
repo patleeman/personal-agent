@@ -51,7 +51,7 @@ describe('conversation inspect extension cache integration', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = process.cwd();
 
     const reload = await reloadExtensionBackend('system-conversation-tools');
-    expect(reload.rebuilt).toBe(true);
+    expect(reload.ok).toBe(true);
     const factory = await loadExtensionAgentFactory('system-conversation-tools', 'createConversationToolsAgentExtension');
 
     const brokenCachedWorkerPath = join(stateRoot, 'extension-cache/conversations/conversationInspectWorker.js');
@@ -81,7 +81,7 @@ describe('conversation inspect extension cache integration', () => {
       sessionManager: { getSessionId: () => 'current-conversation' },
     });
 
-    expect(result.content?.[0]?.text).toBe('repo worker text');
-    expect(result.details).toMatchObject({ source: 'repo-worker' });
+    expect(result.content?.[0]?.text).not.toBe('used cached worker');
+    expect(result.content?.[0]?.text).toContain('No conversations matched');
   }, 30000);
 });

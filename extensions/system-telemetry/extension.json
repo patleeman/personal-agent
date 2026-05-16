@@ -42,7 +42,7 @@
     ],
     "nav": [
       {
-        "id": "nav",
+        "id": "telemetry-nav",
         "label": "Telemetry",
         "route": "/telemetry",
         "icon": "graph"

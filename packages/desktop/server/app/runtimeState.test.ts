@@ -14,6 +14,8 @@ const {
   authStorageMock,
   readSavedModelPreferencesMock,
   listExtensionSkillRegistrationsMock,
+  listExtensionEntriesMock,
+  isExtensionEnabledMock,
 } = vi.hoisted(() => {
   const authStorageMock = {
     hasAuth: vi.fn(() => false),
@@ -33,6 +35,8 @@ const {
     authStorageMock,
     readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
     listExtensionSkillRegistrationsMock: vi.fn(() => []),
+    listExtensionEntriesMock: vi.fn(() => []),
+    isExtensionEnabledMock: vi.fn(() => true),
   };
 });
 
@@ -49,6 +53,8 @@ vi.mock('../extensions/imageProbeAgentExtension.js', () => ({
 }));
 
 vi.mock('../extensions/extensionRegistry.js', () => ({
+  isExtensionEnabled: isExtensionEnabledMock,
+  listExtensionEntries: listExtensionEntriesMock,
   listExtensionSkillRegistrations: listExtensionSkillRegistrationsMock,
 }));
 
@@ -98,6 +104,10 @@ describe('createRuntimeState', () => {
     manifestAgentFactoryMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
     listExtensionSkillRegistrationsMock.mockReset();
+    listExtensionEntriesMock.mockReset();
+    listExtensionEntriesMock.mockReturnValue([]);
+    isExtensionEnabledMock.mockReset();
+    isExtensionEnabledMock.mockReturnValue(true);
     listExtensionSkillRegistrationsMock.mockReturnValue([]);
     readSavedModelPreferencesMock.mockClear();
     readSavedModelPreferencesMock.mockReturnValue({ currentVisionModel: 'openai/gpt-4o' });

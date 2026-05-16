@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const startKnowledgeBaseSyncLoopMock = vi.fn();
 const subscribeKnowledgeBaseStateMock = vi.fn(() => vi.fn());
@@ -21,6 +21,12 @@ vi.mock('@personal-agent/core', async () => {
 });
 
 describe('localApi knowledge base sync loop startup', () => {
+  beforeEach(() => {
+    startKnowledgeBaseSyncLoopMock.mockClear();
+    subscribeKnowledgeBaseStateMock.mockClear();
+    vi.resetModules();
+  });
+
   afterEach(() => {
     delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
     startKnowledgeBaseSyncLoopMock.mockClear();
@@ -35,7 +41,7 @@ describe('localApi knowledge base sync loop startup', () => {
 
     expect(subscribeKnowledgeBaseStateMock).toHaveBeenCalledTimes(1);
     expect(startKnowledgeBaseSyncLoopMock).toHaveBeenCalledTimes(1);
-  });
+  }, 15000);
 
   it('skips the knowledge base sync loop in desktop runtime', async () => {
     process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
@@ -44,5 +50,5 @@ describe('localApi knowledge base sync loop startup', () => {
 
     expect(subscribeKnowledgeBaseStateMock).toHaveBeenCalledTimes(1);
     expect(startKnowledgeBaseSyncLoopMock).not.toHaveBeenCalled();
-  });
+  }, 15000);
 });

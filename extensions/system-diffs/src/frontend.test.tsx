@@ -19,9 +19,12 @@ vi.mock('@personal-agent/extensions/workbench', () => ({
   ConversationCheckpointWorkbenchPane: () => null,
   ConversationDiffRailContent: () => null,
   getConversationCheckpointIdFromSearch: () => null,
-  readCheckpointPresentation: readCheckpointPresentationMock,
   setConversationCheckpointIdInSearch: () => '',
   useConversationCheckpointSummaries: () => ({ checkpoints: [], loading: false, error: null }),
+}));
+
+vi.mock('@personal-agent/extensions/workbench-diffs', () => ({
+  readCheckpointPresentation: readCheckpointPresentationMock,
 }));
 
 vi.mock('react-router-dom', () => ({

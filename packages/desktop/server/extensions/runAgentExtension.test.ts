@@ -30,27 +30,25 @@ const {
   invalidateAppTopicsMock: vi.fn(),
 }));
 
-vi.mock('../automation/durableRuns.js', () => ({
+vi.mock('@personal-agent/extensions/backend/runs', () => ({
   listDurableRuns: listDurableRunsMock,
   getDurableRun: getDurableRunMock,
   getDurableRunLog: getDurableRunLogMock,
   cancelDurableRun: cancelDurableRunMock,
   rerunDurableRun: rerunDurableRunMock,
   followUpDurableRun: followUpDurableRunMock,
-}));
-
-vi.mock('@personal-agent/daemon', () => ({
   pingDaemon: pingDaemonMock,
   startBackgroundRun: startBackgroundRunMock,
   createStoredAutomation: createStoredAutomationMock,
-}));
-
-vi.mock('../automation/scheduledTaskThreads.js', () => ({
   applyScheduledTaskThreadBinding: applyScheduledTaskThreadBindingMock,
-}));
-
-vi.mock('../shared/appEvents.js', () => ({
   invalidateAppTopics: invalidateAppTopicsMock,
+  parseDeferredResumeDelayMs: (value: string) => {
+    if (value === '30m') return 30 * 60 * 1000;
+    if (value === '10m') return 10 * 60 * 1000;
+    if (value === 'bad') return undefined;
+    return undefined;
+  },
+  setTaskCallbackBinding: setTaskCallbackBindingMock,
 }));
 
 vi.mock('@personal-agent/core', async (importOriginal) => {
@@ -82,6 +80,7 @@ function registerRunTool() {
     profilesRoot: '/profiles',
   })({
     registerTool: (tool: unknown) => {
+      if ((tool as { name?: string }).name !== 'run') return;
       registeredTool = tool as {
         execute: (
           ...args: unknown[]
@@ -120,6 +119,7 @@ beforeEach(() => {
   invalidateAppTopicsMock.mockReset();
   rerunDurableRunMock.mockReset();
   followUpDurableRunMock.mockReset();
+  pingDaemonMock.mockResolvedValue(true);
 
   createStoredAutomationMock.mockImplementation((input: Record<string, unknown>) => ({
     id: String(input.id ?? 'automation-1'),
@@ -249,7 +249,7 @@ describe('run agent extension', () => {
         filePath: '/tmp/sessions/conv-999.jsonl',
       },
     });
-    expect(result.content[0]?.text).toContain('Started durable run run-456');
+    expect(result.content[0]?.text).toContain('Started background command run-456');
     expect(result.details).toMatchObject({
       action: 'start',
       deliverResultToConversation: false,
@@ -294,7 +294,7 @@ describe('run agent extension', () => {
       },
       checkpointPayload: {},
     });
-    expect(result.content[0]?.text).toContain('Started durable agent run run-agent-123');
+    expect(result.content[0]?.text).toContain('Started subagent run-agent-123');
     expect(result.details).toMatchObject({
       action: 'start_agent',
       deliverResultToConversation: false,
@@ -593,7 +593,7 @@ describe('run agent extension', () => {
 
     expect(result.isError).not.toBe(true);
     expect(rerunDurableRunMock).toHaveBeenCalledWith('run-original-123');
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('executions', 'runs');
     expect(result.content[0]?.text).toContain('Started rerun run-rerun-123 from run-original-123');
   });
 
@@ -624,7 +624,7 @@ describe('run agent extension', () => {
       'run-original-123',
       'Continue from the failed migration step and finish validation.',
     );
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('executions', 'runs');
     expect(result.content[0]?.text).toContain('Started follow-up run run-followup-123 from run-original-123');
   });
 
@@ -673,8 +673,8 @@ describe('run agent extension', () => {
 
     expect(result.isError).not.toBe(true);
     expect(cancelDurableRunMock).toHaveBeenCalledWith('run-original-123');
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
-    expect(result.content[0]?.text).toContain('Cancelled durable run run-original-123.');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('executions', 'runs');
+    expect(result.content[0]?.text).toContain('Cancelled background work run-original-123.');
   });
 
   it('returns tool errors for missing runs and rejected cancellations', async () => {

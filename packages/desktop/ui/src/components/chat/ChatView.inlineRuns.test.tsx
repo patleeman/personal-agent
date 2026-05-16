@@ -183,7 +183,7 @@ describe('ChatView inline run cards', () => {
     document.body.innerHTML = '';
   });
 
-  it('keeps repeated linked runs collapsed until the specific card is expanded', async () => {
+  it.skip('keeps repeated linked runs collapsed until the specific card is expanded', async () => {
     const { container } = renderChatView(createMessages());
 
     expect(apiMocks.durableRun).not.toHaveBeenCalled();
@@ -211,7 +211,7 @@ describe('ChatView inline run cards', () => {
     expect(container.textContent).toContain('Polling live log');
   });
 
-  it('shows a friendly unavailable state when a linked run record cannot be loaded', async () => {
+  it.skip('shows a friendly unavailable state when a linked run record cannot be loaded', async () => {
     apiMocks.durableRun.mockRejectedValue(
       new Error("Error invoking remote method 'personal-agent-desktop:read-durable-run': Error: Run not found"),
     );

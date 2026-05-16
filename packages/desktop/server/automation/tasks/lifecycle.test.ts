@@ -11,9 +11,9 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PersonalAgentDaemon } from '../../daemon/server.js';
+import { resolveDaemonPaths } from '../../paths.js';
 import type { DaemonConfig } from '../config.js';
-import { resolveDaemonPaths } from '../paths.js';
-import { PersonalAgentDaemon } from '../server.js';
 
 const tempDirs: string[] = [];
 

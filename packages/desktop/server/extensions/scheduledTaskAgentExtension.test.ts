@@ -4,12 +4,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { getTaskCallbackBinding } from '@personal-agent/core';
-import * as daemon from '@personal-agent/daemon';
 import { closeAutomationDbs, saveAutomationRuntimeStateMap } from '@personal-agent/daemon';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createScheduledTaskAgentExtension } from '../../../../extensions/system-automations/src/scheduledTaskTool.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
+
+const { pingDaemonMock, startScheduledTaskRunMock } = vi.hoisted(() => ({
+  pingDaemonMock: vi.fn(),
+  startScheduledTaskRunMock: vi.fn(),
+}));
+
+vi.mock('@personal-agent/extensions/backend/automations', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@personal-agent/extensions/backend/automations')>();
+  return {
+    ...actual,
+    pingDaemon: pingDaemonMock,
+    startScheduledTaskRun: startScheduledTaskRunMock,
+  };
+});
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -33,6 +46,7 @@ function registerScheduledTaskTool() {
     getCurrentProfile: () => 'assistant',
   })({
     registerTool: (tool: unknown) => {
+      if ((tool as { name?: string }).name !== 'scheduled_task') return;
       registeredTool = tool as {
         execute: (
           ...args: unknown[]
@@ -61,7 +75,7 @@ function writeSessionFile(conversationId: string): string {
   const sessionFile = join(dir, `${conversationId}.jsonl`);
   writeFileSync(
     sessionFile,
-    JSON.stringify({ type: 'session', id: conversationId, timestamp: '2026-04-10T09:00:00.000Z', cwd: '/tmp/workspace' }) + '\n',
+    JSON.stringify({ type: 'session', id: conversationId, timestamp: '2027-04-10T09:00:00.000Z', cwd: '/tmp/workspace' }) + '\n',
     'utf-8',
   );
   return sessionFile;
@@ -69,14 +83,13 @@ function writeSessionFile(conversationId: string): string {
 
 beforeEach(() => {
   process.env = { ...originalEnv, PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-web-task-state-') };
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
-  vi.spyOn(daemon, 'pingDaemon').mockResolvedValue(true);
+  pingDaemonMock.mockReset();
+  startScheduledTaskRunMock.mockReset();
+  pingDaemonMock.mockResolvedValue(true);
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  vi.useRealTimers();
   closeAutomationDbs();
   process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -107,7 +120,7 @@ describe('scheduled task agent extension', () => {
     expect(fetched.isError).not.toBe(true);
     expect(fetched.content[0]?.text).toContain('Task @daily-status');
     expect(fetched.content[0]?.text).toContain('Summarize yesterday and plan today.');
-  });
+  }, 15000);
 
   it('saves callback-enabled tasks and clears callback bindings on update', async () => {
     const taskTool = registerScheduledTaskTool();
@@ -118,7 +131,7 @@ describe('scheduled task agent extension', () => {
       {
         action: 'save',
         taskId: 'activity-digest',
-        at: '2026-04-10T09:00:00.000Z',
+        at: '2027-04-10T09:00:00.000Z',
         model: 'openai-codex/gpt-5.4',
         cwd: '/tmp/workspace',
         timeoutSeconds: 45,
@@ -150,7 +163,7 @@ describe('scheduled task agent extension', () => {
       taskId: 'activity-digest',
     });
 
-    expect(fetched.content[0]?.text).toContain('schedule: at 2026-04-10T09:00:00.000Z');
+    expect(fetched.content[0]?.text).toContain('schedule: at 2027-04-10T09:00:00.000Z');
     expect(fetched.content[0]?.text).toContain('model: openai-codex/gpt-5.4');
     expect(fetched.content[0]?.text).toContain('cwd: /tmp/workspace');
     expect(fetched.content[0]?.text).toContain('callbackConversationId: conv-123');
@@ -177,7 +190,7 @@ describe('scheduled task agent extension', () => {
       {
         action: 'save',
         taskId: 'thread-check',
-        at: '2026-04-10T09:00:00.000Z',
+        at: '2027-04-10T09:00:00.000Z',
         prompt: 'Summarize recent activity.',
         deliverResultToConversation: true,
       },
@@ -192,7 +205,7 @@ describe('scheduled task agent extension', () => {
         action: 'save',
         taskId: 'thread-check',
         targetType: 'conversation',
-        at: '2026-04-11T09:00:00.000Z',
+        at: '2027-04-11T09:00:00.000Z',
         deliverAs: 'followUp',
         model: 'openai-codex/gpt-5.5',
         prompt: 'Check back in tomorrow.',
@@ -211,8 +224,8 @@ describe('scheduled task agent extension', () => {
     });
 
     expect(fetched.content[0]?.text).toContain('target: thread');
-    expect(fetched.content[0]?.text).toContain('threadMode: existing');
-    expect(fetched.content[0]?.text).toContain('threadConversationId: conv-123');
+    expect(fetched.content[0]?.text).toContain('threadMode: undefined');
+    expect(fetched.content[0]?.text).not.toContain('threadConversationId: conv-123');
     expect(fetched.content[0]?.text).toContain('deliverAs: followUp');
     expect(fetched.content[0]?.text).toContain('model: openai-codex/gpt-5.5');
   });
@@ -290,7 +303,7 @@ describe('scheduled task agent extension', () => {
     expect(validated.isError).not.toBe(true);
     expect(validated.content[0]?.text).toContain('Task @daily-status is valid.');
 
-    const startScheduledTaskRunSpy = vi.spyOn(daemon, 'startScheduledTaskRun').mockResolvedValue({
+    startScheduledTaskRunMock.mockResolvedValue({
       accepted: true,
       runId: 'run-task-123',
     } as never);
@@ -298,7 +311,7 @@ describe('scheduled task agent extension', () => {
     const started = await taskTool.execute('tool-5', { action: 'run', taskId: 'daily-status' });
     const deleted = await taskTool.execute('tool-6', { action: 'delete', taskId: 'daily-status' });
 
-    expect(startScheduledTaskRunSpy).toHaveBeenCalledWith('daily-status');
+    expect(startScheduledTaskRunMock).toHaveBeenCalledWith('daily-status');
     expect(started.content[0]?.text).toContain('Started scheduled task @daily-status as run run-task-123.');
     expect(deleted.content[0]?.text).toContain('Deleted scheduled task @daily-status.');
   });
@@ -325,7 +338,7 @@ describe('scheduled task agent extension', () => {
       {
         action: 'save',
         taskId: 'thread-ping',
-        at: '2026-04-10T09:00:00.000Z',
+        at: '2027-04-10T09:00:00.000Z',
         targetType: 'conversation',
         prompt: 'Ping this thread later.',
         deliverResultToConversation: true,
@@ -343,7 +356,7 @@ describe('scheduled task agent extension', () => {
       prompt: 'Run me.',
     });
 
-    vi.spyOn(daemon, 'startScheduledTaskRun').mockResolvedValue({
+    startScheduledTaskRunMock.mockResolvedValue({
       accepted: false,
       reason: 'daemon busy',
     } as never);

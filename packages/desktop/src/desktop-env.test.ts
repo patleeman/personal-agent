@@ -69,7 +69,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.repoRoot).toBe(repoRoot);
     expect(result.nodeCommand).toBe('/custom/node');
     expect(result.useElectronRunAsNode).toBe(false);
-    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
+    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json'));
     expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'));
