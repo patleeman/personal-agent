@@ -46,19 +46,23 @@ export async function parseDuckDuckGoHtml(input: { html: string; maxResults: num
   const document = new JSDOM(input.html).window.document;
   const results: SearchHtmlResult[] = [];
 
-  document.querySelectorAll('.result').forEach((element: Element) => {
+  document.querySelectorAll('.result, tr').forEach((element: Element) => {
     if (results.length >= input.maxResults) return;
-    const titleElement = element.querySelector('.result__title a, .result__a');
-    const snippetElement = element.querySelector('.result__snippet');
+    const titleElement = element.querySelector('.result__title a, .result__a, a.result-link, a[href*="uddg="], a[href^="http"]');
+    const snippetElement = element.querySelector('.result__snippet, .result-snippet, td.result-snippet');
     if (!titleElement) return;
-    const title = titleElement.textContent?.trim() || '';
+    const title = titleElement.textContent?.replace(/\s+/g, ' ').trim() || '';
     let href = titleElement.getAttribute('href') || '';
     if (href.includes('uddg=')) {
       const match = href.match(/uddg=([^&]+)/);
       if (match) href = decodeURIComponent(match[1]!);
     }
-    const snippet = snippetElement?.textContent?.trim() || '';
-    if (title && href) results.push({ title, url: href, snippet });
+    if (href.startsWith('//duckduckgo.com/l/?')) {
+      const parsed = new URL(`https:${href}`);
+      href = parsed.searchParams.get('uddg') || href;
+    }
+    const snippet = snippetElement?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    if (title && href && !href.includes('duckduckgo.com/y.js')) results.push({ title, url: href, snippet });
   });
 
   return results;

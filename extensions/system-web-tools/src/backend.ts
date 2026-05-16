@@ -145,17 +145,27 @@ export async function duckDuckGoSearch(input: { query: string; count?: number; p
     searchParams.set('s', String(offset));
     searchParams.set('dc', String(offset + 1));
   }
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml',
+  };
   const response = await fetch(`https://html.duckduckgo.com/html/?${searchParams.toString()}`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml',
-    },
+    headers,
     signal: createRequestSignal(10000),
   });
   if (!response.ok) throw new Error(`DuckDuckGo search failed: HTTP ${response.status}`);
 
   const html = await response.text();
-  const results = await parseDuckDuckGoHtml({ html, maxResults }, ctx);
+  let results = await parseDuckDuckGoHtml({ html, maxResults }, ctx);
+
+  if (results.length === 0) {
+    const liteResponse = await fetch(`https://lite.duckduckgo.com/lite/?${searchParams.toString()}`, {
+      headers,
+      signal: createRequestSignal(10000),
+    });
+    if (!liteResponse.ok) throw new Error(`DuckDuckGo search failed: HTTP ${liteResponse.status}`);
+    results = await parseDuckDuckGoHtml({ html: await liteResponse.text(), maxResults }, ctx);
+  }
 
   if (results.length === 0) return { text: `No results found for: ${query} (page ${page})`, query, page, count: 0, source: 'duckduckgo' };
 

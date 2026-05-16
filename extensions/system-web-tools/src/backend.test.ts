@@ -13,11 +13,14 @@ vi.mock('@personal-agent/extensions/backend/webContent', () => ({
   ),
 }));
 
+import { parseDuckDuckGoHtml } from '@personal-agent/extensions/backend/webContent';
+
 import { duckDuckGoSearch, exaSearch, webFetch } from './backend.js';
 
 describe('system-web-tools backend', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('webFetch', () => {
@@ -136,6 +139,24 @@ describe('system-web-tools backend', () => {
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('DDG failed'));
 
       await expect(duckDuckGoSearch({ query: 'test' })).rejects.toThrow();
+    });
+
+    it('falls back to DuckDuckGo lite when HTML results parse empty', async () => {
+      vi.spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('<html><body></body></html>'),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('<html><body><a class="result__a" href="https://example.org/page">Example Title</a></body></html>'),
+        } as unknown as Response);
+
+      const result = await duckDuckGoSearch({ query: 'test' });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(String(vi.mocked(globalThis.fetch).mock.calls[1]?.[0])).toContain('lite.duckduckgo.com/lite');
+      expect(parseDuckDuckGoHtml).toHaveBeenCalledTimes(2);
+      expect(result.count).toBe(1);
     });
 
     it('uses sensible defaults for count and page', async () => {

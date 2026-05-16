@@ -232,6 +232,9 @@ async function withTimeout<T>(label: string, promise: Promise<T>, timeoutMs = WO
 }
 
 function assertBrowserCommandTargetReady(webContents: WebContents): void {
+  if (webContents.isDestroyed()) {
+    throw new Error('Workbench Browser target is closed. Reopen the Browser workbench panel before using browser tools.');
+  }
   const url = webContents.getURL();
   if (!url || url === 'about:blank') {
     throw new Error('Workbench Browser is not ready: current page is about:blank. Navigate to a real page before using browser tools.');
@@ -485,9 +488,18 @@ export class WorkbenchBrowserViewController {
 
   async screenshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserScreenshot> {
     const view = this.requireView(owner, sessionKey);
-    const capture = (await withCdp(view.webContents, async (send) =>
-      send('Page.captureScreenshot', { format: 'png', fromSurface: true }),
-    )) as { data?: string };
+    let capture: { data?: string };
+    try {
+      capture = (await withCdp(view.webContents, async (send) => send('Page.captureScreenshot', { format: 'png', fromSurface: true }))) as {
+        data?: string;
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/target closed|target.*crashed|session closed|not attached/i.test(message)) throw error;
+      assertBrowserCommandTargetReady(view.webContents);
+      const image = await withTimeout('Electron capturePage', view.webContents.capturePage());
+      capture = { data: image.toPNG().toString('base64') };
+    }
     const bounds = view.getBounds();
     return {
       ...getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey))),
