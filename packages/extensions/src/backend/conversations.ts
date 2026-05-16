@@ -31,10 +31,14 @@ export const resumeSession = (..._args: any[]): any => hostResolved();
 export const subscribeLiveSession = (..._args: any[]): any => hostResolved();
 export const exportConversationSession = (..._args: any[]): any => hostResolved();
 export const importConversationSession = (..._args: any[]): any => hostResolved();
-export const persistTraceContextPointerInspect = (..._args: any[]): any => hostResolved();
+export const persistTraceContextPointerInspect = (_params: {
+  sessionId: string;
+  inspectedConversationId: string;
+  wasSuggested: boolean;
+}): Promise<void> => hostResolved();
 export const buildLiveSessionExtensionFactoriesForRuntime = (..._args: any[]): any => hostResolved();
 export const buildLiveSessionResourceOptionsForRuntime = (..._args: any[]): any => hostResolved();
-export const querySessionSuggestedPointerIds = (..._args: any[]): any => hostResolved();
+export const querySessionSuggestedPointerIds = (_sessionId: string): Promise<Set<string>> => hostResolved();
 export const readSessionMeta = (..._args: any[]): any => hostResolved();
 export const readSessionBlocks = (..._args: any[]): any => hostResolved();
 export const readConversationSummary = (..._args: any[]): any => hostResolved();
