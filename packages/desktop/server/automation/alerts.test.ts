@@ -40,7 +40,7 @@ describe('alerts server helpers', () => {
     return {
       id: overrides.id,
       profile: overrides.profile ?? 'shared',
-      kind: overrides.kind ?? 'reminder',
+      kind: overrides.kind ?? 'continue',
       severity: overrides.severity ?? 'disruptive',
       status: overrides.status ?? 'active',
       title: overrides.title ?? 'Watch the prod gates',
@@ -49,7 +49,7 @@ describe('alerts server helpers', () => {
       updatedAt: overrides.updatedAt ?? '2026-03-26T14:00:00.000Z',
       conversationId: overrides.conversationId,
       wakeupId: overrides.wakeupId,
-      sourceKind: overrides.sourceKind ?? 'reminder-tool',
+      sourceKind: overrides.sourceKind ?? 'queue-followup-tool',
       sourceId: overrides.sourceId ?? overrides.id,
       requiresAck: overrides.requiresAck ?? true,
     };
@@ -97,7 +97,7 @@ describe('alerts server helpers', () => {
     await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', {})).rejects.toThrow('delay is required when snoozing an alert.');
 
     await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', { delay: 'bogus' })).rejects.toThrow(
-      'Invalid delay. Use forms like 30s, 10m, 2h, or 1d.',
+      'Invalid delay. Use forms like 30s, 10m, 10 minutes, 2h, or 1d.',
     );
 
     await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', { at: 'not-a-date' })).rejects.toThrow(
@@ -147,18 +147,18 @@ describe('alerts server helpers', () => {
     const stateRoot = createTempDir('pa-web-alerts-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const reminder = createReadyDeferredResumeForSessionFile({
+    const wakeup = createReadyDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/conv-123.jsonl',
       prompt: 'Watch the prod gates.',
       title: 'Watch the prod gates',
-      kind: 'reminder',
+      kind: 'continue',
       notify: 'disruptive',
       requireAck: true,
       autoResumeIfOpen: false,
       dueAt: '2026-03-26T14:00:00.000Z',
       readyAt: '2026-03-26T14:00:00.000Z',
       createdAt: '2026-03-26T14:00:00.000Z',
-      source: { kind: 'reminder-tool', id: 'reminder-1' },
+      source: { kind: 'queue-followup-tool', id: 'followup-1' },
     });
 
     upsertAlert({
@@ -167,8 +167,8 @@ describe('alerts server helpers', () => {
       alert: createAlert({
         id: 'wakeup-alert-1',
         conversationId: 'conv-123',
-        wakeupId: reminder.id,
-        sourceId: 'reminder-1',
+        wakeupId: wakeup.id,
+        sourceId: 'followup-1',
       }),
     });
 
@@ -184,7 +184,7 @@ describe('alerts server helpers', () => {
           status: 'acknowledged',
         }),
         resume: expect.objectContaining({
-          id: reminder.id,
+          id: wakeup.id,
           status: 'scheduled',
           dueAt: '2026-03-26T14:15:00.000Z',
           attempts: 1,
@@ -194,7 +194,7 @@ describe('alerts server helpers', () => {
 
     expect(listDeferredResumesForSessionFile('/tmp/sessions/conv-123.jsonl')).toEqual([
       expect.objectContaining({
-        id: reminder.id,
+        id: wakeup.id,
         status: 'scheduled',
         dueAt: '2026-03-26T14:15:00.000Z',
       }),
@@ -210,18 +210,18 @@ describe('alerts server helpers', () => {
     const stateRoot = createTempDir('pa-web-alerts-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const reminder = createReadyDeferredResumeForSessionFile({
+    const wakeup = createReadyDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/conv-invalid-now.jsonl',
       prompt: 'Watch the prod gates.',
       title: 'Watch the prod gates',
-      kind: 'reminder',
+      kind: 'continue',
       notify: 'disruptive',
       requireAck: true,
       autoResumeIfOpen: false,
       dueAt: '2026-03-26T14:00:00.000Z',
       readyAt: '2026-03-26T14:00:00.000Z',
       createdAt: '2026-03-26T14:00:00.000Z',
-      source: { kind: 'reminder-tool', id: 'reminder-invalid-now' },
+      source: { kind: 'queue-followup-tool', id: 'followup-invalid-now' },
     });
 
     upsertAlert({
@@ -230,8 +230,8 @@ describe('alerts server helpers', () => {
       alert: createAlert({
         id: 'wakeup-alert-invalid-now',
         conversationId: 'conv-invalid-now',
-        wakeupId: reminder.id,
-        sourceId: 'reminder-invalid-now',
+        wakeupId: wakeup.id,
+        sourceId: 'followup-invalid-now',
       }),
     });
 
@@ -254,18 +254,18 @@ describe('alerts server helpers', () => {
     const stateRoot = createTempDir('pa-web-alerts-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const reminder = createReadyDeferredResumeForSessionFile({
+    const wakeup = createReadyDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/conv-456.jsonl',
       prompt: 'Check production.',
       title: 'Check production',
-      kind: 'reminder',
+      kind: 'continue',
       notify: 'disruptive',
       requireAck: true,
       autoResumeIfOpen: false,
       dueAt: '2026-03-26T14:00:00.000Z',
       readyAt: '2026-03-26T14:00:00.000Z',
       createdAt: '2026-03-26T14:00:00.000Z',
-      source: { kind: 'reminder-tool', id: 'reminder-2' },
+      source: { kind: 'queue-followup-tool', id: 'followup-2' },
     });
 
     upsertAlert({
@@ -273,8 +273,8 @@ describe('alerts server helpers', () => {
       profile: 'shared',
       alert: createAlert({
         id: 'wakeup-alert-2',
-        wakeupId: reminder.id,
-        sourceId: 'reminder-2',
+        wakeupId: wakeup.id,
+        sourceId: 'followup-2',
       }),
     });
 
@@ -286,7 +286,7 @@ describe('alerts server helpers', () => {
     expect(result).toEqual(
       expect.objectContaining({
         resume: expect.objectContaining({
-          id: reminder.id,
+          id: wakeup.id,
           dueAt: '2026-03-26T15:00:00.000Z',
         }),
       }),

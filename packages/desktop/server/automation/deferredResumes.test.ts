@@ -273,7 +273,7 @@ describe('deferredResumes', () => {
     ]);
   });
 
-  it('preserves reminder metadata and absolute times', async () => {
+  it('preserves follow-up metadata and absolute times', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
@@ -282,11 +282,11 @@ describe('deferredResumes', () => {
       at: '2026-03-12T09:30:00-04:00',
       prompt: 'Watch the prod gates.',
       title: 'Watch the prod gates',
-      kind: 'reminder',
+      kind: 'continue',
       notify: 'disruptive',
       requireAck: true,
       autoResumeIfOpen: false,
-      source: { kind: 'reminder-tool', id: 'reminder-1' },
+      source: { kind: 'queue-followup-tool', id: 'followup-1' },
       now: new Date('2026-03-12T12:00:00.000Z'),
     });
 
@@ -294,7 +294,7 @@ describe('deferredResumes', () => {
       expect.objectContaining({
         prompt: 'Watch the prod gates.',
         title: 'Watch the prod gates',
-        kind: 'reminder',
+        kind: 'continue',
         dueAt: '2026-03-12T13:30:00.000Z',
         delivery: {
           alertLevel: 'disruptive',
@@ -307,7 +307,7 @@ describe('deferredResumes', () => {
     const stored = Object.values(loadDeferredResumeState().resumes)[0];
     expect(stored).toEqual(
       expect.objectContaining({
-        source: { kind: 'reminder-tool', id: 'reminder-1' },
+        source: { kind: 'queue-followup-tool', id: 'followup-1' },
       }),
     );
   });
@@ -321,7 +321,7 @@ describe('deferredResumes', () => {
         sessionFile: '/tmp/sessions/current.jsonl',
         delay: 'later',
       }),
-    ).rejects.toThrow('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+    ).rejects.toThrow('Invalid delay. Use forms like 30s, 10m, 10 minutes, 2h, or 1d.');
   });
 
   it('rejects non-ISO at timestamps', async () => {

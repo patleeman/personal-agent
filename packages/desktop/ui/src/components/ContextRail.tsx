@@ -1360,8 +1360,8 @@ function CapabilitiesOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Reminder presets</p>
-          <p className="ui-card-meta">Select a preset on the left to inspect its ordered reminders and defaults.</p>
+          <p className="ui-card-title">Workflow presets</p>
+          <p className="ui-card-meta">Select a preset on the left to inspect its ordered workflow items and defaults.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Presets" value={presets.length} />
@@ -1698,15 +1698,15 @@ export function ContextRail() {
   if (section === 'plans') {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Reminder presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
+        <RailHeader label="Workflow presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {suspendRailPanel(
             selectedPlanId || creatingPlan ? (
               <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
             ) : (
-              <EmptyPrompt text="Select a reminder preset or create a new one to edit reusable reminder presets." />
+              <EmptyPrompt text="Select a workflow preset or create a new one to edit reusable workflow presets." />
             ),
-            'Loading reminder presets…',
+            'Loading workflow presets…',
           )}
         </div>
       </div>

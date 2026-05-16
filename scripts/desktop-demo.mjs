@@ -232,12 +232,12 @@ writeSession({
   ],
 });
 
-const convReminder = writeSession({
-  id: 'demo-reminder',
+const convFollowup = writeSession({
+  id: 'demo-followup',
   cwd: repoRoot,
   title: 'Remind me to verify the onboarding flow later',
   lines: [
-    assistantText('demo-reminder', 1, 'I scheduled a reminder and kept the thread ready for later follow-up.', 'demo-reminder-user-1'),
+    assistantText('demo-followup', 1, 'I queued a follow-up and kept the thread ready for later continuation.', 'demo-followup-user-1'),
   ],
 });
 
@@ -385,7 +385,7 @@ write(
 writeSession({
   id: 'demo-attention',
   cwd: repoRoot,
-  title: 'Look at the callback and reminder attention states',
+  title: 'Look at the callback and follow-up attention states',
   lines: [assistantText('demo-attention', 1, 'This thread should show unread attention and linked activity.', 'demo-attention-user-1')],
 });
 
@@ -681,22 +681,22 @@ saveDurableRunStatus(
 );
 
 const deferredState = createEmptyDeferredResumeState();
-deferredState.resumes['resume-demo-reminder'] = {
-  id: 'resume-demo-reminder',
-  sessionFile: convReminder,
+deferredState.resumes['resume-demo-followup'] = {
+  id: 'resume-demo-followup',
+  sessionFile: convFollowup,
   prompt: 'Check the onboarding flow now.',
   dueAt: '2026-05-01T18:00:00.000Z',
   createdAt: now,
   attempts: 0,
   status: 'scheduled',
-  kind: 'reminder',
+  kind: 'continue',
   title: 'Onboarding follow-up',
   behavior: 'followUp',
   delivery: { alertLevel: 'disruptive', autoResumeIfOpen: true, requireAck: true },
 };
 deferredState.resumes['resume-demo-callback'] = {
   id: 'resume-demo-callback',
-  sessionFile: convReminder,
+  sessionFile: convFollowup,
   prompt: 'Background task information-architecture-eval completed. Tell the user the background task finished in one short sentence.',
   dueAt: '2026-04-30T12:35:00.000Z',
   createdAt: now,
@@ -726,9 +726,9 @@ writeProfileActivityEntry({
     id: 'demo-activity-1',
     createdAt: '2026-04-30T12:44:00.000Z',
     profile: demoProfile,
-    kind: 'conversation-reminder',
-    summary: 'Reminder is waiting for acknowledgement.',
-    details: 'The onboarding follow-up reminder is ready and marked disruptive.',
+    kind: 'conversation-wakeup',
+    summary: 'Follow-up is waiting for acknowledgement.',
+    details: 'The onboarding follow-up wakeup is ready and marked disruptive.',
     notificationState: 'queued',
   }),
 });
@@ -742,7 +742,7 @@ setActivityConversationLinks({
 
 const demoUiPreferences = {
   ui: {
-    openConversationIds: ['demo-rich', 'demo-reminder', 'demo-parallel-parent'],
+    openConversationIds: ['demo-rich', 'demo-followup', 'demo-parallel-parent'],
     pinnedConversationIds: ['demo-remote'],
     archivedConversationIds: ['demo-empty'],
     workspacePaths: [repoRoot],
@@ -772,9 +772,9 @@ console.log('Launch with:');
 console.log(`  source ${envFile} && pnpm run desktop:start -- --no-quit-confirmation`);
 console.log(`Initial route: ${initialRoute}`);
 console.log(
-  'Seeded conversations: demo-empty, demo-normal, demo-tools, demo-running, demo-rich, demo-reminder, demo-auto-review, demo-parent, demo-subagent-child, demo-parallel-parent, demo-attention, demo-remote, demo-related-context',
+  'Seeded conversations: demo-empty, demo-normal, demo-tools, demo-running, demo-rich, demo-followup, demo-auto-review, demo-parent, demo-subagent-child, demo-parallel-parent, demo-attention, demo-remote, demo-related-context',
 );
 console.log('Seeded automations: demo-daily-summary, demo-follow-up-thread, demo-failed-automation');
 console.log('Seeded runs: run-demo-review, run-demo-tests, run-demo-failed');
-console.log('Seeded deferred resumes: resume-demo-reminder, resume-demo-callback');
+console.log('Seeded deferred resumes: resume-demo-followup, resume-demo-callback');
 console.log('Extra pathological fixtures: daemon-offline snapshot, remote-linked conversation, related-context summary thread');

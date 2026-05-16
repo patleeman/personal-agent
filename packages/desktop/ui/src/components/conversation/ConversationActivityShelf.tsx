@@ -169,7 +169,7 @@ export function ConversationActivityShelf({
                       <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
                     </div>
                     <div className="mt-0.5 text-[11px] text-dim">
-                      {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'}
+                      {resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'}
                       {resume.behavior === 'followUp' ? ' · follow-up' : ''} · {resume.status === 'ready' ? 'Ready' : 'Due'}{' '}
                       {formatDeferredResumeWhen(resume)}
                       {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}

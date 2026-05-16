@@ -6,7 +6,7 @@ import { getStateRoot } from './runtime/paths.js';
 export const DEFERRED_RESUME_STATE_FILE_NAME = 'deferred-resumes-state.json';
 
 export type DeferredResumeStatus = 'scheduled' | 'ready';
-export type DeferredResumeKind = 'continue' | 'reminder' | 'task-callback';
+export type DeferredResumeKind = 'continue' | 'task-callback';
 export type DeferredResumeAlertLevel = 'none' | 'passive' | 'disruptive';
 export type DeferredResumeBehavior = 'steer' | 'followUp';
 
@@ -81,7 +81,7 @@ function normalizeStatus(value: unknown): DeferredResumeStatus {
 }
 
 function normalizeKind(value: unknown): DeferredResumeKind {
-  if (value === 'reminder' || value === 'task-callback') {
+  if (value === 'task-callback') {
     return value;
   }
 
@@ -106,11 +106,6 @@ function parseDelivery(value: unknown, kind: DeferredResumeKind): DeferredResume
       alertLevel: 'none',
       autoResumeIfOpen: true,
       requireAck: false,
-    },
-    reminder: {
-      alertLevel: 'disruptive',
-      autoResumeIfOpen: true,
-      requireAck: true,
     },
     'task-callback': {
       alertLevel: 'disruptive',

@@ -25,7 +25,7 @@ Use the smallest scheduling surface that matches the owner of the work.
 | Passive async result tied to a thread              | surface the owning conversation      | conversation/activity         |
 | Scheduled task result should come back to a thread | scheduled task conversation callback | task log + optional wakeup    |
 
-There is no standalone reminder tool. Human “tell me later” requests are same-thread follow-ups unless they need a true app-wide automation.
+There is no standalone tell-me-later tool. Human “tell me later” requests are same-thread follow-ups unless they need a true app-wide automation.
 
 ## `queue_followup`
 

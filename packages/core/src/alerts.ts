@@ -5,7 +5,7 @@ import { getStateRoot } from './runtime/paths.js';
 
 const DEFAULT_RUNTIME_SCOPE = 'shared';
 
-export type AlertKind = 'reminder' | 'approval-needed' | 'blocked' | 'task-completed' | 'task-failed' | 'deferred-resume' | 'task-callback';
+export type AlertKind = 'approval-needed' | 'blocked' | 'task-completed' | 'task-failed' | 'deferred-resume' | 'task-callback';
 export type AlertSeverity = 'passive' | 'disruptive';
 export type AlertStatus = 'active' | 'acknowledged' | 'dismissed';
 
@@ -84,7 +84,6 @@ function normalizeStatus(value: unknown): AlertStatus {
 
 function normalizeKind(value: unknown): AlertKind {
   switch (value) {
-    case 'reminder':
     case 'approval-needed':
     case 'blocked':
     case 'task-completed':
@@ -93,7 +92,7 @@ function normalizeKind(value: unknown): AlertKind {
     case 'task-callback':
       return value;
     default:
-      return 'reminder';
+      return 'deferred-resume';
   }
 }
 

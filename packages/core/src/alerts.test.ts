@@ -34,15 +34,15 @@ describe('alerts', () => {
       stateRoot,
       profile: 'datadog',
       alert: {
-        id: 'reminder-1',
+        id: 'wakeup-1',
         profile: 'datadog',
-        kind: 'reminder',
+        kind: 'deferred-resume',
         severity: 'disruptive',
         status: 'active',
         title: 'Watch the prod gates',
         body: 'Approve the kube changes when the prompt appears.',
         createdAt: '2026-03-26T13:00:00.000Z',
-        sourceKind: 'reminder-tool',
+        sourceKind: 'queue-followup-tool',
         sourceId: 'resume_123',
         conversationId: 'conv-123',
         wakeupId: 'resume_123',
@@ -56,7 +56,7 @@ describe('alerts', () => {
     );
     expect(listAlerts({ stateRoot, profile: 'datadog' })).toEqual([
       expect.objectContaining({
-        id: 'reminder-1',
+        id: 'wakeup-1',
         profile: 'shared',
         title: 'Watch the prod gates',
         status: 'active',
@@ -77,7 +77,7 @@ describe('alerts', () => {
           alerts: {
             'legacy-alert': {
               profile: 'datadog',
-              kind: 'reminder',
+              kind: 'deferred-resume',
               severity: 'disruptive',
               status: 'active',
               title: 'Legacy alert',
@@ -111,27 +111,27 @@ describe('alerts', () => {
       stateRoot,
       profile: 'datadog',
       alert: {
-        id: 'reminder-1',
+        id: 'wakeup-1',
         profile: 'datadog',
-        kind: 'reminder',
+        kind: 'deferred-resume',
         severity: 'disruptive',
         status: 'active',
         title: 'Watch the prod gates',
         body: 'Approve the kube changes when the prompt appears.',
         createdAt: '2026-03-26T13:00:00.000Z',
-        sourceKind: 'reminder-tool',
+        sourceKind: 'queue-followup-tool',
         sourceId: 'resume_123',
         wakeupId: 'resume_123',
         requiresAck: true,
       },
     });
 
-    const acknowledged = acknowledgeAlert({ stateRoot, profile: 'datadog', alertId: 'reminder-1', at: '2026-03-26T13:01:00.000Z' });
+    const acknowledged = acknowledgeAlert({ stateRoot, profile: 'datadog', alertId: 'wakeup-1', at: '2026-03-26T13:01:00.000Z' });
     expect(acknowledged).toEqual(expect.objectContaining({ status: 'acknowledged', acknowledgedAt: '2026-03-26T13:01:00.000Z' }));
     expect(countActiveAlerts({ stateRoot, profile: 'datadog' })).toBe(0);
 
-    const dismissed = dismissAlert({ stateRoot, profile: 'datadog', alertId: 'reminder-1', at: '2026-03-26T13:02:00.000Z' });
+    const dismissed = dismissAlert({ stateRoot, profile: 'datadog', alertId: 'wakeup-1', at: '2026-03-26T13:02:00.000Z' });
     expect(dismissed).toEqual(expect.objectContaining({ status: 'dismissed', dismissedAt: '2026-03-26T13:02:00.000Z' }));
-    expect(getAlert({ stateRoot, profile: 'datadog', alertId: 'reminder-1' })).toEqual(expect.objectContaining({ status: 'dismissed' }));
+    expect(getAlert({ stateRoot, profile: 'datadog', alertId: 'wakeup-1' })).toEqual(expect.objectContaining({ status: 'dismissed' }));
   });
 });

@@ -199,7 +199,7 @@ This means:
 }
 ```
 
-`@personal-agent/extensions` is the host SDK — listed as a reminder of the contract, not for npm resolution.
+`@personal-agent/extensions` is the host SDK — listed to document the contract, not for npm resolution.
 
 ### Agent workflow for extensions with deps
 

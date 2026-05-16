@@ -30,8 +30,6 @@ function firstPromptLine(prompt: string): string {
 
 function buildWakeupSummary(record: DeferredResumeRecord): string {
   switch (record.kind) {
-    case 'reminder':
-      return record.title?.trim().length ? `${record.title.trim()} is due.` : 'Reminder is due.';
     case 'task-callback':
       return record.title?.trim().length ? record.title.trim() : 'Scheduled task result is ready.';
     default:
@@ -54,8 +52,6 @@ function buildWakeupDetails(record: DeferredResumeRecord): string {
 
 function buildAlertTitle(record: DeferredResumeRecord): string {
   switch (record.kind) {
-    case 'reminder':
-      return record.title?.trim().length ? record.title.trim() : 'Reminder due';
     case 'task-callback':
       return record.title?.trim().length ? record.title.trim() : 'Scheduled task update';
     default:
@@ -64,7 +60,7 @@ function buildAlertTitle(record: DeferredResumeRecord): string {
 }
 
 function buildAlertBody(record: DeferredResumeRecord): string {
-  if (record.kind === 'task-callback' || record.kind === 'reminder') {
+  if (record.kind === 'task-callback') {
     const line = firstPromptLine(record.prompt);
     return line.length > 0 ? line : buildWakeupSummary(record);
   }
@@ -90,7 +86,7 @@ function buildAlertRecord(input: {
   return {
     id: input.alertId,
     profile: input.profile,
-    kind: input.entry.kind === 'task-callback' ? 'task-callback' : input.entry.kind === 'reminder' ? 'reminder' : 'deferred-resume',
+    kind: input.entry.kind === 'task-callback' ? 'task-callback' : 'deferred-resume',
     severity: input.entry.delivery.alertLevel === 'passive' ? 'passive' : 'disruptive',
     status: 'active',
     title: buildAlertTitle(input.entry),
@@ -145,7 +141,7 @@ export function surfaceReadyDeferredResume(input: {
       id: activityId,
       createdAt: input.entry.readyAt ?? input.entry.dueAt,
       profile: input.profile,
-      kind: input.entry.kind === 'reminder' ? 'reminder' : 'deferred-resume',
+      kind: 'deferred-resume',
       summary: buildWakeupSummary(input.entry),
       details: buildWakeupDetails(input.entry),
       relatedProjectIds: relatedProjectIds.length > 0 ? relatedProjectIds : undefined,

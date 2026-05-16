@@ -33,7 +33,7 @@ Summarize yesterday's progress.
 
   it('parses one-time at tasks', () => {
     const task = parseTaskDefinition({
-      filePath: '/tmp/tasks/taxes-reminder.task.md',
+      filePath: '/tmp/tasks/taxes-followup.task.md',
       rawContent: `---
 at: "2026-04-15T09:00:00-04:00"
 model: openai-codex/gpt-5.4
@@ -43,7 +43,7 @@ Prepare tax checklist.
       defaultTimeoutSeconds: 1800,
     });
 
-    expect(task.id).toBe('taxes-reminder');
+    expect(task.id).toBe('taxes-followup');
     expect(task.schedule.type).toBe('at');
     expect(task.profile).toBe('shared');
     expect(task.modelRef).toBe('openai-codex/gpt-5.4');
@@ -53,7 +53,7 @@ Prepare tax checklist.
   it('rejects malformed one-time at task timestamps', () => {
     expect(() =>
       parseTaskDefinition({
-        filePath: '/tmp/tasks/malformed-reminder.task.md',
+        filePath: '/tmp/tasks/malformed-followup.task.md',
         rawContent: `---
 at: "9999"
 ---
@@ -65,7 +65,7 @@ Prepare tax checklist.
 
     expect(() =>
       parseTaskDefinition({
-        filePath: '/tmp/tasks/overflowed-reminder.task.md',
+        filePath: '/tmp/tasks/overflowed-followup.task.md',
         rawContent: `---
 at: "2026-02-31T09:00:00.000Z"
 ---

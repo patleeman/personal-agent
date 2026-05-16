@@ -31,7 +31,7 @@ describe('conversation wakeups', () => {
       createdAt: '2026-03-26T13:00:00.000Z',
       attempts: 0,
       status: 'ready',
-      kind: 'reminder',
+      kind: 'continue',
       title: 'Watch the prod gates',
       delivery: {
         alertLevel: 'disruptive',
@@ -39,8 +39,8 @@ describe('conversation wakeups', () => {
         requireAck: true,
       },
       source: {
-        kind: 'reminder-tool',
-        id: 'reminder-1',
+        kind: 'queue-followup-tool',
+        id: 'followup-1',
       },
       readyAt: '2026-03-26T14:00:00.000Z',
     };

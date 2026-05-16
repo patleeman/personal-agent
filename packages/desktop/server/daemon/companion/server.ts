@@ -975,8 +975,8 @@ export class DaemonCompanionServer {
       return;
     }
 
-    const conversationQueueRestoreMatch = /^\/companion\/v1\/conversations\/([^/]+)\/dequeue$/.exec(pathname);
-    if (conversationQueueRestoreMatch && request.method === 'POST') {
+    const conversationDequeueMatch = /^\/companion\/v1\/conversations\/([^/]+)\/dequeue$/.exec(pathname);
+    if (conversationDequeueMatch && request.method === 'POST') {
       if (!(await this.requireBearer(request, response))) {
         return;
       }
@@ -985,7 +985,7 @@ export class DaemonCompanionServer {
       const body = await parseJsonBody(request);
       const payload = isRecord(body) ? body : {};
       const input: CompanionConversationQueueRestoreInput = {
-        conversationId: decodeURIComponent(conversationQueueRestoreMatch[1] || ''),
+        conversationId: decodeURIComponent(conversationDequeueMatch[1] || ''),
         behavior: payload.behavior === 'followUp' ? 'followUp' : 'steer',
         index: readOptionalNonNegativeInteger(payload.index, 'index') ?? 0,
         ...(readOptionalString(payload.previewId) ? { previewId: readOptionalString(payload.previewId) } : {}),

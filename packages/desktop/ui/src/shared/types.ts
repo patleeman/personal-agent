@@ -790,7 +790,7 @@ export interface DeferredResumeSummary {
   attempts: number;
   status: 'scheduled' | 'ready';
   readyAt?: string;
-  kind?: 'continue' | 'reminder' | 'task-callback';
+  kind?: 'continue' | 'task-callback';
   title?: string;
   behavior?: 'steer' | 'followUp';
   delivery?: {

@@ -201,9 +201,9 @@ describe('writeConversationPlanLibrary', () => {
         presets: [
           {
             id: ' preset-a ',
-            name: ' Reminder preset ',
+            name: ' Workflow preset ',
             items: [
-              { kind: 'instruction', text: '  First reminder  ' },
+              { kind: 'instruction', text: '  First instruction  ' },
               { kind: 'skill', skillName: ' deep-research ', skillArgs: ' topic=desktop ' },
               { kind: 'instruction', text: '   ' },
             ],
@@ -218,10 +218,10 @@ describe('writeConversationPlanLibrary', () => {
       presets: [
         {
           id: 'preset-a',
-          name: 'Reminder preset',
+          name: 'Workflow preset',
           updatedAt: expect.any(String),
           items: [
-            { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'First reminder' },
+            { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'First instruction' },
             { id: 'item-2', kind: 'skill', label: 'Skill', skillName: 'deep-research', skillArgs: 'topic=desktop' },
           ],
         },
@@ -239,10 +239,10 @@ describe('writeConversationPlanLibrary', () => {
             presets: [
               {
                 id: 'preset-a',
-                name: 'Reminder preset',
+                name: 'Workflow preset',
                 updatedAt: result.presets[0]?.updatedAt,
                 items: [
-                  { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'First reminder' },
+                  { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'First instruction' },
                   { id: 'item-2', kind: 'skill', label: 'Skill', skillName: 'deep-research', skillArgs: 'topic=desktop' },
                 ],
               },

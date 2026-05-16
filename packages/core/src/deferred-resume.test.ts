@@ -141,7 +141,7 @@ describe('deferred resume state', () => {
       dueAt: '2026-03-08T12:00:00.000Z',
       createdAt: '2026-03-08T11:50:00.000Z',
       attempts: 0,
-      kind: 'reminder',
+      kind: 'continue',
       delivery: {
         alertLevel: 'loud',
         autoResumeIfOpen: 'yes',
@@ -150,9 +150,9 @@ describe('deferred resume state', () => {
     });
 
     expect(scheduled.delivery).toEqual({
-      alertLevel: 'disruptive',
+      alertLevel: 'none',
       autoResumeIfOpen: true,
-      requireAck: true,
+      requireAck: false,
     });
   });
 
