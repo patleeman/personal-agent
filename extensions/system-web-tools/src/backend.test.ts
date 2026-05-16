@@ -15,7 +15,7 @@ vi.mock('@personal-agent/extensions/backend/webContent', () => ({
 
 import { parseDuckDuckGoHtml } from '@personal-agent/extensions/backend/webContent';
 
-import { duckDuckGoSearch, webFetch } from './backend.js';
+import { duckDuckGoSearch, exaSearch, webFetch } from './backend.js';
 
 describe('system-web-tools backend', () => {
   afterEach(() => {
@@ -84,6 +84,34 @@ describe('system-web-tools backend', () => {
 
       const result = await webFetch({ url: 'https://example.com', raw: true });
       expect(result.text).toContain('timed out');
+    });
+  });
+
+  describe('exaSearch', () => {
+    it('requires an Exa API key', async () => {
+      const envBackup = process.env.EXA_API_KEY;
+      delete process.env.EXA_API_KEY;
+
+      await expect(exaSearch({ query: 'test query' })).rejects.toThrow('Exa API key is not configured');
+
+      if (envBackup) process.env.EXA_API_KEY = envBackup;
+    });
+
+    it('uses Exa when an API key is configured', async () => {
+      const envBackup = process.env.EXA_API_KEY;
+      process.env.EXA_API_KEY = 'test-key';
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ results: [{ title: 'Exa Title', url: 'https://example.org/exa', text: 'Exa snippet' }] }),
+      } as unknown as Response);
+
+      const result = await exaSearch({ query: 'test query' }, { secrets: { get: () => process.env.EXA_API_KEY } } as never);
+      expect(result.source).toBe('exa');
+      expect(result.text).toContain('Exa Title');
+
+      if (envBackup) process.env.EXA_API_KEY = envBackup;
+      else delete process.env.EXA_API_KEY;
     });
   });
 
