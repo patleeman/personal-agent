@@ -42,6 +42,23 @@ function formatTimestamp(ts: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatNotificationForCopy(item: NotificationItem): string {
+  const lines = [
+    `Type: ${TYPE_LABEL[item.type]}`,
+    item.source ? `Source: ${item.source}` : null,
+    `Time: ${new Date(item.timestamp).toLocaleString()}`,
+    item.count > 1 ? `Repeated: ${item.count}x` : null,
+    '',
+    item.message,
+  ];
+
+  if (item.details) {
+    lines.push('', 'Details:', item.details);
+  }
+
+  return lines.filter((line): line is string => line !== null).join('\n');
+}
+
 function NotificationRow({
   item,
   onDismiss,
@@ -52,6 +69,13 @@ function NotificationRow({
   onMarkRead: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyNotification = async () => {
+    await navigator.clipboard.writeText(formatNotificationForCopy(item));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
 
   return (
     <div
@@ -89,30 +113,57 @@ function NotificationRow({
             </pre>
           ) : null}
         </div>
-        <button
-          type="button"
-          className="shrink-0 rounded p-0.5 text-steel/40 opacity-0 transition-opacity hover:text-secondary group-hover:opacity-100 focus-visible:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDismiss(item.id);
-          }}
-          aria-label="Dismiss notification"
-          title="Dismiss"
-        >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <button
+            type="button"
+            className="rounded p-0.5 text-steel/40 transition-colors hover:text-secondary"
+            onClick={(e) => {
+              e.stopPropagation();
+              void copyNotification();
+            }}
+            aria-label="Copy notification"
+            title={copied ? 'Copied' : 'Copy'}
           >
-            <path d="M18 6 6 18" />
-            <path d="m6 6 12 12" />
-          </svg>
-        </button>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="rounded p-0.5 text-steel/40 transition-colors hover:text-secondary"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss(item.id);
+            }}
+            aria-label="Dismiss notification"
+            title="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
