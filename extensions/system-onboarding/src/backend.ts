@@ -35,7 +35,7 @@ Recommended first move: configure your provider, then come back and ask “what 
 
 function disableOnboarding(ctx: ExtensionBackendContext): void {
   ctx.extensions?.setEnabled?.(ctx.extensionId, false);
-  ctx.ui.invalidate(['extensions']);
+  ctx.ui?.invalidate?.(['extensions']);
 }
 
 async function ensureOnce(input: EnsureInput | undefined, ctx: ExtensionBackendContext): Promise<EnsureResult> {

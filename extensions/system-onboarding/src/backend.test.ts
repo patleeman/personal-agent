@@ -131,4 +131,14 @@ describe('system-onboarding backend', () => {
 
     expect(storage.put).not.toHaveBeenCalled();
   });
+
+  it('does not fail when UI invalidation is unavailable', async () => {
+    const ctx = createCtx({ ui: undefined });
+
+    await expect(ensure({ source: 'frontend' }, ctx)).resolves.toEqual({
+      created: true,
+      conversationId: 'conv-1',
+      shouldOpen: true,
+    });
+  });
 });
