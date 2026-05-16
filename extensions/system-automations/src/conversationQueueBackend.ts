@@ -36,7 +36,7 @@ export interface QueueFollowupInput {
 export interface QueueFollowupContext {
   profile: string;
   toolContext?: { sessionId?: string; sessionFile?: string; cwd?: string };
-  ui: { invalidate(topics: string | string[]): void };
+  ui?: { invalidate?(topics: string | string[]): void };
 }
 
 interface ConversationQueueItem {
@@ -245,7 +245,7 @@ export async function queueFollowup(input: QueueFollowupInput, ctx: QueueFollowu
         autoResumeIfOpen: true,
         source: { kind: 'queue-followup-tool' },
       });
-      ctx.ui.invalidate(['sessions', 'runs']);
+      ctx.ui?.invalidate?.(['sessions', 'runs']);
       return {
         text: `Queued follow-up ${resume.id} (${trigger === 'delay' ? `in ${delay}` : `for ${scheduled.interpretation ?? resume.dueAt}`}).`,
         action: 'add',
@@ -272,7 +272,7 @@ export async function queueFollowup(input: QueueFollowupInput, ctx: QueueFollowu
       const automation = await findConversationAutomation(id, sessionFile);
       if (automation) {
         await deleteStoredAutomation(automation.id);
-        ctx.ui.invalidate(['tasks', 'sessions']);
+        ctx.ui?.invalidate?.(['tasks', 'sessions']);
         return {
           text: `Cancelled queued follow-up ${automation.id}.`,
           action: 'cancel',
@@ -283,7 +283,7 @@ export async function queueFollowup(input: QueueFollowupInput, ctx: QueueFollowu
         };
       }
       const cancelled = await cancelDeferredResumeForSessionFile({ sessionFile, id });
-      ctx.ui.invalidate('sessions');
+      ctx.ui?.invalidate?.('sessions');
       return {
         text: `Cancelled queued follow-up ${cancelled.id}.`,
         action: 'cancel',

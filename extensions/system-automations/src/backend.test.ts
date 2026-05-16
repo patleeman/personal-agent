@@ -116,6 +116,18 @@ describe('system-automations backend', () => {
       expect(invalidate).toHaveBeenCalledWith(['sessions', 'runs']);
     });
 
+    it('does not fail scheduling when UI invalidation is unavailable', async () => {
+      mocks.parseDeferredResumeDelayMs.mockReturnValue(4 * 60 * 60 * 1000);
+      mocks.scheduleDeferredResume.mockResolvedValue({ id: 'resume-1', dueAt: '2025-01-01T04:00:00.000Z', prompt: 'Keep going' });
+
+      const result = await queueFollowup(
+        { action: 'add', trigger: 'delay', delay: '4h', prompt: 'Keep going' },
+        createCtx({ ui: undefined }),
+      );
+
+      expect(result.id).toBe('resume-1');
+    });
+
     it('throws for unsupported action', async () => {
       await expect(queueFollowup({ action: 'unknown' } as never, createCtx())).rejects.toThrow('Unsupported queue follow-up action');
     });
