@@ -12,7 +12,7 @@ export const FRONTEND_INITIAL_BUNDLE_BYTE_LIMITS = new Map([
 ]);
 
 export const BACKEND_BUNDLE_BYTE_LIMITS = new Map([
-  ['system-automations', 1 * 1024 * 1024],
+  ['system-automations', 2 * 1024 * 1024],
   ['system-conversation-tools', 1 * 1024 * 1024],
   ['system-extension-manager', 1 * 1024 * 1024],
   ['system-image-probe', 2 * 1024 * 1024],

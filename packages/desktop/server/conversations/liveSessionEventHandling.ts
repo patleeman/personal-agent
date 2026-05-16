@@ -400,8 +400,9 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'compaction_start') {
+    const compactionMode = event.reason === 'manual' ? 'manual' : 'auto';
     publishConversationLifecycleEvent(entry.sessionId, 'compaction.started', {
-      mode: event.mode,
+      mode: compactionMode,
       reason: event.reason,
       runId: entry.traceRunId ?? undefined,
     });
