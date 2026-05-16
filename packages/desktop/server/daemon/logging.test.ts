@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -65,5 +66,22 @@ describe('daemon logging', () => {
 
     expect(consoleLines.some((line) => line.includes('personal-agentd started'))).toBe(true);
     expect(sinkLines.some((line) => line.includes('personal-agentd started'))).toBe(true);
+  });
+
+  it('stops even when an IPC client keeps the socket open', async () => {
+    const socketPath = join(createTempDir('daemon-stop-open-socket-'), 'personal-agentd.sock');
+    daemon = new PersonalAgentDaemon({ config: createTestConfig(socketPath), stopRequestBehavior: 'reject' });
+    await daemon.start();
+
+    const socket = createConnection(socketPath);
+    await new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+    });
+
+    await expect(daemon.stop()).resolves.toBeUndefined();
+    expect(daemon.isRunning()).toBe(false);
+    socket.destroy();
+    daemon = undefined;
   });
 });

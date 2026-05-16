@@ -189,6 +189,7 @@ export class PersonalAgentDaemon {
   private readonly logSink?: (line: string) => void;
   private readonly companionRuntimeProvider?: CompanionRuntimeProvider;
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
+  private readonly activeSockets = new Set<Socket>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
   private lockFd?: number;
@@ -361,6 +362,11 @@ export class PersonalAgentDaemon {
       }
     }
 
+    for (const socket of this.activeSockets) {
+      socket.destroy();
+    }
+    this.activeSockets.clear();
+
     await new Promise<void>((resolve) => {
       if (!this.server) {
         resolve();
@@ -517,9 +523,11 @@ export class PersonalAgentDaemon {
 
   private attachConnection(socket: Socket): void {
     let buffer = '';
+    this.activeSockets.add(socket);
     this.socketTraces.set(socket, {});
 
     socket.on('close', () => {
+      this.activeSockets.delete(socket);
       this.socketTraces.delete(socket);
     });
 

@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from 'node:fs';
+import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
 
 import { bindInProcessDaemonClient, PersonalAgentDaemon } from '@personal-agent/daemon';
 
@@ -13,6 +13,7 @@ export class LocalBackendProcesses {
   private clearInProcessClientBinding?: () => void;
   private startPromise?: Promise<void>;
   private logStream?: WriteStream;
+  private healthTimer?: NodeJS.Timeout;
 
   async ensureStarted(): Promise<void> {
     if (this.startPromise) {
@@ -54,6 +55,7 @@ export class LocalBackendProcesses {
   }
 
   async stop(): Promise<void> {
+    this.stopHealthMonitor();
     this.clearInProcessClientBinding?.();
     this.clearInProcessClientBinding = undefined;
 
@@ -70,7 +72,33 @@ export class LocalBackendProcesses {
   }
 
   private hasOwnedRuntime(): boolean {
-    return this.daemon?.isRunning() === true;
+    return this.daemon?.isRunning() === true && existsSync(this.daemon.getSocketPath());
+  }
+
+  private startHealthMonitor(): void {
+    if (this.healthTimer) {
+      return;
+    }
+
+    this.healthTimer = setInterval(() => {
+      if (!this.daemon || this.startPromise || this.hasOwnedRuntime()) {
+        return;
+      }
+
+      void this.restart().catch((error) => {
+        console.warn('[desktop] local daemon health restart failed', error);
+      });
+    }, 5000);
+    this.healthTimer.unref?.();
+  }
+
+  private stopHealthMonitor(): void {
+    if (!this.healthTimer) {
+      return;
+    }
+
+    clearInterval(this.healthTimer);
+    this.healthTimer = undefined;
   }
 
   private async start(): Promise<void> {
@@ -111,5 +139,6 @@ export class LocalBackendProcesses {
     this.clearInProcessClientBinding = bindInProcessDaemonClient(daemon);
     this.logStream = logStream;
     this.daemon = daemon;
+    this.startHealthMonitor();
   }
 }
