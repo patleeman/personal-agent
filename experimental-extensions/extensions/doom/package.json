@@ -1,6 +1,0 @@
-{
-  "type": "module",
-  "dependencies": {
-    "@personal-agent/extensions": "*"
-  }
-}
