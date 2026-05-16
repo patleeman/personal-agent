@@ -450,9 +450,11 @@ function parseProjectStateDocument(object: Record<string, unknown>, baseDocument
     ...baseDocument,
     id: readOptionalYamlString(object, 'id', label) ?? baseDocument.id,
     ownerProfile: readOptionalYamlString(object, 'ownerProfile', label) ?? baseDocument.ownerProfile,
-    createdAt: readOptionalYamlString(object, 'createdAt', label) ?? baseDocument.createdAt,
-    updatedAt: readOptionalYamlString(object, 'updatedAt', label) ?? baseDocument.updatedAt,
-    archivedAt: readOptionalYamlString(object, 'archivedAt', label),
+    createdAt: normalizeIsoTimestamp(readOptionalYamlString(object, 'createdAt', label) ?? baseDocument.createdAt, 'Project createdAt'),
+    updatedAt: normalizeIsoTimestamp(readOptionalYamlString(object, 'updatedAt', label) ?? baseDocument.updatedAt, 'Project updatedAt'),
+    ...(readOptionalYamlString(object, 'archivedAt', label)
+      ? { archivedAt: normalizeIsoTimestamp(readOptionalYamlString(object, 'archivedAt', label)!, 'Project archivedAt') }
+      : {}),
     title: readOptionalYamlString(object, 'title', label) ?? baseDocument.title,
     description,
     repoRoot: readOptionalYamlString(object, 'repoRoot', label),
@@ -489,9 +491,11 @@ function parseLegacyProjectDocument(object: Record<string, unknown>, label: stri
   const baseDocument: ProjectDocument = {
     id: readRequiredYamlString(object, 'id', label),
     ownerProfile: readOptionalYamlString(object, 'ownerProfile', label) ?? 'shared',
-    createdAt: readRequiredYamlString(object, 'createdAt', label),
-    updatedAt: readRequiredYamlString(object, 'updatedAt', label),
-    archivedAt: readOptionalYamlString(object, 'archivedAt', label),
+    createdAt: normalizeIsoTimestamp(readRequiredYamlString(object, 'createdAt', label), 'Project createdAt'),
+    updatedAt: normalizeIsoTimestamp(readRequiredYamlString(object, 'updatedAt', label), 'Project updatedAt'),
+    ...(readOptionalYamlString(object, 'archivedAt', label)
+      ? { archivedAt: normalizeIsoTimestamp(readOptionalYamlString(object, 'archivedAt', label)!, 'Project archivedAt') }
+      : {}),
     title: readRequiredYamlString(object, 'title', label),
     description,
     repoRoot: readOptionalYamlString(object, 'repoRoot', label),
@@ -558,8 +562,8 @@ function readProjectNode(path: string): { document: ProjectDocument; body: strin
   const baseDocument: ProjectDocument = {
     id: readRequiredYamlString(frontmatter, 'id', 'Project index'),
     ownerProfile: readOptionalYamlString(frontmatter, 'ownerProfile', 'Project index') ?? 'shared',
-    createdAt: readRequiredYamlString(frontmatter, 'createdAt', 'Project index'),
-    updatedAt: readRequiredYamlString(frontmatter, 'updatedAt', 'Project index'),
+    createdAt: normalizeIsoTimestamp(readRequiredYamlString(frontmatter, 'createdAt', 'Project index'), 'Project createdAt'),
+    updatedAt: normalizeIsoTimestamp(readRequiredYamlString(frontmatter, 'updatedAt', 'Project index'), 'Project updatedAt'),
     title: readRequiredYamlString(frontmatter, 'title', 'Project index'),
     description: summary,
     summary,
@@ -858,7 +862,7 @@ export function parseProjectActivityEntry(markdown: string): ProjectActivityEntr
 
   return {
     id: readRequiredAttribute(attributes, 'id', 'Activity'),
-    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Activity'),
+    createdAt: normalizeIsoTimestamp(readRequiredAttribute(attributes, 'createdAt', 'Activity'), 'Activity createdAt'),
     profile: readRequiredAttribute(attributes, 'profile', 'Activity'),
     kind: readRequiredAttribute(attributes, 'kind', 'Activity'),
     summary: readRequiredSection(sections, 'Summary', 'Activity'),

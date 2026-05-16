@@ -144,6 +144,19 @@ describe('project artifacts', () => {
     });
   });
 
+  it('rejects invalid project timestamps when parsing yaml', () => {
+    const yaml = `id: artifact-model
+createdAt: not-a-date
+updatedAt: 2026-03-10T12:00:00.000Z
+title: Durable artifact model
+description: Create a durable artifact model.
+summary: Project created.
+status: created
+`;
+
+    expect(() => parseProject(yaml)).toThrow('Invalid Project createdAt');
+  });
+
   it('defaults a missing plan block when parsing legacy yaml', () => {
     const yaml = `id: artifact-model
 createdAt: 2026-03-10T12:00:00.000Z
@@ -246,6 +259,25 @@ describe('project activity artifacts', () => {
     expect(markdown).toContain('# Activity');
     expect(markdown).toContain('relatedProjectIds: artifact-model, daily-review');
     expect(parseProjectActivityEntry(markdown)).toEqual(document);
+  });
+
+  it('rejects invalid activity timestamps when parsing markdown', () => {
+    const markdown = `---
+id: daily-report
+createdAt: not-a-date
+profile: datadog
+kind: scheduled-task
+notificationState: none
+---
+
+# Activity
+
+## Summary
+
+Daily report completed.
+`;
+
+    expect(() => parseProjectActivityEntry(markdown)).toThrow('Invalid Activity createdAt');
   });
 
   it('writes and reads activity files', () => {
