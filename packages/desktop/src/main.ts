@@ -241,7 +241,17 @@ function configureDesktopRuntimeEnvironment(): void {
 
   const runtime = resolveDesktopRuntimePaths();
   process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
-  process.env.PERSONAL_AGENT_REPO_ROOT = runtime.repoRoot;
+  if (runtime.devRepoRoot) {
+    process.env.PERSONAL_AGENT_REPO_ROOT = runtime.devRepoRoot;
+  } else {
+    delete process.env.PERSONAL_AGENT_REPO_ROOT;
+  }
+  if (runtime.resourcesRoot) {
+    process.env.PERSONAL_AGENT_RESOURCES_ROOT = runtime.resourcesRoot;
+  } else {
+    delete process.env.PERSONAL_AGENT_RESOURCES_ROOT;
+  }
+  process.env.PERSONAL_AGENT_APP_ROOT = runtime.appRoot;
   if (runtime.desktopNativeModulesDir) {
     process.env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR = runtime.desktopNativeModulesDir;
   }

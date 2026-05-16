@@ -77,16 +77,21 @@ describe('background runs', () => {
     }
   });
 
-  it('resolves the packaged app.asar runner when packaged repo root is the resources directory', () => {
+  it('resolves the packaged app.asar runner from explicit packaged roots', () => {
     const previousRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
+    const previousResourcesRoot = process.env.PERSONAL_AGENT_RESOURCES_ROOT;
+    const previousAppRoot = process.env.PERSONAL_AGENT_APP_ROOT;
     const resourcesRoot = createTempDir('pa-background-runner-resources-');
-    const appAsarRunner = join(resourcesRoot, 'app.asar/server/dist/daemon/background-agent-runner.js');
+    const appRoot = join(resourcesRoot, 'app.asar');
+    const appAsarRunner = join(appRoot, 'server/dist/daemon/background-agent-runner.js');
 
-    mkdirSync(join(resourcesRoot, 'app.asar/server/dist/daemon'), { recursive: true });
+    mkdirSync(join(appRoot, 'server/dist/daemon'), { recursive: true });
     writeFileSync(appAsarRunner, '');
 
     try {
-      process.env.PERSONAL_AGENT_REPO_ROOT = resourcesRoot;
+      delete process.env.PERSONAL_AGENT_REPO_ROOT;
+      process.env.PERSONAL_AGENT_RESOURCES_ROOT = resourcesRoot;
+      process.env.PERSONAL_AGENT_APP_ROOT = appRoot;
       const argv = buildBackgroundAgentArgv({ prompt: 'Review the latest diff' });
       expect(argv[1]).toBe(appAsarRunner);
     } finally {
@@ -94,6 +99,16 @@ describe('background runs', () => {
         delete process.env.PERSONAL_AGENT_REPO_ROOT;
       } else {
         process.env.PERSONAL_AGENT_REPO_ROOT = previousRepoRoot;
+      }
+      if (previousResourcesRoot === undefined) {
+        delete process.env.PERSONAL_AGENT_RESOURCES_ROOT;
+      } else {
+        process.env.PERSONAL_AGENT_RESOURCES_ROOT = previousResourcesRoot;
+      }
+      if (previousAppRoot === undefined) {
+        delete process.env.PERSONAL_AGENT_APP_ROOT;
+      } else {
+        process.env.PERSONAL_AGENT_APP_ROOT = previousAppRoot;
       }
     }
   });

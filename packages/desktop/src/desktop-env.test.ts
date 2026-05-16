@@ -67,6 +67,9 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     });
 
     expect(result.repoRoot).toBe(repoRoot);
+    expect(result.devRepoRoot).toBe(repoRoot);
+    expect(result.resourcesRoot).toBeUndefined();
+    expect(result.appRoot).toBe(repoRoot);
     expect(result.nodeCommand).toBe('/custom/node');
     expect(result.useElectronRunAsNode).toBe(false);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json'));
@@ -93,6 +96,9 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     });
 
     expect(result.repoRoot).toBe(resourcesPath);
+    expect(result.devRepoRoot).toBeUndefined();
+    expect(result.resourcesRoot).toBe(resourcesPath);
+    expect(result.appRoot).toBe(appRoot);
     expect(result.nodeCommand).toBe('/Applications/Personal Agent.app/Contents/MacOS/Personal Agent');
     expect(result.useElectronRunAsNode).toBe(true);
     expect(result.desktopNativeModulesDir).toBe(join(resourcesPath, 'app.asar.unpacked'));

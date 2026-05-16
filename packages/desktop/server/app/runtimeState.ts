@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import { AuthStorage, type ExtensionAPI, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
@@ -42,7 +42,13 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function applyRuntimeEnvironment(mcpConfigPath?: string | null): void {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = runtimeScope;
     process.env.PERSONAL_AGENT_PROFILE = runtimeScope;
-    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    if (existsSync(resolve(repoRoot, 'packages'))) {
+      process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+      delete process.env.PERSONAL_AGENT_RESOURCES_ROOT;
+    } else {
+      delete process.env.PERSONAL_AGENT_REPO_ROOT;
+      process.env.PERSONAL_AGENT_RESOURCES_ROOT = repoRoot;
+    }
 
     if (mcpConfigPath) {
       process.env.MCP_CONFIG_PATH = mcpConfigPath;

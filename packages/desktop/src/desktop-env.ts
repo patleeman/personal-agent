@@ -6,7 +6,14 @@ import { getStateRoot } from '@personal-agent/core';
 import { app } from 'electron';
 
 export interface DesktopRuntimePaths {
+  /** Source checkout root in development; packaged resources root in signed apps. Legacy, prefer explicit roots below. */
   repoRoot: string;
+  /** Source checkout root. Only set for development/runtime builds launched from a checkout. */
+  devRepoRoot?: string;
+  /** Electron Resources directory in packaged apps. */
+  resourcesRoot?: string;
+  /** app.asar root in packaged apps, or repo root in development. */
+  appRoot: string;
   nodeCommand: string;
   useElectronRunAsNode: boolean;
   desktopNativeModulesDir?: string;
@@ -85,6 +92,8 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
   const execPath = context.execPath ?? process.execPath;
   const isPackaged = context.isPackaged ?? false;
   const repoRoot = isPackaged ? resolvePackagedRepoRoot(context) : resolveDevRepoRoot(context);
+  const devRepoRoot = isPackaged ? undefined : repoRoot;
+  const resourcesRoot = isPackaged ? repoRoot : undefined;
   const appRoot = isPackaged ? resolveAppRoot(context) : repoRoot;
   const stateRoot = getStateRoot();
   const desktopStateDir = resolve(stateRoot, 'desktop');
@@ -130,6 +139,9 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
 
   return {
     repoRoot,
+    devRepoRoot,
+    resourcesRoot,
+    appRoot,
     nodeCommand,
     useElectronRunAsNode: isPackaged,
     desktopNativeModulesDir,

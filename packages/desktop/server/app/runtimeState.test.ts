@@ -117,6 +117,7 @@ describe('createRuntimeState', () => {
     delete process.env.PERSONAL_AGENT_ACTIVE_PROFILE;
     delete process.env.PERSONAL_AGENT_PROFILE;
     delete process.env.PERSONAL_AGENT_REPO_ROOT;
+    delete process.env.PERSONAL_AGENT_RESOURCES_ROOT;
   });
 
   it('materializes the shared runtime and builds live session helpers', async () => {
@@ -131,7 +132,8 @@ describe('createRuntimeState', () => {
     expect(state.getRuntimeScope()).toBe('shared');
     expect(process.env.PERSONAL_AGENT_ACTIVE_PROFILE).toBe('shared');
     expect(process.env.PERSONAL_AGENT_PROFILE).toBe('shared');
-    expect(process.env.PERSONAL_AGENT_REPO_ROOT).toBe('/repo-root');
+    expect(process.env.PERSONAL_AGENT_REPO_ROOT).toBeUndefined();
+    expect(process.env.PERSONAL_AGENT_RESOURCES_ROOT).toBe('/repo-root');
 
     expect(state.buildLiveSessionResourceOptions()).toEqual({
       additionalExtensionPaths: ['/ext/shared'],

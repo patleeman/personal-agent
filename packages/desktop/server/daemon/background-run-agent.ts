@@ -24,14 +24,17 @@ export function looksLikeBackgroundAgentRunnerEntryPath(value: string | undefine
 function resolveBackgroundAgentRunnerEntryPath(): string {
   const daemonModulePath = fileURLToPath(import.meta.url);
   const moduleDir = dirname(daemonModulePath);
-  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
+  const devRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
+  const appRoot = process.env.PERSONAL_AGENT_APP_ROOT?.trim();
+  const resourcesRoot = process.env.PERSONAL_AGENT_RESOURCES_ROOT?.trim();
   const candidates = [
-    repoRoot ? resolve(repoRoot, 'packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
-    repoRoot ? resolve(repoRoot, 'app.asar/server/dist/daemon/background-agent-runner.js') : undefined,
-    repoRoot ? resolve(repoRoot, 'app.asar.unpacked/packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
+    devRepoRoot ? resolve(devRepoRoot, 'packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
+    appRoot ? resolve(appRoot, 'server/dist/daemon/background-agent-runner.js') : undefined,
+    resourcesRoot ? resolve(resourcesRoot, 'app.asar/server/dist/daemon/background-agent-runner.js') : undefined,
+    resourcesRoot ? resolve(resourcesRoot, 'app.asar.unpacked/packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
     resolve(moduleDir, 'background-agent-runner.js'),
     resolve(moduleDir, '../server/daemon/background-agent-runner.js'),
-    repoRoot ? resolve(repoRoot, 'packages/desktop/dist/server/daemon/background-agent-runner.js') : undefined,
+    devRepoRoot ? resolve(devRepoRoot, 'packages/desktop/dist/server/daemon/background-agent-runner.js') : undefined,
   ].filter((candidate): candidate is string => Boolean(candidate));
 
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]!;

@@ -321,7 +321,7 @@ const MAX_DESKTOP_ROLLBACK_TURNS = 100;
 
 function resolveRepoRoot(): string {
   const defaultRepoRoot = fileURLToPath(new URL('../../..', import.meta.url));
-  return process.env.PERSONAL_AGENT_REPO_ROOT ?? defaultRepoRoot;
+  return process.env.PERSONAL_AGENT_REPO_ROOT ?? process.env.PERSONAL_AGENT_RESOURCES_ROOT ?? defaultRepoRoot;
 }
 
 function resolveDaemonRoot(): string {
