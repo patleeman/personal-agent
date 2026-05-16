@@ -27,6 +27,8 @@ function resolveBackgroundAgentRunnerEntryPath(): string {
   const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
   const candidates = [
     repoRoot ? resolve(repoRoot, 'packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
+    repoRoot ? resolve(repoRoot, 'app.asar/server/dist/daemon/background-agent-runner.js') : undefined,
+    repoRoot ? resolve(repoRoot, 'app.asar.unpacked/packages/desktop/server/dist/daemon/background-agent-runner.js') : undefined,
     resolve(moduleDir, 'background-agent-runner.js'),
     resolve(moduleDir, '../server/daemon/background-agent-runner.js'),
     repoRoot ? resolve(repoRoot, 'packages/desktop/dist/server/daemon/background-agent-runner.js') : undefined,

@@ -77,6 +77,27 @@ describe('background runs', () => {
     }
   });
 
+  it('resolves the packaged app.asar runner when packaged repo root is the resources directory', () => {
+    const previousRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT;
+    const resourcesRoot = createTempDir('pa-background-runner-resources-');
+    const appAsarRunner = join(resourcesRoot, 'app.asar/server/dist/daemon/background-agent-runner.js');
+
+    mkdirSync(join(resourcesRoot, 'app.asar/server/dist/daemon'), { recursive: true });
+    writeFileSync(appAsarRunner, '');
+
+    try {
+      process.env.PERSONAL_AGENT_REPO_ROOT = resourcesRoot;
+      const argv = buildBackgroundAgentArgv({ prompt: 'Review the latest diff' });
+      expect(argv[1]).toBe(appAsarRunner);
+    } finally {
+      if (previousRepoRoot === undefined) {
+        delete process.env.PERSONAL_AGENT_REPO_ROOT;
+      } else {
+        process.env.PERSONAL_AGENT_REPO_ROOT = previousRepoRoot;
+      }
+    }
+  });
+
   it('materializes agent runs into durable argv and stores the structured agent spec', async () => {
     const runsRoot = createTempDir('pa-background-run-record-');
     const record = await createBackgroundRunRecord(runsRoot, {
