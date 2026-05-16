@@ -1,5 +1,5 @@
 import { api, cx, Pill, useApi } from '@personal-agent/extensions/settings';
-import React, { type ReactNode } from 'react';
+import React, { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 
 type McpServerConfig = {
   name: string;
@@ -23,6 +23,7 @@ type McpSettingsState = {
   configPath: string;
   configExists: boolean;
   searchedPaths: string[];
+  explicitConfigJson: string;
   servers: McpServerConfig[];
   bundledSkills: Array<{
     skillName: string;
@@ -35,6 +36,11 @@ type McpSettingsState = {
 
 async function inspectMcpSettings(): Promise<McpSettingsState> {
   const response = await api.invokeExtensionAction('system-mcp', 'inspectSettings', {});
+  return response.result as McpSettingsState;
+}
+
+async function saveExplicitMcpConfig(json: string): Promise<McpSettingsState> {
+  const response = await api.invokeExtensionAction('system-mcp', 'saveExplicitConfig', { json });
   return response.result as McpSettingsState;
 }
 
@@ -91,7 +97,34 @@ function SettingsPanel({
 }
 
 export function McpSettingsPanel() {
-  const { data: mcpState, loading: mcpLoading, error: mcpError } = useApi(inspectMcpSettings, 'system-mcp-settings');
+  const { data: mcpState, loading: mcpLoading, error: mcpError, refetch } = useApi(inspectMcpSettings, 'system-mcp-settings');
+  const [configDraft, setConfigDraft] = useState('');
+  const [saveState, setSaveState] = useState<{ busy: boolean; error: string | null; saved: boolean }>({
+    busy: false,
+    error: null,
+    saved: false,
+  });
+
+  useEffect(() => {
+    if (mcpState) {
+      setConfigDraft(mcpState.explicitConfigJson);
+      setSaveState({ busy: false, error: null, saved: false });
+    }
+  }, [mcpState?.explicitConfigJson]);
+
+  async function handleSaveConfig(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaveState({ busy: true, error: null, saved: false });
+    try {
+      await saveExplicitMcpConfig(configDraft);
+      await refetch();
+      setSaveState({ busy: false, error: null, saved: true });
+    } catch (error) {
+      setSaveState({ busy: false, error: error instanceof Error ? error.message : String(error), saved: false });
+    }
+  }
+
+  const isDirty = Boolean(mcpState && configDraft !== mcpState.explicitConfigJson);
 
   return (
     <div className="space-y-0">
@@ -105,15 +138,60 @@ export function McpSettingsPanel() {
           <p className="text-[12px] text-danger">Failed to load MCP wrappers: {mcpError}</p>
         ) : mcpState ? (
           <div className="space-y-5">
-            <p className="ui-card-meta break-all">
-              {mcpState.configExists ? (
-                <>
-                  Explicit config file: <span className="font-mono text-[11px]">{mcpState.configPath}</span>
-                </>
-              ) : (
-                'No explicit MCP config file found. Using bundled skill manifests only.'
-              )}
-            </p>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="ui-card-meta break-all">
+                  {mcpState.configExists ? (
+                    <>
+                      Explicit config file: <span className="font-mono text-[11px]">{mcpState.configPath}</span>
+                    </>
+                  ) : (
+                    <>
+                      No explicit MCP config file yet. Saving creates <span className="font-mono text-[11px]">{mcpState.configPath}</span>
+                    </>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="rounded-md border border-border-default px-2.5 py-1 text-[12px] text-primary hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={mcpLoading}
+                  onClick={() => void refetch()}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <form className="space-y-2" onSubmit={handleSaveConfig}>
+                <textarea
+                  className="min-h-40 w-full resize-y rounded-lg border border-border-subtle bg-elevated/40 p-3 font-mono text-[11px] leading-5 text-primary outline-none focus:border-border-strong"
+                  spellCheck={false}
+                  value={configDraft}
+                  onChange={(event) => {
+                    setConfigDraft(event.target.value);
+                    setSaveState((current) => ({ ...current, error: null, saved: false }));
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!isDirty || saveState.busy}
+                  >
+                    {saveState.busy ? 'Saving…' : 'Save MCP config'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-border-default px-3 py-1.5 text-[12px] text-primary hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!isDirty || saveState.busy || !mcpState}
+                    onClick={() => setConfigDraft(mcpState.explicitConfigJson)}
+                  >
+                    Revert
+                  </button>
+                  {saveState.saved ? <span className="text-[12px] text-success">Saved.</span> : null}
+                  {saveState.error ? <span className="text-[12px] text-danger">{saveState.error}</span> : null}
+                </div>
+              </form>
+            </div>
 
             {mcpState.bundledSkills.length > 0 ? (
               <div className="space-y-3">

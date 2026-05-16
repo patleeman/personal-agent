@@ -12,7 +12,10 @@
   "backend": {
     "entry": "src/backend.ts",
     "agentExtension": "createMcpAgentExtension",
-    "actions": [{ "id": "inspectSettings", "handler": "inspectMcpSettings", "title": "Inspect MCP settings" }]
+    "actions": [
+      { "id": "inspectSettings", "handler": "inspectMcpSettings", "title": "Inspect MCP settings" },
+      { "id": "saveExplicitConfig", "handler": "saveExplicitMcpConfig", "title": "Save explicit MCP config" }
+    ]
   },
   "contributes": {
     "settingsComponent": {

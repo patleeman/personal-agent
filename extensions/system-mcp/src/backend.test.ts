@@ -16,7 +16,7 @@ function createMockApi(): { api: ExtensionAPI; registeredExecute: (params: unkno
   };
 }
 
-vi.mock('@personal-agent/extensions/backend', () => ({
+vi.mock('@personal-agent/extensions/backend/mcp', () => ({
   listMcpCatalog: vi.fn(),
   inspectMcpServer: vi.fn(),
   inspectMcpTool: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('@personal-agent/extensions/backend', () => ({
   getConfigRoot: vi.fn(() => '/tmp/pi-agent-config'),
 }));
 
-const core = await import('@personal-agent/extensions/backend');
+const core = await import('@personal-agent/extensions/backend/mcp');
 
 function buildHandler() {
   const { api, registeredExecute } = createMockApi();

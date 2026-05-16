@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import {
   authenticateMcpServer,
@@ -39,6 +42,7 @@ type McpSettingsState = {
   configPath: string;
   configExists: boolean;
   searchedPaths: string[];
+  explicitConfigJson: string;
   servers: McpServerSettingsState[];
   bundledSkills: Array<{
     skillName: string;
@@ -47,6 +51,10 @@ type McpSettingsState = {
     serverNames: string[];
     overriddenServerNames: string[];
   }>;
+};
+
+type McpRuntimeContext = {
+  runtime: { getLiveSessionResourceOptions(): { additionalSkillPaths?: string[]; cwd?: string }; getRepoRoot(): string };
 };
 
 const McpToolParams = Type.Object({
@@ -102,21 +110,51 @@ function buildMcpCallbackUrl(input: { callbackHost?: string; callbackPort?: numb
   return `http://${host}:${port}${path}`;
 }
 
-export function inspectMcpSettings(
-  _input: unknown,
-  ctx: { runtime: { getLiveSessionResourceOptions(): { additionalSkillPaths?: string[]; cwd?: string }; getRepoRoot(): string } },
-): McpSettingsState {
+function getExplicitMcpDocument(ctx: McpRuntimeContext): ReturnType<typeof buildMergedMcpConfigDocument> {
   const resourceOptions = ctx.runtime.getLiveSessionResourceOptions();
   const skillDirs = resourceOptions.additionalSkillPaths ?? [];
   const cwd = resourceOptions.cwd ?? ctx.runtime.getRepoRoot();
-  const bundledSkillManifests = readBundledSkillMcpManifests(skillDirs);
   const configDiscoveryEnv = { ...process.env };
   delete configDiscoveryEnv.MCP_CONFIG_PATH;
-  const mergedMcpConfig = buildMergedMcpConfigDocument({
+  return buildMergedMcpConfigDocument({
     cwd,
     env: configDiscoveryEnv,
     skillDirs,
   });
+}
+
+function parseExplicitMcpConfigJson(input: unknown): { mcpServers: Record<string, unknown> } {
+  if (!input || typeof input !== 'object' || typeof (input as { json?: unknown }).json !== 'string') {
+    throw new Error('json is required.');
+  }
+
+  const parsed = JSON.parse((input as { json: string }).json) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('MCP config must be a JSON object.');
+  }
+
+  const document = parsed as { mcpServers?: unknown; servers?: unknown };
+  const servers = document.mcpServers ?? document.servers ?? {};
+  if (!servers || typeof servers !== 'object' || Array.isArray(servers)) {
+    throw new Error('MCP config must contain an object mcpServers field.');
+  }
+
+  return { mcpServers: servers as Record<string, unknown> };
+}
+
+export function saveExplicitMcpConfig(input: unknown, ctx: McpRuntimeContext): McpSettingsState {
+  const document = parseExplicitMcpConfigJson(input);
+  const config = getExplicitMcpDocument(ctx);
+  mkdirSync(dirname(config.baseConfigPath), { recursive: true });
+  writeFileSync(config.baseConfigPath, `${JSON.stringify(document, null, 2)}\n`);
+  return inspectMcpSettings({}, ctx);
+}
+
+export function inspectMcpSettings(_input: unknown, ctx: McpRuntimeContext): McpSettingsState {
+  const resourceOptions = ctx.runtime.getLiveSessionResourceOptions();
+  const skillDirs = resourceOptions.additionalSkillPaths ?? [];
+  const bundledSkillManifests = readBundledSkillMcpManifests(skillDirs);
+  const mergedMcpConfig = getExplicitMcpDocument(ctx);
   const parsedMcpConfig = readMcpConfigDocument({
     path: mergedMcpConfig.baseConfigPath,
     exists: mergedMcpConfig.baseConfigExists || Object.keys(mergedMcpConfig.document.mcpServers).length > 0,
@@ -135,6 +173,7 @@ export function inspectMcpSettings(
     configPath: parsedMcpConfig.path,
     configExists: mergedMcpConfig.baseConfigExists,
     searchedPaths: parsedMcpConfig.searchedPaths,
+    explicitConfigJson: `${JSON.stringify({ mcpServers: Object.fromEntries(parsedMcpConfig.servers.filter((server) => explicitServerNames.has(server.name)).map((server) => [server.name, server.raw])) }, null, 2)}\n`,
     servers: parsedMcpConfig.servers.map((server) => {
       const bundledManifest = bundledManifestByServerName.get(server.name);
       const source = explicitServerNames.has(server.name) ? 'config' : 'skill';

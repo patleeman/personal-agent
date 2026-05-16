@@ -34,6 +34,7 @@ describe('McpSettingsPanel', () => {
         configPath: '/tmp/mcp_servers.json',
         configExists: true,
         searchedPaths: ['/tmp/mcp_servers.json'],
+        explicitConfigJson: '{\n  "mcpServers": {}\n}\n',
         servers: [
           {
             name: 'atlassian',
