@@ -28,12 +28,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function readRawMcpServersRecord(path: string): Record<string, unknown> {
+function readRawMcpServersRecord(path: string): Record<string, unknown> | null {
   if (!existsSync(path)) {
     return {};
   }
 
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+  } catch {
+    return null;
+  }
   if (!isRecord(parsed)) {
     return {};
   }
@@ -54,6 +59,9 @@ export function readBundledSkillMcpManifests(skillDirs: readonly string[]): Bund
     }
 
     const entries = readRawMcpServersRecord(manifestPath);
+    if (!entries) {
+      continue;
+    }
     manifests.push({
       skillName: basename(resolvedSkillDir),
       skillDir: resolvedSkillDir,
@@ -73,7 +81,7 @@ export function readBundledSkillMcpServers(skillDirs: readonly string[]): {
   const manifests = readBundledSkillMcpManifests(skillDirs);
 
   for (const manifest of manifests) {
-    const entries = readRawMcpServersRecord(manifest.manifestPath);
+    const entries = readRawMcpServersRecord(manifest.manifestPath) ?? {};
     for (const [serverName, serverConfig] of Object.entries(entries)) {
       servers[serverName] = serverConfig;
     }
@@ -92,7 +100,7 @@ export function buildMergedMcpConfigDocument(options: {
   skillDirs?: readonly string[];
 }): BundledMcpConfigBuildResult {
   const resolved = resolveMcpConfig({ cwd: options.cwd, configPath: options.configPath, env: options.env });
-  const baseServers = resolved.exists ? readRawMcpServersRecord(resolved.path) : {};
+  const baseServers = resolved.exists ? (readRawMcpServersRecord(resolved.path) ?? {}) : {};
   const bundled = readBundledSkillMcpServers(options.skillDirs ?? []);
 
   return {
