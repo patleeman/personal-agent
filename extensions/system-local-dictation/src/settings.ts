@@ -21,19 +21,26 @@ function normalizeDictationSettings(value: unknown): DictationSettings {
   return { enabled, model };
 }
 
-export function readDictationSettings(settingsFile: string): DictationSettings {
+function readSettingsRoot(settingsFile: string): Record<string, unknown> {
   if (!existsSync(settingsFile)) {
-    return normalizeDictationSettings(undefined);
+    return {};
   }
 
-  const parsed = JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown;
-  const root = isRecord(parsed) ? parsed : {};
+  try {
+    const parsed = JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown;
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function readDictationSettings(settingsFile: string): DictationSettings {
+  const root = readSettingsRoot(settingsFile);
   return normalizeDictationSettings(root.dictation);
 }
 
 export function writeDictationSettings(settingsFile: string, update: Partial<DictationSettings>): DictationSettings {
-  const root = existsSync(settingsFile) ? (JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown) : {};
-  const currentRoot = isRecord(root) ? root : {};
+  const currentRoot = readSettingsRoot(settingsFile);
   const current = normalizeDictationSettings(currentRoot.dictation);
 
   const next = normalizeDictationSettings({
