@@ -2107,28 +2107,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      if (options?.automatic && historicalTailBlocks >= Math.min(historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS)) {
-        return;
-      }
-
-      const tailBlockStep = Math.max(1, Math.ceil(options?.tailBlockStep ?? HISTORICAL_TAIL_BLOCKS_STEP));
-      const minimumTailBlocks =
-        typeof targetMessageIndex === 'number'
-          ? Math.max(historicalTailBlocks + tailBlockStep, historicalTotalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING)
-          : historicalTailBlocks + tailBlockStep;
-      const nextTailBlocks = Math.min(historicalTotalBlocks, minimumTailBlocks);
-
-      if (nextTailBlocks <= historicalTailBlocks) {
-        return;
-      }
-
       if (targetMessageIndex === undefined) {
         capturePrependRestore();
       }
 
-      setHistoricalTailBlocks(nextTailBlocks);
+      const tailBlockStep = Math.max(1, Math.ceil(options?.tailBlockStep ?? HISTORICAL_TAIL_BLOCKS_STEP));
+
+      setHistoricalTailBlocks((currentTailBlocks) => {
+        if (options?.automatic && currentTailBlocks >= Math.min(historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS)) {
+          return currentTailBlocks;
+        }
+
+        const minimumTailBlocks =
+          typeof targetMessageIndex === 'number'
+            ? Math.max(currentTailBlocks + tailBlockStep, historicalTotalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING)
+            : currentTailBlocks + tailBlockStep;
+        const nextTailBlocks = Math.min(historicalTotalBlocks, minimumTailBlocks);
+
+        return nextTailBlocks > currentTailBlocks ? nextTailBlocks : currentTailBlocks;
+      });
     },
-    [capturePrependRestore, historicalTailBlocks, historicalTotalBlocks, id, sessionLoading],
+    [capturePrependRestore, historicalTotalBlocks, id, sessionLoading],
   );
 
   // Derive menu states
