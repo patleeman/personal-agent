@@ -34,6 +34,16 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
+function normalizeResultCount(count: number): number {
+  if (!Number.isFinite(count)) return 5;
+  return Math.min(Math.max(Math.floor(count), 1), 20);
+}
+
+function normalizePage(page: number): number {
+  if (!Number.isFinite(page)) return 1;
+  return Math.max(Math.floor(page), 1);
+}
+
 function truncateHead(content: string, options: { maxLines: number; maxBytes: number }) {
   const lines = content.split(/\r?\n/);
   let output = lines.slice(0, options.maxLines).join('\n');
@@ -98,9 +108,10 @@ export async function webFetch(input: { url: string; raw?: boolean }, _ctx?: Ext
 }
 
 export async function exaSearch(input: { query: string; count?: number; page?: number }, ctx?: ExtensionBackendContext) {
-  const { query, count = 5, page = 1 } = input;
-  const maxResults = Math.min(count, 20);
-  const offset = (Math.max(page, 1) - 1) * 20;
+  const { query } = input;
+  const page = normalizePage(input.page ?? 1);
+  const maxResults = normalizeResultCount(input.count ?? 5);
+  const offset = (page - 1) * 20;
   const exaApiKey = getExaApiKey(ctx);
   if (!exaApiKey) throw new Error('Exa API key is not configured. Set Web tools → Exa API key or EXA_API_KEY.');
 
@@ -137,9 +148,10 @@ export async function exaSearch(input: { query: string; count?: number; page?: n
 }
 
 export async function duckDuckGoSearch(input: { query: string; count?: number; page?: number }, ctx?: ExtensionBackendContext) {
-  const { query, count = 5, page = 1 } = input;
-  const maxResults = Math.min(count, 20);
-  const offset = (Math.max(page, 1) - 1) * 20;
+  const { query } = input;
+  const page = normalizePage(input.page ?? 1);
+  const maxResults = normalizeResultCount(input.count ?? 5);
+  const offset = (page - 1) * 20;
   const searchParams = new URLSearchParams({ q: query });
   if (offset > 0) {
     searchParams.set('s', String(offset));

@@ -180,6 +180,18 @@ describe('system-web-tools backend', () => {
       const result = await duckDuckGoSearch({ query: 'test', count: 100 });
       expect(result.count).toBe(0); // no results found, but count was clamped
     });
+
+    it('normalizes invalid count and page before searching', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve('<html><body><a class="result__a" href="https://example.org/page">Example Title</a></body></html>'),
+      } as unknown as Response);
+
+      const result = await duckDuckGoSearch({ query: 'test', count: -1, page: -2 });
+      expect(result.page).toBe(1);
+      expect(result.text).toContain('Results 1-1');
+      expect(parseDuckDuckGoHtml).toHaveBeenCalledWith(expect.objectContaining({ maxResults: 1 }), undefined);
+    });
   });
 
   describe('formatTruncatedContent', () => {
