@@ -7,6 +7,7 @@ metadata:
   summary: Built-in routing guide for follow-up queues, owning surfaces, and later attention.
   status: active
 tools:
+  - deferred_resume
   - queue_followup
   - activity
   - scheduled_task
@@ -14,22 +15,22 @@ tools:
 
 # Async Attention and Wakeups
 
-Use the smallest scheduling surface that matches the owner of the work.
+Use the smallest scheduling surface that matches the owner of the work. For wait-then-continue requests, use `deferred_resume`/`queue_followup`; do not run `sleep` in bash.
 
 ## Choose the right surface
 
 | Need                                               | Use                                  | Durable home                  |
 | -------------------------------------------------- | ------------------------------------ | ----------------------------- |
-| Agent should continue this conversation later      | `queue_followup`                     | live queue or deferred resume |
+| Agent should continue this conversation later      | `deferred_resume`                    | live queue or deferred resume |
 | Unattended automation should run later or recur    | `scheduled_task`                     | automation store + run logs   |
 | Passive async result tied to a thread              | surface the owning conversation      | conversation/activity         |
 | Scheduled task result should come back to a thread | scheduled task conversation callback | task log + optional wakeup    |
 
 There is no standalone tell-me-later tool. Human “tell me later” requests are same-thread follow-ups unless they need a true app-wide automation.
 
-## `queue_followup`
+## `deferred_resume` / `queue_followup`
 
-Use `queue_followup` when this same conversation should continue later.
+Use `deferred_resume` when this same conversation should continue later. `queue_followup` is the compatibility alias.
 
 Actions:
 
@@ -56,7 +57,7 @@ Example:
 }
 ```
 
-Use `queue_followup` with `action: "list"` before assuming no wakeups are pending.
+Use `deferred_resume` with `action: "list"` before assuming no wakeups are pending.
 
 ## `scheduled_task`
 
@@ -66,5 +67,6 @@ Use `scheduled_task` for app-wide recurring or one-time automations, especially 
 
 - invent a shared inbox substitute for ordinary async work
 - use scheduled tasks for a simple same-thread follow-up
+- use `bash` + `sleep` as a timer for deferred conversation work
 - store async state only in notification/alert state
 - copy conversation ids into portable durable files

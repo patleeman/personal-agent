@@ -5,6 +5,7 @@ export const COMMON_AGENT_TOOL_NAMES = [
   'write',
   'artifact',
   'scheduled_task',
+  'deferred_resume',
   'queue_followup',
   'checkpoint',
   'extension_manager',

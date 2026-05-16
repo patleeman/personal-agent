@@ -10,12 +10,14 @@ tools:
   - bash
   - background_command
   - subagent
+  - deferred_resume
+  - queue_followup
   - run
 ---
 
 # Background Work
 
-Use intent-shaped tools first. The old generic `run` tool is compatibility plumbing, not the mental model.
+Use intent-shaped tools first. The old generic `run` tool is compatibility plumbing, not the mental model. For waiting/resuming this conversation later, use `deferred_resume`; do not run `sleep` in bash.
 
 ## Choose the tool
 
@@ -25,7 +27,8 @@ Use intent-shaped tools first. The old generic `run` tool is compatibility plumb
 | `background_command` | Compatibility lifecycle tool for background command records.             |
 | `subagent`           | A delegated agent task that should run durably outside the current turn. |
 | `scheduled_task`     | A persistent automation with a cron/time trigger and delivery policy.    |
-| `queue_followup`     | Attention or follow-up without background execution.                     |
+| `deferred_resume`    | Continue this same conversation later; preferred for wait/resume.        |
+| `queue_followup`     | Compatibility alias for deferred/follow-up queue behavior.               |
 
 ## Background commands
 

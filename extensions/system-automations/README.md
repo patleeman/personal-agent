@@ -191,7 +191,7 @@ Tasks are managed through the `scheduled_task` agent tool or the Automations UI.
 
 Follow-up queue entries resume the current conversation later. They are conversation-bound and are the only user-facing tool for same-thread delayed continuation.
 
-Use the `queue_followup` tool from within a conversation.
+Use the `deferred_resume` tool from within a conversation for explicit wait/resume requests. `queue_followup` is retained as the compatibility alias. Do not use `bash` + `sleep` as a timer.
 
 ## Actions
 

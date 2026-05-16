@@ -110,10 +110,51 @@
         }
       },
       {
+        "id": "deferred-resume",
+        "name": "deferred_resume",
+        "title": "Deferred resume",
+        "description": "Schedule, list, or cancel a future resume for the current conversation. Use this for waiting instead of bash sleep.",
+        "action": "deferredResume",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["add", "list", "cancel"]
+            },
+            "id": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": ["after_turn", "delay", "at"]
+            },
+            "delay": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "deliverAs": {
+              "type": "string",
+              "enum": ["steer", "followUp"]
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
+      },
+      {
         "id": "queue-followup",
         "name": "queue_followup",
         "title": "Queue follow-up",
-        "description": "Queue, list, or cancel future follow-up work for the current conversation.",
+        "description": "Queue, list, or cancel future follow-up work for the current conversation. Prefer deferred_resume for explicit wait/resume requests.",
         "action": "queueFollowup",
         "inputSchema": {
           "type": "object",
